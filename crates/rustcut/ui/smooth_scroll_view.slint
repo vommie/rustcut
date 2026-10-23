@@ -1,0 +1,318 @@
+// Copied from RustView (crates/rustview/ui/smooth_scroll_view.slint); only the imports differ. tests/rustview_parity.rs compares it
+// with the original: change RustView's file and copy it again, never this one (ADR-10).
+
+import { Theme } from "styles.slint";
+
+/// Generic, modular, high-performance scroll container with permanent full-width, custom-styled scrollbars.
+/// Provides real-time 1:1 cursor synchronization during scrollbar dragging with zero lag or drift,
+/// and instant frame-synchronized viewport positioning for embedded native subwindows.
+export component SmoothScrollArea inherits Rectangle {
+    in-out property <length> viewport-x: 0px;
+    in-out property <length> viewport-y: 0px;
+
+    in property <length> content-width: self.width;
+    in property <length> content-height: 0px;
+    in property <length> scroll-step: 40px;
+
+    in property <bool> enable-horizontal: false;
+    in property <bool> enable-vertical: true;
+    in property <bool> animate-scroll: false;
+
+    // Visual Scrollbar Configuration (Permanent constant width, zero size jump on hover)
+    in property <length> scrollbar-size: 7px;
+    in property <length> scrollbar-padding: 1px;
+    in property <color> track-color: #00000028;
+    in property <color> thumb-color: #585b70;
+    in property <color> thumb-hover-color: Theme.primary;
+    in property <color> thumb-pressed-color: Theme.accent;
+
+    // Internal State Properties for Dragging & Interaction
+    property <bool> is-dragging-v: false;
+    property <bool> is-dragging-h: false;
+
+    // Computed boundary properties
+    property <length> min-x: Math.min(0px, self.width - root.content-width);
+    property <length> min-y: Math.min(0px, self.height - root.content-height);
+
+    out property <bool> has-vertical-scrollbar: root.enable-vertical && (root.content-height > self.height);
+    out property <bool> has-horizontal-scrollbar: root.enable-horizontal && (root.content-width > self.width);
+
+    // Clamped viewport coordinates preventing content clipping on window resize
+    out property <length> clamped-x: root.has-horizontal-scrollbar
+        ? Math.max(root.min-x, Math.min(0px, root.viewport-x))
+        : 0px;
+
+    out property <length> clamped-y: root.has-vertical-scrollbar
+        ? Math.max(root.min-y, Math.min(0px, root.viewport-y))
+        : 0px;
+
+    changed clamped-x => {
+        if root.viewport-x != root.clamped-x {
+            root.viewport-x = root.clamped-x;
+        }
+    }
+
+    changed clamped-y => {
+        if root.viewport-y != root.clamped-y {
+            root.viewport-y = root.clamped-y;
+        }
+    }
+
+    clip: true;
+
+    callback scrolled(length /* dx */, length /* dy */);
+    /// A click on the free space of the area (not on its content).
+    callback background-clicked();
+
+    /// Public method to apply wheel / gesture delta to the viewport
+    public function handle-scroll(dx: length, dy: length) {
+        let has-v = root.has-vertical-scrollbar;
+        let has-h = root.has-horizontal-scrollbar;
+
+        if has-v && !has-h {
+            // Pure vertical scrolling
+            root.viewport-y = Math.max(root.min-y, Math.min(0px, root.viewport-y + dy));
+        } else if has-h && !has-v {
+            // Pure horizontal scrolling (translates vertical mouse wheel dy into horizontal dx)
+            let delta = (dx != 0px) ? dx : dy;
+            root.viewport-x = Math.max(root.min-x, Math.min(0px, root.viewport-x + delta));
+        } else if has-v && has-h {
+            // Bi-directional scrolling
+            root.viewport-y = Math.max(root.min-y, Math.min(0px, root.viewport-y + dy));
+            root.viewport-x = Math.max(root.min-x, Math.min(0px, root.viewport-x + dx));
+        }
+        root.scrolled(dx, dy);
+    }
+
+    /// Programmatically scrolls the viewport to ensure the target item range [target-y, target-y + target-height] is visible in the viewport.
+    public function scroll-into-view(target-y: length, target-height: length) {
+        if !root.has-vertical-scrollbar {
+            return;
+        }
+        let view-h = self.height;
+        let cur-top = 0px - root.clamped-y;
+        let cur-bottom = cur-top + view-h;
+
+        if target-y < cur-top {
+            // Target is above current viewport -> scroll up to show top of item
+            root.viewport-y = 0px - target-y;
+        } else if target-y + target-height > cur-bottom {
+            // Target is below current viewport -> scroll down to bring item into view at bottom
+            root.viewport-y = 0px - (target-y + target-height - view-h);
+        }
+    }
+
+    /// Centers the range [target-y, target-y + target-height] in the viewport, unless it is completely visible already (then nothing moves).
+    public function scroll-to-center-unless-visible(target-y: length, target-height: length) {
+        if !root.has-vertical-scrollbar {
+            return;
+        }
+        let cur-top = 0px - root.clamped-y;
+        if target-y >= cur-top && target-y + target-height <= cur-top + self.height {
+            return;
+        }
+        root.viewport-y = Math.max(root.min-y, Math.min(0px, 0px - (target-y - (self.height - target-height) / 2)));
+    }
+
+    /// Programmatically scrolls the viewport to ensure the target horizontal item range [target-x, target-x + target-width] is visible in the viewport.
+    public function scroll-into-view-horizontal(target-x: length, target-width: length) {
+        if !root.has-horizontal-scrollbar {
+            return;
+        }
+        let view-w = self.width;
+        let cur-left = 0px - root.clamped-x;
+        let cur-right = cur-left + view-w;
+
+        // Add 8px margin so the tab doesn't stick directly against the edge
+        let margin: length = 8px;
+        let padded-target-x = Math.max(0px, target-x - margin);
+        let padded-target-right = target-x + target-width + margin;
+
+        if padded-target-x < cur-left {
+            // Target is to the left of current viewport -> scroll left to show left edge of item
+            root.viewport-x = 0px - padded-target-x;
+        } else if padded-target-right > cur-right {
+            // Target is to the right of current viewport -> scroll right to bring item into view at right edge
+            root.viewport-x = 0px - (padded-target-right - view-w);
+        }
+    }
+
+    /// Programmatically scrolls to top
+    public function scroll-to-top() {
+        root.viewport-y = 0px;
+    }
+
+    // Scroll gesture event interceptor over content area
+    scroll-touch := TouchArea {
+        width: 100%;
+        height: 100%;
+
+        scroll-event(event) => {
+            root.handle-scroll(event.delta-x, event.delta-y);
+            return accept;
+        }
+
+        clicked => { root.background-clicked(); }
+    }
+
+    // Content container viewport with real-time 1:1 lockstep positioning
+    content-host := Rectangle {
+        x: root.clamped-x;
+        y: root.clamped-y;
+        width: Math.max(parent.width, root.content-width);
+        height: Math.max(parent.height, root.content-height);
+
+        animate x { duration: (root.animate-scroll && !root.is-dragging-h && !root.is-dragging-v && !scroll-touch.pressed) ? 200ms : 0ms; easing: ease-out; }
+        animate y { duration: (root.animate-scroll && !root.is-dragging-h && !root.is-dragging-v && !scroll-touch.pressed) ? 200ms : 0ms; easing: ease-out; }
+
+        @children
+    }
+
+    // Vertical Scrollbar Track & Real-Time Synchronized Thumb
+    if root.has-vertical-scrollbar : v-track := Rectangle {
+        x: parent.width - root.scrollbar-size - root.scrollbar-padding;
+        y: root.scrollbar-padding;
+        width: root.scrollbar-size;
+        height: parent.height - (2 * root.scrollbar-padding) - (root.has-horizontal-scrollbar ? (root.scrollbar-size + root.scrollbar-padding) : 0px);
+        background: root.track-color;
+        border-radius: root.scrollbar-size / 2;
+
+        property <length> track-h: self.height;
+        property <length> thumb-h: Math.max(24px, self.height * (root.height / Math.max(1px, root.content-height)));
+        property <length> track-avail: Math.max(1px, self.track-h - self.thumb-h);
+        property <length> max-scroll-y: Math.max(1px, root.content-height - root.height);
+        property <length> thumb-y: (-root.clamped-y / self.max-scroll-y) * self.track-avail;
+
+        // Visual Thumb Bar
+        Rectangle {
+            x: 0px;
+            y: v-track.thumb-y;
+            width: root.scrollbar-size;
+            height: v-track.thumb-h;
+            border-radius: root.scrollbar-size / 2;
+            background: v-touch.pressed ? root.thumb-pressed-color : (
+                (v-touch.has-hover && v-touch.mouse-y >= v-track.thumb-y && v-touch.mouse-y <= v-track.thumb-y + v-track.thumb-h)
+                ? root.thumb-hover-color
+                : root.thumb-color
+            );
+
+            animate y { duration: (v-touch.pressed || scroll-touch.pressed || !root.animate-scroll) ? 0ms : 200ms; easing: ease-out; }
+        }
+
+        // Full-track TouchArea delivering 1:1 real-time cursor tracking
+        v-touch := TouchArea {
+            width: 100%;
+            height: 100%;
+
+            property <length> drag-offset-y: 0px;
+
+            scroll-event(event) => {
+                root.handle-scroll(event.delta-x, event.delta-y);
+                return accept;
+            }
+
+            pointer-event(e) => {
+                if e.kind == PointerEventKind.down {
+                    root.is-dragging-v = true;
+                    if e.button == PointerEventButton.left {
+                        if self.mouse-y >= v-track.thumb-y && self.mouse-y <= v-track.thumb-y + v-track.thumb-h {
+                            // Grab thumb at exact click point
+                            self.drag-offset-y = self.mouse-y - v-track.thumb-y;
+                        } else {
+                            // Click on empty track: Jump center of thumb to cursor immediately
+                            self.drag-offset-y = v-track.thumb-h / 2;
+                            let target-y = Math.max(0px, Math.min(v-track.track-avail, self.mouse-y - self.drag-offset-y));
+                            let ratio = target-y / v-track.track-avail;
+                            root.viewport-y = -ratio * v-track.max-scroll-y;
+                        }
+                    }
+                }
+                if e.kind == PointerEventKind.up || e.kind == PointerEventKind.cancel {
+                    root.is-dragging-v = false;
+                }
+            }
+
+            moved => {
+                if self.pressed {
+                    let target-y = Math.max(0px, Math.min(v-track.track-avail, self.mouse-y - self.drag-offset-y));
+                    let ratio = target-y / v-track.track-avail;
+                    root.viewport-y = -ratio * v-track.max-scroll-y;
+                }
+            }
+        }
+    }
+
+    // Horizontal Scrollbar Track & Real-Time Synchronized Thumb
+    if root.has-horizontal-scrollbar : h-track := Rectangle {
+        x: root.scrollbar-padding;
+        y: parent.height - root.scrollbar-size - root.scrollbar-padding;
+        width: parent.width - (2 * root.scrollbar-padding) - (root.has-vertical-scrollbar ? (root.scrollbar-size + root.scrollbar-padding) : 0px);
+        height: root.scrollbar-size;
+        background: root.track-color;
+        border-radius: root.scrollbar-size / 2;
+
+        property <length> track-w: self.width;
+        property <length> thumb-w: Math.max(24px, self.width * (root.width / Math.max(1px, root.content-width)));
+        property <length> track-avail: Math.max(1px, self.track-w - self.thumb-w);
+        property <length> max-scroll-x: Math.max(1px, root.content-width - root.width);
+        property <length> thumb-x: (-root.clamped-x / self.max-scroll-x) * self.track-avail;
+
+        // Visual Thumb Bar
+        Rectangle {
+            x: h-track.thumb-x;
+            y: 0px;
+            width: h-track.thumb-w;
+            height: root.scrollbar-size;
+            border-radius: root.scrollbar-size / 2;
+            background: h-touch.pressed ? root.thumb-pressed-color : (
+                (h-touch.has-hover && h-touch.mouse-x >= h-track.thumb-x && h-touch.mouse-x <= h-track.thumb-x + h-track.thumb-w)
+                ? root.thumb-hover-color
+                : root.thumb-color
+            );
+
+            animate x { duration: (h-touch.pressed || scroll-touch.pressed || !root.animate-scroll) ? 0ms : 200ms; easing: ease-out; }
+        }
+
+        // Full-track TouchArea delivering 1:1 real-time cursor tracking
+        h-touch := TouchArea {
+            width: 100%;
+            height: 100%;
+
+            property <length> drag-offset-x: 0px;
+
+            scroll-event(event) => {
+                root.handle-scroll(event.delta-x, event.delta-y);
+                return accept;
+            }
+
+            pointer-event(e) => {
+                if e.kind == PointerEventKind.down {
+                    root.is-dragging-h = true;
+                    if e.button == PointerEventButton.left {
+                        if self.mouse-x >= h-track.thumb-x && self.mouse-x <= h-track.thumb-x + h-track.thumb-w {
+                            // Grab thumb at exact click point
+                            self.drag-offset-x = self.mouse-x - h-track.thumb-x;
+                        } else {
+                            // Click on empty track: Jump center of thumb to cursor immediately
+                            self.drag-offset-x = h-track.thumb-w / 2;
+                            let target-x = Math.max(0px, Math.min(h-track.track-avail, self.mouse-x - self.drag-offset-x));
+                            let ratio = target-x / h-track.track-avail;
+                            root.viewport-x = -ratio * h-track.max-scroll-x;
+                        }
+                    }
+                }
+                if e.kind == PointerEventKind.up || e.kind == PointerEventKind.cancel {
+                    root.is-dragging-h = false;
+                }
+            }
+
+            moved => {
+                if self.pressed {
+                    let target-x = Math.max(0px, Math.min(h-track.track-avail, self.mouse-x - self.drag-offset-x));
+                    let ratio = target-x / h-track.track-avail;
+                    root.viewport-x = -ratio * h-track.max-scroll-x;
+                }
+            }
+        }
+    }
+}

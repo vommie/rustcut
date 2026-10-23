@@ -14,4 +14,5 @@ pub mod queue;
 pub mod render_settings;
 pub mod sections;
 pub mod status;
+pub mod tags;
 pub mod timeline;

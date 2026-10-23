@@ -1,0 +1,103 @@
+// Copied from RustView (crates/rustview/ui/node_button.slint); only the imports differ. tests/rustview_parity.rs compares it
+// with the original: change RustView's file and copy it again, never this one (ADR-10).
+
+import { Theme } from "styles.slint";
+import { TooltipHost } from "tooltip.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+
+/// Fully encapsulated, standalone, reusable tree node toggle button component.
+/// Renders library icons (plus / minus / bullet), independent of font metrics, with optional tooltip support.
+export component NodeButton inherits Rectangle {
+    // State & Behavior Properties
+    in-out property <bool> is-expanded: false;
+    in property <bool> has-children: true;
+    in property <bool> show-leaf-bullet: false;
+    in property <bool> enabled: true;
+    in property <string> tooltip: "";
+
+    // Dimension & Sizing API
+    in property <length> button-size: 14px;
+    in property <length> icon-size: IconSize.xs;
+    in property <length> btn-corner-radius: 2px;
+    in property <length> btn-border-width: 1px;
+
+    // Styling & Theme Color API
+    in property <color> button-background: Theme.surface;
+    in property <color> hover-background: Theme.surface-hover;
+    in property <color> button-border-color: Theme.border;
+    in property <color> hover-border-color: Theme.primary;
+    in property <color> icon-color: Theme.text;
+    in property <color> hover-icon-color: Theme.primary;
+    in property <color> leaf-bullet-color: Theme.text-muted;
+
+    // Callbacks
+    callback toggled(bool /* new_expanded_state */);
+    callback clicked();
+
+    width: root.button-size;
+    height: root.button-size;
+    background: transparent;
+    opacity: root.enabled ? 1.0 : 0.38;
+
+    tooltip-host := TooltipHost {
+        text: root.tooltip;
+    }
+
+    // 1. Branch / Parent Node Toggle Button Box (+ / -)
+    if root.has-children : Rectangle {
+        width: parent.width;
+        height: parent.height;
+        background: btn-touch.has-hover ? root.hover-background : root.button-background;
+        border-radius: root.btn-corner-radius;
+        border-width: root.btn-border-width;
+        border-color: btn-touch.has-hover ? root.hover-border-color : root.button-border-color;
+
+        // Always enabled: a disabled TouchArea reports no hover, so the tooltip (with the reason) could not show. Clicks are filtered below.
+        btn-touch := TouchArea {
+            mouse-cursor: root.enabled ? pointer : default;
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down {
+                    tooltip-host.on-hover-leave();
+                }
+            }
+            clicked => {
+                tooltip-host.on-hover-leave();
+                if root.enabled {
+                    root.is-expanded = !root.is-expanded;
+                    root.toggled(root.is-expanded);
+                    root.clicked();
+                }
+            }
+            moved => {
+                tooltip-host.on-mouse-move(self.mouse-x, self.mouse-y);
+            }
+        }
+
+        property <bool> is-hovered: btn-touch.has-hover && root.tooltip != "";
+        changed is-hovered => {
+            if self.is-hovered {
+                tooltip-host.on-hover-enter(btn-touch.mouse-x, btn-touch.mouse-y);
+            } else {
+                tooltip-host.on-hover-leave();
+            }
+        }
+
+        // Plus when collapsed, minus when expanded
+        AppIcon {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            icon: root.is-expanded ? IconId.minus : IconId.plus;
+            size: root.icon-size;
+            color: btn-touch.has-hover ? root.hover-icon-color : root.icon-color;
+        }
+    }
+
+    // 2. Leaf Node Bullet Point (centered dot indicator)
+    if !root.has-children && root.show-leaf-bullet : AppIcon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        icon: IconId.point;
+        size: root.icon-size;
+        color: root.leaf-bullet-color;
+    }
+}

@@ -26,12 +26,14 @@ import { OptionRowView, Probe, RenderIssueView, RenderSettings } from "render_ty
 import { ProbeBanner } from "probe_banner.slint";
 import { ConflictJobView, ConflictOptionView, Export, Queue, QueueRowView } from "export_types.slint";
 import { ConflictDialog } from "export_dialog.slint";
+import { TagColumnView, TagHistoryItemModel, TagHistoryRowModel, TagNodeView, TagRate } from "tag_types.slint";
 
 export {
     Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
     MediaInfoRow, MediaInfoSection, KnownSource, Shortcuts, Timeline, TimelineBlock, TimelineTick, Sections,
     SectionRowView, Filters, FilterRowView, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe, Export,
-    ConflictJobView, ConflictOptionView, Queue, QueueRowView
+    ConflictJobView, ConflictOptionView, Queue, QueueRowView, TagRate, TagNodeView, TagColumnView, TagHistoryItemModel,
+    TagHistoryRowModel
 }
 
 export component MainWindow inherits Window {

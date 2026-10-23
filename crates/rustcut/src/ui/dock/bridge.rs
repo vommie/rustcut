@@ -95,6 +95,11 @@ impl DockBridge {
     }
 
     /// Applies `change` to the layout and shows the result.
+    /// Shows `panel`: its sidebar expands and its tab becomes the active one.
+    pub fn reveal(&self, panel: PanelId) {
+        self.update(|l| l.reveal(panel));
+    }
+
     fn update(&self, change: impl FnOnce(&mut DockLayout)) {
         change(&mut self.state.borrow_mut().layout);
         self.publish();

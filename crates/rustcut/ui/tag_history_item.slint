@@ -1,0 +1,119 @@
+// Copied from RustView (crates/rustview/ui/tag_history_item.slint); only the imports differ. tests/rustview_parity.rs compares it
+// with the original: change RustView's file and copy it again, never this one (ADR-10).
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize, IconSlot } from "icons.slint";
+import { TagHistoryItemModel } from "tag_types.slint";
+import { TooltipHost } from "tooltip.slint";
+
+export component TagHistoryItemView inherits Rectangle {
+    in property <TagHistoryItemModel> item;
+    in property <bool> is-enabled: true;
+    /// Reason appended to the tooltip while the item is disabled.
+    in property <string> disabled-hint: "Disabled: No file selected. Select a file to assign this tag";
+    callback clicked();
+
+    width: content-layout.preferred-width;
+    height: 22px;
+    border-radius: 4px;
+    clip: true;
+
+    background: root.item.is-assigned ? (
+        touch-area.has-hover ? #a6e3a133 : #a6e3a122
+    ) : (
+        root.item.is-partial ? (
+            touch-area.has-hover ? #f9e2af33 : #f9e2af22
+        ) : (
+            touch-area.has-hover ? Theme.surface-hover : Theme.surface-variant
+        )
+    );
+
+    border-width: 1px;
+    border-color: root.item.is-assigned ? (
+        touch-area.has-hover ? #a6e3a1 : #a6e3a1aa
+    ) : (
+        root.item.is-partial ? (
+            touch-area.has-hover ? #f9e2af : #f9e2afaa
+        ) : (
+            touch-area.has-hover ? Theme.primary : Theme.border
+        )
+    );
+
+    // Clean hierarchical tooltip without action text
+    tooltip-host := TooltipHost {
+        text: (root.item.tooltip != "" ? root.item.tooltip : root.item.display-text)
+            + (root.is-enabled ? "" : "\n" + root.disabled-hint);
+    }
+
+    // Always enabled: a disabled TouchArea reports no hover, so the tooltip (with the reason) could not show. Clicks are filtered below.
+    touch-area := TouchArea {
+        mouse-cursor: root.is-enabled ? pointer : default;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                tooltip-host.on-hover-leave();
+            }
+        }
+        clicked => {
+            tooltip-host.on-hover-leave();
+            if root.is-enabled {
+                root.clicked();
+            }
+        }
+        moved => {
+            tooltip-host.on-mouse-move(self.mouse-x, self.mouse-y);
+        }
+    }
+
+    property <bool> is-hovered: touch-area.has-hover;
+    changed is-hovered => {
+        if self.is-hovered {
+            tooltip-host.on-hover-enter(touch-area.mouse-x, touch-area.mouse-y);
+        } else {
+            tooltip-host.on-hover-leave();
+        }
+    }
+
+    content-layout := HorizontalLayout {
+        padding-left: 5px;
+        padding-right: 5px;
+        spacing: 3px;
+        alignment: start;
+
+        // Tree-identical status icons
+        if root.item.is-assigned || root.item.is-partial : IconSlot {
+            icon: root.item.is-assigned ? IconId.check : IconId.partial;
+            size: IconSize.sm;
+            color: root.item.is-assigned ? #a6e3a1 : #f9e2af;
+        }
+
+        // Zero-jitter bold text measurement box
+        text-box := Rectangle {
+            width: measure-text.preferred-width;
+
+            measure-text := Text {
+                text: root.item.display-text;
+                font-size: 11px;
+                font-weight: 700;
+                font-italic: root.item.is-italic;
+                visible: false;
+            }
+
+            label := Text {
+                width: 100%;
+                height: 100%;
+                text: root.item.display-text;
+                font-size: 11px;
+                font-weight: root.item.is-bold ? 700 : 400;
+                font-italic: root.item.is-italic;
+                color: root.item.is-assigned ? #a6e3a1 : (
+                    root.item.is-partial ? #f9e2af : (
+                        touch-area.has-hover ? Theme.primary : Theme.text
+                    )
+                );
+                vertical-alignment: center;
+                horizontal-alignment: left;
+                overflow: elide;
+            }
+        }
+    }
+}
