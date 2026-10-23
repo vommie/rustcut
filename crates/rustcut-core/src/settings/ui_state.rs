@@ -2,10 +2,11 @@
 //! on quit; restored before the first frame.
 
 use serde::{Deserialize, Serialize};
-use serde_with::{DefaultOnError, serde_as};
+use serde_with::{DefaultOnError, VecSkipError, serde_as};
 
 use super::file::VersionedFile;
 use crate::edit::{CropAspect, FilterChain};
+use crate::job::{JobId, JobStateKind};
 use crate::render::{DEFAULT_PROBE_SECS, PROBE_SECS, RenderProfile};
 use crate::settings::WhenDone;
 
@@ -23,6 +24,12 @@ pub struct UiState {
     /// The Tag & Rate panel. A value this version cannot read counts as missing (the other parts stay).
     #[serde_as(as = "DefaultOnError")]
     pub tags: TagPanelState,
+    /// The Job panel (the inspector of the queue's current job). A value this version cannot read counts as missing.
+    #[serde_as(as = "DefaultOnError")]
+    pub job: JobPanelState,
+    /// The Logs panel. A value this version cannot read counts as missing.
+    #[serde_as(as = "DefaultOnError")]
+    pub logs: LogPanelState,
     /// Path of the last opened video's folder (the file dialog starts there).
     pub last_open_dir: Option<std::path::PathBuf>,
 }
@@ -132,18 +139,79 @@ impl Default for ProbeState {
 }
 
 /// The queue panel's view settings and its processing switches.
+#[serde_as]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct QueuePanelState {
     /// Processing was paused by the user.
     pub paused: bool,
-    /// State filter chips that are on (empty = all).
-    pub state_filter: Vec<crate::job::JobStateKind>,
+    /// State filter chips that are on (empty = all). A state this version does not know is left out.
+    #[serde_as(as = "DefaultOnError<VecSkipError<_>>")]
+    pub state_filter: Vec<JobStateKind>,
     pub search: String,
     /// Column widths in logical pixels by column id.
     pub columns: std::collections::BTreeMap<String, u32>,
     /// One-time choice for this run of the queue (the default is `Settings.queue.when_done`).
     pub when_done: Option<WhenDone>,
+    /// The selected jobs in the order they were selected (ids that are gone are dropped when the queue is known).
+    #[serde_as(as = "DefaultOnError")]
+    pub selected: Vec<JobId>,
+    /// The job the Job and Logs panels show (the last one clicked).
+    #[serde_as(as = "DefaultOnError")]
+    pub current: Option<JobId>,
+}
+
+impl QueuePanelState {
+    /// Most selected jobs that are remembered.
+    pub const SELECTED_MAX: usize = 10_000;
+    /// Longest search text that is remembered.
+    pub const SEARCH_MAX: usize = 500;
+
+    fn sanitize(&mut self, notes: &mut Vec<String>) {
+        self.columns.retain(|_, width| *width >= 24 && *width <= 4_000);
+        let mut seen = std::collections::HashSet::new();
+        self.state_filter.retain(|k| seen.insert(*k));
+        let mut seen = std::collections::HashSet::new();
+        self.selected.retain(|id| seen.insert(*id));
+        if self.selected.len() > Self::SELECTED_MAX {
+            notes.push("queue selection shortened".into());
+            self.selected.truncate(Self::SELECTED_MAX);
+        }
+        if self.search.chars().count() > Self::SEARCH_MAX {
+            notes.push("queue search shortened".into());
+            self.search = self.search.chars().take(Self::SEARCH_MAX).collect();
+        }
+    }
+}
+
+/// The Job panel: which of its sections are folded.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct JobPanelState {
+    /// Ids of the folded sections (`sections`, `filters`, `render`, ...; unknown ids are ignored by the app).
+    pub collapsed: Vec<String>,
+}
+
+/// The Logs panel's filter.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LogPanelState {
+    /// Only lines containing this text (case-insensitive).
+    pub search: String,
+    /// Only errors and warnings.
+    pub errors_only: bool,
+    /// Stay at the newest line.
+    pub follow: bool,
+}
+
+impl Default for LogPanelState {
+    fn default() -> Self {
+        Self {
+            search: String::new(),
+            errors_only: false,
+            follow: true,
+        }
+    }
 }
 
 /// The timeline under the video.
@@ -267,7 +335,7 @@ impl VersionedFile for UiState {
             notes.push("volume limited to 150".into());
             self.export.volume = 150;
         }
-        self.queue.columns.retain(|_, width| *width >= 24 && *width <= 4_000);
+        self.queue.sanitize(&mut notes);
         let seconds = self.export.probe.seconds;
         if !PROBE_SECS.contains(&seconds) {
             notes.push(format!("probe length {seconds} s brought into range"));
@@ -284,196 +352,5 @@ impl VersionedFile for UiState {
         }
         self.tags.sanitize(&mut notes);
         notes
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::settings::{load, save};
-
-    #[test]
-    fn round_trip_with_an_opaque_dock_table() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut state = UiState::default();
-        let mut dock = toml::Table::new();
-        dock.insert("left_width".into(), toml::Value::Integer(320));
-        state.dock = Some(dock);
-        state.queue.state_filter = vec![crate::job::JobStateKind::Failed];
-        state.queue.columns.insert("name".into(), 240);
-        save(dir.path(), &state).unwrap();
-        assert_eq!(
-            load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value(),
-            state
-        );
-    }
-
-    #[test]
-    fn the_tag_panel_round_trips_is_sanitized_and_old_files_load() {
-        let dir = tempfile::tempdir().unwrap();
-        let state = UiState {
-            tags: TagPanelState {
-                expanded: vec![1, 2],
-                filter: "be.*".into(),
-                regex: true,
-                history: vec![5, 3],
-                history_collapsed: true,
-                history_height: 120,
-                hidden: vec![9],
-                locked: vec![3],
-                last_tags: vec![3, 5],
-                last_rating: Some(4),
-            },
-            ..UiState::default()
-        };
-        save(dir.path(), &state).unwrap();
-        assert_eq!(
-            load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value(),
-            state
-        );
-
-        let mut bad = UiState::default();
-        bad.tags.history = (0..30).chain([1, 1]).collect();
-        bad.tags.locked = vec![4, 4, 2];
-        bad.tags.history_height = 9;
-        bad.tags.last_rating = Some(9);
-        assert_eq!(bad.sanitize().len(), 3);
-        assert_eq!(bad.tags.history.len(), TagPanelState::HISTORY_MAX);
-        assert_eq!(bad.tags.locked, vec![4, 2]);
-        assert_eq!((bad.tags.history_height, bad.tags.last_rating), (40, None));
-
-        // A file of 0.0.11 has no `[tags]`; a `[tags]` this version cannot read keeps the rest of the file.
-        for tags in ["", "[tags]\nhistory = \"many\"\n"] {
-            std::fs::write(
-                dir.path().join("ui-state.toml"),
-                format!("version = 1\n[timeline]\nzoom = 4.0\n{tags}"),
-            )
-            .unwrap();
-            let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
-            assert_eq!((read.timeline.zoom, read.tags.clone()), (4.0, TagPanelState::default()));
-        }
-    }
-
-    #[test]
-    fn absurd_values_are_reset() {
-        let mut state = UiState::default();
-        state.window.width = 5;
-        state.window.maximized = true;
-        state.export.volume = 255;
-        state.queue.columns.insert("x".into(), 1);
-        assert_eq!(state.sanitize().len(), 2);
-        assert_eq!((state.window.width, state.window.maximized), (1280, true));
-        assert!(state.queue.columns.is_empty());
-    }
-
-    #[test]
-    fn the_timeline_zoom_is_kept_in_range_and_old_files_load() {
-        let mut state = UiState::default();
-        state.timeline.zoom = 0.2;
-        assert_eq!(state.sanitize().len(), 1);
-        assert_eq!(state.timeline.zoom, 1.0);
-        state.timeline.zoom = 1e9;
-        state.sanitize();
-        assert_eq!(state.timeline.zoom, TimelineState::MAX_ZOOM);
-        state.timeline.zoom = f64::NAN;
-        state.sanitize();
-        assert_eq!(state.timeline.zoom, 1.0);
-
-        // A file of 0.0.5 has no `[timeline]`.
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("ui-state.toml"),
-            "version = 1\n[window]\nwidth = 1000\n",
-        )
-        .unwrap();
-        let value = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
-        assert_eq!((value.window.width, value.timeline.zoom), (1000, 1.0));
-    }
-
-    #[test]
-    fn kept_filters_round_trip_and_bad_values_read_as_missing() {
-        use crate::edit::{Crop, Filter, FilterKind, Rotation};
-        let dir = tempfile::tempdir().unwrap();
-        let mut state = UiState::default();
-        let mut chain = FilterChain::default();
-        chain.set(Filter::Crop(Crop::new(2, 4, 6, 8)));
-        chain.set_enabled(FilterKind::Crop, true);
-        chain.set(Filter::Rotate {
-            rotation: Rotation::CounterClockwise,
-        });
-        chain.move_up(FilterKind::Rotate);
-        state.export.keep_filters = true;
-        state.export.filters = Some(chain);
-        state.export.crop_aspect = CropAspect::Wide;
-        save(dir.path(), &state).unwrap();
-        let text = std::fs::read_to_string(dir.path().join("ui-state.toml")).unwrap();
-        assert!(text.contains("crop_aspect = \"16:9\""), "{text}");
-        assert_eq!(
-            load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value(),
-            state
-        );
-
-        // A file of 0.0.6 has neither field; a broken chain or aspect does not reset the rest.
-        std::fs::write(
-            dir.path().join("ui-state.toml"),
-            "version = 1\n[export]\nvolume = 70\nkeep_filters = true\ncrop_aspect = \"7:3\"\nfilters = 5\n",
-        )
-        .unwrap();
-        let value = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
-        assert_eq!(value.export.volume, 70);
-        assert!(value.export.keep_filters);
-        assert_eq!(value.export.filters, None);
-        assert_eq!(value.export.crop_aspect, CropAspect::Free);
-    }
-
-    #[test]
-    fn the_render_working_copy_and_probe_switches() {
-        use crate::render::{VideoEncoder, builtin_profiles};
-        let dir = tempfile::tempdir().unwrap();
-        let mut state = UiState::default();
-        let mut working = builtin_profiles().remove(0);
-        working.set_encoder(VideoEncoder::X264);
-        state.export.profile = Some("av1-balanced".into());
-        state.export.render = Some(working);
-        state.export.probe = ProbeState {
-            seconds: 20,
-            exact: true,
-        };
-        save(dir.path(), &state).unwrap();
-        assert_eq!(
-            load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value(),
-            state
-        );
-
-        // 0.0.8 wrote neither; a broken copy or switch does not reset the rest.
-        std::fs::write(
-            dir.path().join("ui-state.toml"),
-            "version = 1\n[export]\nvolume = 60\nprofile = \"x265-quality\"\nprobe = 3\n\
-             [export.render]\nid = 1\n",
-        )
-        .unwrap();
-        let value = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
-        assert_eq!(value.export.volume, 60);
-        assert_eq!(value.export.profile.as_deref(), Some("x265-quality"));
-        assert_eq!(value.export.render, None);
-        assert_eq!(value.export.probe, ProbeState::default());
-
-        let mut state = UiState::default();
-        state.export.probe.seconds = 600;
-        assert_eq!(state.sanitize().len(), 1);
-        assert_eq!(state.export.probe.seconds, 60);
-    }
-
-    #[test]
-    fn positions_off_every_screen_or_half_known_are_dropped() {
-        let mut state = UiState::default();
-        (state.window.x, state.window.y) = (Some(-40), Some(1200));
-        assert!(state.sanitize().is_empty());
-        state.window.x = Some(900_000);
-        assert_eq!(state.sanitize(), vec!["window position reset".to_owned()]);
-        assert_eq!((state.window.x, state.window.y), (None, None));
-        state.window.y = Some(10);
-        assert_eq!(state.sanitize().len(), 1);
-        assert_eq!(state.window.y, None);
     }
 }

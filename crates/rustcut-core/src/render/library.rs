@@ -187,6 +187,23 @@ impl Selection {
         self.select(library, &base);
     }
 
+    /// The settings of a job loaded into the editor: its profile becomes the base when the library still has it (with
+    /// the name it has now), else the base stays and the copy is marked modified.
+    pub fn load(&mut self, library: &ProfileLibrary, settings: &RenderProfile) {
+        if let Some(profile) = library.get(&settings.id) {
+            self.base.clone_from(&profile.id);
+        }
+        let (id, name) = library.get(&self.base).map_or_else(
+            || (settings.id.clone(), settings.name.clone()),
+            |p| (p.id.clone(), p.name.clone()),
+        );
+        self.working = RenderProfile {
+            id,
+            name,
+            ..settings.clone()
+        };
+    }
+
     /// The working copy after its profile was renamed or saved: the name follows.
     pub fn follow(&mut self, library: &ProfileLibrary) {
         if let Some(profile) = library.get(&self.base) {
@@ -237,6 +254,32 @@ mod tests {
         lib.delete(&id).unwrap();
         assert!(sel.is_modified(&lib), "a deleted profile leaves a modified copy");
         assert_eq!(lib.delete("gone"), Err(LibraryError::Unknown("gone".into())));
+    }
+
+    #[test]
+    fn loading_a_jobs_settings() {
+        let mut lib = ProfileLibrary::new(Vec::new());
+        let mut sel = Selection::restore(&lib, None, None, DEFAULT_PROFILE_ID);
+        let mut job = lib.get("x265-quality").unwrap().clone();
+        job.name = "x265 quality (old name)".into();
+        sel.load(&lib, &job);
+        assert_eq!(
+            (sel.base.as_str(), sel.working.name.as_str()),
+            ("x265-quality", "x265 quality")
+        );
+        assert!(!sel.is_modified(&lib), "the job's profile as it is in the library");
+        job.video.keyint = Some(123);
+        sel.load(&lib, &job);
+        assert!(sel.is_modified(&lib));
+        assert_eq!(sel.working.video.keyint, Some(123));
+
+        // A user profile deleted since: the base stays, the job's settings are the modified copy.
+        let id = lib.save_as("Mine", &sel.working).unwrap();
+        let mine = lib.get(&id).unwrap().clone();
+        lib.delete(&id).unwrap();
+        sel.load(&lib, &mine);
+        assert_eq!(sel.base, "x265-quality");
+        assert!(sel.working.same_settings(&mine));
     }
 
     #[test]

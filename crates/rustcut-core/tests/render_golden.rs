@@ -100,6 +100,7 @@ impl Fixture {
                 folder: self.out(),
                 stem: stem.into(),
                 overwrite: false,
+                naming: None,
             },
             metadata: JobMetadata::default(),
         }

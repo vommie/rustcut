@@ -194,6 +194,11 @@ pub enum QueueCommand {
         metadata: JobMetadata,
         reply: Reply<Result<(), QueueError>>,
     },
+    /// The whole spec of a job in any state (the Job panel shows it, the editor loads it; M4.1).
+    Spec {
+        id: JobId,
+        reply: Reply<Result<Box<JobSpec>, QueueError>>,
+    },
     /// Stops rendering jobs (they wait again at the next start) and ends the actor.
     Shutdown {
         reply: Reply<()>,
