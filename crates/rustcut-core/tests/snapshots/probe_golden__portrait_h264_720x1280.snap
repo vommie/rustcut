@@ -1,0 +1,26 @@
+---
+source: crates/rustcut-core/tests/probe_golden.rs
+expression: portrait_h264_720x1280.mp4
+---
+[Container]
+Format: QuickTime / MOV
+Duration: 0:00:10.000
+Size: 5.12 MB
+Bit rate: 4.09 Mbit/s
+[Video]
+Codec: H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (h264)
+Profile: Constrained Baseline
+Resolution: 720 x 1280
+Aspect ratio: 9:16
+Frame rate: 25 fps
+Frames: 250
+Scan: Progressive
+Pixel format: yuv420p (8-bit)
+Bit rate: 3.99 Mbit/s
+[Audio]
+Codec: AAC (Advanced Audio Coding)
+Profile: LC
+Sample rate: 48 kHz
+Channels: 1 (mono)
+Sample format: fltp
+Bit rate: 96 kbit/s

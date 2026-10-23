@@ -1,0 +1,24 @@
+---
+source: crates/rustcut-core/tests/probe_golden.rs
+expression: mpeg4_mp3.avi
+---
+[Container]
+Format: AVI (Audio Video Interleaved)
+Duration: 0:00:08.040
+Size: 2.06 MB
+Bit rate: 2.05 Mbit/s
+[Video]
+Codec: MPEG-4 part 2 (mpeg4)
+Profile: Simple Profile
+Resolution: 640 x 480
+Aspect ratio: 4:3
+Frame rate: 25 fps
+Frames: 201
+Pixel format: yuv420p (8-bit)
+Bit rate: 1.94 Mbit/s
+[Audio]
+Codec: MP3 (MPEG audio layer 3)
+Sample rate: 48 kHz
+Channels: 1 (mono)
+Sample format: fltp
+Bit rate: 96 kbit/s

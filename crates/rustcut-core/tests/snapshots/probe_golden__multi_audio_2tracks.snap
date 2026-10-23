@@ -1,0 +1,32 @@
+---
+source: crates/rustcut-core/tests/probe_golden.rs
+expression: multi_audio_2tracks.mkv
+---
+[Container]
+Format: Matroska / WebM
+Duration: 0:00:08.021
+Size: 1.38 MB
+Bit rate: 1.37 Mbit/s
+[Video]
+Codec: H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (h264)
+Profile: Constrained Baseline
+Resolution: 640 x 360
+Aspect ratio: 16:9
+Frame rate: 25 fps
+Scan: Progressive
+Pixel format: yuv420p (8-bit)
+Color: Limited range
+[Audio 1 (default)]
+Codec: AAC (Advanced Audio Coding)
+Profile: LC
+Sample rate: 48 kHz
+Channels: 1 (mono)
+Sample format: fltp
+Language: English (eng)
+[Audio 2]
+Codec: AAC (Advanced Audio Coding)
+Profile: LC
+Sample rate: 48 kHz
+Channels: 1 (mono)
+Sample format: fltp
+Language: German (deu)

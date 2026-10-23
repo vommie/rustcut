@@ -9,6 +9,7 @@ pub mod app_identity;
 pub mod edit;
 pub mod hashing;
 pub mod job;
+pub mod media;
 pub mod naming;
 pub mod queue;
 pub mod render;

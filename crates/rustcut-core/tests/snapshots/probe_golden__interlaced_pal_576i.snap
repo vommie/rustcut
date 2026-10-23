@@ -1,0 +1,26 @@
+---
+source: crates/rustcut-core/tests/probe_golden.rs
+expression: interlaced_pal_576i.mpg
+---
+[Container]
+Format: MPEG-PS (MPEG-2 Program Stream)
+Duration: 0:00:10.010
+Start time: 0:00:00.529
+Size: 4.01 MB
+Bit rate: 3.2 Mbit/s
+[Video]
+Codec: MPEG-2 video (mpeg2video)
+Profile: Main
+Resolution: 720 x 576
+Aspect ratio: 5:4
+Frame rate: 25 fps
+Scan: Interlaced, top field first
+Pixel format: yuv420p (8-bit)
+Color: Limited range
+Start time: 0:00:00.540
+[Audio]
+Codec: MP2 (MPEG audio layer 2)
+Sample rate: 48 kHz
+Channels: 1 (mono)
+Sample format: s16p
+Bit rate: 128 kbit/s
