@@ -16,7 +16,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = slint_build::CompilerConfiguration::new()
         .with_style("fluent".into())
         .with_include_paths(vec![out_dir, assets_root])
-        .embed_resources(slint_build::EmbedResourcesKind::EmbedFiles);
+        .embed_resources(slint_build::EmbedResourcesKind::EmbedFiles)
+        // Slint's MCP server finds elements by id only with debug info in the generated code (feature `slint-mcp`).
+        .with_debug_info(env::var_os("CARGO_FEATURE_SLINT_MCP").is_some());
     slint_build::compile_with_config("ui/main.slint", config)?;
     Ok(())
 }

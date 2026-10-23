@@ -1,22 +1,32 @@
-//! Startup and shutdown of the application: command line, logging, Slint backend, main window, event loop.
+//! Startup and shutdown of the application: command line, profile, logging, single instance, runtime, Slint backend, main
+//! window, event loop, and the one quit path (`shutdown`).
 
 mod cli;
 mod logging;
 mod persistence;
+mod shutdown;
+pub mod window;
 
 use std::process::ExitCode;
+use std::rc::Rc;
+use std::time::{Duration, Instant};
 
-use az::CheckedAs as _;
 use clap::Parser as _;
-use rustcut_core::app_identity::{APP_ID, APP_NAME, VERSION};
-use rustcut_core::settings::{AppPaths, UiState, WindowState};
+use rustcut_core::app_identity::{APP_NAME, VERSION};
+use rustcut_core::settings::AppPaths;
 use slint::ComponentHandle as _;
 
 pub use cli::Cli;
 
 use crate::MainWindow;
+use crate::desktop::instance::{self, Request};
+use crate::ui::dispatcher::{SlintSink, UiDispatcher};
 use crate::ui::dock::{DockBridge, persist as dock_persist};
+use crate::ui::open::{self, FileOpener};
 use crate::ui::player::{PlayerBridge, PlayerBridgeError};
+
+/// How long the runtime may take to finish its tasks at quit.
+const RUNTIME_SHUTDOWN: Duration = Duration::from_secs(2);
 
 /// Errors that end the application before or while the event loop runs.
 #[derive(Debug, thiserror::Error)]
@@ -25,8 +35,17 @@ pub enum AppError {
     Platform(#[from] slint::PlatformError),
     #[error("no home folder is known; start with --home <dir>")]
     NoHome,
+    #[error("the async runtime could not be started: {0}")]
+    Runtime(std::io::Error),
     #[error("the player could not be started: {0}")]
     Player(#[from] PlayerBridgeError),
+}
+
+/// How a run ended.
+enum Outcome {
+    Quit,
+    /// A running instance of the same profile took the files.
+    Forwarded,
 }
 
 /// Runs the application and returns the process exit code.
@@ -34,38 +53,62 @@ pub fn main() -> ExitCode {
     let cli = Cli::parse();
     let log = logging::init();
     tracing::info!(version = VERSION, "[App] {APP_NAME} starting");
-    match run(&cli, &log) {
-        Ok(()) => {
+    let result = run(&cli, &log);
+    let code = match result {
+        Ok(Outcome::Quit) => {
             tracing::info!("[App] Exited normally");
+            ExitCode::SUCCESS
+        }
+        Ok(Outcome::Forwarded) => {
+            tracing::info!("[App] Handed over to the running instance");
             ExitCode::SUCCESS
         }
         Err(e) => {
             tracing::error!(error = %e, "[App] Exited with an error");
             ExitCode::FAILURE
         }
-    }
+    };
+    // Flushes the log file.
+    drop(log);
+    code
 }
 
-fn run(cli: &Cli, log: &logging::LogControl) -> Result<(), AppError> {
+fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     if let Some(home) = &cli.home {
         tracing::info!(home = %home.display(), "[App] Isolated profile requested");
     }
     let paths = AppPaths::resolve(cli.home.as_deref()).ok_or(AppError::NoHome)?;
     let loaded = persistence::load_all(paths);
     log.apply_setting(&loaded.settings.advanced.log_level);
-    select_backend()?;
-    let window = MainWindow::new()?;
-    // The XDG app id must be set after the backend exists and before the window is mapped (taskbar grouping, desktop file).
-    if let Err(e) = slint::set_xdg_app_id(APP_ID) {
-        tracing::warn!(error = %e, "[App] Failed to register the XDG app id");
+    log.open_file(&loaded.paths.log_dir(), loaded.settings.advanced.log_keep_days);
+
+    let single_instance = loaded.settings.general.single_instance;
+    let socket = instance::socket_path(&loaded.paths.config_dir);
+    if single_instance && forward(&socket, cli) {
+        return Ok(Outcome::Forwarded);
     }
-    window.set_app_name(APP_NAME.into());
-    window.set_app_version(VERSION.into());
-    restore_window(&window, &loaded.ui_state.window);
-    let dock = DockBridge::install(&window, dock_persist::from_table(loaded.ui_state.dock.as_ref()));
-    let player = PlayerBridge::start(&window)?;
+
+    let runtime = start_runtime()?;
+    let ui = UiDispatcher::new(SlintSink, runtime.handle().clone());
+    window::select_backend()?;
+    let main = MainWindow::new()?;
+    main.set_app_name(APP_NAME.into());
+    main.set_app_version(VERSION.into());
+    window::restore(&main, &loaded.ui_state.window);
+    let quit = shutdown::QuitPath::install(&main, &loaded.ui_state.window);
+    let dock = DockBridge::install(&main, dock_persist::from_table(loaded.ui_state.dock.as_ref()));
+    let player = PlayerBridge::start(&main, &ui, &loaded.settings.player, &loaded.ui_state.export)?;
+    let opener = FileOpener::install(
+        &main,
+        &player,
+        runtime.handle().clone(),
+        loaded.ui_state.last_open_dir.clone(),
+    );
+    let server = single_instance.then(|| listen(&socket, &runtime, &ui, &main)).flatten();
+    shutdown::watch_signals(runtime.handle(), ui, main.as_weak());
+
     if let Some(first) = cli.files.first() {
-        player.open(first);
+        opener.open(first.clone());
     }
     if cli.files.len() > 1 {
         tracing::info!(
@@ -73,67 +116,98 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<(), AppError> {
             "[App] Only the first file on the command line is opened"
         );
     }
-    window.run()?;
+    main.run()?;
 
+    // The single quit path: save what the user arranged, then stop the services.
     let mut ui_state = loaded.ui_state.clone();
-    capture_window(&window, &mut ui_state);
+    ui_state.window = quit.geometry(&main);
     ui_state.dock = dock_persist::to_table(&dock.layout());
+    (ui_state.export.volume, ui_state.export.muted) = player.volume_and_mute();
+    ui_state.last_open_dir = opener.last_open_dir();
     persistence::save_ui_state(&loaded, &ui_state);
-    drop(player);
-    Ok(())
+    drop(server);
+    drop(opener);
+    drop(main);
+    stop_player(player);
+    runtime.shutdown_timeout(RUNTIME_SHUTDOWN);
+    Ok(Outcome::Quit)
 }
 
-/// Size and maximized state before the first frame (the position is left to the window manager until M1.3).
-fn restore_window(window: &MainWindow, state: &WindowState) {
-    let w = window.window();
-    tracing::debug!(
-        width = state.width,
-        height = state.height,
-        maximized = state.maximized,
-        "[App] Window restored"
-    );
-    w.set_size(slint::LogicalSize::new(state.width as f32, state.height as f32));
-    if state.maximized {
-        w.set_maximized(true);
-    }
+/// The tokio runtime of the services (ADR-4). Built before the window: it takes about a millisecond (logged), and mpv's
+/// first events need the dispatcher, whose coalescing runs on it.
+fn start_runtime() -> Result<tokio::runtime::Runtime, AppError> {
+    let started = Instant::now();
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_name("rustcut-rt")
+        .build()
+        .map_err(AppError::Runtime)?;
+    tracing::debug!(micros = started.elapsed().as_micros(), "[App] Runtime started");
+    Ok(runtime)
 }
 
-/// The window's size in logical pixels; a maximized window keeps its last normal size.
-fn capture_window(window: &MainWindow, state: &mut UiState) {
-    let w = window.window();
-    let maximized = w.is_maximized();
-    state.window.maximized = maximized;
-    if !maximized {
-        let size = w.size().to_logical(w.scale_factor());
-        state.window.width = to_dimension(size.width, state.window.width);
-        state.window.height = to_dimension(size.height, state.window.height);
-    }
-}
-
-/// A logical size as whole pixels; `fallback` for values that are not a sensible size.
-fn to_dimension(value: f32, fallback: u32) -> u32 {
-    value
-        .round()
-        .checked_as::<u32>()
-        .filter(|px| (1..=65_535).contains(px))
-        .unwrap_or(fallback)
-}
-
-/// Selects winit with an OpenGL renderer: the player draws libmpv's frames into a GL texture on Slint's context (ADR-2).
-/// Without OpenGL the default backend is used, so the window still opens (the player then reports that it cannot render).
-fn select_backend() -> Result<(), slint::PlatformError> {
-    match slint::BackendSelector::new()
-        .backend_name("winit".into())
-        .require_opengl()
-        .select()
-    {
-        Ok(()) => {
-            tracing::info!("[App] Backend winit with OpenGL selected");
-            Ok(())
+/// Hands the command line's files to a running instance of this profile. `true` = it took them, this start ends.
+fn forward(socket: &std::path::Path, cli: &Cli) -> bool {
+    let request = Request::Open {
+        files: instance::absolute_files(&cli.files),
+    };
+    match instance::send(socket, &request) {
+        Ok(Some(reply)) if reply.ok => {
+            tracing::info!(
+                files = cli.files.len(),
+                "[Instance] RustCut is already running; files forwarded"
+            );
+            true
         }
+        Ok(Some(reply)) => {
+            tracing::warn!(message = %reply.message, "[Instance] The running instance refused the files; starting anyway");
+            false
+        }
+        Ok(None) => false,
         Err(e) => {
-            tracing::warn!(error = %e, "[App] OpenGL is not available; falling back to the default backend");
-            slint::BackendSelector::new().select()
+            tracing::warn!(error = %e, "[Instance] The running instance did not answer; starting anyway");
+            false
+        }
+    }
+}
+
+/// Listens for a second start; its files open in this window. `None` (logged) when the socket cannot be used.
+fn listen(
+    socket: &std::path::Path,
+    runtime: &tokio::runtime::Runtime,
+    ui: &UiDispatcher,
+    main: &MainWindow,
+) -> Option<instance::Server> {
+    let ui = ui.clone();
+    let main = main.as_weak();
+    let served = instance::serve(socket, runtime.handle(), move |request| {
+        if let Request::Open { files } = request {
+            let main = main.clone();
+            ui.post(move || {
+                if let Some(main) = main.upgrade() {
+                    open::open_forwarded(&main, &files);
+                }
+            });
+        }
+    });
+    match served {
+        Ok(server) => Some(server),
+        Err(e) => {
+            tracing::warn!(error = %e, "[Instance] Not listening for a second start; it opens its own window");
+            None
+        }
+    }
+}
+
+/// Drops the last reference to the player: mpv quits and its threads are joined.
+fn stop_player(player: Rc<PlayerBridge>) {
+    match Rc::try_unwrap(player) {
+        Ok(player) => drop(player),
+        Err(player) => {
+            tracing::warn!(
+                references = Rc::strong_count(&player),
+                "[App] The player is still referenced; it stops when the last reference goes"
+            );
         }
     }
 }

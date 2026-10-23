@@ -1,0 +1,76 @@
+// A slim horizontal bar for a value from 0 to 1: the seek bar under the video and the volume bar. A click jumps to the
+// clicked spot (not a page step); dragging follows the mouse and shows the dragged value until the button is released.
+
+import { Theme } from "styles.slint";
+
+export component PlayerSeekBar inherits Rectangle {
+    in property <float> value;
+    in property <bool> enabled: true;
+    in property <length> track-height: 4px;
+    in property <length> knob-size: 12px;
+    // `final` is false while dragging, true when the button is released.
+    callback changed(/* value */ float, /* final */ bool);
+
+    property <bool> dragging;
+    property <float> drag-value;
+    property <float> shown: Math.clamp(root.dragging ? root.drag-value : root.value, 0, 1);
+    property <length> usable: Math.max(1px, root.width - root.knob-size);
+
+    min-width: 40px;
+    height: 24px;
+
+    pure function at(x: length) -> float {
+        return Math.clamp((x - root.knob-size / 2) / root.usable, 0, 1);
+    }
+
+    track := Rectangle {
+        x: root.knob-size / 2;
+        y: (parent.height - self.height) / 2;
+        width: root.usable;
+        height: root.track-height;
+        border-radius: self.height / 2;
+        background: Theme.surface-hover;
+
+        Rectangle {
+            x: 0;
+            width: parent.width * root.shown;
+            height: parent.height;
+            border-radius: parent.border-radius;
+            background: root.enabled ? Theme.primary : Theme.status-deleted;
+        }
+    }
+
+    if root.enabled: Rectangle {
+        x: root.usable * root.shown;
+        y: (parent.height - self.height) / 2;
+        width: root.knob-size;
+        height: root.knob-size;
+        border-radius: self.width / 2;
+        background: touch.has-hover || root.dragging ? Theme.text : Theme.text-muted;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+
+        pointer-event(event) => {
+            if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
+                root.dragging = true;
+                root.drag-value = root.at(self.mouse-x);
+                root.changed(root.drag-value, false);
+            }
+            if event.button == PointerEventButton.left && event.kind == PointerEventKind.up && root.dragging {
+                root.drag-value = root.at(self.mouse-x);
+                root.dragging = false;
+                root.changed(root.drag-value, true);
+            }
+        }
+
+        moved => {
+            if root.dragging && self.pressed {
+                root.drag-value = root.at(self.mouse-x);
+                root.changed(root.drag-value, false);
+            }
+        }
+    }
+}

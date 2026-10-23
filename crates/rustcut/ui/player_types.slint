@@ -1,0 +1,34 @@
+// The player's state and actions as one global, so the video view, the transport bar, the menus and the keys share it
+// (src/ui/player/ sets the properties and handles the callbacks).
+
+export global Playback {
+    // A file is open (also when it failed to play): the transport bar is usable.
+    in property <bool> has-file;
+    // A video frame is shown.
+    in property <bool> has-video;
+    in property <bool> paused: true;
+    in property <bool> muted;
+    // Volume in percent (0-150).
+    in property <int> volume: 100;
+    // Position / duration, 0 to 1.
+    in property <float> progress;
+    // Current and total time as H:MM:SS.mmm.
+    in property <string> position-text: "0:00:00.000";
+    in property <string> duration-text: "0:00:00.000";
+    // Non-empty while the file cannot be played: the error overlay over the video.
+    in property <string> error-title;
+    in property <string> error-detail;
+    // A file is dragged over the window; `drop-count` files.
+    in property <bool> drop-hover;
+    in property <int> drop-count;
+
+    callback toggle-pause();
+    callback frame-step(/* back */ bool);
+    // `final` is false while the seek bar is dragged (fast keyframe seeks), true on release (exact).
+    callback seek(/* fraction */ float, /* final */ bool);
+    callback toggle-mute();
+    callback set-volume(int);
+    // Mouse wheel over the video: volume up (negative delta) or down.
+    callback wheel(/* delta-y */ length);
+    callback reload();
+}

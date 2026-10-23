@@ -366,6 +366,9 @@ impl VersionedFile for Settings {
         if fix("render.nice limited to 19", self.render.nice > 19) {
             self.render.nice = 19;
         }
+        if fix("advanced.log_keep_days raised to 1", self.advanced.log_keep_days == 0) {
+            self.advanced.log_keep_days = 1;
+        }
         if fix("rustview.timeout_secs raised to 1", self.rustview.timeout_secs == 0) {
             self.rustview.timeout_secs = 1;
         }
@@ -442,8 +445,10 @@ mod tests {
         s.render.default_profile = "gone".into();
         s.export.name_template = " ".into();
         s.render.profiles = vec![crate::render::builtin_profiles().remove(0)];
+        s.advanced.log_keep_days = 0;
         let notes = s.sanitize();
-        assert_eq!(notes.len(), 5, "{notes:?}");
+        assert_eq!(notes.len(), 6, "{notes:?}");
+        assert_eq!(s.advanced.log_keep_days, 1);
         assert_eq!((s.queue.workers, s.render.nice), (1, 19));
         assert_eq!(s.render.default_profile, DEFAULT_PROFILE_ID);
         assert!(s.render.profiles.is_empty());

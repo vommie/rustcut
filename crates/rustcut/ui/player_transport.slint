@@ -1,0 +1,140 @@
+// The transport bar under the video: play/pause, frame steps, the seek bar between the current and the total time, mute
+// and volume. Everything reads and calls the `Playback` global.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { Playback } from "player_types.slint";
+import { PlayerSeekBar } from "player_seek_bar.slint";
+
+component TransportButton inherits Rectangle {
+    in property <IconId> icon;
+    in property <bool> enabled: true;
+    in property <length> icon-size: IconSize.md;
+    callback clicked();
+
+    width: 30px;
+    height: 30px;
+    border-radius: 4px;
+    background: !root.enabled ? transparent
+        : touch.pressed ? Theme.surface-selected
+        : touch.has-hover ? Theme.surface-hover : transparent;
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+
+    AppIcon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        icon: root.icon;
+        size: root.icon-size;
+        color: !root.enabled ? Theme.status-deleted : touch.has-hover ? Theme.text : Theme.text-muted;
+    }
+}
+
+component TimeLabel inherits Text {
+    color: Playback.has-file ? Theme.text : Theme.status-deleted;
+    font-family: "monospace";
+    font-size: 12px;
+    vertical-alignment: center;
+    horizontal-stretch: 0;
+}
+
+export component PlayerTransport inherits Rectangle {
+    height: 40px;
+    background: Theme.surface;
+
+    Rectangle {
+        y: 0;
+        height: 1px;
+        background: Theme.border;
+    }
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 10px;
+        spacing: 4px;
+        alignment: stretch;
+
+        VerticalLayout {
+            alignment: center;
+            TransportButton {
+                icon: Playback.paused ? IconId.play : IconId.pause;
+                icon-size: IconSize.lg;
+                enabled: Playback.has-file;
+                clicked => { Playback.toggle-pause(); }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            TransportButton {
+                icon: IconId.frame-back;
+                enabled: Playback.has-video;
+                clicked => { Playback.frame-step(true); }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            TransportButton {
+                icon: IconId.frame-forward;
+                enabled: Playback.has-video;
+                clicked => { Playback.frame-step(false); }
+            }
+        }
+
+        Rectangle { width: 6px; }
+
+        TimeLabel {
+            text: Playback.position-text;
+        }
+
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            PlayerSeekBar {
+                value: Playback.progress;
+                enabled: Playback.has-video;
+                changed(value, final) => { Playback.seek(value, final); }
+            }
+        }
+
+        TimeLabel {
+            text: Playback.duration-text;
+            color: Theme.text-muted;
+        }
+
+        Rectangle { width: 10px; }
+
+        VerticalLayout {
+            alignment: center;
+            TransportButton {
+                icon: Playback.muted ? IconId.volume-muted : IconId.volume;
+                clicked => { Playback.toggle-mute(); }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 0;
+            PlayerSeekBar {
+                width: 90px;
+                track-height: 3px;
+                knob-size: 10px;
+                value: Playback.volume / 150;
+                changed(value, final) => { Playback.set-volume(Math.round(value * 150)); }
+            }
+        }
+
+        Text {
+            text: Playback.volume + "%";
+            width: 36px;
+            color: Playback.muted ? Theme.status-deleted : Theme.text-muted;
+            font-size: 11px;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+        }
+    }
+}

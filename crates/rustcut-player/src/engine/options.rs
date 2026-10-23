@@ -2,6 +2,8 @@
 
 use libmpv2::{MpvInitializer, Result};
 
+use super::audio::{self, AudioOptions};
+
 /// mpv's built-in profile for cheap scaling (bilinear, no dithering, no linear-light downscaling).
 pub(crate) const FAST_PROFILE: &str = "fast";
 
@@ -29,6 +31,13 @@ pub struct PlayerOptions {
     pub autoplay: bool,
     /// Scaling quality of the preview.
     pub preview_quality: PreviewQuality,
+    /// Color of the area around the video (`#RRGGBB`, mpv `background-color`).
+    pub background: String,
+    /// The preview's audio filters.
+    pub audio: AudioOptions,
+    /// Volume in percent at startup.
+    pub volume: f64,
+    pub muted: bool,
     /// Lowest mpv log level forwarded to RustCut's log (`fatal`, `error`, `warn`, `info`, `v`, `debug`).
     pub log_level: &'static str,
 }
@@ -40,6 +49,10 @@ impl Default for PlayerOptions {
             keep_open: true,
             autoplay: true,
             preview_quality: PreviewQuality::Auto,
+            background: "#000000".into(),
+            audio: AudioOptions::default(),
+            volume: 100.0,
+            muted: false,
             log_level: "warn",
         }
     }
@@ -56,6 +69,18 @@ impl PlayerOptions {
         init.set_option("hwdec", self.hwdec.as_str())?;
         init.set_option("keep-open", if self.keep_open { "yes" } else { "no" })?;
         init.set_option("pause", !self.autoplay)?;
+        init.set_option("volume", self.volume.clamp(0.0, 150.0))?;
+        init.set_option("volume-max", 150.0)?;
+        init.set_option("mute", self.muted)?;
+        if is_color(&self.background) {
+            init.set_option("background-color", self.background.as_str())?;
+        } else {
+            tracing::warn!(color = %self.background, "[Player] The background is not a #RRGGBB color; using black");
+        }
+        let af = audio::filter_chain(self.audio, None);
+        if !af.is_empty() {
+            init.set_option("af", af.as_str())?;
+        }
         // An embedded player: no own key bindings, no on-screen controller, no window title of its own.
         init.set_option("input-default-bindings", false)?;
         init.set_option("input-vo-keyboard", false)?;
@@ -65,6 +90,12 @@ impl PlayerOptions {
         }
         Ok(())
     }
+}
+
+/// `#RRGGBB` (mpv also accepts other forms, but the settings store this one).
+fn is_color(text: &str) -> bool {
+    text.strip_prefix('#')
+        .is_some_and(|hex| hex.len() == 6 && hex.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
 /// Whether an OpenGL renderer string (`GL_RENDERER`) names a software rasterizer (Mesa llvmpipe, softpipe, swrast).
@@ -78,6 +109,12 @@ pub(crate) fn is_software_renderer(renderer: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn background_colors_are_checked() {
+        assert!(is_color("#000000") && is_color("#1e1E2e"));
+        assert!(!is_color("black") && !is_color("#12345") && !is_color("#12345g") && !is_color(""));
+    }
 
     #[test]
     fn software_renderers_are_recognized() {

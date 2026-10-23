@@ -1,16 +1,37 @@
-//! Bridge between the player (`rustcut-player`) and the main window: the video surface, opening files, player events.
+//! Bridge between the player (`rustcut-player`) and the main window: the video surface, the `Playback` global (transport
+//! bar, menus, keys, error overlay), opening files.
 //!
-//! Player events arrive on mpv's event thread and reach the UI through [`SlintSink`] (the dispatcher's sink). They move onto
-//! the full [`UiDispatcher`](crate::ui::dispatcher::UiDispatcher) with the tokio runtime in M1.3.
+//! Player events arrive on mpv's event thread. They update the shared [`PlaybackState`] (a short lock, never held across a
+//! Slint call) and post the resulting [`PlaybackView`] through the [`UiDispatcher`], coalesced to the playhead rate: every
+//! post is the complete state, so the latest one wins. Commands go from the Slint callbacks straight to the player, whose
+//! command thread talks to mpv.
 
-use std::path::Path;
+mod state;
+
+use std::cell::Cell;
+use std::path::{Path, PathBuf};
+use std::rc::{Rc, Weak};
+use std::sync::Arc;
 
 use az::CheckedAs as _;
-use rustcut_player::{Player, PlayerError, PlayerEvent, PlayerOptions, SurfaceError, SurfaceHooks, attach_surface};
+use parking_lot::Mutex;
+use rustcut_core::settings::{ExportPanelState, PlayerSettings};
+use rustcut_player::{
+    AudioOptions, OpenOptions, Player, PlayerError, PlayerEvent, PlayerOptions, SurfaceError, SurfaceHooks,
+    attach_surface,
+};
 use slint::ComponentHandle as _;
 
-use crate::MainWindow;
-use crate::ui::dispatcher::{SlintSink, UiSink as _};
+pub use state::{PlaybackState, PlaybackView};
+
+use crate::ui::dispatcher::{CoalesceKey, UiDispatcher, rate};
+use crate::{MainWindow, Playback, Status};
+
+/// The one coalesced update of the playback view.
+const VIEW_KEY: CoalesceKey = CoalesceKey::new("playback", 0);
+/// One mouse wheel notch in Slint's `delta-y` on X11 (measured in RustView: winit reports two lines of 60 px); touchpads
+/// send pixels that add up to a notch the same way.
+const WHEEL_NOTCH: f32 = 120.0;
 
 /// Errors while starting the player.
 #[derive(Debug, thiserror::Error)]
@@ -21,23 +42,60 @@ pub enum PlayerBridgeError {
     Surface(#[from] SurfaceError),
 }
 
-/// The running player of the main window. Dropping it stops mpv.
+/// The running player of the main window. The app owns the only strong reference; dropping it stops mpv.
 pub struct PlayerBridge {
     player: Player,
+    state: Arc<Mutex<PlaybackState>>,
+    window: slint::Weak<MainWindow>,
+    auto_play: bool,
+    wheel_step: u8,
+    /// Wheel movement that has not made a whole notch yet (touchpads send small steps).
+    wheel_rest: Cell<f32>,
 }
 
 impl PlayerBridge {
-    /// Starts mpv and attaches its video surface to `window`.
-    pub fn start(window: &MainWindow) -> Result<Self, PlayerBridgeError> {
+    /// Starts mpv with the player settings and the saved volume, attaches its video surface to `window` and handles the
+    /// `Playback` callbacks from now on.
+    pub fn start(
+        window: &MainWindow,
+        ui: &UiDispatcher,
+        settings: &PlayerSettings,
+        export: &ExportPanelState,
+    ) -> Result<Rc<Self>, PlayerBridgeError> {
+        let options = PlayerOptions {
+            hwdec: settings.hwdec.clone(),
+            autoplay: settings.auto_play,
+            background: settings.background.clone(),
+            audio: AudioOptions {
+                mute_last_second: settings.mute_last_second,
+                loudnorm: settings.loudnorm_preview,
+            },
+            volume: f64::from(export.volume),
+            muted: export.muted,
+            ..PlayerOptions::default()
+        };
+        let state = Arc::new(Mutex::new(PlaybackState {
+            volume: export.volume,
+            muted: export.muted,
+            ..PlaybackState::default()
+        }));
+
+        let events_state = Arc::clone(&state);
+        let events_ui = ui.clone();
         let events_window = window.as_weak();
-        let player = Player::new(&PlayerOptions::default(), move |event| {
-            on_event(&event);
+        let player = Player::new(&options, move |event| {
+            log_event(&event);
+            let view = {
+                let mut state = events_state.lock();
+                state.apply(&event);
+                state.view()
+            };
             let window = events_window.clone();
-            SlintSink.run_on_ui(Box::new(move || {
+            events_ui.post_latest(VIEW_KEY, rate::PLAYHEAD, move || {
                 if let Some(window) = window.upgrade() {
-                    apply_event(&window, &event);
+                    show(&window, &view);
                 }
-            }));
+            });
         })?;
 
         let size_window = window.as_weak();
@@ -54,15 +112,173 @@ impl PlayerBridge {
                 }),
             },
         )?;
-        Ok(Self { player })
+
+        let bridge = Rc::new(Self {
+            player,
+            state,
+            window: window.as_weak(),
+            auto_play: settings.auto_play,
+            wheel_step: settings.wheel_volume_step,
+            wheel_rest: Cell::new(0.0),
+        });
+        bridge.connect(window);
+        bridge.refresh();
+        Ok(bridge)
     }
 
-    /// Opens `path` in the player (it waits for the video surface if the window has not rendered yet).
-    pub fn open(&self, path: &Path) {
-        if let Err(e) = self.player.open(path) {
-            tracing::error!(error = %e, path = %path.display(), "[Player] The file could not be opened");
+    /// Opens `path` (it waits for the video surface if the window has not rendered yet). Auto play decides whether it
+    /// starts playing.
+    pub fn open(&self, path: &Path) -> Result<(), PlayerError> {
+        self.state.lock().opening(path);
+        self.refresh();
+        self.player.open(
+            path,
+            OpenOptions {
+                start: None,
+                play: Some(self.auto_play),
+            },
+        )
+    }
+
+    /// The file that is open (also when it failed to play).
+    pub fn current_file(&self) -> Option<PathBuf> {
+        self.state.lock().file.clone()
+    }
+
+    /// Volume and mute as mpv has them now (saved in the UI state at quit).
+    pub fn volume_and_mute(&self) -> (u8, bool) {
+        let state = self.state.lock();
+        (state.volume, state.muted)
+    }
+
+    /// Loads the current file again at the current position, keeping the pause state (F5, the error overlay).
+    fn reload(&self) {
+        let (file, start) = {
+            let state = self.state.lock();
+            let start =
+                (state.failure.is_none() && state.position.as_micros() > 0).then(|| state.position.as_secs_f64());
+            (state.file.clone(), start)
+        };
+        let Some(file) = file else { return };
+        tracing::info!(path = %file.display(), start = ?start, "[Player] Reloading");
+        self.state.lock().opening(&file);
+        self.refresh();
+        if let Err(e) = self.player.open(&file, OpenOptions { start, play: None }) {
+            tracing::error!(error = %e, "[Player] Reloading failed");
         }
     }
+
+    fn connect(self: &Rc<Self>, window: &MainWindow) {
+        let playback = window.global::<Playback<'_>>();
+        let this = Rc::downgrade(self);
+        playback.on_toggle_pause(with(&this, |b| b.command(Player::toggle_pause)));
+        let this = Rc::downgrade(self);
+        playback.on_frame_step(move |back| {
+            if let Some(b) = this.upgrade() {
+                b.command(|p| p.frame_step(back));
+            }
+        });
+        let this = Rc::downgrade(self);
+        playback.on_seek(move |fraction, exact| {
+            if let Some(b) = this.upgrade() {
+                let target = b.state.lock().seek_target(fraction);
+                if let Some(seconds) = target {
+                    b.command(|p| p.seek(seconds, exact));
+                }
+            }
+        });
+        let this = Rc::downgrade(self);
+        playback.on_toggle_mute(with(&this, |b| {
+            let muted = b
+                .window
+                .upgrade()
+                .is_some_and(|w| w.global::<Playback<'_>>().get_muted());
+            b.command(|p| p.set_muted(!muted));
+        }));
+        let this = Rc::downgrade(self);
+        playback.on_set_volume(move |percent| {
+            if let Some(b) = this.upgrade() {
+                b.set_volume(percent);
+            }
+        });
+        let this = Rc::downgrade(self);
+        playback.on_wheel(move |delta| {
+            if let Some(b) = this.upgrade() {
+                b.wheel(delta);
+            }
+        });
+        let this = Rc::downgrade(self);
+        playback.on_reload(with(&this, PlayerBridge::reload));
+    }
+
+    /// Mouse wheel over the video: one notch changes the volume by the configured step.
+    fn wheel(&self, delta: f32) {
+        if !delta.is_finite() || delta == 0.0 {
+            return;
+        }
+        // A change of direction starts over.
+        let rest = self.wheel_rest.get();
+        let total = if rest * delta < 0.0 { delta } else { rest + delta };
+        let notches = (total / WHEEL_NOTCH).trunc();
+        self.wheel_rest.set(total - notches * WHEEL_NOTCH);
+        let Some(notches) = notches.checked_as::<i32>().filter(|n| *n != 0) else {
+            return;
+        };
+        let Some(window) = self.window.upgrade() else { return };
+        let current = window.global::<Playback<'_>>().get_volume();
+        self.set_volume(current.saturating_add(notches.saturating_mul(i32::from(self.wheel_step))));
+    }
+
+    fn set_volume(&self, percent: i32) {
+        let percent = percent.clamp(0, 150);
+        // Shown at once; mpv's confirmation arrives as a property change.
+        if let Some(window) = self.window.upgrade() {
+            window.global::<Playback<'_>>().set_volume(percent);
+        }
+        self.command(|p| p.set_volume(f64::from(percent)));
+    }
+
+    fn command(&self, run: impl FnOnce(&Player) -> Result<(), PlayerError>) {
+        if let Err(e) = run(&self.player) {
+            tracing::warn!(error = %e, "[Player] Command not sent");
+        }
+    }
+
+    /// Shows the current state at once (UI thread).
+    fn refresh(&self) {
+        let view = self.state.lock().view();
+        if let Some(window) = self.window.upgrade() {
+            show(&window, &view);
+        }
+    }
+}
+
+/// A callback without arguments that runs `f` while the bridge exists.
+fn with(this: &Weak<PlayerBridge>, f: impl Fn(&PlayerBridge) + 'static) -> impl Fn() + 'static {
+    let this = Weak::clone(this);
+    move || {
+        if let Some(bridge) = this.upgrade() {
+            f(&bridge);
+        }
+    }
+}
+
+/// Puts `view` into the `Playback` global and the status line's decoder field (UI thread).
+fn show(window: &MainWindow, view: &PlaybackView) {
+    let playback = window.global::<Playback<'_>>();
+    playback.set_has_file(view.has_file);
+    playback.set_has_video(view.has_video);
+    playback.set_paused(view.paused);
+    playback.set_muted(view.muted);
+    playback.set_volume(view.volume);
+    playback.set_progress(view.progress);
+    playback.set_position_text(view.position_text.as_str().into());
+    playback.set_duration_text(view.duration_text.as_str().into());
+    playback.set_error_title(view.error_title.as_str().into());
+    playback.set_error_detail(view.error_detail.as_str().into());
+    window
+        .global::<Status<'_>>()
+        .set_decoder(view.decoder_text.as_str().into());
 }
 
 /// The video area's size in physical pixels.
@@ -72,20 +288,15 @@ fn video_size(window: &MainWindow) -> slint::PhysicalSize {
     slint::PhysicalSize::new(px(window.get_video_width()), px(window.get_video_height()))
 }
 
-/// Logs a player event (on mpv's event thread).
-fn on_event(event: &PlayerEvent) {
+/// Logs a player event (on mpv's event thread); property changes only at trace level (the position changes every frame).
+fn log_event(event: &PlayerEvent) {
     match event {
+        PlayerEvent::PlaybackFailed { reason, detail } => {
+            tracing::warn!(reason = %reason, detail = ?detail, "[Player] The file cannot be played");
+        }
         PlayerEvent::Error(message) => tracing::warn!(message = %message, "[Player] Playback error"),
         PlayerEvent::Ended(reason) => tracing::info!(reason = ?reason, "[Player] Playback ended"),
+        PlayerEvent::Property(property) => tracing::trace!(property = ?property, "[Player] Property"),
         other => tracing::debug!(event = ?other, "[Player] Event"),
-    }
-}
-
-/// Shows a player event in the window (UI thread).
-fn apply_event(window: &MainWindow, event: &PlayerEvent) {
-    match event {
-        PlayerEvent::FileLoaded => window.set_has_video(true),
-        PlayerEvent::Ended(rustcut_player::EndReason::Error) | PlayerEvent::Shutdown => window.set_has_video(false),
-        _ => {}
     }
 }

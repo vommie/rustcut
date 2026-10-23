@@ -1,10 +1,13 @@
-// The video area: mpv's frame as an image (rustcut-player renders it at exactly this element's size), and the empty state.
+// The video area: mpv's frame as an image (rustcut-player renders it at exactly this element's size), the empty state, the
+// non-modal error overlay with Reload (click or F5), and the hint while a file is dragged over the window. The mouse wheel
+// changes the volume.
 
 import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { Playback } from "player_types.slint";
 
 export component PlayerView inherits Rectangle {
     in property <image> frame;
-    in property <bool> has-video;
     in property <string> app-name;
     in property <string> app-version;
 
@@ -18,10 +21,20 @@ export component PlayerView inherits Rectangle {
         height: parent.height;
         source: root.frame;
         image-fit: fill;
-        visible: root.has-video;
+        visible: Playback.has-video;
     }
 
-    if !root.has-video: VerticalLayout {
+    TouchArea {
+        scroll-event(event) => {
+            if event.delta-y == 0 {
+                return reject;
+            }
+            Playback.wheel(event.delta-y);
+            accept
+        }
+    }
+
+    if !Playback.has-file: VerticalLayout {
         alignment: center;
         spacing: 6px;
 
@@ -37,6 +50,135 @@ export component PlayerView inherits Rectangle {
             text: "Version " + root.app-version;
             color: Theme.text-muted;
             horizontal-alignment: center;
+        }
+
+        Rectangle { height: 10px; }
+
+        Text {
+            text: "Open a video with File > Open (Ctrl+O) or drop it here.";
+            color: Theme.text-muted;
+            horizontal-alignment: center;
+        }
+    }
+
+    if Playback.error-title != "": Rectangle {
+        background: #11111be6;
+
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => { Playback.reload(); }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 8px;
+            padding: 24px;
+
+            HorizontalLayout {
+                alignment: center;
+                AppIcon {
+                    icon: IconId.status-error;
+                    size: IconSize.xxl;
+                    color: Theme.status-corrupt;
+                }
+            }
+
+            Text {
+                text: Playback.error-title;
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+            }
+
+            if Playback.error-detail != "": Text {
+                text: Playback.error-detail;
+                color: Theme.text-muted;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+            }
+
+            Rectangle { height: 6px; }
+
+            HorizontalLayout {
+                alignment: center;
+
+                reload := Rectangle {
+                    width: reload-row.preferred-width + 24px;
+                    height: 30px;
+                    border-radius: 4px;
+                    background: reload-touch.pressed ? Theme.surface-selected
+                        : reload-touch.has-hover ? Theme.surface-hover : Theme.surface-variant;
+                    border-width: 1px;
+                    border-color: Theme.border;
+
+                    reload-touch := TouchArea {
+                        clicked => { Playback.reload(); }
+                    }
+
+                    reload-row := HorizontalLayout {
+                        alignment: center;
+                        spacing: 6px;
+
+                        VerticalLayout {
+                            alignment: center;
+                            AppIcon {
+                                icon: IconId.reload;
+                                size: IconSize.md;
+                            }
+                        }
+
+                        Text {
+                            text: "Reload (F5)";
+                            color: Theme.text;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if Playback.drop-hover: Rectangle {
+        background: #11111bcc;
+
+        Rectangle {
+            x: 12px;
+            y: 12px;
+            width: parent.width - 24px;
+            height: parent.height - 24px;
+            border-radius: 8px;
+            border-width: 2px;
+            border-color: Theme.primary;
+        }
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 8px;
+
+            HorizontalLayout {
+                alignment: center;
+                AppIcon {
+                    icon: IconId.drop-file;
+                    size: IconSize.xxl;
+                    color: Theme.primary;
+                }
+            }
+
+            Text {
+                text: "Drop to open";
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 600;
+                horizontal-alignment: center;
+            }
+
+            if Playback.drop-count > 1: Text {
+                text: "Only the first of the " + Playback.drop-count + " files is opened.";
+                color: Theme.text-muted;
+                horizontal-alignment: center;
+            }
         }
     }
 }

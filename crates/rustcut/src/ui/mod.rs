@@ -2,4 +2,6 @@
 
 pub mod dispatcher;
 pub mod dock;
+pub mod open;
 pub mod player;
+pub mod status;

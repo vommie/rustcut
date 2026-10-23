@@ -1,6 +1,7 @@
 //! RustCut player: libmpv's render API drawing into an OpenGL texture on Slint's context (ADR-2 in `HANDOFF.md`).
 //!
-//! - [`Player`] owns the mpv core: options, commands and the event thread (safe code only).
+//! - [`Player`] owns the mpv core: options, the command thread (every libmpv call except rendering) and the event thread with
+//!   the observed properties (safe code only).
 //! - [`attach_surface`] installs Slint's rendering notifier on a window: mpv draws each new frame into a framebuffer texture
 //!   while Slint renders, and the app shows that texture as a `slint::Image`. mpv's update callback requests the redraw.
 //! - [`FrameStats`] measures how long the video frames take (logged while playing and when the surface goes away).
@@ -13,6 +14,9 @@ mod engine;
 mod stats;
 mod surface;
 
-pub use engine::{EndReason, Player, PlayerError, PlayerEvent, PlayerHandle, PlayerOptions, PreviewQuality};
+pub use engine::{
+    AudioOptions, EndReason, OpenOptions, Player, PlayerError, PlayerEvent, PlayerHandle, PlayerOptions,
+    PreviewQuality, Property,
+};
 pub use stats::{FrameReport, FrameSample, FrameStats, Spread};
 pub use surface::{SurfaceError, SurfaceHooks, attach_surface};

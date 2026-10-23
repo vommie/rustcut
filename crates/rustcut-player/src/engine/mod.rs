@@ -1,21 +1,27 @@
 //! The mpv core: options, commands and the event thread.
 //!
 //! [`Player`] is owned by the app (UI thread); [`PlayerHandle`] is the cheap, thread-safe part the video surface needs (the
-//! mpv handle for the render context, and the "surface ready" state). A file opened before the surface exists is loaded as
-//! soon as the render context is there: with `vo=libmpv` mpv can only show video while a render context exists.
+//! mpv handle for the render context and a way to report the surface's state). Every command goes to the player's command
+//! thread (`commands.rs`), because the UI thread renders the video and must not call libmpv's synchronous API. A file
+//! opened before the surface exists is loaded as soon as the render context is there: with `vo=libmpv` mpv can only show
+//! video while a render context exists.
 
+mod audio;
+mod commands;
 mod events;
 mod log;
 mod options;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::mpsc::{self, Sender};
 use std::thread::JoinHandle;
 
 use libmpv2::Mpv;
-use parking_lot::Mutex;
 
-pub use events::{EndReason, PlayerEvent};
+pub use audio::AudioOptions;
+use commands::{Command, Session};
+pub use events::{EndReason, PlayerEvent, Property};
 pub use options::{PlayerOptions, PreviewQuality};
 
 /// Errors of the mpv core.
@@ -25,23 +31,26 @@ pub enum PlayerError {
     Mpv(#[from] libmpv2::Error),
     #[error("mpv cannot open paths that are not valid UTF-8: {}", .0.display())]
     NonUtf8Path(PathBuf),
-    #[error("the mpv event thread could not be started: {0}")]
+    #[error("a player thread could not be started: {0}")]
     Thread(#[from] std::io::Error),
+    #[error("the player's command thread is gone")]
+    Stopped,
 }
 
-/// What the video surface and the player share: whether a render context exists, and the file waiting for it.
-#[derive(Debug, Default)]
-struct SurfaceState {
-    ready: bool,
-    pending: Option<PathBuf>,
-    quality: PreviewQuality,
+/// How a file is opened.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct OpenOptions {
+    /// Start position in seconds.
+    pub start: Option<f64>,
+    /// `Some(true)` plays at once, `Some(false)` opens paused, `None` keeps the current pause state.
+    pub play: Option<bool>,
 }
 
 /// The thread-safe part of the player that the video surface uses.
 #[derive(Clone)]
 pub struct PlayerHandle {
     mpv: Arc<Mpv>,
-    surface: Arc<Mutex<SurfaceState>>,
+    commands: Sender<Command>,
 }
 
 impl PlayerHandle {
@@ -51,75 +60,56 @@ impl PlayerHandle {
     }
 
     /// A render context exists now on a renderer called `gl_renderer`: the preview quality is settled and a file opened
-    /// before is loaded.
+    /// before is loaded (on the command thread).
     pub(crate) fn surface_ready(&self, gl_renderer: &str) {
-        let (pending, quality) = {
-            let mut state = self.surface.lock();
-            state.ready = true;
-            (state.pending.take(), state.quality)
-        };
-        if quality == PreviewQuality::Auto && options::is_software_renderer(gl_renderer) {
-            match self.mpv.command("apply-profile", &[options::FAST_PROFILE]) {
-                Ok(()) => tracing::info!("[Player] Software OpenGL: fast preview scaling"),
-                Err(e) => tracing::warn!(error = %e, "[Player] The fast preview profile could not be applied"),
-            }
-        }
-        if let Some(path) = pending {
-            tracing::info!(path = %path.display(), "[Player] Video surface ready, loading the waiting file");
-            if let Err(e) = load(&self.mpv, &path) {
-                tracing::error!(error = %e, path = %path.display(), "[Player] Loading the file failed");
-            }
-        }
+        let software = options::is_software_renderer(gl_renderer);
+        self.send(Command::SurfaceReady { software });
     }
 
     /// The render context is gone (window hidden or closed); later files wait for the next one.
     pub(crate) fn surface_lost(&self) {
-        self.surface.lock().ready = false;
+        self.send(Command::SurfaceLost);
     }
 
-    /// Reads an mpv property as text, `None` when it is not available (no file, no video).
-    pub fn property_text(&self, name: &str) -> Option<String> {
-        self.mpv.get_property::<String>(name).ok()
-    }
-
-    /// Reads a numeric mpv property, `None` when it is not available.
-    pub fn property_f64(&self, name: &str) -> Option<f64> {
-        self.mpv.get_property::<f64>(name).ok()
-    }
-
-    /// Reads an integer mpv property, `None` when it is not available.
-    pub fn property_i64(&self, name: &str) -> Option<i64> {
-        self.mpv.get_property::<i64>(name).ok()
+    fn send(&self, command: Command) {
+        if self.commands.send(command).is_err() {
+            tracing::debug!("[Player] Command thread is gone; command dropped");
+        }
     }
 }
 
-/// The mpv core with its event thread. Dropping it quits mpv and joins the thread.
+/// The mpv core with its event and command threads. Dropping it quits mpv and joins both threads.
 pub struct Player {
     handle: PlayerHandle,
     events: Option<JoinHandle<()>>,
+    commands: Option<JoinHandle<()>>,
 }
 
 impl Player {
-    /// Creates the mpv core with `options` and starts the event thread, which hands every event to `on_event` (on that
-    /// thread: forward it, never block).
+    /// Creates the mpv core with `options` and starts its threads. Every event goes to `on_event` on the event thread:
+    /// forward it, never block.
     pub fn new(options: &PlayerOptions, on_event: impl Fn(PlayerEvent) + Send + 'static) -> Result<Self, PlayerError> {
-        let mpv = Mpv::with_initializer(|init| options.apply(&init))?;
+        let mpv = Arc::new(Mpv::with_initializer(|init| options.apply(&init))?);
         let client = mpv.create_client(Some("rustcut_events"))?;
         client.disable_deprecated_events()?;
         log::request_log_messages(&client, options.log_level);
+        events::observe(&client);
+
+        let (tx, rx) = mpsc::channel();
+        let session = Session::new(options.preview_quality, options.audio);
+        let command_mpv = Arc::clone(&mpv);
+        let commands = std::thread::Builder::new()
+            .name("rustcut-mpv-commands".into())
+            .spawn(move || commands::run(&command_mpv, &rx, session))?;
+        let event_tx = tx.clone();
         let events = std::thread::Builder::new()
             .name("rustcut-mpv-events".into())
-            .spawn(move || events::run(&client, &on_event))?;
+            .spawn(move || events::run(&client, &on_event, &event_tx))?;
         tracing::info!(options = ?options, "[Player] mpv core started");
         Ok(Self {
-            handle: PlayerHandle {
-                mpv: Arc::new(mpv),
-                surface: Arc::new(Mutex::new(SurfaceState {
-                    quality: options.preview_quality,
-                    ..SurfaceState::default()
-                })),
-            },
+            handle: PlayerHandle { mpv, commands: tx },
             events: Some(events),
+            commands: Some(commands),
         })
     }
 
@@ -129,49 +119,79 @@ impl Player {
     }
 
     /// Opens `path` (replacing the current file). Before the video surface exists the file waits for it.
-    pub fn open(&self, path: &Path) -> Result<(), PlayerError> {
-        {
-            let mut state = self.handle.surface.lock();
-            if !state.ready {
-                tracing::info!(path = %path.display(), "[Player] Waiting for the video surface before loading");
-                state.pending = Some(path.to_path_buf());
-                return Ok(());
-            }
+    pub fn open(&self, path: &Path, options: OpenOptions) -> Result<(), PlayerError> {
+        if path.to_str().is_none() {
+            return Err(PlayerError::NonUtf8Path(path.to_path_buf()));
         }
-        load(&self.handle.mpv, path)
+        self.command(Command::Open {
+            path: path.to_path_buf(),
+            start: options.start,
+            play: options.play,
+        })
     }
 
     /// Pauses or resumes playback.
     pub fn set_paused(&self, paused: bool) -> Result<(), PlayerError> {
-        self.handle.mpv.set_property("pause", paused)?;
-        Ok(())
+        self.command(Command::SetPaused(paused))
+    }
+
+    /// Pauses or resumes; at the end of the file playback starts over.
+    pub fn toggle_pause(&self) -> Result<(), PlayerError> {
+        self.command(Command::TogglePause)
+    }
+
+    /// Jumps to `seconds`; `exact` = to the precise frame (otherwise the nearest keyframe, for dragging).
+    pub fn seek(&self, seconds: f64, exact: bool) -> Result<(), PlayerError> {
+        self.command(Command::Seek { seconds, exact })
+    }
+
+    /// Shows the next (or, with `back`, the previous) frame and pauses.
+    pub fn frame_step(&self, back: bool) -> Result<(), PlayerError> {
+        self.command(Command::FrameStep { back })
+    }
+
+    pub fn set_muted(&self, muted: bool) -> Result<(), PlayerError> {
+        self.command(Command::SetMuted(muted))
+    }
+
+    /// Volume in percent (0-150).
+    pub fn set_volume(&self, percent: f64) -> Result<(), PlayerError> {
+        self.command(Command::SetVolume(percent))
+    }
+
+    /// Changes the preview's audio filters.
+    pub fn set_audio(&self, audio: AudioOptions) -> Result<(), PlayerError> {
+        self.command(Command::SetAudio(audio))
+    }
+
+    fn command(&self, command: Command) -> Result<(), PlayerError> {
+        self.handle
+            .commands
+            .send(command)
+            .map_err(|_closed| PlayerError::Stopped)
     }
 }
 
 impl Drop for Player {
     fn drop(&mut self) {
-        // `quit` shuts the core down: every client receives MPV_EVENT_SHUTDOWN, so the event thread ends.
-        match self.handle.mpv.command("quit", &[]) {
-            Ok(()) => {
-                if let Some(thread) = self.events.take()
-                    && thread.join().is_err()
-                {
-                    tracing::error!("[Player] The mpv event thread panicked");
-                }
+        // `quit` shuts the core down: every client receives MPV_EVENT_SHUTDOWN, so the event thread ends. The command
+        // thread sends it and ends; if that thread is gone, quit is sent from here (the render context is gone by now).
+        let sent = self.handle.commands.send(Command::Quit).is_ok();
+        let joined = self.commands.take().is_some_and(|t| t.join().is_ok());
+        if !(sent && joined) {
+            tracing::warn!("[Player] The command thread was gone; quitting mpv directly");
+            if let Err(e) = self.handle.mpv.command("quit", &[]) {
+                tracing::warn!(error = %e, "[Player] mpv did not accept quit; the event thread is left to end");
+                return;
             }
-            Err(e) => tracing::warn!(error = %e, "[Player] mpv did not accept quit; the event thread is left to end"),
+        }
+        if let Some(thread) = self.events.take()
+            && thread.join().is_err()
+        {
+            tracing::error!("[Player] The mpv event thread panicked");
         }
         tracing::info!("[Player] mpv core stopped");
     }
-}
-
-fn load(mpv: &Mpv, path: &Path) -> Result<(), PlayerError> {
-    let text = path
-        .to_str()
-        .ok_or_else(|| PlayerError::NonUtf8Path(path.to_path_buf()))?;
-    tracing::info!(path = %path.display(), "[Player] Loading");
-    mpv.command("loadfile", &[text, "replace"])?;
-    Ok(())
 }
 
 #[cfg(test)]
@@ -197,6 +217,10 @@ mod tests {
                 event_tx.send(event).ok();
             })
             .unwrap();
+            player.set_volume(50.0).unwrap();
+            player
+                .open(Path::new("/nonexistent/video.mkv"), OpenOptions::default())
+                .unwrap();
             drop(player);
             let events: Vec<_> = event_rx.try_iter().collect();
             done_tx.send(events).unwrap();
@@ -205,24 +229,36 @@ mod tests {
             .recv_timeout(Duration::from_secs(10))
             .expect("Player::drop hung");
         assert_eq!(events.last(), Some(&PlayerEvent::Shutdown));
+        // The observed properties report their values at once.
+        assert!(
+            events.contains(&PlayerEvent::Property(Property::Muted(false))),
+            "{events:?}"
+        );
     }
 
     #[test]
-    fn a_file_opened_before_the_surface_waits_for_it() {
-        let player = Player::new(&quiet_options(), |_| {}).unwrap();
-        player.open(Path::new("/nonexistent/video.mkv")).unwrap();
-        let state = player.handle.surface.lock();
-        assert!(!state.ready);
-        assert_eq!(state.pending.as_deref(), Some(Path::new("/nonexistent/video.mkv")));
+    fn the_volume_set_through_the_command_thread_is_reported() {
+        let (event_tx, event_rx) = mpsc::channel();
+        let player = Player::new(&quiet_options(), move |event| {
+            event_tx.send(event).ok();
+        })
+        .unwrap();
+        player.set_volume(42.0).unwrap();
+        let seen = event_rx
+            .iter()
+            .take(50)
+            .any(|e| e == PlayerEvent::Property(Property::Volume(42.0)));
+        assert!(seen);
     }
 
     #[test]
-    fn the_surface_takes_the_waiting_file() {
+    fn paths_that_mpv_cannot_take_are_refused() {
+        use std::os::unix::ffi::OsStrExt as _;
         let player = Player::new(&quiet_options(), |_| {}).unwrap();
-        player.open(Path::new("/nonexistent/video.mkv")).unwrap();
-        player.handle().surface_ready("AMD Radeon (radeonsi)");
-        assert!(player.handle.surface.lock().pending.is_none());
-        player.handle().surface_lost();
-        assert!(!player.handle.surface.lock().ready);
+        let bad = Path::new(std::ffi::OsStr::from_bytes(b"/v/\xff.mkv"));
+        assert!(matches!(
+            player.open(bad, OpenOptions::default()),
+            Err(PlayerError::NonUtf8Path(_))
+        ));
     }
 }

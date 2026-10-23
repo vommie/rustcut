@@ -1,4 +1,5 @@
-// Main window of RustCut: the dock (ADR-12) with its two sidebars around the video, a slim status line, the View menu.
+// Main window of RustCut: the dock (ADR-12) with its two sidebars around the video and its transport bar, a slim status
+// line, the menus (File, Playback, View) with their shortcuts.
 
 import { Theme } from "styles.slint";
 import { PlayerView } from "player_view.slint";
@@ -7,15 +8,17 @@ import { ResizerBar } from "resizer_bar.slint";
 import { Dock, DockCardView, DockGroupView, DockMetrics, DockRailItem, DockTabView } from "dock_types.slint";
 import { DockSidebar } from "dock_sidebar.slint";
 import { DockOverlay } from "dock_overlay.slint";
+import { Playback } from "player_types.slint";
+import { PlayerTransport } from "player_transport.slint";
+import { Status, StatusLine } from "status_line.slint";
 
-export { Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView }
+export { Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status }
 
 export component MainWindow inherits Window {
     in property <string> app-name: "RustCut";
     in property <string> app-version;
     // The frame mpv drew into Slint's OpenGL context (rustcut-player); empty until the first video frame.
     in property <image> video-frame;
-    in property <bool> has-video;
     // Size of the video area in logical pixels: the player renders its texture at this size times the scale factor.
     out property <length> video-width: player.width;
     out property <length> video-height: player.height;
@@ -34,7 +37,17 @@ export component MainWindow inherits Window {
     out property <length> center-frame-height: center-area.height;
     out property <length> window-width: root.width;
 
-    title: root.app-name;
+    // File > Open: the file dialog (src/ui/open/).
+    callback open-file();
+    // Opens a path (UI-thread entry for the dialog, drops and a second start).
+    callback open-path(string);
+    // File > Quit: the same path as closing the window.
+    callback quit();
+
+    // "<file> (<folder>) - RustCut" while a file is open (src/app/window.rs).
+    in property <string> window-title: root.app-name;
+
+    title: root.window-title;
     preferred-width: 1280px;
     preferred-height: 800px;
     min-width: 900px;
@@ -43,6 +56,64 @@ export component MainWindow inherits Window {
     default-font-size: Theme.font-size;
 
     MenuBar {
+        Menu {
+            title: "File";
+
+            MenuItem {
+                title: "Open...";
+                shortcut: @keys(Control + O);
+                activated => { root.open-file(); }
+            }
+
+            MenuSeparator { }
+
+            MenuItem {
+                title: "Quit";
+                shortcut: @keys(Control + Q);
+                activated => { root.quit(); }
+            }
+        }
+
+        Menu {
+            title: "Playback";
+
+            MenuItem {
+                title: Playback.paused ? "Play" : "Pause";
+                shortcut: @keys(Space);
+                enabled: Playback.has-file;
+                activated => { Playback.toggle-pause(); }
+            }
+
+            MenuItem {
+                title: "Previous Frame";
+                shortcut: @keys(",");
+                enabled: Playback.has-video;
+                activated => { Playback.frame-step(true); }
+            }
+
+            MenuItem {
+                title: "Next Frame";
+                shortcut: @keys(".");
+                enabled: Playback.has-video;
+                activated => { Playback.frame-step(false); }
+            }
+
+            MenuSeparator { }
+
+            MenuItem {
+                title: Playback.muted ? "Unmute" : "Mute";
+                shortcut: @keys(M);
+                activated => { Playback.toggle-mute(); }
+            }
+
+            MenuItem {
+                title: "Reload";
+                shortcut: @keys(F5);
+                enabled: Playback.has-file;
+                activated => { Playback.reload(); }
+            }
+        }
+
         Menu {
             title: "View";
 
@@ -94,10 +165,11 @@ export component MainWindow inherits Window {
                 player := PlayerView {
                     vertical-stretch: 1;
                     frame: root.video-frame;
-                    has-video: root.has-video;
                     app-name: root.app-name;
                     app-version: root.app-version;
                 }
+
+                PlayerTransport { }
             }
 
             if Dock.right-shown && !Dock.right-collapsed: ResizerBar {
@@ -117,24 +189,7 @@ export component MainWindow inherits Window {
             }
         }
 
-        // One slim status line (HANDOFF.md section 6: one place per piece of information).
-        Rectangle {
-            height: Theme.status-bar-height;
-            background: Theme.surface;
-
-            Rectangle {
-                y: 0;
-                height: 1px;
-                background: Theme.border;
-            }
-
-            Text {
-                x: 10px;
-                text: "Ready";
-                color: Theme.text-muted;
-                vertical-alignment: center;
-            }
-        }
+        StatusLine { }
     }
 
     DockOverlay {
