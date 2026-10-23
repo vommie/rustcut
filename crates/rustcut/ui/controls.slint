@@ -1,0 +1,396 @@
+// Small controls shared by the panels: icon buttons with tooltips (icons only; a very short text only where a symbol
+// cannot say it, user rule 2026-10-23), number fields that edit on click and step with the mouse wheel, a compact
+// choice button with a popup list, and a switch.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { Shortcuts } from "shortcuts.slint";
+import { TooltipHost } from "tooltip.slint";
+
+/// A button showing an icon (or a very short text), explained by its tooltip. `checked` draws it pressed in.
+export component IconButton inherits Rectangle {
+    in property <IconId> icon: IconId.none;
+    in property <string> text;
+    in property <string> tooltip;
+    in property <string> shortcut;
+    in property <bool> enabled: true;
+    in property <bool> checked;
+    in property <length> icon-size: IconSize.md;
+    callback clicked();
+
+    height: 24px;
+    width: root.text == "" ? 26px : Math.max(26px, label.preferred-width + 12px);
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    border-radius: 4px;
+    background: !root.enabled ? transparent : root.checked ? Theme.primary.with-alpha(0.22)
+        : touch.pressed ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : Theme.surface;
+    border-width: 1px;
+    border-color: root.checked && root.enabled ? Theme.primary : Theme.border;
+
+    host := TooltipHost {
+        text: root.tooltip;
+        shortcut: root.shortcut;
+    }
+
+    // Enabled even when the button is not, so a disabled button still explains itself.
+    touch := TouchArea {
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                host.leave();
+            }
+        }
+        clicked => {
+            if root.enabled {
+                root.clicked();
+            }
+        }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+
+    if root.icon != IconId.none && root.text == "": AppIcon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        icon: root.icon;
+        size: root.icon-size;
+        color: !root.enabled ? Theme.status-deleted : root.checked ? Theme.primary : Theme.text;
+    }
+
+    label := Text {
+        visible: root.text != "";
+        x: (parent.width - self.width) / 2;
+        text: root.text;
+        color: !root.enabled ? Theme.status-deleted : root.checked ? Theme.primary : Theme.text;
+        font-size: 11px;
+        font-weight: 600;
+        vertical-alignment: center;
+        height: parent.height;
+    }
+}
+
+/// An icon that labels a field, with a tooltip.
+export component FieldIcon inherits Rectangle {
+    in property <IconId> icon;
+    in property <string> tooltip;
+    in property <bool> enabled: true;
+
+    width: 16px;
+    horizontal-stretch: 0;
+
+    host := TooltipHost {
+        text: root.tooltip;
+    }
+
+    TouchArea {
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+
+    AppIcon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        icon: root.icon;
+        size: IconSize.sm;
+        color: root.enabled ? Theme.text-muted : Theme.status-deleted;
+    }
+}
+
+/// A number that turns into a text field on click (Enter keeps, Escape cancels, leaving keeps a valid value) and
+/// steps with the mouse wheel (Shift: ten steps).
+export component NumberField inherits Rectangle {
+    in property <string> text;
+    in property <string> placeholder;
+    in property <string> tooltip;
+    in property <bool> enabled: true;
+    callback committed(string) -> bool;
+    callback stepped(/* steps */ int);
+
+    property <bool> editing;
+    property <bool> invalid;
+
+    min-width: 34px;
+    height: 22px;
+    horizontal-stretch: 1;
+    border-radius: 3px;
+    background: root.editing ? Theme.background : touch.has-hover && root.enabled ? Theme.surface-hover : Theme.surface;
+    border-width: 1px;
+    border-color: root.invalid ? Theme.status-corrupt : root.editing ? Theme.primary : Theme.border;
+
+    function start-edit() {
+        input.text = root.text;
+        root.invalid = false;
+        root.editing = true;
+        input.focus();
+        input.select-all();
+    }
+
+    function finish(keep: bool) {
+        if keep && !root.committed(input.text) {
+            root.invalid = true;
+            return;
+        }
+        root.editing = false;
+        root.invalid = false;
+        Shortcuts.release-focus();
+    }
+
+    host := TooltipHost {
+        text: root.tooltip;
+    }
+
+    if !root.editing: Text {
+        x: 5px;
+        width: parent.width - 10px;
+        text: root.text == "" ? root.placeholder : root.text;
+        color: !root.enabled || root.text == "" ? Theme.status-deleted : Theme.text;
+        font-size: 12px;
+        horizontal-alignment: right;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled && !root.editing;
+        mouse-cursor: MouseCursor.text;
+        clicked => {
+            host.leave();
+            root.start-edit();
+        }
+        scroll-event(event) => {
+            if event.delta-y == 0 {
+                return reject;
+            }
+            root.stepped((event.delta-y > 0 ? 1 : -1) * (event.modifiers.shift ? 10 : 1));
+            accept
+        }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+
+    input := TextInput {
+        x: 5px;
+        width: parent.width - 10px;
+        height: parent.height;
+        visible: root.editing;
+        enabled: root.editing;
+        single-line: true;
+        color: Theme.text;
+        font-size: 12px;
+        horizontal-alignment: right;
+        vertical-alignment: center;
+        selection-background-color: Theme.primary.with-alpha(0.4);
+
+        accepted => { root.finish(true); }
+        edited => { root.invalid = false; }
+
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.finish(false);
+                return accept;
+            }
+            reject
+        }
+
+        changed has-focus => {
+            Shortcuts.editing-changed(self.has-focus);
+            if !self.has-focus && root.editing {
+                if !root.committed(self.text) {
+                    root.invalid = false;
+                }
+                root.editing = false;
+            }
+        }
+    }
+}
+
+/// The current choice of a short list; a click opens the list below it.
+export component ChoiceButton inherits Rectangle {
+    in property <[string]> items;
+    in property <int> current;
+    in property <string> tooltip;
+    in property <bool> enabled: true;
+    in property <IconId> icon: IconId.none;
+    callback selected(int);
+
+    height: 24px;
+    // Shrinks with a narrow sidebar (the choice is elided), up to its natural width.
+    min-width: 48px;
+    preferred-width: row.preferred-width;
+    max-width: row.preferred-width;
+    horizontal-stretch: 1;
+    border-radius: 4px;
+    background: !root.enabled ? transparent : touch.pressed ? Theme.surface-selected
+        : touch.has-hover ? Theme.surface-hover : Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    host := TooltipHost {
+        text: root.tooltip;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.pointer;
+        clicked => {
+            host.leave();
+            popup.show();
+        }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+
+    row := HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 4px;
+        spacing: 3px;
+
+        if root.icon != IconId.none: VerticalLayout {
+            alignment: center;
+            AppIcon {
+                icon: root.icon;
+                size: IconSize.sm;
+                color: root.enabled ? Theme.text-muted : Theme.status-deleted;
+            }
+        }
+
+        Text {
+            text: root.items[root.current];
+            color: root.enabled ? Theme.text : Theme.status-deleted;
+            font-size: 12px;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+            min-width: 16px;
+        }
+
+        VerticalLayout {
+            alignment: center;
+            AppIcon {
+                icon: IconId.chevron-down;
+                size: IconSize.xs;
+                color: Theme.text-muted;
+            }
+        }
+    }
+
+    popup := PopupWindow {
+        x: 0;
+        y: root.height + 2px;
+        width: Math.max(root.width, list.preferred-width);
+        height: list.preferred-height;
+        close-policy: close-on-click;
+
+        Rectangle {
+            background: Theme.surface;
+            border-radius: 4px;
+            border-width: 1px;
+            border-color: Theme.border;
+            drop-shadow-blur: 10px;
+            drop-shadow-color: #000000aa;
+
+            list := VerticalLayout {
+                padding: 3px;
+                spacing: 1px;
+
+                for item[index] in root.items: Rectangle {
+                    height: 22px;
+                    border-radius: 3px;
+                    background: index == root.current ? Theme.surface-selected
+                        : item-touch.has-hover ? Theme.surface-hover : transparent;
+
+                    item-touch := TouchArea {
+                        clicked => {
+                            root.selected(index);
+                            popup.close();
+                        }
+                    }
+
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 12px;
+
+                        Text {
+                            text: item;
+                            color: Theme.text;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A switch in the theme colors (RustView's `ToggleSwitch`, crates/rustview/ui/toggle_switch.slint, 30x16 here), with
+/// its own click and tooltip.
+export component Switch inherits Rectangle {
+    in property <bool> checked;
+    in property <bool> enabled: true;
+    in property <string> tooltip;
+    in property <string> shortcut;
+    callback toggled();
+
+    width: 30px;
+    height: 16px;
+    horizontal-stretch: 0;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: root.checked && root.enabled ? Theme.primary : Theme.border;
+    background: !root.enabled ? Theme.surface-variant : root.checked ? Theme.primary : Theme.surface-selected;
+    animate background { duration: 120ms; }
+
+    host := TooltipHost {
+        text: root.tooltip;
+        shortcut: root.shortcut;
+    }
+
+    TouchArea {
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        clicked => {
+            host.leave();
+            if root.enabled {
+                root.toggled();
+            }
+        }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+
+    Rectangle {
+        width: 10px;
+        height: 10px;
+        border-radius: 5px;
+        x: root.checked ? 17px : 3px;
+        y: 3px;
+        background: !root.enabled ? Theme.text-muted : root.checked ? Theme.background : Theme.text;
+        animate x { duration: 120ms; easing: ease-in-out; }
+    }
+}

@@ -9,6 +9,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Filters card in the Export panel: deinterlace, crop, deshake, rotate, mirror and resize, one row each with a switch,
+  shown in the order they run (move a filter up or down to change it), their settings while switched on, the output size
+  ("Output 1916×1076", or the even size the render makes of an odd one, or a warning when the crop removes everything),
+  and buttons to show the filters in the player or not, to keep them for the next video and the next start (all filters
+  with their order; `ui-state.toml`, `[export]`), and to reset them. Buttons are icons; their tooltips explain them and
+  show their keys.
+- Live preview: the player shows the filters as they will be rendered (deshake only in the render; it needs two passes).
+  Rotated videos (phone recordings) are cropped in the orientation they are shown, like the render does.
+- Crop: top, right, bottom and left as seen in the output (after a rotation or mirror that follows the crop); type a
+  value or use the mouse wheel over a field (2 pixels per notch, Shift: 20).
+- Cropping on the video: press C or the crop button to see the whole picture with the crop on it; drag a corner, an edge
+  or the area itself, with the size shown, the rest dimmed and thirds lines while dragging; Enter keeps the crop, Escape
+  restores the one from before. Quicker: hold Ctrl over the video and drag; the edge or corner nearest to the pointer
+  follows, no aiming needed, and releasing Ctrl keeps the result. An aspect ratio lock (Free, Source, 16:9, 4:3, 3:2,
+  1:1, 9:16) shapes the crop while it is dragged; the choice is kept. Edges snap to even pixels.
+- Auto-crop (Shift+C or the wand button) looks at up to eight points of the video instead of only the current frame,
+  ignores black scenes, and crops only what is black everywhere, rounded to even pixels.
+- Deinterlace with bwdif, yadif, w3fdif or kerndeint, optionally one frame per field (2×); a background check of the
+  video says next to it whether it is interlaced (and which field comes first). nnedi is not offered: it needs a weights
+  file that ffmpeg does not ship.
+- Resize to a width and/or height (an empty side keeps the aspect ratio, shown as "auto (720)"), with 16:9 and 4:3
+  helpers that compute the height from the width and a choice of scaling algorithm; the output has square pixels.
+- Rotate in quarter turns (R right, Shift+R left) and mirror left/right and top/bottom.
+- Deshake settings: shakiness, accuracy, step size, smoothing, zoom, automatic zoom, border fill, interpolation and the
+  virtual tripod.
+- Filters menu: show or hide the filters in the player (P), keep filters, edit the crop on the video (C), detect black
+  borders (Shift+C), rotate left/right, mirror, reset. All are keymap actions (`crop_edit`, `auto_crop`,
+  `toggle_filter_preview`, `toggle_keep_filters`, `rotate_left`, `rotate_right`, `mirror_horizontal`,
+  `mirror_vertical`, `reset_filters`).
+- Tooltips on the buttons of the Filters and Sections cards, with their keys.
+
 - Timeline under the video: a time ruler, every section of the list as a numbered block (the selected one highlighted,
   overlapping ones outlined in red), the current section's start and end marks with the range between them, the
   playhead, and the time under the mouse pointer. Click to jump there and drag to scrub; click a section to select it;
@@ -89,5 +120,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Settings (`~/.config/rustcut/config.toml`) and the UI state are versioned: files of older versions are backed up to
   `~/.config/rustcut/backups/` before they are migrated, files of newer versions are never overwritten, and damaged files
   are kept as a backup while defaults are used. The log level can be set with `advanced.log_level` (`RUST_LOG` wins).
+
+### Changed
+
+- The Sections card's buttons are icons with tooltips (set start/end to the playhead, add, move, delete).
 
 [Unreleased]: https://github.com/vommie/rustcut/commits/master

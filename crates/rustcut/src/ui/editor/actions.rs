@@ -5,13 +5,20 @@ use std::rc::Rc;
 
 use rustcut_core::time::Timestamp;
 use slint::ComponentHandle as _;
+use slint::platform::Key;
 
 use super::Editor;
+use crate::ui::filters::FiltersBridge;
 use crate::ui::keymap::{Action, KeyPress};
 use crate::ui::player::ShuttleKey;
 use crate::ui::sections::Bound;
 use crate::ui::status::Level;
 use crate::{MainWindow, Playback, Shortcuts};
+
+/// Whether a key event's text is `key` (Slint sends special keys as private-use characters).
+fn is_key(text: &str, key: Key) -> bool {
+    text == slint::SharedString::from(key).as_str()
+}
 
 /// Cut points closer to the playhead than this count as "here" (the next one is the one after).
 const CUT_EPSILON: Timestamp = Timestamp::from_millis(1);
@@ -39,6 +46,15 @@ pub(super) fn connect(editor: &Rc<Editor>, window: &MainWindow) {
         (None, _) => {}
     });
     let this = Rc::downgrade(editor);
+    sc.on_key_released(move |text| {
+        if let Some(editor) = this.upgrade()
+            && is_key(&text, Key::Control)
+            && let Some(filters) = editor.filters.upgrade()
+        {
+            filters.control_changed(false);
+        }
+    });
+    let this = Rc::downgrade(editor);
     sc.on_editing_changed(move |editing| {
         if let Some(editor) = this.upgrade() {
             editor.publish_menu_keys(editing);
@@ -56,6 +72,19 @@ impl Editor {
     /// A key press no focused element took: `true` when it belongs to the keymap (a held key that must not repeat its
     /// action is taken and ignored).
     fn key_pressed(self: &Rc<Self>, press: &KeyPress<'_>) -> bool {
+        if let Some(filters) = self.filters.upgrade() {
+            // Ctrl held over the video edits the crop; any other key (a shortcut like Ctrl+O) cancels that start.
+            if is_key(press.text, Key::Control) {
+                if !press.repeat {
+                    filters.control_changed(true);
+                }
+                return false;
+            }
+            filters.other_key();
+            if filters.crop_key(press.text) {
+                return true;
+            }
+        }
         let Some(action) = self.keymap.lookup(press) else {
             return false;
         };
@@ -104,6 +133,22 @@ impl Editor {
                 self.state.borrow_mut().viewport.fit();
                 self.publish();
             }
+            Action::CropEdit => self.with_filters(FiltersBridge::toggle_crop_edit),
+            Action::AutoCrop => self.with_filters(FiltersBridge::auto_crop),
+            Action::ToggleFilterPreview => self.with_filters(FiltersBridge::toggle_preview),
+            Action::ToggleKeepFilters => self.with_filters(FiltersBridge::toggle_keep),
+            Action::RotateLeft => self.with_filters(|f| f.rotate(false)),
+            Action::RotateRight => self.with_filters(|f| f.rotate(true)),
+            Action::MirrorHorizontal => self.with_filters(|f| f.mirror(true)),
+            Action::MirrorVertical => self.with_filters(|f| f.mirror(false)),
+            Action::ResetFilters => self.with_filters(FiltersBridge::reset),
+        }
+    }
+
+    /// Runs `f` with the filters when they exist.
+    fn with_filters(&self, f: impl FnOnce(&FiltersBridge)) {
+        if let Some(filters) = self.filters.upgrade() {
+            f(&filters);
         }
     }
 

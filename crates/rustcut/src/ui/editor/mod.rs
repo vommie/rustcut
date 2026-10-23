@@ -19,6 +19,7 @@ use rustcut_core::settings::{EditorSettings, Settings, TimelineState};
 use rustcut_core::time::{FrameRate, Timestamp};
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 
+use crate::ui::filters::{FilterKeys, FiltersBridge};
 use crate::ui::keymap::{Action, Keymap};
 use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::player::{self, PlaybackView, PlayerBridge};
@@ -57,6 +58,7 @@ pub struct Editor {
     window: slint::Weak<MainWindow>,
     player: Weak<PlayerBridge>,
     media: Weak<MediaInfoBridge>,
+    filters: Weak<FiltersBridge>,
     keymap: Keymap,
     seek_step: f64,
     seek_step_long: f64,
@@ -74,6 +76,7 @@ impl Editor {
         window: &MainWindow,
         player: &Rc<PlayerBridge>,
         media: &Rc<MediaInfoBridge>,
+        filters: &Rc<FiltersBridge>,
         settings: &Settings,
         timeline: &TimelineState,
     ) -> Rc<Self> {
@@ -90,6 +93,7 @@ impl Editor {
             window: window.as_weak(),
             player: Rc::downgrade(player),
             media: Rc::downgrade(media),
+            filters: Rc::downgrade(filters),
             keymap,
             seek_step: f64::from(seek_step_secs),
             seek_step_long: f64::from(seek_step_long_secs),
@@ -225,6 +229,40 @@ impl Editor {
         sc.set_zoom_in(keys(Action::ZoomIn));
         sc.set_zoom_out(keys(Action::ZoomOut));
         sc.set_zoom_fit(keys(Action::ZoomFit));
+        sc.set_filter_preview(keys(Action::ToggleFilterPreview));
+        sc.set_filter_keep(keys(Action::ToggleKeepFilters));
+        sc.set_filter_reset(keys(Action::ResetFilters));
+        sc.set_crop_edit(keys(Action::CropEdit));
+        sc.set_auto_crop(keys(Action::AutoCrop));
+        sc.set_rotate_left(keys(Action::RotateLeft));
+        sc.set_rotate_right(keys(Action::RotateRight));
+        sc.set_mirror_horizontal(keys(Action::MirrorHorizontal));
+        sc.set_mirror_vertical(keys(Action::MirrorVertical));
+        let label = |action| {
+            self.keymap
+                .chords(action)
+                .first()
+                .map(crate::ui::keymap::Chord::label)
+                .unwrap_or_default()
+        };
+        let sections = window.global::<Sections<'_>>();
+        sections.set_key_set_start(label(Action::SetStart).into());
+        sections.set_key_set_end(label(Action::SetEnd).into());
+        sections.set_key_add(label(Action::AddSection).into());
+        sections.set_key_delete(label(Action::DeleteSection).into());
+        if let Some(filters) = self.filters.upgrade() {
+            filters.show_keys(&FilterKeys {
+                preview: label(Action::ToggleFilterPreview),
+                keep: label(Action::ToggleKeepFilters),
+                reset: label(Action::ResetFilters),
+                crop_edit: label(Action::CropEdit),
+                auto_crop: label(Action::AutoCrop),
+                rotate_left: label(Action::RotateLeft),
+                rotate_right: label(Action::RotateRight),
+                mirror_horizontal: label(Action::MirrorHorizontal),
+                mirror_vertical: label(Action::MirrorVertical),
+            });
+        }
     }
 
     /// Shows the whole state: timeline and Sections card.

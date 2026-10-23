@@ -3,6 +3,7 @@
 pub mod dispatcher;
 pub mod dock;
 pub mod editor;
+pub mod filters;
 pub mod keymap;
 pub mod media_info;
 pub mod open;

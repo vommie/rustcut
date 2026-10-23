@@ -1,6 +1,6 @@
 // Main window of RustCut: the dock (ADR-12) with its two sidebars around the video, the timeline and the transport bar, a
-// slim status line, the menus (File, Playback, Sections, View) with the keymap's shortcuts, and the key scope that hands
-// every other key press to the keymap (src/ui/editor/).
+// slim status line, the menus (File, Playback, Sections, Filters, View) with the keymap's shortcuts, the key scope that
+// hands every other key press to the keymap (src/ui/editor/), and the tooltip layer on top.
 
 import { Theme } from "styles.slint";
 import { PlayerView } from "player_view.slint";
@@ -17,11 +17,14 @@ import { KnownSource, KnownSourceBanner } from "source_banner.slint";
 import { Shortcuts } from "shortcuts.slint";
 import { Timeline, TimelineBlock, TimelineStrip, TimelineTick } from "timeline_view.slint";
 import { SectionRowView, Sections } from "sections_card.slint";
+import { FilterRowView, Filters } from "filters_card.slint";
+import { CropOverlay } from "crop_overlay.slint";
+import { TooltipLayer } from "tooltip.slint";
 
 export {
     Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
     MediaInfoRow, MediaInfoSection, KnownSource, Shortcuts, Timeline, TimelineBlock, TimelineTick, Sections,
-    SectionRowView
+    SectionRowView, Filters, FilterRowView, CropOverlay
 }
 
 export component MainWindow inherits Window {
@@ -189,6 +192,72 @@ export component MainWindow inherits Window {
         }
 
         Menu {
+            title: "Filters";
+
+            MenuItem {
+                title: Filters.preview ? "Show Video Without Filters" : "Show Filters in the Player";
+                shortcut: Shortcuts.filter-preview;
+                activated => { Shortcuts.run("toggle_filter_preview"); }
+            }
+
+            MenuItem {
+                title: Filters.keep ? "Do Not Keep Filters" : "Keep Filters for the Next Video";
+                shortcut: Shortcuts.filter-keep;
+                activated => { Shortcuts.run("toggle_keep_filters"); }
+            }
+
+            MenuSeparator { }
+
+            MenuItem {
+                title: Filters.crop-editing ? "Finish Crop Editing" : "Edit Crop on the Video";
+                shortcut: Shortcuts.crop-edit;
+                enabled: Filters.can-edit-crop;
+                activated => { Shortcuts.run("crop_edit"); }
+            }
+
+            MenuItem {
+                title: "Detect Black Borders";
+                shortcut: Shortcuts.auto-crop;
+                enabled: Filters.has-media && !Filters.auto-crop-running;
+                activated => { Shortcuts.run("auto_crop"); }
+            }
+
+            MenuSeparator { }
+
+            MenuItem {
+                title: "Rotate Left";
+                shortcut: Shortcuts.rotate-left;
+                activated => { Shortcuts.run("rotate_left"); }
+            }
+
+            MenuItem {
+                title: "Rotate Right";
+                shortcut: Shortcuts.rotate-right;
+                activated => { Shortcuts.run("rotate_right"); }
+            }
+
+            MenuItem {
+                title: "Mirror Left and Right";
+                shortcut: Shortcuts.mirror-horizontal;
+                activated => { Shortcuts.run("mirror_horizontal"); }
+            }
+
+            MenuItem {
+                title: "Mirror Top and Bottom";
+                shortcut: Shortcuts.mirror-vertical;
+                activated => { Shortcuts.run("mirror_vertical"); }
+            }
+
+            MenuSeparator { }
+
+            MenuItem {
+                title: "Reset Filters";
+                shortcut: Shortcuts.filter-reset;
+                activated => { Shortcuts.run("reset_filters"); }
+            }
+        }
+
+        Menu {
             title: "View";
 
             MenuItem {
@@ -246,6 +315,11 @@ export component MainWindow inherits Window {
                 event.modifiers.meta, event.repeat) {
                 return accept;
             }
+            reject
+        }
+
+        key-released(event) => {
+            Shortcuts.key-released(event.text);
             reject
         }
 
@@ -309,6 +383,13 @@ export component MainWindow inherits Window {
     }
 
     DockOverlay {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+    }
+
+    TooltipLayer {
         x: 0;
         y: 0;
         width: parent.width;
