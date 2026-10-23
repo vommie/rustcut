@@ -9,6 +9,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Timeline under the video: a time ruler, every section of the list as a numbered block (the selected one highlighted,
+  overlapping ones outlined in red), the current section's start and end marks with the range between them, the
+  playhead, and the time under the mouse pointer. Click to jump there and drag to scrub; click a section to select it;
+  drag a section edge or a mark to move it (it snaps to the playhead, the marks and other edges, else to the video's
+  frames; hold Shift to snap to frames only), and the video shows the frame at the edge. The mouse wheel zooms around the
+  pointer (Shift + wheel or a horizontal wheel scrolls), while zoomed a strip below shows and moves the visible part, and
+  the view pages along with the playhead. The zoom is kept for the next start (`ui-state.toml`, `[timeline]`).
+- Sections card in the Export panel: the current section's start and end (from the playhead with "Set", the keys I/Home
+  and O/End, or typed), its length, and "Add section". Setting a start after the end (or an end before the start) clears
+  the other mark, so a new section begins. Added sections are listed with start, end and duration, the number of
+  sections and the total length; move the selected one up or down or delete it. A click on a time jumps there, a double
+  click edits it (Enter keeps, Escape cancels; reversed times are swapped, times past the end are limited to it). A
+  section that is already in the list is not added twice, and overlapping sections are pointed out.
+- Sections menu: Set Start, Set End, Add Section, Go to Start, Go to End, Previous and Next Cut Point. View menu: Zoom
+  Timeline In, Zoom Timeline Out, Fit Timeline.
+- Keys (PyCutRv's plus NLE style): I or Home sets the start, O or End the end, + or Scroll Lock adds the section, Delete
+  deletes the selected one, Shift+I / Shift+O go to the start / end, Up / Down jump to the previous / next cut point,
+  Left / Right seek 2 s and Shift+Left / Shift+Right 10 s (`editor.seek_step_secs`, `editor.seek_step_long_secs`),
+  Page Up / Page Down step a frame like `,` / `.`, J / K / L shuttle (L plays forward and each press doubles the speed
+  up to 8x, J plays backward the same way, K stops; the speed shows next to the time), Ctrl++ / Ctrl+- / Ctrl+0 zoom the
+  timeline. Ctrl+S and F9 are reserved for saving the job, which arrives with the queue. Held keys repeat only steps,
+  seeks and zoom.
+- Configurable keymap: `config.toml` takes a `[keymap]` table (`set_start = ["I", "Home"]`, Slint key names such as
+  `Control+S`, `Shift+LeftArrow`, `PageUp`, `Plus`, `ScrollLock`); an action that is missing keeps its default keys and
+  an empty list unbinds it. Unknown actions and keys are ignored and a key bound to two actions stays with the one that
+  was configured (all logged at startup). The menus show the configured keys. The editor for it comes with the Settings
+  window. No migration: older `config.toml` files load unchanged.
 - Media Info panel: when a video opens, it shows the container (format, duration, start time, size, overall bit rate,
   title) and every stream: codec and profile, resolution, rotation (and the size it is shown at), aspect ratio, frame rate
   (a variable frame rate is detected and shown with its range), frame count, scan type (progressive or interlaced),
@@ -21,8 +48,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   and a Cancel button, without slowing down the window. It is computed automatically while the known-source warning
   (`warnings.known_source`) is on, else on demand with "Compute". The warning itself (a banner above the video when
   RustView knows the video already) arrives with the RustView connection.
-- Transport bar under the video: play/pause, previous and next frame, a seek bar that jumps to the clicked spot (drag it to
-  scrub), the current and the total time (`H:MM:SS.mmm`), mute and volume. The mouse wheel over the video changes the
+- Transport bar under the timeline: play/pause, previous and next frame, the current and the total time (`H:MM:SS.mmm`),
+  mute and volume. The mouse wheel over the video changes the
   volume (`player.wheel_volume_step`, 5 % per notch). Volume and mute are kept for the next start.
 - Playback menu with keys: Space plays or pauses (at the end of a video it starts over), `,` and `.` step one frame back
   and forward, M mutes, F5 reloads the video.

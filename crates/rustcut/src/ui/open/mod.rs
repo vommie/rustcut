@@ -16,6 +16,7 @@ use slint::winit_030::{EventResult, WinitWindowAccessor as _};
 
 use self::drop::{DropAction, DropTracker};
 use crate::app::window::title;
+use crate::ui::editor::Editor;
 use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::player::PlayerBridge;
 use crate::ui::status::{self, Level};
@@ -30,6 +31,7 @@ pub struct FileOpener {
     window: slint::Weak<MainWindow>,
     player: Weak<PlayerBridge>,
     media: Weak<MediaInfoBridge>,
+    editor: Weak<Editor>,
     runtime: tokio::runtime::Handle,
     last_open_dir: RefCell<Option<PathBuf>>,
     drops: RefCell<DropTracker>,
@@ -41,6 +43,7 @@ impl FileOpener {
         window: &MainWindow,
         player: &Rc<PlayerBridge>,
         media: &Rc<MediaInfoBridge>,
+        editor: &Rc<Editor>,
         runtime: tokio::runtime::Handle,
         last_open_dir: Option<PathBuf>,
     ) -> Rc<Self> {
@@ -48,6 +51,7 @@ impl FileOpener {
             window: window.as_weak(),
             player: Rc::downgrade(player),
             media: Rc::downgrade(media),
+            editor: Rc::downgrade(editor),
             runtime,
             last_open_dir: RefCell::new(last_open_dir),
             drops: RefCell::new(DropTracker::default()),
@@ -109,6 +113,9 @@ impl FileOpener {
         tracing::info!(path = %path.display(), "[Open] Opened");
         if let Some(media) = self.media.upgrade() {
             media.file_opened(path);
+        }
+        if let Some(editor) = self.editor.upgrade() {
+            editor.file_opened();
         }
         if let Some(folder) = path.parent() {
             *self.last_open_dir.borrow_mut() = Some(folder.to_path_buf());

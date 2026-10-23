@@ -1,0 +1,407 @@
+// The Sections card of the Export panel (src/ui/editor/ fills the `Sections` global and handles its callbacks): the current
+// section's start and end (from the playhead with "Set" or the keys, or typed), "Add section", the list of added sections
+// with editable times, durations and the total, and the buttons that move and delete the selected section.
+// Times: a click seeks there, a double click edits (Enter keeps, Escape cancels; user decision 2026-10-23).
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { Shortcuts } from "shortcuts.slint";
+
+export struct SectionRowView {
+    number: int,
+    start: string,
+    end: string,
+    duration: string,
+    selected: bool,
+    overlapping: bool,
+}
+
+export global Sections {
+    // A video is loaded: marks can be set.
+    in property <bool> has-media;
+    // The current section's marks ("" = not set) and its length ("" without a range).
+    in property <string> mark-start;
+    in property <string> mark-end;
+    in property <string> current-length;
+    in property <bool> can-add;
+    in property <[SectionRowView]> rows;
+    in property <bool> can-move-up;
+    in property <bool> can-move-down;
+    in property <bool> can-delete;
+    // "2 sections, 0:00:25.000 in total"; empty without sections.
+    in property <string> summary;
+    // A warning about the list (overlaps); empty when there is none.
+    in property <string> note;
+
+    // 0 = start, 1 = end.
+    callback set-mark(int);
+    callback seek-mark(int);
+    // A typed time; false = not accepted (the field stays open and turns red).
+    callback edit-mark(int, string) -> bool;
+    callback add();
+    callback select(/* row */ int);
+    callback seek-row(/* row */ int, /* 0 = start, 1 = end */ int);
+    callback edit-row(/* row */ int, /* 0 = start, 1 = end */ int, string) -> bool;
+    callback move-up();
+    callback move-down();
+    callback delete();
+}
+
+/// A time that seeks on click and turns into a text field on double click.
+export component TimeField inherits Rectangle {
+    in property <string> text;
+    in property <string> placeholder: "Not set";
+    in property <bool> enabled: true;
+    callback clicked();
+    callback committed(string) -> bool;
+
+    property <bool> editing;
+    property <bool> invalid;
+
+    min-width: 84px;
+    height: 22px;
+    border-radius: 3px;
+    background: root.editing ? Theme.background
+        : touch.has-hover && root.enabled ? Theme.surface-hover : transparent;
+    border-width: root.editing ? 1px : 0px;
+    border-color: root.invalid ? Theme.status-corrupt : Theme.primary;
+
+    function start-edit() {
+        input.text = root.text;
+        root.invalid = false;
+        root.editing = true;
+        input.focus();
+        input.select-all();
+    }
+
+    function finish(keep: bool) {
+        if keep && !root.committed(input.text) {
+            root.invalid = true;
+            return;
+        }
+        root.editing = false;
+        root.invalid = false;
+        Shortcuts.release-focus();
+    }
+
+    if !root.editing: Text {
+        x: 5px;
+        width: parent.width - 10px;
+        text: root.text == "" ? root.placeholder : root.text;
+        color: !root.enabled || root.text == "" ? Theme.status-deleted : Theme.text;
+        font-family: "monospace";
+        font-size: 12px;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled && !root.editing;
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+        double-clicked => { root.start-edit(); }
+    }
+
+    input := TextInput {
+        x: 5px;
+        width: parent.width - 10px;
+        height: parent.height;
+        visible: root.editing;
+        enabled: root.editing;
+        single-line: true;
+        color: Theme.text;
+        font-family: "monospace";
+        font-size: 12px;
+        vertical-alignment: center;
+        selection-background-color: Theme.primary.with-alpha(0.4);
+
+        accepted => { root.finish(true); }
+        edited => { root.invalid = false; }
+
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.finish(false);
+                return accept;
+            }
+            reject
+        }
+
+        changed has-focus => {
+            Shortcuts.editing-changed(self.has-focus);
+            // Leaving the field keeps a valid time and drops an invalid one.
+            if !self.has-focus && root.editing {
+                if !root.committed(self.text) {
+                    root.invalid = false;
+                }
+                root.editing = false;
+            }
+        }
+    }
+}
+
+component SmallButton inherits Rectangle {
+    in property <string> text;
+    in property <IconId> icon: IconId.none;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 24px;
+    min-width: self.icon != IconId.none && self.text == "" ? 26px : 0px;
+    horizontal-stretch: 0;
+    border-radius: 4px;
+    background: !root.enabled ? transparent : touch.pressed ? Theme.surface-selected
+        : touch.has-hover ? Theme.surface-hover : Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+
+    HorizontalLayout {
+        padding-left: root.text == "" ? 5px : 8px;
+        padding-right: root.text == "" ? 5px : 8px;
+        spacing: 4px;
+        alignment: center;
+
+        if root.icon != IconId.none: AppIcon {
+            y: (parent.height - self.height) / 2;
+            icon: root.icon;
+            size: IconSize.sm;
+            color: root.enabled ? Theme.text : Theme.status-deleted;
+        }
+
+        if root.text != "": Text {
+            text: root.text;
+            color: root.enabled ? Theme.text : Theme.status-deleted;
+            font-size: 12px;
+            vertical-alignment: center;
+        }
+    }
+}
+
+component MarkRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> time;
+    in property <int> which;
+
+    spacing: 6px;
+
+    Text {
+        text: root.label;
+        width: 34px;
+        color: Theme.text-muted;
+        font-size: 12px;
+        vertical-alignment: center;
+    }
+
+    TimeField {
+        horizontal-stretch: 1;
+        text: root.time;
+        enabled: Sections.has-media;
+        clicked => { Sections.seek-mark(root.which); }
+        committed(text) => { return Sections.edit-mark(root.which, text); }
+    }
+
+    SmallButton {
+        text: "Set";
+        enabled: Sections.has-media;
+        clicked => { Sections.set-mark(root.which); }
+    }
+}
+
+component SectionRowItem inherits Rectangle {
+    in property <SectionRowView> item;
+    in property <int> index;
+
+    height: 24px;
+    border-radius: 3px;
+    background: root.item.selected ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : transparent;
+
+    touch := TouchArea {
+        clicked => { Sections.select(root.index); }
+    }
+
+    HorizontalLayout {
+        padding-left: 4px;
+        padding-right: 4px;
+        spacing: 2px;
+
+        Text {
+            text: root.item.number;
+            width: 18px;
+            color: root.item.overlapping ? Theme.status-corrupt : Theme.text-muted;
+            font-size: 11px;
+            vertical-alignment: center;
+        }
+
+        VerticalLayout {
+            alignment: center;
+            TimeField {
+                text: root.item.start;
+                clicked => {
+                    Sections.select(root.index);
+                    Sections.seek-row(root.index, 0);
+                }
+                committed(text) => { return Sections.edit-row(root.index, 0, text); }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            TimeField {
+                text: root.item.end;
+                clicked => {
+                    Sections.select(root.index);
+                    Sections.seek-row(root.index, 1);
+                }
+                committed(text) => { return Sections.edit-row(root.index, 1, text); }
+            }
+        }
+
+        Text {
+            text: root.item.duration;
+            horizontal-stretch: 1;
+            horizontal-alignment: right;
+            color: Theme.text-muted;
+            font-family: "monospace";
+            font-size: 11px;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+component ColumnTitle inherits Text {
+    color: Theme.status-deleted;
+    font-size: 10px;
+    vertical-alignment: center;
+}
+
+/// The body of the Sections card.
+export component SectionsCardBody inherits VerticalLayout {
+    padding: 8px;
+    padding-top: 0px;
+    spacing: 6px;
+
+    MarkRow {
+        label: "Start";
+        time: Sections.mark-start;
+        which: 0;
+    }
+
+    MarkRow {
+        label: "End";
+        time: Sections.mark-end;
+        which: 1;
+    }
+
+    HorizontalLayout {
+        spacing: 6px;
+
+        SmallButton {
+            text: "Add section";
+            icon: IconId.section-add;
+            enabled: Sections.can-add;
+            clicked => { Sections.add(); }
+        }
+
+        Text {
+            text: Sections.current-length;
+            horizontal-stretch: 1;
+            horizontal-alignment: right;
+            color: Theme.text-muted;
+            font-family: "monospace";
+            font-size: 11px;
+            vertical-alignment: center;
+        }
+    }
+
+    Rectangle {
+        height: 1px;
+        background: Theme.border;
+    }
+
+    if Sections.rows.length == 0: Text {
+        text: "No sections yet: set a start and an end, then add the section.";
+        color: Theme.text-muted;
+        font-size: 11px;
+        wrap: word-wrap;
+    }
+
+    if Sections.rows.length > 0: HorizontalLayout {
+        padding-left: 4px;
+        padding-right: 4px;
+        spacing: 2px;
+        height: 14px;
+
+        ColumnTitle {
+            text: "#";
+            width: 18px;
+        }
+
+        ColumnTitle {
+            text: "Start";
+            min-width: 84px;
+            horizontal-stretch: 0;
+        }
+
+        ColumnTitle {
+            text: "End";
+            min-width: 84px;
+            horizontal-stretch: 0;
+        }
+
+        ColumnTitle {
+            text: "Duration";
+            horizontal-stretch: 1;
+            horizontal-alignment: right;
+        }
+    }
+
+    for row[index] in Sections.rows: SectionRowItem {
+        item: row;
+        index: index;
+    }
+
+    HorizontalLayout {
+        spacing: 4px;
+
+        SmallButton {
+            icon: IconId.section-up;
+            enabled: Sections.can-move-up;
+            clicked => { Sections.move-up(); }
+        }
+
+        SmallButton {
+            icon: IconId.section-down;
+            enabled: Sections.can-move-down;
+            clicked => { Sections.move-down(); }
+        }
+
+        SmallButton {
+            icon: IconId.section-delete;
+            enabled: Sections.can-delete;
+            clicked => { Sections.delete(); }
+        }
+
+        Text {
+            text: Sections.summary;
+            horizontal-stretch: 1;
+            horizontal-alignment: right;
+            color: Theme.text-muted;
+            font-size: 11px;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    if Sections.note != "": Text {
+        text: Sections.note;
+        color: Theme.accent;
+        font-size: 11px;
+        wrap: word-wrap;
+    }
+}

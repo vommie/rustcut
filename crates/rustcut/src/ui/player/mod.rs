@@ -4,11 +4,13 @@
 //! Player events arrive on mpv's event thread. They update the shared [`PlaybackState`] (a short lock, never held across a
 //! Slint call) and post the resulting [`PlaybackView`] through the [`UiDispatcher`], coalesced to the playhead rate: every
 //! post is the complete state, so the latest one wins. Commands go from the Slint callbacks straight to the player, whose
-//! command thread talks to mpv.
+//! command thread talks to mpv. Seeks, frame steps and the J/K/L shuttle live in `transport.rs`.
 
+pub mod shuttle;
 mod state;
+mod transport;
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
@@ -22,6 +24,7 @@ use rustcut_player::{
 };
 use slint::ComponentHandle as _;
 
+pub use shuttle::ShuttleKey;
 pub use state::{PlaybackState, PlaybackView};
 
 use crate::ui::dispatcher::{CoalesceKey, UiDispatcher, rate};
@@ -32,6 +35,20 @@ const VIEW_KEY: CoalesceKey = CoalesceKey::new("playback", 0);
 /// One mouse wheel notch in Slint's `delta-y` on X11 (measured in RustView: winit reports two lines of 60 px); touchpads
 /// send pixels that add up to a notch the same way.
 const WHEEL_NOTCH: f32 = 120.0;
+
+/// The function that sees every playback view.
+type ViewHook = Box<dyn Fn(&PlaybackView)>;
+
+thread_local! {
+    /// Called on the UI thread with every playback view after it is shown (the timeline follows the playhead). Views are
+    /// posted from mpv's event thread as `Send` closures, which cannot carry the UI-thread objects themselves.
+    static VIEW_HOOK: RefCell<Option<ViewHook>> = const { RefCell::new(None) };
+}
+
+/// Installs the function that sees every playback view (UI thread; replaces the previous one).
+pub fn set_view_hook(hook: impl Fn(&PlaybackView) + 'static) {
+    VIEW_HOOK.with(|h| *h.borrow_mut() = Some(Box::new(hook)));
+}
 
 /// Errors while starting the player.
 #[derive(Debug, thiserror::Error)]
@@ -51,6 +68,9 @@ pub struct PlayerBridge {
     wheel_step: u8,
     /// Wheel movement that has not made a whole notch yet (touchpads send small steps).
     wheel_rest: Cell<f32>,
+    /// The emulated backward playback while J is active, and the timer that moves it.
+    reverse: Cell<Option<shuttle::Reverse>>,
+    reverse_timer: slint::Timer,
 }
 
 impl PlayerBridge {
@@ -120,6 +140,8 @@ impl PlayerBridge {
             auto_play: settings.auto_play,
             wheel_step: settings.wheel_volume_step,
             wheel_rest: Cell::new(0.0),
+            reverse: Cell::new(None),
+            reverse_timer: slint::Timer::default(),
         });
         bridge.connect(window);
         bridge.refresh();
@@ -129,6 +151,7 @@ impl PlayerBridge {
     /// Opens `path` (it waits for the video surface if the window has not rendered yet). Auto play decides whether it
     /// starts playing.
     pub fn open(&self, path: &Path) -> Result<(), PlayerError> {
+        self.end_reverse();
         self.state.lock().opening(path);
         self.refresh();
         self.player.open(
@@ -160,6 +183,7 @@ impl PlayerBridge {
             (state.file.clone(), start)
         };
         let Some(file) = file else { return };
+        self.end_reverse();
         tracing::info!(path = %file.display(), start = ?start, "[Player] Reloading");
         self.state.lock().opening(&file);
         self.refresh();
@@ -171,20 +195,11 @@ impl PlayerBridge {
     fn connect(self: &Rc<Self>, window: &MainWindow) {
         let playback = window.global::<Playback<'_>>();
         let this = Rc::downgrade(self);
-        playback.on_toggle_pause(with(&this, |b| b.command(Player::toggle_pause)));
+        playback.on_toggle_pause(with(&this, PlayerBridge::toggle_pause));
         let this = Rc::downgrade(self);
         playback.on_frame_step(move |back| {
             if let Some(b) = this.upgrade() {
-                b.command(|p| p.frame_step(back));
-            }
-        });
-        let this = Rc::downgrade(self);
-        playback.on_seek(move |fraction, exact| {
-            if let Some(b) = this.upgrade() {
-                let target = b.state.lock().seek_target(fraction);
-                if let Some(seconds) = target {
-                    b.command(|p| p.seek(seconds, exact));
-                }
+                b.step_frame(back);
             }
         });
         let this = Rc::downgrade(self);
@@ -271,14 +286,19 @@ fn show(window: &MainWindow, view: &PlaybackView) {
     playback.set_paused(view.paused);
     playback.set_muted(view.muted);
     playback.set_volume(view.volume);
-    playback.set_progress(view.progress);
     playback.set_position_text(view.position_text.as_str().into());
     playback.set_duration_text(view.duration_text.as_str().into());
+    playback.set_speed_text(view.speed_text.as_str().into());
     playback.set_error_title(view.error_title.as_str().into());
     playback.set_error_detail(view.error_detail.as_str().into());
     window
         .global::<Status<'_>>()
         .set_decoder(view.decoder_text.as_str().into());
+    VIEW_HOOK.with(|hook| {
+        if let Some(hook) = hook.borrow().as_ref() {
+            hook(view);
+        }
+    });
 }
 
 /// The video area's size in physical pixels.

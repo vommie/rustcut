@@ -51,6 +51,12 @@ reload = { tabler = "refresh", doc = "Reload the video" }
 drop_file = { tabler = "drag-drop", doc = "Drop a video to open it" }
 open_file = { tabler = "folder-open", doc = "Open a video" }
 
+# --- Sections ------------------------------------------------------------------------------------------------------
+section_add = { tabler = "plus", doc = "Add the current section to the list" }
+section_delete = { tabler = "trash", doc = "Delete the selected section" }
+section_up = { tabler = "arrow-up", doc = "Move the selected section up" }
+section_down = { tabler = "arrow-down", doc = "Move the selected section down" }
+
 # --- Status --------------------------------------------------------------------------------------------------------
 status_ok = { tabler = "circle-check", doc = "Success message" }
 status_warning = { tabler = "alert-triangle", doc = "Warning message" }

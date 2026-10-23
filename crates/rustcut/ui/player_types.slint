@@ -10,11 +10,11 @@ export global Playback {
     in property <bool> muted;
     // Volume in percent (0-150).
     in property <int> volume: 100;
-    // Position / duration, 0 to 1.
-    in property <float> progress;
     // Current and total time as H:MM:SS.mmm.
     in property <string> position-text: "0:00:00.000";
     in property <string> duration-text: "0:00:00.000";
+    // The J/K/L shuttle speed (`2×`, `◀ 4×`); empty at normal playback.
+    in property <string> speed-text;
     // Non-empty while the file cannot be played: the error overlay over the video.
     in property <string> error-title;
     in property <string> error-detail;
@@ -24,8 +24,6 @@ export global Playback {
 
     callback toggle-pause();
     callback frame-step(/* back */ bool);
-    // `final` is false while the seek bar is dragged (fast keyframe seeks), true on release (exact).
-    callback seek(/* fraction */ float, /* final */ bool);
     callback toggle-mute();
     callback set-volume(int);
     // Mouse wheel over the video: volume up (negative delta) or down.

@@ -1,0 +1,317 @@
+// The timeline strip under the video (src/ui/timeline/ computes every position; src/ui/editor/ handles the pointer): a time
+// ruler, the listed sections as numbered blocks, the current section's marks and range, the playhead, the time under the
+// pointer, and while zoomed an overview strip with the visible window. Positions are in track pixels (0 = the track's
+// left edge); the pointer is reported in the same coordinates.
+
+import { Theme } from "styles.slint";
+import { Shortcuts } from "shortcuts.slint";
+
+export struct TimelineTick {
+    x: length,
+    label: string,
+}
+
+export struct TimelineBlock {
+    x: length,
+    width: length,
+    label: string,
+    selected: bool,
+    overlapping: bool,
+}
+
+/// Sizes of the strip. Rust works in track coordinates and is told whether the pointer is on the ruler.
+export global TimelineMetrics {
+    out property <length> height: 62px;
+    out property <length> inset: 8px;
+    out property <length> ruler-height: 18px;
+    out property <length> track-height: 30px;
+}
+
+export global Timeline {
+    // A video with a known duration is shown.
+    in property <bool> active;
+    in property <[TimelineTick]> ticks;
+    in property <[TimelineBlock]> blocks;
+    in property <bool> mark-start-shown;
+    in property <length> mark-start-x;
+    in property <bool> mark-end-shown;
+    in property <length> mark-end-x;
+    in property <bool> range-shown;
+    in property <length> range-x;
+    in property <length> range-width;
+    in property <bool> playhead-shown;
+    in property <length> playhead-x;
+    in property <bool> hover-shown;
+    in property <length> hover-x;
+    in property <string> hover-text;
+    // The pointer is on an edge that can be dragged.
+    in property <bool> edge-hovered;
+    in property <bool> zoomed;
+    in property <float> window-start;
+    in property <float> window-width: 1;
+    in property <float> overview-playhead;
+
+    callback resized(/* track width */ length);
+    callback pointer-down(/* x */ length, /* on the ruler */ bool);
+    callback pointer-moved(/* x */ length, /* on the ruler */ bool, /* pressed */ bool, /* shift */ bool);
+    callback pointer-up(/* x */ length);
+    callback pointer-left();
+    // Mouse wheel: zoom around x, or scroll with Shift or a horizontal wheel; true when used.
+    callback wheel(/* x */ length, /* delta-x */ length, /* delta-y */ length, /* control */ bool, /* shift */ bool) -> bool;
+    // The overview strip was pressed or dragged at this fraction of the video.
+    callback overview(float);
+}
+
+export component TimelineStrip inherits Rectangle {
+    property <length> track-width: root.width - 2 * TimelineMetrics.inset;
+    property <length> track-y: TimelineMetrics.ruler-height;
+
+    height: TimelineMetrics.height;
+    background: Theme.surface;
+    clip: true;
+
+    changed track-width => { Timeline.resized(self.track-width); }
+    init => { Timeline.resized(self.track-width); }
+
+    // Track background.
+    Rectangle {
+        x: 0;
+        y: root.track-y;
+        width: parent.width;
+        height: TimelineMetrics.track-height;
+        background: Theme.background;
+    }
+
+    Rectangle {
+        y: root.track-y + TimelineMetrics.track-height;
+        height: 1px;
+        background: Theme.border;
+    }
+
+    track := Rectangle {
+        x: TimelineMetrics.inset;
+        width: root.track-width;
+        height: root.height;
+
+        for tick in Timeline.ticks: Rectangle {
+            x: tick.x;
+            y: tick.label != "" ? 9px : 13px;
+            width: 1px;
+            height: TimelineMetrics.ruler-height - self.y;
+            background: tick.label != "" ? Theme.text-muted : Theme.surface-selected;
+        }
+
+        for tick in Timeline.ticks: Text {
+            // The last label moves left instead of being cut at the right edge.
+            x: Math.min(tick.x + 3px, root.track-width + TimelineMetrics.inset - self.preferred-width - 1px);
+            y: 0px;
+            text: tick.label;
+            color: Theme.text-muted;
+            font-size: 10px;
+            visible: tick.label != "";
+        }
+
+        // The current section between the marks.
+        if Timeline.range-shown: Rectangle {
+            x: Timeline.range-x;
+            y: root.track-y + 2px;
+            width: Timeline.range-width;
+            height: TimelineMetrics.track-height - 4px;
+            background: Theme.accent.with-alpha(0.14);
+            border-width: 1px;
+            border-color: Theme.accent.with-alpha(0.45);
+        }
+
+        for block in Timeline.blocks: Rectangle {
+            x: block.x;
+            y: root.track-y + 5px;
+            width: block.width;
+            height: TimelineMetrics.track-height - 10px;
+            border-radius: 3px;
+            background: Theme.primary.with-alpha(block.selected ? 0.62 : 0.34);
+            border-width: block.selected || block.overlapping ? 1px : 0px;
+            border-color: block.overlapping ? Theme.status-corrupt : Theme.text;
+
+            Text {
+                text: block.label;
+                color: Theme.text;
+                font-size: 11px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        if Timeline.mark-start-shown: Rectangle {
+            x: Timeline.mark-start-x - 1px;
+            y: root.track-y;
+            width: 2px;
+            height: TimelineMetrics.track-height;
+            background: Theme.accent;
+
+            Rectangle {
+                x: 0;
+                y: 0;
+                width: 7px;
+                height: 2px;
+                background: Theme.accent;
+            }
+
+            Rectangle {
+                x: 0;
+                y: parent.height - 2px;
+                width: 7px;
+                height: 2px;
+                background: Theme.accent;
+            }
+        }
+
+        if Timeline.mark-end-shown: Rectangle {
+            x: Timeline.mark-end-x - 1px;
+            y: root.track-y;
+            width: 2px;
+            height: TimelineMetrics.track-height;
+            background: Theme.accent;
+
+            Rectangle {
+                x: -5px;
+                y: 0;
+                width: 7px;
+                height: 2px;
+                background: Theme.accent;
+            }
+
+            Rectangle {
+                x: -5px;
+                y: parent.height - 2px;
+                width: 7px;
+                height: 2px;
+                background: Theme.accent;
+            }
+        }
+
+        if Timeline.hover-shown: Rectangle {
+            x: Timeline.hover-x;
+            y: root.track-y;
+            width: 1px;
+            height: TimelineMetrics.track-height;
+            background: Theme.text.with-alpha(0.5);
+        }
+
+        if Timeline.playhead-shown: Rectangle {
+            x: Timeline.playhead-x - 1px;
+            y: 0;
+            width: 2px;
+            height: root.track-y + TimelineMetrics.track-height;
+            background: Theme.status-corrupt;
+
+            Path {
+                x: -4px;
+                y: 0;
+                width: 10px;
+                height: 7px;
+                commands: "M 0 0 L 10 0 L 5 7 Z";
+                fill: Theme.status-corrupt;
+            }
+        }
+
+        // The time under the pointer, on the ruler (over the labels).
+        if Timeline.hover-shown: Rectangle {
+            property <length> box-width: hover-label.preferred-width + 10px;
+            x: Math.clamp(Timeline.hover-x - self.box-width / 2, -TimelineMetrics.inset, root.track-width + TimelineMetrics.inset - self.box-width);
+            y: 1px;
+            width: self.box-width;
+            height: TimelineMetrics.ruler-height - 2px;
+            border-radius: 3px;
+            background: Theme.surface-selected;
+
+            hover-label := Text {
+                text: Timeline.hover-text;
+                color: Theme.text;
+                font-size: 10px;
+                font-family: "monospace";
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+
+    touch := TouchArea {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: root.track-y + TimelineMetrics.track-height;
+        enabled: Timeline.active;
+        mouse-cursor: Timeline.edge-hovered ? MouseCursor.ew-resize : MouseCursor.default;
+
+        pointer-event(event) => {
+            if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
+                Shortcuts.release-focus();
+                Timeline.pointer-down(self.mouse-x - TimelineMetrics.inset, self.mouse-y < root.track-y);
+            }
+            if event.button == PointerEventButton.left && event.kind == PointerEventKind.up {
+                Timeline.pointer-up(self.mouse-x - TimelineMetrics.inset);
+            }
+            // Moves arrive while hovering and while dragging; Shift turns snapping to edges off.
+            if event.kind == PointerEventKind.move {
+                Timeline.pointer-moved(self.mouse-x - TimelineMetrics.inset, self.mouse-y < root.track-y, self.pressed, event.modifiers.shift);
+            }
+        }
+
+        changed has-hover => {
+            if !self.has-hover {
+                Timeline.pointer-left();
+            }
+        }
+
+        scroll-event(event) => {
+            if Timeline.wheel(self.mouse-x - TimelineMetrics.inset, event.delta-x, event.delta-y, event.modifiers.control, event.modifiers.shift) {
+                return accept;
+            }
+            reject
+        }
+    }
+
+    // The overview strip: the whole video, the visible window, the playhead.
+    if Timeline.zoomed: Rectangle {
+        x: TimelineMetrics.inset;
+        y: root.track-y + TimelineMetrics.track-height + 4px;
+        width: root.track-width;
+        height: 6px;
+        border-radius: 3px;
+        background: Theme.surface-hover;
+
+        Rectangle {
+            x: parent.width * Timeline.window-start;
+            width: Math.max(4px, parent.width * Timeline.window-width);
+            height: parent.height;
+            border-radius: 3px;
+            background: overview-touch.has-hover || overview-touch.pressed ? Theme.primary : Theme.primary.with-alpha(0.6);
+        }
+
+        Rectangle {
+            x: parent.width * Timeline.overview-playhead;
+            width: 2px;
+            height: parent.height;
+            background: Theme.status-corrupt;
+        }
+
+        overview-touch := TouchArea {
+            y: -4px;
+            height: parent.height + 8px;
+            mouse-cursor: MouseCursor.pointer;
+
+            pointer-event(event) => {
+                if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
+                    Timeline.overview(Math.clamp(self.mouse-x / Math.max(1px, self.width), 0, 1));
+                }
+            }
+
+            moved => {
+                if self.pressed {
+                    Timeline.overview(Math.clamp(self.mouse-x / Math.max(1px, self.width), 0, 1));
+                }
+            }
+        }
+    }
+}
