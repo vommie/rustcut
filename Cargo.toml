@@ -1,0 +1,129 @@
+[workspace]
+resolver = "3"
+members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustcut"]
+default-members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustcut"]
+
+[workspace.package]
+# Single source of truth for the app version: the About page, the package script and the PKGBUILD read it from here.
+# Claude bumps the patch number whenever a state is testable; major and minor belong to the user.
+version = "0.0.1"
+edition = "2024"
+# The lowest toolchain known to work (rusqlite_migration needs 1.95). rust-toolchain.toml pins `stable`.
+rust-version = "1.95"
+license = "MIT"
+authors = ["vommie"]
+repository = "https://github.com/vommie/rustcut"
+homepage = "https://github.com/vommie/rustcut"
+readme = "README.md"
+keywords = ["video", "cutter", "ffmpeg", "mpv", "slint"]
+categories = ["multimedia::video", "gui"]
+# Applications, never published to crates.io.
+publish = false
+
+# Every dependency version lives here; the crates reference them with `workspace = true`.
+[workspace.dependencies]
+rustcut-core = { path = "crates/rustcut-core" }
+rustcut-player = { path = "crates/rustcut-player" }
+
+slint = { version = "1.18", features = ["raw-window-handle-06", "unstable-winit-030"] }
+slint-build = "1.18"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+clap = { version = "4", features = ["derive"] }
+
+# Lints. The rust and clippy groups below are the project's definition of "safe and robust"; `scripts/check-all.sh` and
+# `cargo cl` turn every warning into an error. Generated Slint code and tests are exempt where noted (clippy.toml, `mod generated`).
+[workspace.lints.rust]
+# Only `rustcut-player` may contain unsafe code (libmpv and OpenGL); it allows it at its crate root with a reason.
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+unused_must_use = "deny"
+non_ascii_idents = "forbid"
+trivial_casts = "warn"
+trivial_numeric_casts = "warn"
+unused_lifetimes = "warn"
+unused_import_braces = "warn"
+unused_qualifications = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+# Everything clippy calls pedantic, minus the lints that only ask for documentation or taste (allowed below with a reason).
+pedantic = { level = "warn", priority = -1 }
+# A panic in an actor or worker task silently stops it, so panicking constructs are not accepted outside tests.
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+unreachable = "warn"
+dbg_macro = "warn"
+# Out-of-range indexing and slicing in the middle of a UTF-8 character panic.
+indexing_slicing = "warn"
+string_slice = "warn"
+# `Instant - Duration` panics when the result would be before the clock's start.
+unchecked_time_subtraction = "warn"
+# Silent truncation and wrap-around of numbers (timestamps, sizes, frame counts).
+cast_possible_truncation = "warn"
+cast_possible_wrap = "warn"
+cast_sign_loss = "warn"
+cast_lossless = "warn"
+# Unsafe code must say why it is sound (player crate only); locks must not be held longer than needed (deadlocks).
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "warn"
+significant_drop_in_scrutinee = "warn"
+await_holding_lock = "warn"
+mem_forget = "warn"
+exit = "warn"
+rc_mutex = "warn"
+map_err_ignore = "warn"
+lossy_float_literal = "warn"
+fallible_impl_from = "warn"
+maybe_infinite_iter = "warn"
+redundant_clone = "warn"
+# Documentation and taste, not safety. Both crates are applications that are never published, so there is no consumer of a
+# public API that `#[must_use]` attributes and `# Errors` / `# Panics` sections would guide.
+must_use_candidate = "allow"
+return_self_not_must_use = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+too_many_lines = "allow"
+struct_excessive_bools = "allow"       # settings structs mirror one switch per UI control
+fn_params_excessive_bools = "allow"
+similar_names = "allow"                # tx/rx, in/out pairs read well in their functions
+many_single_char_names = "allow"
+doc_markdown = "allow"
+too_long_first_doc_paragraph = "allow"
+needless_pass_by_value = "allow"       # Slint callbacks and Rc handles hand over ownership by design
+assert_is_empty = "allow"              # tests: `assert!(x.is_empty())` reads fine
+unreadable_literal = "allow"           # hash constants and microsecond values are written the way their sources write them
+cast_precision_loss = "allow"          # only sizes, counts and durations become floats, for percentages, speeds and display
+# `significant_drop_tightening` is not enabled: it flags every guard that is read in the last expression of a block.
+
+# Debug info is limited to line tables (and none for dependencies): full debug info made the target folder of a sibling project
+# grow to more than 100 GB over a day of rebuilds. Dependencies are optimized (Slint, SQLite, the video stack are unusably slow
+# otherwise); the own crates build fast at opt-level 1. For a debugger session use `cargo build --profile debug-full`.
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 3
+debug = false
+
+[profile.debug-full]
+inherits = "dev"
+debug = true
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
+# `cargo build --profile profiling`, then `samply record target/profiling/rustcut`: release code with symbols.
+[profile.profiling]
+inherits = "release"
+debug = "line-tables-only"
+strip = false

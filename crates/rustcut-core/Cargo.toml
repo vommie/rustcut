@@ -1,0 +1,18 @@
+[package]
+name = "rustcut-core"
+description = "RustCut without a user interface: domain model, editing, rendering, queue, store, settings, RustView client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+
+[dev-dependencies]

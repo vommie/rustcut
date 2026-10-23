@@ -1,0 +1,36 @@
+[package]
+name = "rustcut"
+description = "Local video cutter: mark sections, apply filters, render through a queue, tag and rate in RustView"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
+publish.workspace = true
+build = "build.rs"
+
+[lib]
+name = "rustcut"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rustcut"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+rustcut-core.workspace = true
+rustcut-player.workspace = true
+slint.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+clap.workspace = true
+
+[build-dependencies]
+slint-build.workspace = true

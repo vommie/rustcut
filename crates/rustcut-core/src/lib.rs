@@ -1,0 +1,7 @@
+//! RustCut core: everything that needs no user interface.
+//!
+//! This crate never depends on the app crate or on generated Slint code. Its modules are the domain model (time, sections,
+//! filters), render planning and the ffmpeg runner, the queue engine, the SQLite store, settings, the RustView client and the
+//! hash service (see `HANDOFF.md`, section 5).
+
+pub mod app_identity;
