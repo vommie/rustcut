@@ -30,6 +30,8 @@ export global TimelineMetrics {
 export global Timeline {
     // A video with a known duration is shown.
     in property <bool> active;
+    // The player shows the probe render: the timeline keeps the source and takes no input.
+    in property <bool> locked;
     in property <[TimelineTick]> ticks;
     in property <[TimelineBlock]> blocks;
     in property <bool> mark-start-shown;
@@ -311,6 +313,21 @@ export component TimelineStrip inherits Rectangle {
                 if self.pressed {
                     Timeline.overview(Math.clamp(self.mouse-x / Math.max(1px, self.width), 0, 1));
                 }
+            }
+        }
+    }
+
+    // While the probe render plays: dimmed, and every pointer event stops here.
+    if Timeline.locked: Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        background: Theme.background.with-alpha(0.65);
+
+        TouchArea {
+            scroll-event(event) => {
+                accept
             }
         }
     }

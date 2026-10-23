@@ -1,10 +1,29 @@
 //! The entries of the encoder catalog.
 
 use super::presets::{
-    AOM_PRESETS, AOM_TUNES, NONE, NVENC_PRESETS, NVENC_TUNES, QSV_PRESETS, RAV1E_PRESETS, SVT_PRESETS, SVT_TUNES,
-    X26X_PRESETS, X264_TUNES, X265_TUNES,
+    AOM_AQ, AOM_PRESETS, AOM_TUNES, NONE, NVENC_PRESETS, NVENC_TUNES, QSV_PRESETS, RAV1E_PRESETS, SVT_AQ, SVT_PRESETS,
+    SVT_TUNES, X26X_PRESETS, X264_AQ, X264_TUNES, X265_AQ, X265_TUNES,
 };
-use super::{AudioCodec, CodecFamily, EncoderBackend, EncoderSpec, QualityScale, TuneTarget, VideoEncoder};
+use super::{
+    AqSpec, AudioCodec, CodecFamily, EncoderBackend, EncoderSpec, QualityScale, Setting, TuneTarget, VideoEncoder,
+};
+
+/// Speeds of x264, x265 and Quick Sync (fastest first).
+const X26X_SPEEDS: [&str; 5] = ["veryfast", "fast", "medium", "slow", "veryslow"];
+
+/// Keys that conflict with options RustCut always passes (rate control, preset, passes, pixel format). Keys of the
+/// optional fields (tune, AQ mode, ...) are only refused when that field is set too (`validate::own_field`).
+const X264_RESERVED: &[&str] = &["crf", "qp", "bitrate", "preset", "pass", "stats"];
+const X265_RESERVED: &[&str] = &[
+    "crf",
+    "qp",
+    "bitrate",
+    "preset",
+    "pass",
+    "stats",
+    "input-depth",
+    "output-depth",
+];
 
 const fn q(
     option: &'static str,
@@ -30,11 +49,18 @@ const fn hw(
     family: CodecFamily,
     backend: EncoderBackend,
     quality: QualityScale,
+    simple_quality: (u16, u16),
 ) -> EncoderSpec {
-    let (preset_option, presets, default_preset, tunes) = match backend {
-        EncoderBackend::Nvenc => (Some("-preset"), NVENC_PRESETS, Some("p5"), NVENC_TUNES),
-        EncoderBackend::Qsv => (Some("-preset"), QSV_PRESETS, Some("medium"), NONE),
-        EncoderBackend::Vaapi | EncoderBackend::Software => (None, NONE, None, NONE),
+    let (preset_option, presets, default_preset, tunes, speeds) = match backend {
+        EncoderBackend::Nvenc => (
+            Some("-preset"),
+            NVENC_PRESETS,
+            Some("p5"),
+            NVENC_TUNES,
+            Some(["p1", "p3", "p4", "p5", "p7"]),
+        ),
+        EncoderBackend::Qsv => (Some("-preset"), QSV_PRESETS, Some("medium"), NONE, Some(X26X_SPEEDS)),
+        EncoderBackend::Vaapi | EncoderBackend::Software => (None, NONE, None, NONE, None),
     };
     let pix_fmt_10 = if matches!(family, CodecFamily::H264) {
         None
@@ -61,6 +87,13 @@ const fn hw(
         average_bitrate: true,
         film_grain: false,
         recommended_audio: AudioCodec::Opus,
+        constant_qp: None,
+        aq: None,
+        scene_cuts: false,
+        variance_boost: false,
+        reserved_params: &[],
+        simple_quality,
+        speeds,
     }
 }
 
@@ -84,6 +117,16 @@ pub(super) const SVT_AV1: EncoderSpec = EncoderSpec {
     average_bitrate: true,
     film_grain: true,
     recommended_audio: AudioCodec::Opus,
+    constant_qp: Some(q("-qp", "QP", 63, 30, &[])),
+    aq: Some(AqSpec {
+        setting: Setting::Param("aq-mode"),
+        modes: SVT_AQ,
+    }),
+    scene_cuts: false,
+    variance_boost: true,
+    reserved_params: &["crf", "qp", "rc", "tbr", "preset", "pass", "stats", "input-depth"],
+    simple_quality: (50, 16),
+    speeds: Some(["10", "8", "6", "4", "2"]),
 };
 
 pub(super) const AOM: EncoderSpec = EncoderSpec {
@@ -106,6 +149,16 @@ pub(super) const AOM: EncoderSpec = EncoderSpec {
     average_bitrate: true,
     film_grain: false,
     recommended_audio: AudioCodec::Opus,
+    constant_qp: None,
+    aq: Some(AqSpec {
+        setting: Setting::Option("-aq-mode"),
+        modes: AOM_AQ,
+    }),
+    scene_cuts: false,
+    variance_boost: false,
+    reserved_params: &["end-usage", "cq-level", "target-bitrate", "cpu-used", "passes", "pass"],
+    simple_quality: (50, 16),
+    speeds: Some(["8", "6", "4", "3", "2"]),
 };
 
 pub(super) const RAV1E: EncoderSpec = EncoderSpec {
@@ -128,6 +181,13 @@ pub(super) const RAV1E: EncoderSpec = EncoderSpec {
     average_bitrate: true,
     film_grain: false,
     recommended_audio: AudioCodec::Opus,
+    constant_qp: None,
+    aq: None,
+    scene_cuts: false,
+    variance_boost: false,
+    reserved_params: &["quantizer", "bitrate", "speed"],
+    simple_quality: (200, 40),
+    speeds: Some(["10", "8", "6", "4", "2"]),
 };
 
 pub(super) const X265: EncoderSpec = EncoderSpec {
@@ -151,6 +211,16 @@ pub(super) const X265: EncoderSpec = EncoderSpec {
     average_bitrate: true,
     film_grain: false,
     recommended_audio: AudioCodec::Aac,
+    constant_qp: Some(q("-qp", "QP", 51, 26, &[])),
+    aq: Some(AqSpec {
+        setting: Setting::Param("aq-mode"),
+        modes: X265_AQ,
+    }),
+    scene_cuts: true,
+    variance_boost: false,
+    reserved_params: X265_RESERVED,
+    simple_quality: (36, 16),
+    speeds: Some(X26X_SPEEDS),
 };
 
 pub(super) const X264: EncoderSpec = EncoderSpec {
@@ -173,6 +243,16 @@ pub(super) const X264: EncoderSpec = EncoderSpec {
     average_bitrate: true,
     film_grain: false,
     recommended_audio: AudioCodec::Aac,
+    constant_qp: Some(q("-qp", "QP", 69, 22, &[])),
+    aq: Some(AqSpec {
+        setting: Setting::Param("aq-mode"),
+        modes: X264_AQ,
+    }),
+    scene_cuts: true,
+    variance_boost: false,
+    reserved_params: X264_RESERVED,
+    simple_quality: (32, 14),
+    speeds: Some(X26X_SPEEDS),
 };
 
 const VAAPI_Q: QualityScale = q("-qp", "QP", 52, 25, &["-rc_mode", "CQP"]);
@@ -189,6 +269,7 @@ pub(super) const AV1_VAAPI: EncoderSpec = hw(
     CodecFamily::Av1,
     EncoderBackend::Vaapi,
     q("-global_quality", "QP", 255, 120, &["-rc_mode", "CQP"]),
+    (220, 60),
 );
 pub(super) const HEVC_VAAPI: EncoderSpec = hw(
     VideoEncoder::HevcVaapi,
@@ -197,6 +278,7 @@ pub(super) const HEVC_VAAPI: EncoderSpec = hw(
     CodecFamily::Hevc,
     EncoderBackend::Vaapi,
     VAAPI_Q,
+    (36, 16),
 );
 pub(super) const H264_VAAPI: EncoderSpec = hw(
     VideoEncoder::H264Vaapi,
@@ -205,6 +287,7 @@ pub(super) const H264_VAAPI: EncoderSpec = hw(
     CodecFamily::H264,
     EncoderBackend::Vaapi,
     VAAPI_Q,
+    (36, 16),
 );
 pub(super) const AV1_NVENC: EncoderSpec = hw(
     VideoEncoder::Av1Nvenc,
@@ -217,6 +300,7 @@ pub(super) const AV1_NVENC: EncoderSpec = hw(
         default: 32,
         ..NVENC_Q
     },
+    (50, 20),
 );
 pub(super) const HEVC_NVENC: EncoderSpec = hw(
     VideoEncoder::HevcNvenc,
@@ -225,6 +309,7 @@ pub(super) const HEVC_NVENC: EncoderSpec = hw(
     CodecFamily::Hevc,
     EncoderBackend::Nvenc,
     NVENC_Q,
+    (38, 16),
 );
 pub(super) const H264_NVENC: EncoderSpec = hw(
     VideoEncoder::H264Nvenc,
@@ -233,6 +318,7 @@ pub(super) const H264_NVENC: EncoderSpec = hw(
     CodecFamily::H264,
     EncoderBackend::Nvenc,
     NVENC_Q,
+    (38, 16),
 );
 pub(super) const AV1_QSV: EncoderSpec = hw(
     VideoEncoder::Av1Qsv,
@@ -241,6 +327,7 @@ pub(super) const AV1_QSV: EncoderSpec = hw(
     CodecFamily::Av1,
     EncoderBackend::Qsv,
     QSV_Q,
+    (36, 16),
 );
 pub(super) const HEVC_QSV: EncoderSpec = hw(
     VideoEncoder::HevcQsv,
@@ -249,6 +336,7 @@ pub(super) const HEVC_QSV: EncoderSpec = hw(
     CodecFamily::Hevc,
     EncoderBackend::Qsv,
     QSV_Q,
+    (36, 16),
 );
 pub(super) const H264_QSV: EncoderSpec = hw(
     VideoEncoder::H264Qsv,
@@ -257,4 +345,5 @@ pub(super) const H264_QSV: EncoderSpec = hw(
     CodecFamily::H264,
     EncoderBackend::Qsv,
     QSV_Q,
+    (36, 16),
 );

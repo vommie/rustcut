@@ -23,6 +23,7 @@ use crate::ui::filters::{FilterKeys, FiltersBridge};
 use crate::ui::keymap::{Action, Keymap};
 use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::player::{self, PlaybackView, PlayerBridge};
+use crate::ui::probe::ProbeBridge;
 use crate::ui::sections::{Bound, Edge, SectionsState};
 use crate::ui::status::{self, Level};
 use crate::ui::timeline::{Viewport, view};
@@ -63,6 +64,10 @@ pub struct Editor {
     seek_step: f64,
     seek_step_long: f64,
     state: RefCell<State>,
+    /// The probe render (set after it is installed; it needs the editor first).
+    probe: RefCell<Weak<ProbeBridge>>,
+    /// The player shows the probe render: the timeline, the marks and the sections wait (user decision Q-E1).
+    probe_playing: Cell<bool>,
     /// The status line shows a refused edit: the next accepted one replaces it.
     warned: Cell<bool>,
     ticks: Rc<VecModel<TimelineTick>>,
@@ -106,6 +111,8 @@ impl Editor {
                 hover: None,
                 edge_hovered: false,
             }),
+            probe: RefCell::new(Weak::new()),
+            probe_playing: Cell::new(false),
             warned: Cell::new(false),
             ticks: Rc::new(VecModel::default()),
             blocks: Rc::new(VecModel::default()),
@@ -142,6 +149,50 @@ impl Editor {
         self.publish();
     }
 
+    /// Connects the probe render (its key, Escape while it plays).
+    pub fn set_probe(&self, probe: &Rc<ProbeBridge>) {
+        *self.probe.borrow_mut() = Rc::downgrade(probe);
+    }
+
+    /// The player shows the probe render (`true`) or the source again. While the probe plays the timeline keeps
+    /// showing the source and takes no input; edits of marks and sections are refused.
+    pub fn set_probe_playing(&self, playing: bool) {
+        self.probe_playing.set(playing);
+        if let Some(window) = self.window.upgrade() {
+            window.global::<Timeline<'_>>().set_locked(playing);
+        }
+        if !playing {
+            self.publish();
+        }
+    }
+
+    /// Whether an edit must wait because the probe render plays (says so in the status line).
+    fn probe_blocks(&self) -> bool {
+        if self.probe_playing.get() {
+            self.status(Level::Info, "The probe render is playing: Esc returns to the source.");
+        }
+        self.probe_playing.get()
+    }
+
+    /// Where a probe render starts from: the playhead, the source's length and the job's length (the sections, else
+    /// the whole source). `None` without a video of known length.
+    pub fn probe_point(&self) -> Option<(Timestamp, Timestamp, Timestamp)> {
+        let st = self.state.borrow();
+        let duration = st.sections.duration().filter(|_| st.has_video)?;
+        let total = st.sections.list().total_duration();
+        let job = if total.as_micros() > 0 { total } else { duration };
+        Some((st.playhead, duration, job))
+    }
+
+    /// The first key of `action` as the tooltips show it ("" when unbound).
+    pub fn key_label(&self, action: Action) -> String {
+        self.keymap
+            .chords(action)
+            .first()
+            .map(crate::ui::keymap::Chord::label)
+            .unwrap_or_default()
+    }
+
     /// The zoom to remember in `ui-state.toml`.
     pub fn timeline_state(&self) -> TimelineState {
         TimelineState {
@@ -151,6 +202,10 @@ impl Editor {
 
     /// A new playback view (UI thread): the duration, the playhead, and the view pages to follow a moving playhead.
     fn playback_changed(&self, view: &PlaybackView) {
+        if self.probe_playing.get() {
+            // The probe's own time and length are not the source's.
+            return;
+        }
         let Ok(mut st) = self.state.try_borrow_mut() else {
             return;
         };
@@ -232,6 +287,7 @@ impl Editor {
         sc.set_filter_preview(keys(Action::ToggleFilterPreview));
         sc.set_filter_keep(keys(Action::ToggleKeepFilters));
         sc.set_filter_reset(keys(Action::ResetFilters));
+        sc.set_probe_render(keys(Action::ProbeRender));
         sc.set_crop_edit(keys(Action::CropEdit));
         sc.set_auto_crop(keys(Action::AutoCrop));
         sc.set_rotate_left(keys(Action::RotateLeft));

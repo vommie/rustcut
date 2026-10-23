@@ -9,6 +9,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Render Settings panel (left sidebar, next to Export), in five cards:
+  - Profile: quick selection of the built-in profiles and your own. Changes go to a working copy marked "(modified)";
+    icons drop the changes, save them into your own profile, save them as a new profile, rename or delete your profile.
+    Your profiles are stored in `config.toml` (`[[render.profiles]]`); the working copy and the profile it came from
+    are remembered across restarts (`ui-state.toml`, `[export]`: `profile`, `render`). Problems of the settings are
+    listed here, errors first (the render would fail or the file would not be standard) and then warnings (plays on few
+    devices, slow combinations); the option concerned is marked in its card.
+  - Encoding (the simple view): the codec (only encoders that work on this computer; the software encoders while the
+    check at start still runs), a quality slider from "Small" over "Good", "High" and "Very high" to "Archive" that means
+    about the same picture with every codec (the codec's own CRF, QP or CQ is shown under it), five speeds from
+    "Fastest (largest files)" to "Slowest (smallest files)", and the container. Switching the codec keeps the slider
+    position, the speed, a bit rate, the keyframe interval and the color tags; options only the old codec had are
+    dropped, and H.264 starts at 8 bits.
+  - Audio: codec, bit rate, channels and sample rate.
+  - Expert (folded at first), per codec: rate control (constant quality, constant QP, average bit rate, bit rate in two
+    passes, target size in two passes) with its value, the codec's full preset list, tune, profile, level, bit depth,
+    keyframe interval, film grain and variance boost (SVT-AV1), AQ mode, keyframes at scene cuts (x264, x265), color
+    tags and range (labels only, nothing is converted), and extra codec parameters (`key=value:key=value`).
+  - Probe Render (see below).
+  Every option has a tooltip that says what it does and what it costs.
+- The real encoder checks the settings in the background half a second after a change (a few frames of a test picture
+  with silence, into the chosen container): settings it refuses and codec parameters it ignores (x264, x265, SVT-AV1 and
+  rav1e only warn about keys they do not know) are listed as errors, its own advice as warnings.
+- Probe render (T, the flask button of the Probe Render card, or Filters > Probe Render): renders a few seconds around
+  the playhead (10 by default, 2 to 60, a quarter of it before the playhead) with the current filters, deshake included,
+  and the render settings at the encoder's fastest speed, then plays it in the player in a loop with a banner above the
+  video. Escape or the banner's button returns to the source at the same place, paused or playing as before. While the
+  probe plays, the timeline is dimmed and marks and sections wait. "Exact settings" renders with the profile's own
+  speed and estimates the size of the whole job (the sections, or the whole video without sections). The length and
+  the switch are remembered (`ui-state.toml`, `[export.probe]`). Probes are written to the cache folder (`probe/`) and
+  removed at the next start.
+- Size estimate of a render after its first seconds, from the bytes written so far (used by the probe render now and by
+  the queue later).
+- No migration: `config.toml` and `ui-state.toml` of 0.0.8 load unchanged (the new options have defaults), and a user
+  profile in `config.toml` that cannot be read is skipped instead of resetting all settings.
+
 - Render engine (not yet reachable from the window; the queue that drives it comes next): a job's sections are cut with
   frame-accurate seeking and joined, every audio track of the source is kept with its language and title, the filters
   run exactly as previewed (also on rotated phone videos and odd sizes, which are rounded to even pixels), and global
@@ -140,5 +176,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - The Sections card's buttons are icons with tooltips (set start/end to the playhead, add, move, delete).
+
+### Fixed
+
+- FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
 [Unreleased]: https://github.com/vommie/rustcut/commits/master

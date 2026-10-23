@@ -21,6 +21,15 @@ const EXPORT_CARDS: [(&str, &str, &str); 3] = [
     ("sections", "Sections", "The section list arrives with milestone M2.2."),
 ];
 
+/// The cards of the Render Settings panel (M2.5): id and title.
+const RENDER_CARDS: [(&str, &str); 5] = [
+    ("render-profile", "Profile"),
+    ("render-video", "Encoding"),
+    ("render-audio", "Audio"),
+    ("render-expert", "Expert"),
+    ("render-probe", "Probe Render"),
+];
+
 /// The tab being dragged, as far as the rows need it.
 #[derive(Debug, Clone, Copy)]
 pub struct DraggedTab {
@@ -146,6 +155,18 @@ pub fn export_cards(layout: &DockLayout) -> Vec<DockCardView> {
             title: SharedString::from(*title),
             collapsed: layout.collapsed_cards.contains(*id),
             note: SharedString::from(*note),
+        })
+        .collect()
+}
+
+pub fn render_cards(layout: &DockLayout) -> Vec<DockCardView> {
+    RENDER_CARDS
+        .iter()
+        .map(|(id, title)| DockCardView {
+            id: SharedString::from(*id),
+            title: SharedString::from(*title),
+            collapsed: layout.collapsed_cards.contains(*id),
+            note: SharedString::new(),
         })
         .collect()
 }

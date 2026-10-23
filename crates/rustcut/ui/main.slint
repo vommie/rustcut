@@ -1,4 +1,5 @@
-// Main window of RustCut: the dock (ADR-12) with its two sidebars around the video, the timeline and the transport bar, a
+// Main window of RustCut: the dock (ADR-12) with its two sidebars around the video, the banners above it (known source,
+// probe render), the timeline and the transport bar, a
 // slim status line, the menus (File, Playback, Sections, Filters, View) with the keymap's shortcuts, the key scope that
 // hands every other key press to the keymap (src/ui/editor/), and the tooltip layer on top.
 
@@ -20,11 +21,13 @@ import { SectionRowView, Sections } from "sections_card.slint";
 import { FilterRowView, Filters } from "filters_card.slint";
 import { CropOverlay } from "crop_overlay.slint";
 import { TooltipLayer } from "tooltip.slint";
+import { OptionRowView, Probe, RenderIssueView, RenderSettings } from "render_types.slint";
+import { ProbeBanner } from "probe_banner.slint";
 
 export {
     Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
     MediaInfoRow, MediaInfoSection, KnownSource, Shortcuts, Timeline, TimelineBlock, TimelineTick, Sections,
-    SectionRowView, Filters, FilterRowView, CropOverlay
+    SectionRowView, Filters, FilterRowView, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe
 }
 
 export component MainWindow inherits Window {
@@ -255,6 +258,21 @@ export component MainWindow inherits Window {
                 shortcut: Shortcuts.filter-reset;
                 activated => { Shortcuts.run("reset_filters"); }
             }
+
+            MenuSeparator { }
+
+            MenuItem {
+                title: "Probe Render";
+                shortcut: Shortcuts.probe-render;
+                enabled: (Playback.has-video || Probe.playing) && !Probe.running;
+                activated => { Shortcuts.run("probe_render"); }
+            }
+
+            MenuItem {
+                title: "Back to the Source";
+                enabled: Probe.playing;
+                activated => { Probe.back(); }
+            }
         }
 
         Menu {
@@ -348,6 +366,8 @@ export component MainWindow inherits Window {
                     min-width: 240px;
 
                     KnownSourceBanner { }
+
+                    ProbeBanner { }
 
                     player := PlayerView {
                         vertical-stretch: 1;

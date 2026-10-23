@@ -304,6 +304,9 @@ impl FiltersBridge {
 
     /// Starts the quick crop (Ctrl held over the video) unless a session runs or the picture is not known.
     fn begin_quick(&self) {
+        if self.suspended.get() {
+            return;
+        }
         let started = {
             let mut st = self.state.borrow_mut();
             st.crop_session().is_none() && st.begin_crop(CropMode::Quick)
