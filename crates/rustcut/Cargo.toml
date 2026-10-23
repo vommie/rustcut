@@ -52,6 +52,7 @@ rfd.workspace = true
 interprocess.workspace = true
 fnv.workspace = true
 directories.workspace = true
+regex.workspace = true
 
 [build-dependencies]
 slint-build.workspace = true
@@ -60,5 +61,6 @@ toml.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+similar.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }

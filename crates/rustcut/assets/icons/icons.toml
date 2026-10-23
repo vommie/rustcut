@@ -118,3 +118,22 @@ job_cancel = { tabler = "circle-x", doc = "Cancel the job" }
 job_retry = { tabler = "refresh", doc = "Render the job again" }
 job_remove = { tabler = "trash", doc = "Remove the job from the queue" }
 job_hold = { tabler = "hand-stop", doc = "Hold the job (it waits until released)" }
+
+# Tag & Rate (M3.2); the first block carries the ids RustView's copied components use
+check = { tabler = "check", doc = "Assigned tag (tag tree, tag history)" }
+partial = { tabler = "circle-half-2", doc = "Partially assigned tag (several files; not used by RustCut's single job)" }
+plus = { tabler = "plus", doc = "Expand a tag branch" }
+minus = { tabler = "minus", doc = "Collapse a tag branch" }
+point = { tabler = "point", style = "filled", doc = "Leaf marker of the tag tree" }
+regex = { tabler = "regex", doc = "Regular expression tag filter" }
+search = { tabler = "search", doc = "Search field" }
+tag_locked = { tabler = "lock", doc = "A locked tag stays assigned for the next jobs" }
+rustview_connected = { tabler = "plug-connected", doc = "RustView is connected" }
+rustview_unavailable = { tabler = "plug-connected-x", doc = "RustView cannot be reached" }
+tags_last = { tabler = "history", doc = "Apply the last saved job's tags" }
+rating_last = { tabler = "star", doc = "Apply the last saved job's rating" }
+tags_clear = { tabler = "tags-off", doc = "Clear the tags and the rating" }
+tags_expand = { tabler = "fold-down", doc = "Expand every tag branch" }
+tags_collapse = { tabler = "fold-up", doc = "Collapse every tag branch" }
+tags_hide = { tabler = "eye-off", doc = "Choose the tag branches to hide" }
+job_tags = { tabler = "tag", doc = "Edit the tags and the rating of the job" }

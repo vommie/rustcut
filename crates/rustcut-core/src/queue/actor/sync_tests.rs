@@ -175,3 +175,94 @@ async fn a_restart_continues_from_the_stored_records() {
     );
     assert!(after.iter().any(|c| c.starts_with("delete-media")), "{after:?}");
 }
+
+#[tokio::test]
+async fn the_metadata_of_waiting_finished_and_failed_jobs_can_be_edited() {
+    let dir = tempfile::tempdir().unwrap();
+    let (store, _thread) = spawn_store(Store::open_in_memory().unwrap()).unwrap();
+    let insert = |stem: &'static str, state: JobState| {
+        let store = store.clone();
+        let spec = tagged(dir.path(), stem);
+        async move {
+            store
+                .request(|reply| StoreCommand::InsertJob { spec, state, reply })
+                .await
+                .unwrap()
+                .unwrap()
+                .id
+        }
+    };
+    let finished = insert("done", JobState::Finished).await;
+    let failed = insert("failed", JobState::Failed { reason: "test".into() }).await;
+    let done_file = dir.path().join("done.mkv");
+    std::fs::write(&done_file, b"rendered").unwrap();
+    let fake = FakeRustView::new();
+    let (queue, _sync) = start(&store, dir.path(), &fake, true);
+    let mut events = queue.events.subscribe();
+    let waiting = enqueue(&queue, tagged(dir.path(), "waiting")).await.unwrap();
+    wait_for(&mut events, waiting, |row| row.sync == SyncState::Synced).await;
+    assert!(
+        fake.media(&done_file.display().to_string()).is_none(),
+        "a finished job that was never synced stays alone (D-V2)"
+    );
+
+    let edit = |id: JobId, tags: Vec<u32>, rating: u8| {
+        let handle = queue.handle.clone();
+        async move {
+            let mut metadata = handle
+                .request(|reply| QueueCommand::Metadata { id, reply })
+                .await
+                .unwrap()
+                .unwrap();
+            metadata.tags = tags;
+            metadata.rating = Some(rating);
+            handle
+                .request(|reply| QueueCommand::UpdateMetadata { id, metadata, reply })
+                .await
+                .unwrap()
+        }
+    };
+    edit(waiting, vec![7, 8], 2).await.unwrap();
+    edit(finished, vec![5], 5).await.unwrap();
+    edit(failed, vec![6], 1).await.unwrap();
+    let waiting_file = dir.path().join("waiting.mkv").display().to_string();
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let w = fake.media(&waiting_file).map(|m| (m.tags, m.rating));
+            let f = fake.media(&done_file.display().to_string()).map(|m| (m.tags, m.rating));
+            if w == Some((vec![7, 8], 2)) && f == Some((vec![5], 5)) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(
+        stored_record(&store, finished).await.finished,
+        "the finished file was asserted"
+    );
+    let failed_file = dir.path().join("failed.mkv").display().to_string();
+    assert!(fake.media(&failed_file).is_none(), "a failed job only keeps the values");
+    let kept = queue
+        .handle
+        .request(|reply| QueueCommand::Metadata { id: failed, reply })
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!((kept.tags, kept.rating), (vec![6], Some(1)));
+    let unknown = JobId(999);
+    let metadata = JobMetadata::default();
+    assert_eq!(
+        queue
+            .handle
+            .request(|reply| QueueCommand::UpdateMetadata {
+                id: unknown,
+                metadata,
+                reply
+            })
+            .await
+            .unwrap(),
+        Err(QueueError::NoSuchJob(unknown))
+    );
+}

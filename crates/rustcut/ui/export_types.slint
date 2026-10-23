@@ -70,6 +70,17 @@ export global Export {
     in property <bool> dialog-can-confirm;
     in property <string> dialog-confirm-text;
 
+    // The question before a job without tags or rating is saved (modal; user decision Q-G1).
+    in property <bool> meta-open;
+    in property <string> meta-title;
+    in property <string> meta-text;
+    in property <bool> meta-ask-rating;
+    in property <bool> meta-dont-ask;
+    callback meta-rate(int);
+    callback meta-save();
+    callback meta-back();
+    callback meta-toggle-dont-ask();
+
     callback dialog-select(int);
     callback dialog-step(int);
     callback dialog-type(string);
@@ -115,4 +126,6 @@ export global Queue {
     callback toggle-hold();
     callback move-up();
     callback move-down();
+    // The Tag & Rate panel edits the selected job's RustView entry (user decision Q-G3).
+    callback edit-tags();
 }

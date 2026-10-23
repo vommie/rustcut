@@ -1,0 +1,136 @@
+// The question before a job without tags or rating is saved (src/ui/export/metadata.rs; user decision Q-G1): what is
+// missing, the rating bar (a click saves the job with that rating), "Save without" (Enter), "Back to tagging" (Escape)
+// and "Don't ask again". Keys 0-5 pick a rating while it is asked for.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { Switch } from "controls.slint";
+import { RatingBar } from "rating_bar.slint";
+import { DialogButton } from "export_dialog.slint";
+import { Export } from "export_types.slint";
+
+export component MetadataDialog inherits Rectangle {
+    // The scrim: the window behind waits.
+    background: #000000a0;
+
+    TouchArea { }
+
+    keys := FocusScope {
+        init => { self.focus(); }
+
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                Export.meta-back();
+                return accept;
+            }
+            if event.text == Key.Return {
+                Export.meta-save();
+                return accept;
+            }
+            if Export.meta-ask-rating && (event.text == "0" || event.text == "1" || event.text == "2"
+                || event.text == "3" || event.text == "4" || event.text == "5") {
+                Export.meta-rate(event.text.to-float());
+                return accept;
+            }
+            accept
+        }
+
+        card := Rectangle {
+            width: Math.min(460px, root.width - 40px);
+            height: Math.min(content.preferred-height, root.height - 40px);
+            x: (root.width - self.width) / 2;
+            y: (root.height - self.height) / 2;
+            border-radius: 8px;
+            background: Theme.surface-variant;
+            border-width: 1px;
+            border-color: Theme.border;
+            drop-shadow-blur: 24px;
+            drop-shadow-color: #00000080;
+            clip: true;
+
+            content := VerticalLayout {
+                padding: 16px;
+                spacing: 12px;
+
+                HorizontalLayout {
+                    spacing: 12px;
+
+                    AppIcon {
+                        icon: IconId.panel-tag-rate;
+                        size: IconSize.xl;
+                        color: Theme.accent;
+                    }
+
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        spacing: 4px;
+
+                        Text {
+                            text: Export.meta-title;
+                            color: Theme.text;
+                            font-size: 15px;
+                            font-weight: 700;
+                            wrap: word-wrap;
+                        }
+
+                        Text {
+                            text: Export.meta-text;
+                            color: Theme.text-muted;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+
+                if Export.meta-ask-rating: VerticalLayout {
+                    spacing: 4px;
+
+                    Text {
+                        text: "Save with the rating (keys 0-5)";
+                        color: Theme.text-muted;
+                        font-size: 11px;
+                        font-weight: 600;
+                    }
+
+                    RatingBar {
+                        selected-rating: -1;
+                        is-assign-mode: true;
+                        has-selection: true;
+                        rating-selected(r) => { Export.meta-rate(r); }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+
+                    Switch {
+                        y: (parent.height - self.height) / 2;
+                        checked: Export.meta-dont-ask;
+                        tooltip: "Can be switched on again in the settings (Warnings)";
+                        toggled => { Export.meta-toggle-dont-ask(); }
+                    }
+
+                    Text {
+                        horizontal-stretch: 1;
+                        text: "Don't ask again";
+                        color: Theme.text-muted;
+                        font-size: 11px;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+
+                    DialogButton {
+                        text: "Back to tagging";
+                        clicked => { Export.meta-back(); }
+                    }
+
+                    DialogButton {
+                        text: "Save without";
+                        primary: true;
+                        clicked => { Export.meta-save(); }
+                    }
+                }
+            }
+        }
+    }
+}

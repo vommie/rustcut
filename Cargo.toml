@@ -6,7 +6,7 @@ default-members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustc
 [workspace.package]
 # Single source of truth for the app version: the About page, the package script and the PKGBUILD read it from here.
 # Claude bumps the patch number whenever a state is testable; major and minor belong to the user.
-version = "0.0.11"
+version = "0.0.12"
 edition = "2024"
 # The lowest toolchain known to work (rusqlite_migration needs 1.95). rust-toolchain.toml pins `stable`.
 rust-version = "1.95"
@@ -37,6 +37,10 @@ serde_json = "1"
 az = "1"
 # File-name templates (Jinja2 syntax) with a fuel limit; RustStart uses the same engine.
 minijinja = { version = "3", features = ["builtins", "serde", "fuel"] }
+# The Tag & Rate panel's regular-expression tag filter (RustView uses the same crate).
+regex = "1"
+# Line diffs in the RustView parity test (tests/rustview_parity.rs).
+similar = "2"
 # Async runtime of the services (actors, processes, timers); the UI thread never runs on it (ADR-4).
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "signal", "io-util", "net", "process", "fs"] }
 parking_lot = "0.12"

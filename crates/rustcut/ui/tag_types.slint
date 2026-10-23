@@ -1,0 +1,99 @@
+// Data of the Tag & Rate panel (M3.2): the structs RustView's copied components read (same names and fields as in
+// RustView's `ui/types.slint`, plus RustCut's `is-locked`) and the `TagRate` global the panel reads, so the dock can put
+// the panel in any group. Rust fills it (`src/ui/tags/`).
+
+export struct TagNodeView {
+    id: int,
+    name: string,
+    depth: int,
+    has_children: bool,
+    is_expanded: bool,
+    is_selected: bool,
+    is_assigned: bool,
+    is_partial: bool,
+    is_dimmed: bool,
+    /// RustCut: the tag stays assigned for the next jobs (right click).
+    is_locked: bool,
+}
+
+export struct TagColumnView {
+    tags: [TagNodeView],
+}
+
+export struct TagHistoryItemModel {
+    id: int,
+    name: string,
+    display_text: string,
+    is_assigned: bool,
+    is_partial: bool,
+    is_bold: bool,
+    is_italic: bool,
+    width: length,
+    tooltip: string,
+}
+
+export struct TagHistoryRowModel {
+    items: [TagHistoryItemModel],
+}
+
+export global TagRate {
+    // The header: RustView's connection state (the one place it is shown, ADR-6).
+    in property <string> connection-text;
+    in property <string> connection-tooltip;
+    /// 0 = unknown/checking, 1 = connected, 2 = unavailable, 3 = switched off.
+    in property <int> connection-kind;
+    in property <bool> can-retry;
+
+    // What the panel edits: the next job (the draft) or a queued job (user decision Q-G3).
+    in property <bool> editing-job;
+    in property <string> editing-title;
+    in property <string> editing-tooltip;
+    in property <bool> can-apply;
+
+    // The rating bar: -1 = no rating chosen (the bar sets it on a click; Rust sets what the job holds right after).
+    in-out property <int> rating: -1;
+    in property <string> summary;
+    in property <bool> has-last-tags;
+    in property <string> last-tags-tooltip;
+    /// -1 = no job was saved with a rating yet.
+    in property <int> last-rating: -1;
+    in property <bool> can-clear;
+    /// The tree was loaded at least once (tags can be chosen).
+    in property <bool> has-tree;
+    in property <string> empty-text;
+    /// Choosing the branches to hide: a click hides or shows a branch.
+    in property <bool> hide-mode;
+    in property <int> hidden-count;
+
+    in-out property <string> filter-text;
+    in-out property <bool> filter-regex;
+    in property <bool> filter-invalid;
+    in property <[TagColumnView]> columns;
+
+    in property <[TagHistoryRowModel]> history-rows;
+    in property <int> history-count;
+    in-out property <bool> history-collapsed;
+    in-out property <length> history-height: 96px;
+
+    callback retry();
+    callback apply-edit();
+    callback cancel-edit();
+    callback rating-clicked(int);
+    callback tag-clicked(int);
+    callback tag-right-clicked(int);
+    callback tag-toggle-expand(int);
+    callback filter-changed(string);
+    callback filter-regex-toggled(bool);
+    callback filter-done();
+    callback tree-height-changed(length);
+    callback history-tag-clicked(int);
+    callback history-width-changed(length);
+    callback history-collapsed-changed(bool);
+    callback history-resized(length);
+    callback apply-last-tags();
+    callback apply-last-rating();
+    callback clear();
+    callback expand-all();
+    callback collapse-all();
+    callback toggle-hide-mode();
+}

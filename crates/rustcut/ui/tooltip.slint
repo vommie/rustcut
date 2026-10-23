@@ -75,6 +75,18 @@ export component TooltipHost inherits Rectangle {
         timer.running = false;
         GlobalTooltip.hide();
     }
+
+    // RustView's names, used by the copied components (node_button, search_field, tag_history_item). The bubble sits
+    // below the element, so the pointer position is not needed.
+    public function on-hover-enter(mouse-x: length, mouse-y: length) {
+        root.enter();
+    }
+
+    public function on-hover-leave() {
+        root.leave();
+    }
+
+    public function on-mouse-move(mouse-x: length, mouse-y: length) {}
 }
 
 /// A transparent area with a tooltip over its children (labels, fields).

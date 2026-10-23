@@ -7,6 +7,7 @@
 
 mod check;
 mod dialog;
+mod metadata;
 mod save;
 mod state;
 
@@ -21,8 +22,10 @@ use slint::ComponentHandle as _;
 
 pub use check::{CardCheck, CardInput, Level as CheckLevel, card_check};
 pub use dialog::{Choice, ConflictDialog, DialogInput, DialogOption, Outcome, silent_outcome};
+pub use metadata::{MetadataFacts, Missing, missing};
 pub use state::{ExportState, JobFacts, MAX_COUNTER, SOURCE_FOLDER, codec_label};
 
+use self::metadata::MetaPending;
 use self::save::Pending;
 use crate::app::SettingsWriter;
 use crate::ui::editor::Editor;
@@ -32,6 +35,7 @@ use crate::ui::player::PlayerBridge;
 use crate::ui::queue::QueueBridge;
 use crate::ui::render_settings::RenderSettingsBridge;
 use crate::ui::status::{self, Level};
+use crate::ui::tags::TagsBridge;
 use crate::{Export, MainWindow};
 
 /// The parts the export flow reads the job from.
@@ -42,6 +46,7 @@ pub struct ExportParts<'a> {
     pub media: &'a Rc<MediaInfoBridge>,
     pub render: &'a Rc<RenderSettingsBridge>,
     pub queue: &'a Rc<QueueBridge>,
+    pub tags: &'a Rc<TagsBridge>,
 }
 
 pub struct ExportBridge {
@@ -54,6 +59,7 @@ pub struct ExportBridge {
     media: Weak<MediaInfoBridge>,
     render: Weak<RenderSettingsBridge>,
     queue: Weak<QueueBridge>,
+    tags: Weak<TagsBridge>,
     state: RefCell<ExportState>,
     warnings: RefCell<WarningSettings>,
     auto_section: AutoSection,
@@ -65,6 +71,8 @@ pub struct ExportBridge {
     saving: Cell<bool>,
     /// The open conflict dialog with the job it is about.
     pending: RefCell<Option<Pending>>,
+    /// The open question about missing tags or rating, with the job it is about.
+    meta: RefCell<Option<MetaPending>>,
 }
 
 impl ExportBridge {
@@ -87,6 +95,7 @@ impl ExportBridge {
             media: Rc::downgrade(parts.media),
             render: Rc::downgrade(parts.render),
             queue: Rc::downgrade(parts.queue),
+            tags: Rc::downgrade(parts.tags),
             state: RefCell::new(ExportState::new(&settings.export, panel)),
             warnings: RefCell::new(settings.warnings.clone()),
             auto_section: settings.editor.auto_section,
@@ -94,9 +103,11 @@ impl ExportBridge {
             scans: Cell::new(0),
             saving: Cell::new(false),
             pending: RefCell::new(None),
+            meta: RefCell::new(None),
         });
         connect(&bridge, window);
         save::connect_dialog(&bridge, window);
+        metadata::connect(&bridge, window);
         let weak = Rc::downgrade(&bridge);
         parts.queue.set_on_job_ended(move || {
             if let Some(b) = weak.upgrade() {

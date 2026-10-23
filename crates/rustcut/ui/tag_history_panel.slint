@@ -1,0 +1,78 @@
+// Copied from RustView (crates/rustview/ui/tag_history_panel.slint); only the imports differ. tests/rustview_parity.rs compares it
+// with the original: change RustView's file and copy it again, never this one (ADR-10).
+
+import { Theme } from "styles.slint";
+import { TagHistoryRowModel } from "tag_types.slint";
+import { TagHistoryItemView } from "tag_history_item.slint";
+import { SmoothScrollArea } from "smooth_scroll_view.slint";
+import { CollapsiblePanel } from "collapsible_panel.slint";
+
+export { TagHistoryItemView } from "tag_history_item.slint";
+
+/// Collapsible Assigned Tags History panel inheriting from the unified CollapsiblePanel component.
+/// Supports smooth ease-in-out height animation, interactive dragging without animation lag,
+/// horizontal flow wrapping, and scrollable rows.
+export component TagHistoryPanel inherits CollapsiblePanel {
+    in property <[TagHistoryRowModel]> rows: [];
+    in property <int> tag-count: 0;
+    in property <bool> has-selection: true;
+
+    callback tag-clicked(int /* tag_id */);
+    callback geometry-changed(length /* available_width */);
+
+    title: "TAG HISTORY";
+    count-badge: root.tag-count > 0 ? (root.tag-count + "") : "";
+
+    changed width => {
+        if self.width > 20px {
+            root.geometry-changed(self.width);
+        }
+    }
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+
+        if root.rows.length == 0 : VerticalLayout {
+            alignment: center;
+            Text {
+                text: "No recent tags in history";
+                font-size: 10px;
+                color: Theme.text-muted;
+                horizontal-alignment: center;
+            }
+        }
+
+        if root.rows.length > 0 : SmoothScrollArea {
+            width: 100%;
+            height: 100%;
+            enable-horizontal: false;
+            enable-vertical: true;
+            content-width: self.width;
+            content-height: rows-layout.preferred-height;
+            scrollbar-size: 6px;
+
+            rows-layout := VerticalLayout {
+                padding-left: 6px;
+                padding-right: 6px;
+                padding-top: 4px;
+                padding-bottom: 4px;
+                spacing: 4px;
+                alignment: start;
+
+                for row in root.rows : HorizontalLayout {
+                    spacing: 4px;
+                    alignment: start;
+
+                    for item in row.items : TagHistoryItemView {
+                        item: item;
+                        is-enabled: root.has-selection;
+                        clicked => {
+                            root.tag-clicked(item.id);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,7 +1,8 @@
 // Main window of RustCut: the dock (ADR-12) with its two sidebars around the video, the banners above it (known source,
 // probe render), the timeline and the transport bar, a
 // slim status line, the menus (File, Playback, Sections, Filters, View) with the keymap's shortcuts, the key scope that
-// hands every other key press to the keymap (src/ui/editor/), the modal conflict dialog of saving a job (src/ui/export/)
+// hands every other key press to the keymap (src/ui/editor/), the modal dialogs of saving a job (conflict, missing
+// tags or rating; src/ui/export/)
 // and the tooltip layer on top.
 
 import { Theme } from "styles.slint";
@@ -26,12 +27,15 @@ import { OptionRowView, Probe, RenderIssueView, RenderSettings } from "render_ty
 import { ProbeBanner } from "probe_banner.slint";
 import { ConflictJobView, ConflictOptionView, Export, Queue, QueueRowView } from "export_types.slint";
 import { ConflictDialog } from "export_dialog.slint";
+import { MetadataDialog } from "export_metadata_dialog.slint";
+import { TagColumnView, TagHistoryItemModel, TagHistoryRowModel, TagNodeView, TagRate } from "tag_types.slint";
 
 export {
     Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
     MediaInfoRow, MediaInfoSection, KnownSource, Shortcuts, Timeline, TimelineBlock, TimelineTick, Sections,
     SectionRowView, Filters, FilterRowView, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe, Export,
-    ConflictJobView, ConflictOptionView, Queue, QueueRowView
+    ConflictJobView, ConflictOptionView, Queue, QueueRowView, TagRate, TagNodeView, TagColumnView, TagHistoryItemModel,
+    TagHistoryRowModel
 }
 
 export component MainWindow inherits Window {
@@ -97,7 +101,7 @@ export component MainWindow inherits Window {
             MenuItem {
                 title: "Save Job";
                 shortcut: Shortcuts.save;
-                enabled: Export.can-save && !Export.dialog-open;
+                enabled: Export.can-save && !Export.dialog-open && !Export.meta-open;
                 activated => { Export.save(); }
             }
 
@@ -421,6 +425,13 @@ export component MainWindow inherits Window {
     }
 
     if Export.dialog-open: ConflictDialog {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+    }
+
+    if Export.meta-open: MetadataDialog {
         x: 0;
         y: 0;
         width: parent.width;

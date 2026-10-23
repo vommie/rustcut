@@ -9,6 +9,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Tag & Rate panel (0.0.12): RustView's tag tree (in columns, with the same look as in RustView), its rating bar, the
+  tag filter (plain text or, with the `.*` switch, a regular expression; an invalid expression is matched as text and
+  says so) and the tag history (recently used tags, a click assigns or removes one). The tags and the rating you
+  choose go with the next saved job into RustView. After a save the panel is cleared; "Apply the last saved job's
+  tags" and the last rating button bring them back with one click. **Right-click a tag to lock it:** a locked tag
+  (lock icon) stays assigned for every following job until you right-click it again. "Clear" removes the tags and
+  the rating (locked tags stay); expand/collapse every branch; the eye button lets you hide branches you never use
+  (click a branch to hide or show it, hidden ones are dimmed while choosing). The panel's header is the one place
+  that says whether RustView is connected; when it cannot be reached it shows why, retries by itself and offers
+  Retry. Expanded branches, filter, history, hidden branches, locked tags, the history's height and the last tags
+  and rating are kept in `ui-state.toml` (new `[tags]` table; older files load unchanged, no migration).
+- Saving a job without tags or without a rating asks once (`warnings.no_tags`, `warnings.no_rating`): the dialog
+  names what is missing, a click on a rating (or the keys 0-5) saves with it, "Save without" (Enter) saves as it is,
+  "Back to tagging" (Escape) shows the Tag & Rate panel, and "Don't ask again" switches the asking warning off. It
+  asks about tags only when RustView offers tags, and nothing while the RustView link is switched off.
+- Editing a job's RustView entry: the tag button in the queue panel switches the Tag & Rate panel to the selected
+  job ("Editing: <name>"); Apply writes the new tags and rating (a waiting job's record is updated, a finished job's
+  file record in RustView too; a failed or canceled job keeps them for a retry), Cancel or Escape returns to the next
+  job's tags, which are kept meanwhile.
 - RustView link (0.0.11): RustCut now talks to RustView through `rustview api` in the background (never blocking the
   window; one call at a time, each with the time limit `rustview.timeout_secs`, the program from `rustview.binary` or
   `rustview` in your PATH). Each queued job gets its record in the RustView library according to
@@ -20,7 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   record RustCut created; a waiting job whose file name changes moves its record along. A record stays when the file
   exists or when RustView now says another app made it. While RustView cannot be reached, RustCut tries again after
   2 s, then 4 s, 8 s, ... up to every 2 minutes; nothing is lost when RustCut quits meanwhile (the next start
-  continues). Jobs carry no tags or rating yet (the Tag & Rate panel arrives with the next milestone).
+  continues). The tags and rating come from the Tag & Rate panel (0.0.12).
 - Known-source warning: when a video opens, its MD5 comes from RustView's record of the file if the record matches
   the file's size and time (shown as "From the RustView library" in Media Info, no need to read the file), else from
   the sidecar `.<name>.md5` or by reading the file. RustView is then asked whether a job was made from this video

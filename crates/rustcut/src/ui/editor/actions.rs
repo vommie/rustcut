@@ -91,6 +91,13 @@ impl Editor {
             }
             return true;
         }
+        if is_key(press.text, Key::Escape)
+            && let Some(tags) = self.tags.borrow().upgrade()
+            && tags.editing()
+        {
+            tags.cancel_edit();
+            return true;
+        }
         let Some(action) = self.keymap.lookup(press) else {
             return false;
         };

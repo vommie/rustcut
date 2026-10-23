@@ -8,6 +8,7 @@ import { SectionsCardBody } from "sections_card.slint";
 import { FiltersCardBody } from "filters_card.slint";
 import { FinalizeCardBody } from "export_card.slint";
 import { QueuePanel } from "queue_panel.slint";
+import { TagRatePanel } from "tag_rate_panel.slint";
 import { RenderAudioBody, RenderExpertBody, RenderProbeBody, RenderProfileBody, RenderVideoBody } from "render_cards.slint";
 
 /// A collapsible card inside a panel (its state is part of the dock layout).
@@ -129,10 +130,7 @@ export component DockPanelContent inherits Rectangle {
         cards: Dock.render-cards;
     }
     if root.key == "queue": QueuePanel { }
-    if root.key == "tag-rate": PanelPlaceholder {
-        title: "Tag & Rate";
-        note: "RustView's tag tree and rating bar arrive with milestone M3.2.";
-    }
+    if root.key == "tag-rate": TagRatePanel { }
     if root.key == "media-info": MediaInfoPanelView { }
     if root.key == "logs": PanelPlaceholder {
         title: "Logs";

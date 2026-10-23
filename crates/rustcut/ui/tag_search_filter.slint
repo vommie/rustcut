@@ -1,0 +1,67 @@
+// Copied from RustView (crates/rustview/ui/tag_search_filter.slint); only the imports differ. tests/rustview_parity.rs compares it
+// with the original: change RustView's file and copy it again, never this one (ADR-10).
+
+import { Theme } from "styles.slint";
+import { SearchField } from "search_field.slint";
+
+export { SearchField } from "search_field.slint";
+
+/// Specialized search filter input component tailored for the Tag & Rate Panel.
+/// Encapsulates full-width layout, inline regex toggle, clear button, and ESC reset support.
+export component TagSearchFilter inherits Rectangle {
+    in-out property <string> text: "";
+    in-out property <bool> is-regex: false;
+    in property <string> placeholder-text: "Filter tags...";
+    in property <bool> is-enabled: true;
+    in property <bool> enable-regex-toggle: true;
+    in property <bool> enable-clear-button: true;
+    in property <bool> enable-escape-clear: true;
+
+    out property <bool> has-focus: field.has-focus;
+
+    callback search-changed(string);
+    callback regex-toggled(bool);
+    callback accepted(string);
+    callback cleared();
+    callback escape-pressed();
+
+    forward-focus: field;
+
+    public function clear() {
+        field.clear();
+    }
+
+    public function focus-input() {
+        field.focus-input();
+    }
+
+    public function select-all() {
+        field.select-all();
+    }
+
+    width: 100%;
+    height: 26px;
+    background: transparent;
+
+    field := SearchField {
+        width: 100%;
+        height: 100%;
+        text <=> root.text;
+        is-regex <=> root.is-regex;
+        placeholder-text: root.placeholder-text;
+        is-enabled: root.is-enabled;
+        enable-regex-toggle: root.enable-regex-toggle;
+        enable-clear-button: root.enable-clear-button;
+        enable-escape-clear: root.enable-escape-clear;
+        field-height: 26px;
+        corner-radius: 4px;
+        regex-tooltip: "Toggle Regular Expression tag filter mode";
+        clear-tooltip: "Clear tag filter (Esc)";
+
+        search-changed(t) => { root.search-changed(t); }
+        regex-toggled(r) => { root.regex-toggled(r); }
+        accepted(t) => { root.accepted(t); }
+        cleared => { root.cleared(); }
+        escape-pressed => { root.escape-pressed(); }
+    }
+}

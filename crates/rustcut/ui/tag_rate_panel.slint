@@ -1,0 +1,371 @@
+// The Tag & Rate panel (M3.2): RustCut's wrapper around RustView's copied components (ADR-10). RustView's `TagPanel`
+// holds a mode toolbar for its library; RustCut's panel is always in assign mode for one job (the next one, or a queued
+// job while it is edited, user decision Q-G3) and holds RustCut's own parts: the connection state of RustView (the one
+// place it is shown, ADR-6) with Retry, the editing banner, and the toolbar (last tags, last rating, clear, expand,
+// collapse, hide branches). Everything comes from the `TagRate` global (src/ui/tags/).
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { IconButton } from "controls.slint";
+import { TooltipHost } from "tooltip.slint";
+import { Shortcuts } from "shortcuts.slint";
+import { TagRate } from "tag_types.slint";
+import { RatingBar, RatingButton } from "rating_bar.slint";
+import { TagSearchFilter } from "tag_search_filter.slint";
+import { TagTreeList } from "tag_tree.slint";
+import { TagHistoryPanel } from "tag_history_panel.slint";
+import { ResizerBar } from "resizer_bar.slint";
+
+/// RustView's state and the Retry button.
+component ConnectionHeader inherits Rectangle {
+    height: 26px;
+    border-radius: 4px;
+    background: Theme.surface-variant;
+
+    host := TooltipHost {
+        text: TagRate.connection-tooltip;
+    }
+
+    touch := TouchArea {
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 2px;
+        spacing: 6px;
+
+        AppIcon {
+            y: (parent.height - self.height) / 2;
+            icon: TagRate.connection-kind == 1 ? IconId.rustview-connected : IconId.rustview-unavailable;
+            size: IconSize.sm;
+            color: TagRate.connection-kind == 1 ? Theme.status-ok
+                : TagRate.connection-kind == 2 ? Theme.status-corrupt : Theme.text-muted;
+        }
+
+        Text {
+            text: TagRate.connection-text;
+            font-size: 11px;
+            color: TagRate.connection-kind == 2 ? Theme.status-corrupt : Theme.text-muted;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+
+        if TagRate.can-retry: IconButton {
+            y: (parent.height - self.height) / 2;
+            height: 22px;
+            width: 24px;
+            icon: IconId.reload;
+            icon-size: IconSize.sm;
+            tooltip: "Try to reach RustView now";
+            clicked => { TagRate.retry(); }
+        }
+    }
+}
+
+/// "Editing: <job>" with Apply and Cancel while a queued job's tags are edited.
+component EditingBanner inherits Rectangle {
+    height: 28px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: Theme.primary;
+    background: Theme.primary.with-alpha(0.12);
+
+    host := TooltipHost {
+        text: TagRate.editing-tooltip;
+    }
+
+    touch := TouchArea {
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 2px;
+        spacing: 4px;
+
+        AppIcon {
+            y: (parent.height - self.height) / 2;
+            icon: IconId.job-tags;
+            size: IconSize.sm;
+            color: Theme.primary;
+        }
+
+        Text {
+            text: TagRate.editing-title;
+            font-size: 11px;
+            font-weight: 600;
+            color: Theme.text;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+
+        IconButton {
+            y: (parent.height - self.height) / 2;
+            icon: IconId.confirm;
+            enabled: TagRate.can-apply;
+            tooltip: "Apply the tags and the rating to the job";
+            clicked => { TagRate.apply-edit(); }
+        }
+
+        IconButton {
+            y: (parent.height - self.height) / 2;
+            icon: IconId.close;
+            tooltip: "Cancel: back to the next job's tags";
+            shortcut: "Esc";
+            clicked => { TagRate.cancel-edit(); }
+        }
+    }
+}
+
+/// The last saved job's rating as a rating button (a click applies it).
+component LastRatingButton inherits Rectangle {
+    in property <bool> enabled;
+    in property <int> rating;
+    callback clicked();
+
+    width: 24px;
+    height: 24px;
+
+    if root.enabled: RatingButton {
+        width: 100%;
+        height: 100%;
+        rating: root.rating;
+    }
+
+    if !root.enabled: Rectangle {
+        border-radius: 4px;
+        border-width: 1px;
+        border-color: Theme.border;
+
+        AppIcon {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            icon: IconId.rating-last;
+            size: IconSize.sm;
+            color: Theme.status-deleted;
+        }
+    }
+
+    host := TooltipHost {
+        text: root.enabled ? "Apply the last saved job's rating" : "No job was saved with a rating yet";
+    }
+
+    // On top of the button: hover for the tooltip, click for the action.
+    touch := TouchArea {
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        clicked => {
+            host.leave();
+            if root.enabled {
+                root.clicked();
+            }
+        }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+}
+
+component TagToolbar inherits HorizontalLayout {
+    spacing: 4px;
+    height: 24px;
+
+    IconButton {
+        icon: IconId.tags-last;
+        enabled: TagRate.has-last-tags;
+        tooltip: TagRate.has-last-tags ? "Apply the last saved job's tags: " + TagRate.last-tags-tooltip
+            : "No job was saved with tags yet";
+        clicked => { TagRate.apply-last-tags(); }
+    }
+
+    LastRatingButton {
+        enabled: TagRate.last-rating >= 0;
+        rating: Math.max(0, TagRate.last-rating);
+        clicked => { TagRate.apply-last-rating(); }
+    }
+
+    IconButton {
+        icon: IconId.tags-clear;
+        enabled: TagRate.can-clear;
+        tooltip: "Clear the tags and the rating (locked tags stay)";
+        clicked => { TagRate.clear(); }
+    }
+
+    summary := Rectangle {
+        horizontal-stretch: 1;
+
+        Text {
+            width: 100%;
+            text: TagRate.summary;
+            font-size: 11px;
+            color: Theme.text-muted;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    IconButton {
+        icon: IconId.tags-expand;
+        enabled: TagRate.has-tree;
+        tooltip: "Expand every branch";
+        clicked => { TagRate.expand-all(); }
+    }
+
+    IconButton {
+        icon: IconId.tags-collapse;
+        enabled: TagRate.has-tree;
+        tooltip: "Collapse every branch";
+        clicked => { TagRate.collapse-all(); }
+    }
+
+    IconButton {
+        icon: IconId.tags-hide;
+        enabled: TagRate.has-tree;
+        checked: TagRate.hide-mode;
+        tooltip: TagRate.hide-mode ? "Done: a click on a tag assigns it again"
+            : TagRate.hidden-count > 0 ? "Hidden branches (" + TagRate.hidden-count + "): show them and choose with a click"
+            : "Hide branches: show every tag and choose with a click";
+        clicked => { TagRate.toggle-hide-mode(); }
+    }
+}
+
+export component TagRatePanel inherits Rectangle {
+    // The copied history panel reports its width only when it changes; a width laid out before Rust listened would
+    // never arrive. Once after the panel is created, it is sent here.
+    Timer {
+        interval: 100ms;
+        running: true;
+        triggered => {
+            self.running = false;
+            TagRate.history-width-changed(history-panel.width);
+        }
+    }
+
+    VerticalLayout {
+        padding: 6px;
+        spacing: 6px;
+
+        ConnectionHeader { }
+
+        if TagRate.editing-job: EditingBanner { }
+
+        TagToolbar { }
+
+        // Always in assign mode for one job (RustView's file selection is RustCut's job).
+        RatingBar {
+            selected-rating <=> TagRate.rating;
+            is-assign-mode: true;
+            has-selection: true;
+            rating-selected(r) => { TagRate.rating-clicked(r); }
+        }
+
+        filter := TagSearchFilter {
+            text <=> TagRate.filter-text;
+            is-regex <=> TagRate.filter-regex;
+            placeholder-text: "Filter tags...";
+            search-changed(text) => { TagRate.filter-changed(text); }
+            regex-toggled(r) => { TagRate.filter-regex-toggled(r); }
+            escape-pressed => { Shortcuts.release-focus(); }
+            accepted(text) => { Shortcuts.release-focus(); }
+            changed has-focus => { Shortcuts.editing-changed(self.has-focus); }
+        }
+
+        if TagRate.filter-invalid: Text {
+            text: "Not a valid regular expression: the filter matches it as plain text.";
+            font-size: 10px;
+            color: Theme.accent;
+            wrap: word-wrap;
+        }
+
+        if TagRate.hide-mode: Text {
+            text: "A click hides a branch or shows it again. Hidden branches are dimmed here and left out of the tree.";
+            font-size: 10px;
+            color: Theme.text-muted;
+            wrap: word-wrap;
+        }
+
+        // The tree, and what the area says while it has no rows (no tree yet, no tags, no match, all hidden).
+        Rectangle {
+            vertical-stretch: 1;
+
+            if TagRate.has-tree: TagTreeList {
+                width: 100%;
+                height: 100%;
+                columns: TagRate.columns;
+                is-assign-mode: true;
+                has-selection: true;
+                tree-geometry-changed(h) => { TagRate.tree-height-changed(h); }
+                tag-clicked(id) => { TagRate.tag-clicked(id); }
+                tag-toggle-expand(id) => { TagRate.tag-toggle-expand(id); }
+                tag-context-menu(id, x, y) => { TagRate.tag-right-clicked(id); }
+            }
+
+            if !TagRate.has-tree: Rectangle {
+                border-radius: 4px;
+                border-width: 1px;
+                border-color: Theme.border;
+                background: Theme.background;
+            }
+
+            if !TagRate.has-tree || TagRate.columns.length == 0: Text {
+                x: 12px;
+                width: parent.width - 24px;
+                text: TagRate.empty-text;
+                font-size: 11px;
+                color: Theme.text-muted;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+            }
+        }
+
+        history-resizer := ResizerBar {
+            is-horizontal: false;
+            height: (!TagRate.history-collapsed) ? self.thickness : 0px;
+            visible: !TagRate.history-collapsed;
+
+            property <length> start-h: 96px;
+            drag-started => {
+                self.start-h = TagRate.history-height;
+            }
+            dragged(delta) => {
+                // The history is anchored at the bottom: dragging up makes it taller.
+                TagRate.history-height = Math.max(40px, Math.min(500px, self.start-h - delta));
+            }
+            drag-finished => {
+                TagRate.history-resized(TagRate.history-height);
+            }
+        }
+
+        history-panel := TagHistoryPanel {
+            vertical-stretch: 0;
+            body-height: TagRate.history-height;
+            is-dragging: history-resizer.is-dragging;
+            rows: TagRate.history-rows;
+            tag-count: TagRate.history-count;
+            is-collapsed <=> TagRate.history-collapsed;
+            has-selection: true;
+            collapsed-toggled(c) => { TagRate.history-collapsed-changed(c); }
+            tag-clicked(id) => { TagRate.history-tag-clicked(id); }
+            geometry-changed(w) => { TagRate.history-width-changed(w); }
+        }
+    }
+}

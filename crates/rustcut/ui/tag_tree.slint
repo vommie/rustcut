@@ -1,0 +1,203 @@
+// Copied from RustView (crates/rustview/ui/tag_panel.slint): `TagTreeItem` and `TagTreeList`. RustView's `TagPanel` is
+// replaced by RustCut's wrapper `tag_rate_panel.slint`; the lock marker between the "RustCut begin/end" lines is the only
+// addition. tests/rustview_parity.rs compares both components with the original (ADR-10).
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize, IconSlot } from "icons.slint";
+import { TagNodeView, TagColumnView } from "tag_types.slint";
+import { SmoothScrollArea } from "smooth_scroll_view.slint";
+import { NodeButton } from "node_button.slint";
+
+export component TagTreeItem inherits Rectangle {
+    in property <TagNodeView> tag;
+    in property <bool> is-assign-mode: false;
+    in property <bool> has-selection: true;
+    callback clicked();
+    callback toggle-expanded();
+    callback scroll-requested(length /* dx */, length /* dy */);
+    callback context-menu-requested(length /* x */, length /* y */);
+
+    height: 22px;
+    min-width: 60px;
+    max-width: 180px;
+
+    property <bool> is-item-enabled: !root.is-assign-mode || root.has-selection;
+    // Indentation of each nesting level; a child label sits only 7px right of its parent label.
+    property <length> indent-per-level: 7px;
+
+    background: root.tag.is-selected ? Theme.surface-selected : (
+        root.tag.is-assigned ? (root.tag.is-dimmed ? #a6e3a118 : #a6e3a128) : (
+            root.tag.is-partial ? (root.tag.is-dimmed ? #f9e2af15 : #f9e2af22) : (
+                tag-touch.has-hover ? Theme.surface-hover : (root.tag.is-dimmed ? #1e1e2e66 : Theme.surface-variant)
+            )
+        )
+    );
+
+    border-radius: 3px;
+    border-width: 1px;
+
+    border-color: root.tag.is-selected ? Theme.primary : (
+        root.tag.is-assigned ? (root.tag.is-dimmed ? #a6e3a188 : #a6e3a1) : (
+            root.tag.is-partial ? (root.tag.is-dimmed ? #f9e2af88 : #f9e2af) : Theme.border
+        )
+    );
+
+    opacity: root.is-item-enabled ? 1.0 : 0.45;
+
+    tag-touch := TouchArea {
+        enabled: root.is-item-enabled;
+        mouse-cursor: root.is-item-enabled ? pointer : default;
+
+        scroll-event(event) => {
+            root.scroll-requested(event.delta-x, event.delta-y);
+            return accept;
+        }
+
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                if event.button == PointerEventButton.right {
+                    root.context-menu-requested(tag-touch.mouse-x, tag-touch.mouse-y);
+                } else if event.button == PointerEventButton.left {
+                    root.clicked();
+                }
+            }
+        }
+    }
+
+    HorizontalLayout {
+        opacity: root.tag.is-dimmed ? 0.8 : 1.0;
+        padding-left: (root.tag.depth * root.indent-per-level) + 6px;
+        padding-right: 8px;
+        spacing: 4px;
+        alignment: start;
+
+        NodeButton {
+            has-children: root.tag.has-children;
+            is-expanded: root.tag.is-expanded;
+            button-size: 14px;
+            y: (parent.height - self.height) / 2;
+            toggled(new-state) => {
+                root.toggle-expanded();
+            }
+        }
+
+        if root.tag.is-assigned || root.tag.is-partial : IconSlot {
+            icon: root.tag.is-assigned ? IconId.check : IconId.partial;
+            size: IconSize.sm;
+            color: root.tag.is-assigned ? #a6e3a1 : #f9e2af;
+        }
+
+        // RustCut begin: a locked tag stays assigned for the next jobs (user decision Q-G2).
+        if root.tag.is-locked : IconSlot {
+            icon: IconId.tag-locked;
+            size: IconSize.sm;
+            color: Theme.accent;
+        }
+        // RustCut end
+
+        Text {
+            text: root.tag.name;
+            color: root.tag.is-selected ? Theme.primary : (
+                root.tag.is-assigned ? #a6e3a1 : (
+                    root.tag.is-partial ? #f9e2af : Theme.text
+                )
+            );
+
+            font-weight: (root.tag.is-selected || root.tag.is-assigned || root.tag.depth == 0) ? 700 : 400;
+            font-italic: root.tag.is-partial;
+            font-size: 11px;
+            vertical-alignment: center;
+            horizontal-alignment: left;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+    }
+}
+
+export component TagTreeList inherits Rectangle {
+    vertical-stretch: 1;
+    background: Theme.background;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: Theme.border;
+    clip: true;
+
+    in property <[TagColumnView]> columns: [];
+    in property <bool> is-assign-mode: false;
+    in property <bool> has-selection: true;
+
+    callback tag-clicked(int);
+    callback tag-toggle-expand(int);
+    callback tag-context-menu(int, length, length);
+    callback root-context-menu(length, length);
+    callback tree-geometry-changed(length /* available_height */);
+
+    changed height => {
+        if self.height > 10px {
+            root.tree-geometry-changed(self.height);
+        }
+    }
+
+    scroll-area := SmoothScrollArea {
+        width: 100%;
+        height: 100%;
+        enable-horizontal: true;
+        enable-vertical: false;
+        content-width: columns-layout.preferred-width;
+        content-height: self.height;
+
+        bg-touch := TouchArea {
+            width: 100%;
+            height: 100%;
+
+            scroll-event(event) => {
+                scroll-area.handle-scroll(event.delta-x, event.delta-y);
+                return accept;
+            }
+
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down && event.button == PointerEventButton.right {
+                    root.root-context-menu(
+                        bg-touch.mouse-x + scroll-area.clamped-x,
+                        bg-touch.mouse-y
+                    );
+                }
+            }
+        }
+
+        columns-layout := HorizontalLayout {
+            padding-left: 4px;
+            padding-right: 4px;
+            padding-top: 4px;
+            padding-bottom: 4px;
+            spacing: 6px;
+            alignment: start;
+
+            for column[col-idx] in root.columns: VerticalLayout {
+                spacing: 2px;
+                alignment: start;
+                min-width: 60px;
+                max-width: 180px;
+
+                for tag in column.tags: TagTreeItem {
+                    tag: tag;
+                    is-assign-mode: root.is-assign-mode;
+                    has-selection: root.has-selection;
+
+                    clicked => { root.tag-clicked(tag.id); }
+                    toggle-expanded => { root.tag-toggle-expand(tag.id); }
+                    scroll-requested(dx, dy) => {
+                        scroll-area.handle-scroll(dx, dy);
+                    }
+                    context-menu-requested(mx, my) => {
+                        root.tag-context-menu(
+                            tag.id,
+                            self.x + mx + scroll-area.clamped-x,
+                            self.y + my
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
