@@ -1,0 +1,22 @@
+# Rust
+/target/
+
+# Packaging output
+dist/
+packaging/pkg/
+packaging/src/
+packaging/*.pkg.tar.zst
+
+# Editors and OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Local runtime data and logs
+*.log
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.trf
