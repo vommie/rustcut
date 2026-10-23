@@ -6,6 +6,8 @@ import { Dock, DockCardView } from "dock_types.slint";
 import { MediaInfoPanelView } from "media_info_panel.slint";
 import { SectionsCardBody } from "sections_card.slint";
 import { FiltersCardBody } from "filters_card.slint";
+import { FinalizeCardBody } from "export_card.slint";
+import { QueuePanel } from "queue_panel.slint";
 import { RenderAudioBody, RenderExpertBody, RenderProbeBody, RenderProfileBody, RenderVideoBody } from "render_cards.slint";
 
 /// A collapsible card inside a panel (its state is part of the dock layout).
@@ -64,19 +66,7 @@ component DockCard inherits Rectangle {
 
         if !root.card.collapsed && root.card.id == "render-probe": RenderProbeBody { }
 
-        if !root.card.collapsed && root.card.id == "finalize": Rectangle {
-            height: 56px;
-
-            Text {
-                x: 10px;
-                width: parent.width - 20px;
-                text: root.card.note;
-                color: Theme.text-muted;
-                font-size: 11px;
-                wrap: word-wrap;
-                vertical-alignment: center;
-            }
-        }
+        if !root.card.collapsed && root.card.id == "finalize": FinalizeCardBody { }
     }
 }
 
@@ -138,10 +128,7 @@ export component DockPanelContent inherits Rectangle {
     if root.key == "render-settings": CardStack {
         cards: Dock.render-cards;
     }
-    if root.key == "queue": PanelPlaceholder {
-        title: "Queue";
-        note: "The job queue arrives with milestones M2.6 and M4.1.";
-    }
+    if root.key == "queue": QueuePanel { }
     if root.key == "tag-rate": PanelPlaceholder {
         title: "Tag & Rate";
         note: "RustView's tag tree and rating bar arrive with milestone M3.2.";

@@ -1,0 +1,184 @@
+// The queue panel of M2.6 (src/ui/queue/ fills `Queue`; user decision Q-X2): a compact list of two-line rows (the file
+// with its state and progress; folder, profile and length, or ETA, size estimate and speed while rendering, or the
+// failure) and a toolbar: pause/resume processing, and for the selected job cancel, retry, hold, move and remove. The
+// full queue panel (multi-select, drag & drop, filters, inspector) is M4.1.
+
+import { Theme } from "styles.slint";
+import { IconId } from "icons.slint";
+import { IconButton } from "controls.slint";
+import { TooltipHost } from "tooltip.slint";
+import { Export, Queue, QueueRowView } from "export_types.slint";
+
+component QueueRow inherits Rectangle {
+    in property <QueueRowView> job;
+
+    // waiting, held, rendering, paused, finished, failed, canceled
+    property <color> state-color: root.job.kind == 2 ? Theme.primary
+        : root.job.kind == 3 ? Theme.accent
+        : root.job.kind == 4 ? Theme.status-ok
+        : root.job.kind == 5 ? Theme.status-corrupt
+        : root.job.kind == 6 || root.job.kind == 1 ? Theme.status-deleted : Theme.text-muted;
+
+    height: 44px;
+    border-radius: 4px;
+    background: root.job.selected ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : transparent;
+
+    host := TooltipHost {
+        text: root.job.tooltip;
+    }
+
+    VerticalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            padding-top: 4px;
+            padding-bottom: 4px;
+            spacing: 2px;
+
+            HorizontalLayout {
+                spacing: 8px;
+
+                Text {
+                    horizontal-stretch: 1;
+                    text: root.job.name;
+                    color: Theme.text;
+                    font-size: 12px;
+                    font-weight: 600;
+                    overflow: elide;
+                }
+
+                Text {
+                    text: root.job.state;
+                    color: root.state-color;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+            }
+
+            Text {
+                text: root.job.detail;
+                color: root.job.kind == 5 ? Theme.status-corrupt : Theme.text-muted;
+                font-size: 11px;
+                overflow: elide;
+            }
+
+            Rectangle {
+                height: 3px;
+                border-radius: 1.5px;
+                background: root.job.progress >= 0 ? Theme.surface-selected : transparent;
+
+                Rectangle {
+                    x: 0;
+                    width: parent.width * Math.clamp(root.job.progress, 0, 1);
+                    border-radius: 1.5px;
+                    background: root.state-color;
+                }
+            }
+    }
+
+    // On top of the texts: selects the row and shows its tooltip.
+    touch := TouchArea {
+        clicked => {
+            host.leave();
+            Queue.select(root.job.id);
+        }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+}
+
+export component QueuePanel inherits Rectangle {
+    VerticalLayout {
+        padding: 6px;
+        spacing: 6px;
+
+        HorizontalLayout {
+            spacing: 4px;
+
+            IconButton {
+                icon: Queue.paused ? IconId.queue-resume : IconId.queue-pause;
+                checked: Queue.paused;
+                tooltip: Queue.paused ? "Processing is paused: resume" : "Pause processing (running renders stop where they are)";
+                clicked => { Queue.toggle-paused(); }
+            }
+
+            Text {
+                horizontal-stretch: 1;
+                text: Queue.summary;
+                color: Theme.text-muted;
+                font-size: 11px;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+
+            IconButton {
+                icon: IconId.move-up;
+                enabled: Queue.can-move-up;
+                tooltip: "Move the job up";
+                clicked => { Queue.move-up(); }
+            }
+
+            IconButton {
+                icon: IconId.move-down;
+                enabled: Queue.can-move-down;
+                tooltip: "Move the job down";
+                clicked => { Queue.move-down(); }
+            }
+
+            IconButton {
+                icon: IconId.job-hold;
+                enabled: Queue.can-hold;
+                checked: Queue.held;
+                tooltip: Queue.held ? "Held: release the job" : "Hold the job (it waits until released)";
+                clicked => { Queue.toggle-hold(); }
+            }
+
+            IconButton {
+                icon: IconId.job-retry;
+                enabled: Queue.can-retry;
+                tooltip: "Render the job again";
+                clicked => { Queue.retry(); }
+            }
+
+            IconButton {
+                icon: IconId.job-cancel;
+                enabled: Queue.can-cancel;
+                tooltip: "Cancel the job (an existing target stays)";
+                clicked => { Queue.cancel(); }
+            }
+
+            IconButton {
+                icon: IconId.job-remove;
+                enabled: Queue.can-remove;
+                tooltip: "Remove the job from the queue";
+                clicked => { Queue.remove(); }
+            }
+        }
+
+        Flickable {
+            vertical-stretch: 1;
+            content-height: list.preferred-height;
+
+            list := VerticalLayout {
+                alignment: start;
+                spacing: 2px;
+
+                for job in Queue.rows: QueueRow {
+                    job: job;
+                }
+            }
+        }
+
+        if Queue.rows.length == 0: Text {
+            vertical-stretch: 1;
+            text: Export.key-save == "" ? "Saved jobs appear here." : "Saved jobs appear here (" + Export.key-save + ").";
+            color: Theme.status-deleted;
+            font-size: 11px;
+            horizontal-alignment: center;
+        }
+    }
+}

@@ -162,9 +162,8 @@ impl RenderSettingsBridge {
     fn changed(&self, library_changed: bool) {
         if library_changed {
             let profiles = self.state.borrow().library.user().to_vec();
-            let mut settings = self.settings.borrow_mut();
-            settings.render.profiles = profiles;
-            if !self.writer.save(settings.clone()) {
+            self.settings.borrow_mut().render.profiles.clone_from(&profiles);
+            if !self.writer.update(|settings| settings.render.profiles = profiles) {
                 self.status(
                     Level::Warning,
                     "config.toml is from a newer RustCut: the profiles are not saved.",

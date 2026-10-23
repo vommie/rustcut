@@ -15,10 +15,12 @@ use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
 use az::CheckedAs as _;
-use rustcut_core::settings::{EditorSettings, Settings, TimelineState};
+use rustcut_core::edit::{Section, SectionList};
+use rustcut_core::settings::{AutoSection, EditorSettings, Settings, TimelineState};
 use rustcut_core::time::{FrameRate, Timestamp};
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 
+use crate::ui::export::ExportBridge;
 use crate::ui::filters::{FilterKeys, FiltersBridge};
 use crate::ui::keymap::{Action, Keymap};
 use crate::ui::media_info::MediaInfoBridge;
@@ -28,7 +30,7 @@ use crate::ui::sections::{Bound, Edge, SectionsState};
 use crate::ui::status::{self, Level};
 use crate::ui::timeline::{Viewport, view};
 use crate::util::model::sync;
-use crate::{MainWindow, SectionRowView, Sections, Shortcuts, Timeline, TimelineBlock, TimelineTick};
+use crate::{Export, MainWindow, SectionRowView, Sections, Shortcuts, Timeline, TimelineBlock, TimelineTick};
 
 /// Frame rates outside this range are not a frame grid (Matroska's 1000/1 time base, broken headers).
 const PLAUSIBLE_FPS: std::ops::RangeInclusive<f64> = 1.0..=300.0;
@@ -68,6 +70,8 @@ pub struct Editor {
     probe: RefCell<Weak<ProbeBridge>>,
     /// The player shows the probe render: the timeline, the marks and the sections wait (user decision Q-E1).
     probe_playing: Cell<bool>,
+    /// The export panel that saves jobs (set after it is installed; it needs the editor first).
+    export: RefCell<Weak<ExportBridge>>,
     /// The status line shows a refused edit: the next accepted one replaces it.
     warned: Cell<bool>,
     ticks: Rc<VecModel<TimelineTick>>,
@@ -113,6 +117,7 @@ impl Editor {
             }),
             probe: RefCell::new(Weak::new()),
             probe_playing: Cell::new(false),
+            export: RefCell::new(Weak::new()),
             warned: Cell::new(false),
             ticks: Rc::new(VecModel::default()),
             blocks: Rc::new(VecModel::default()),
@@ -152,6 +157,41 @@ impl Editor {
     /// Connects the probe render (its key, Escape while it plays).
     pub fn set_probe(&self, probe: &Rc<ProbeBridge>) {
         *self.probe.borrow_mut() = Rc::downgrade(probe);
+    }
+
+    /// Connects the export panel (the Save key).
+    pub fn set_export(&self, export: &Rc<ExportBridge>) {
+        *self.export.borrow_mut() = Rc::downgrade(export);
+    }
+
+    /// The sections a saved job gets: the list, or with an empty list the automatic section of `auto` (PyCutRv's
+    /// auto section): the whole video, or the range between the marks.
+    pub fn sections_for_save(&self, auto: AutoSection) -> Result<SectionList, &'static str> {
+        let st = self.state.borrow();
+        if !st.sections.list().is_empty() {
+            return Ok(st.sections.list().clone());
+        }
+        let section = match auto {
+            AutoSection::Off => {
+                return Err("Add a section first (or switch on the automatic section in the settings).");
+            }
+            AutoSection::WholeVideo => st
+                .sections
+                .duration()
+                .and_then(|d| Section::new(Timestamp::ZERO, d).ok())
+                .ok_or("The video's length is not known yet.")?,
+            AutoSection::CurrentRange => st
+                .sections
+                .current()
+                .map_err(|_none| "Add a section first, or set both marks for the automatic section.")?,
+        };
+        Ok(vec![section].into())
+    }
+
+    /// After a save with "clear sections": the list goes, the marks stay (PyCutRv).
+    pub fn clear_sections(&self) {
+        self.state.borrow_mut().sections.clear_list();
+        self.publish();
     }
 
     /// The player shows the probe render (`true`) or the source again. While the probe plays the timeline keeps
@@ -268,6 +308,7 @@ impl Editor {
         let sc = window.global::<Shortcuts<'_>>();
         let keys = |action| self.keymap.menu_keys(action, editing);
         sc.set_open(keys(Action::Open));
+        sc.set_save(keys(Action::Save));
         sc.set_quit(keys(Action::Quit));
         sc.set_toggle_pause(keys(Action::TogglePause));
         sc.set_frame_back(keys(Action::FrameBack));
@@ -301,6 +342,7 @@ impl Editor {
                 .map(crate::ui::keymap::Chord::label)
                 .unwrap_or_default()
         };
+        window.global::<Export<'_>>().set_key_save(label(Action::Save).into());
         let sections = window.global::<Sections<'_>>();
         sections.set_key_set_start(label(Action::SetStart).into());
         sections.set_key_set_end(label(Action::SetEnd).into());

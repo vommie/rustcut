@@ -37,6 +37,12 @@ pub fn mailbox<C>() -> (Handle<C>, Mailbox<C>) {
 }
 
 impl<C> Handle<C> {
+    /// A handle without an actor: every command fails with [`ActorGone`] (a service that could not start).
+    pub fn closed() -> Self {
+        let (handle, _mailbox) = mailbox();
+        handle
+    }
+
     /// Sends a command without waiting (never blocks, also on the UI thread).
     pub fn send(&self, command: C) -> Result<(), ActorGone> {
         self.tx.send(command).map_err(|_closed| ActorGone)

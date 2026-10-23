@@ -42,18 +42,27 @@ pub fn load_all(paths: AppPaths) -> Loaded {
     }
 }
 
-/// Writes `config.toml` on the runtime whenever the app changed the settings (the Render Settings panel's profiles),
-/// one save after the other; the latest settings win when several changes come quickly.
+/// Writes `config.toml` on the runtime whenever the app changed the settings (the Render Settings panel's profiles, the
+/// export panel's target folders and warnings), one save after the other; the latest settings win when several changes
+/// come quickly. Every bridge changes the one shared copy, so no bridge overwrites another one's change. UI thread only.
 #[derive(Debug, Clone)]
 pub struct SettingsWriter {
     sender: Option<tokio::sync::watch::Sender<Option<Settings>>>,
+    current: std::rc::Rc<std::cell::RefCell<Settings>>,
 }
 
 impl SettingsWriter {
-    /// A writer into `config_dir`; `read_only` (a newer or unreadable file) makes every save a logged no-op.
-    pub fn start(runtime: &tokio::runtime::Handle, config_dir: std::path::PathBuf, read_only: bool) -> Self {
+    /// A writer into `config_dir` starting from `settings`; `read_only` (a newer or unreadable file) makes every save a
+    /// logged no-op.
+    pub fn start(
+        runtime: &tokio::runtime::Handle,
+        config_dir: std::path::PathBuf,
+        read_only: bool,
+        settings: &Settings,
+    ) -> Self {
+        let current = std::rc::Rc::new(std::cell::RefCell::new(settings.clone()));
         if read_only {
-            return Self { sender: None };
+            return Self { sender: None, current };
         }
         let (sender, mut receiver) = tokio::sync::watch::channel(None::<Settings>);
         runtime.spawn(async move {
@@ -69,17 +78,31 @@ impl SettingsWriter {
                 }
             }
         });
-        Self { sender: Some(sender) }
+        Self {
+            sender: Some(sender),
+            current,
+        }
     }
 
-    /// Saves `settings` soon (on the runtime). `false` when `config.toml` must not be written.
-    pub fn save(&self, settings: Settings) -> bool {
+    /// Changes the settings with `change` and saves them soon (on the runtime). `false` when `config.toml` must not be
+    /// written (the change still holds for this run).
+    pub fn update(&self, change: impl FnOnce(&mut Settings)) -> bool {
+        let settings = {
+            let mut current = self.current.borrow_mut();
+            change(&mut current);
+            current.clone()
+        };
         let Some(sender) = &self.sender else {
             tracing::warn!("[Settings] config.toml is from a newer version or unreadable; not overwritten");
             return false;
         };
         sender.send_replace(Some(settings));
         true
+    }
+
+    /// The settings as the app changed them so far.
+    pub fn current(&self) -> Settings {
+        self.current.borrow().clone()
     }
 }
 
@@ -139,10 +162,12 @@ mod tests {
             .enable_all()
             .build()
             .unwrap();
-        let writer = SettingsWriter::start(runtime.handle(), dir.path().to_path_buf(), false);
-        let mut settings = Settings::default();
-        settings.queue.workers = 3;
-        assert!(writer.save(settings.clone()));
+        let writer = SettingsWriter::start(runtime.handle(), dir.path().to_path_buf(), false, &Settings::default());
+        assert!(writer.update(|s| s.queue.workers = 3));
+        // A second bridge's change keeps the first one's.
+        let second = writer.clone();
+        assert!(second.update(|s| s.render.nice = 5));
+        assert_eq!((writer.current().queue.workers, writer.current().render.nice), (3, 5));
         runtime.block_on(async {
             for _ in 0..100 {
                 if dir.path().join("config.toml").exists() {
@@ -154,11 +179,12 @@ mod tests {
         let read = load::<Settings>(dir.path(), &dir.path().join("b"))
             .unwrap()
             .into_value();
-        assert_eq!(read.queue.workers, 3);
+        assert_eq!((read.queue.workers, read.render.nice), (3, 5));
 
         let other = tempfile::tempdir().unwrap();
-        let locked = SettingsWriter::start(runtime.handle(), other.path().to_path_buf(), true);
-        assert!(!locked.save(settings));
+        let locked = SettingsWriter::start(runtime.handle(), other.path().to_path_buf(), true, &Settings::default());
+        assert!(!locked.update(|s| s.queue.workers = 2));
+        assert_eq!(locked.current().queue.workers, 2, "the change holds for this run");
         assert!(!other.path().join("config.toml").exists());
     }
 
