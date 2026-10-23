@@ -24,6 +24,7 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
+az.workspace = true
 rustcut-core.workspace = true
 rustcut-player.workspace = true
 slint.workspace = true
@@ -31,6 +32,12 @@ thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 clap.workspace = true
+parking_lot.workspace = true
+tokio.workspace = true
 
 [build-dependencies]
 slint-build.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }

@@ -2,11 +2,14 @@
 
 mod cli;
 mod logging;
+mod persistence;
 
 use std::process::ExitCode;
 
+use az::CheckedAs as _;
 use clap::Parser as _;
 use rustcut_core::app_identity::{APP_ID, APP_NAME, VERSION};
+use rustcut_core::settings::{AppPaths, UiState, WindowState};
 use slint::ComponentHandle as _;
 
 pub use cli::Cli;
@@ -18,14 +21,16 @@ use crate::MainWindow;
 pub enum AppError {
     #[error("the window system could not be initialized: {0}")]
     Platform(#[from] slint::PlatformError),
+    #[error("no home folder is known; start with --home <dir>")]
+    NoHome,
 }
 
 /// Runs the application and returns the process exit code.
 pub fn main() -> ExitCode {
     let cli = Cli::parse();
-    logging::init();
+    let log = logging::init();
     tracing::info!(version = VERSION, "[App] {APP_NAME} starting");
-    match run(&cli) {
+    match run(&cli, &log) {
         Ok(()) => {
             tracing::info!("[App] Exited normally");
             ExitCode::SUCCESS
@@ -37,10 +42,13 @@ pub fn main() -> ExitCode {
     }
 }
 
-fn run(cli: &Cli) -> Result<(), AppError> {
+fn run(cli: &Cli, log: &logging::LogControl) -> Result<(), AppError> {
     if let Some(home) = &cli.home {
         tracing::info!(home = %home.display(), "[App] Isolated profile requested");
     }
+    let paths = AppPaths::resolve(cli.home.as_deref()).ok_or(AppError::NoHome)?;
+    let loaded = persistence::load_all(paths);
+    log.apply_setting(&loaded.settings.advanced.log_level);
     if !cli.files.is_empty() {
         tracing::info!(
             count = cli.files.len(),
@@ -56,8 +64,49 @@ fn run(cli: &Cli) -> Result<(), AppError> {
     }
     window.set_app_name(APP_NAME.into());
     window.set_app_version(VERSION.into());
+    restore_window(&window, &loaded.ui_state.window);
     window.run()?;
+
+    let mut ui_state = loaded.ui_state.clone();
+    capture_window(&window, &mut ui_state);
+    persistence::save_ui_state(&loaded, &ui_state);
     Ok(())
+}
+
+/// Size and maximized state before the first frame (the position is left to the window manager until M1.3).
+fn restore_window(window: &MainWindow, state: &WindowState) {
+    let w = window.window();
+    tracing::debug!(
+        width = state.width,
+        height = state.height,
+        maximized = state.maximized,
+        "[App] Window restored"
+    );
+    w.set_size(slint::LogicalSize::new(state.width as f32, state.height as f32));
+    if state.maximized {
+        w.set_maximized(true);
+    }
+}
+
+/// The window's size in logical pixels; a maximized window keeps its last normal size.
+fn capture_window(window: &MainWindow, state: &mut UiState) {
+    let w = window.window();
+    let maximized = w.is_maximized();
+    state.window.maximized = maximized;
+    if !maximized {
+        let size = w.size().to_logical(w.scale_factor());
+        state.window.width = to_dimension(size.width, state.window.width);
+        state.window.height = to_dimension(size.height, state.window.height);
+    }
+}
+
+/// A logical size as whole pixels; `fallback` for values that are not a sensible size.
+fn to_dimension(value: f32, fallback: u32) -> u32 {
+    value
+        .round()
+        .checked_as::<u32>()
+        .filter(|px| (1..=65_535).contains(px))
+        .unwrap_or(fallback)
 }
 
 /// Selects winit with an OpenGL renderer: the player draws libmpv's frames into a GL texture on Slint's context (ADR-2).

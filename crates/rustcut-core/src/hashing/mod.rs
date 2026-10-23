@@ -1,0 +1,93 @@
+//! Interface of the hash service (implemented in M2.1): MD5 of a source for RustView's known-source check, taken from
+//! RustView itself, a sidecar `.<name>.md5`, or computed in the background (cancelable, progress shown non-modally; PyCutRv
+//! hashed on the UI thread, bug 4).
+
+use std::path::{Path, PathBuf};
+
+use crate::actor::Reply;
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum HashError {
+    #[error("{path}: {error}")]
+    Io { path: PathBuf, error: String },
+    #[error("hashing was canceled")]
+    Canceled,
+}
+
+#[derive(Debug)]
+pub enum HashCommand {
+    /// Hashes `path` (sidecar first); the answer also goes out as [`HashEvent::Finished`].
+    Hash {
+        path: PathBuf,
+        reply: Option<Reply<Result<String, HashError>>>,
+    },
+    Cancel {
+        path: PathBuf,
+    },
+    Shutdown {
+        reply: Reply<()>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HashEvent {
+    Progress {
+        path: PathBuf,
+        done: u64,
+        total: u64,
+    },
+    Finished {
+        path: PathBuf,
+        md5: String,
+        from_sidecar: bool,
+    },
+    Failed {
+        path: PathBuf,
+        error: String,
+    },
+    Canceled {
+        path: PathBuf,
+    },
+}
+
+/// The sidecar of `video`: `.<file name>.md5` in the same folder (PyCutRv and RustView convention). RustCut reads it but
+/// never deletes it (PyCutRv bug 11).
+pub fn sidecar_path(video: &Path) -> Option<PathBuf> {
+    let name = video.file_name()?.to_str()?;
+    Some(video.with_file_name(format!(".{name}.md5")))
+}
+
+/// The MD5 in a sidecar: `md5sum` output (`<hash>  <name>`) or the bare hash; lower-cased, `None` when it is not 32 hex digits.
+pub fn parse_sidecar(text: &str) -> Option<String> {
+    let hash = text.split_whitespace().next()?;
+    (hash.len() == 32 && hash.bytes().all(|b| b.is_ascii_hexdigit())).then(|| hash.to_ascii_lowercase())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sidecar_naming() {
+        assert_eq!(
+            sidecar_path(Path::new("/v/clip one.mp4")),
+            Some(PathBuf::from("/v/.clip one.mp4.md5"))
+        );
+        assert_eq!(sidecar_path(Path::new("/")), None);
+    }
+
+    #[test]
+    fn sidecar_contents() {
+        let hash = "D41D8CD98F00B204E9800998ECF8427E";
+        assert_eq!(
+            parse_sidecar(&format!("{hash}  clip.mp4\n")).as_deref(),
+            Some("d41d8cd98f00b204e9800998ecf8427e")
+        );
+        assert_eq!(
+            parse_sidecar("d41d8cd98f00b204e9800998ecf8427e").as_deref(),
+            Some("d41d8cd98f00b204e9800998ecf8427e")
+        );
+        assert_eq!(parse_sidecar("xyz  clip.mp4"), None);
+        assert_eq!(parse_sidecar(""), None);
+    }
+}
