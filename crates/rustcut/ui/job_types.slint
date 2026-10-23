@@ -1,0 +1,82 @@
+// The data of the Job panel (the inspector of the queue's current job; src/ui/inspector/ fills `Job`), of the Logs
+// panel (the job's stored log; src/ui/logs/ fills `Logs`) and of the question before a job replaces the editor's
+// draft (src/ui/editing/ fills `JobLoad`; setting `editor.draft_on_load = "ask"`).
+
+// One label/value row of a section; tone 0 normal, 1 muted, 2 error.
+export struct JobRowView {
+    label: string,
+    value: string,
+    tooltip: string,
+    tone: int,
+}
+
+export struct JobSectionView {
+    id: string,
+    title: string,
+    collapsed: bool,
+    rows: [JobRowView],
+}
+
+export global Job {
+    in property <bool> has-job;
+    in property <string> title;
+    in property <string> state;
+    // JobStateKind order (the color), and the render's progress (negative = none).
+    in property <int> kind;
+    in property <float> progress;
+    in property <[JobSectionView]> sections;
+    // The job is loaded into the editor right now.
+    in property <bool> editing;
+    in property <bool> can-edit;
+    in property <bool> can-load;
+    in property <bool> can-play;
+    in property <bool> can-retry;
+    in property <bool> can-log;
+    in property <string> empty-text;
+
+    callback toggle-section(/* id */ string);
+    callback edit();
+    callback load-new();
+    callback play();
+    callback reveal();
+    callback retry();
+    callback duplicate();
+    callback show-log();
+    callback edit-tags();
+}
+
+// One line of a log; level 0 info, 1 a note of RustCut, 2 warning, 3 error.
+export struct LogLineView {
+    number: int,
+    text: string,
+    level: int,
+}
+
+export global Logs {
+    in property <bool> has-job;
+    in property <string> title;
+    // Why there is nothing (yet): "The log is stored when the render ends."
+    in property <string> note;
+    in property <[LogLineView]> lines;
+    in property <string> summary;
+    in property <string> search;
+    in property <bool> errors-only;
+    // Stay at the newest line when the log changes.
+    in property <bool> follow: true;
+    in property <bool> loading;
+
+    callback search-edited(string);
+    callback toggle-errors-only();
+    callback toggle-follow();
+    callback copy();
+    callback refresh();
+}
+
+export global JobLoad {
+    in property <bool> open;
+    in property <string> title;
+    in property <string> text;
+    callback replace();
+    callback set-aside();
+    callback cancel();
+}

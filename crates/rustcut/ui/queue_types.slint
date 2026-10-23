@@ -1,0 +1,113 @@
+// The data of the queue panel (src/ui/queue/ fills `Queue` and handles its callbacks): the rows in their compact or
+// table form, the columns that fit, the state chips and the search, the overall progress, and what the toolbar can do
+// with the selection.
+
+// One row of the queue list.
+export struct QueueRowView {
+    id: int,
+    name: string,
+    state: string,
+    // JobStateKind order: 0 waiting, 1 held, 2 rendering, 3 paused, 4 finished, 5 failed, 6 canceled.
+    kind: int,
+    // 0 to 1 while rendering or when finished, negative otherwise.
+    progress: float,
+    // The compact form's second line.
+    detail: string,
+    tooltip: string,
+    selected: bool,
+    // The job the Job and Logs panels show.
+    current: bool,
+    // Loaded into the editor.
+    editing: bool,
+    // The table form's cells, one per entry of `Queue.columns`.
+    cells: [string],
+}
+
+// One column of the table form (src/ui/queue/columns.rs computes where it sits).
+export struct QueueColumnView {
+    id: string,
+    title: string,
+    tooltip: string,
+    x: length,
+    width: length,
+    right: bool,
+    // The name stretches; every other column can be dragged wider or narrower.
+    resizable: bool,
+}
+
+// A state filter chip.
+export struct QueueChipView {
+    id: string,
+    title: string,
+    count: int,
+    on: bool,
+}
+
+export global Queue {
+    in property <[QueueRowView]> rows;
+    // Two-line rows without a header (a narrow sidebar).
+    in property <bool> compact: true;
+    in property <[QueueColumnView]> columns;
+    in property <length> row-height: 44px;
+    in property <[QueueChipView]> chips;
+    in property <string> search;
+    in property <bool> filtered;
+    // "4 of 12 jobs shown" while a filter is on.
+    in property <string> filter-note;
+    in property <string> summary;
+    in property <string> empty-text;
+    // The overall progress of the current run.
+    in property <bool> has-overall;
+    in property <float> overall;
+    in property <string> overall-text;
+    in property <bool> paused;
+    in property <bool> pause-after;
+    // What the toolbar can do with the selection (tooltips with the number of jobs).
+    in property <int> selected-count;
+    in property <bool> can-edit;
+    in property <bool> can-edit-tags;
+    in property <bool> can-cancel;
+    in property <bool> can-remove;
+    in property <bool> can-retry;
+    in property <bool> can-hold;
+    in property <bool> held;
+    in property <bool> can-move-up;
+    in property <bool> can-move-down;
+    in property <bool> can-remove-finished;
+    in property <string> cancel-tooltip;
+    in property <string> remove-tooltip;
+    in property <string> retry-tooltip;
+    in property <string> hold-tooltip;
+    in property <string> move-up-tooltip;
+    in property <string> move-down-tooltip;
+    in property <string> remove-finished-tooltip;
+    in property <string> key-move-up;
+    in property <string> key-move-down;
+
+    // The list's inner width (the columns follow it).
+    callback width-changed(length);
+    callback select(/* job id */ int, /* ctrl */ bool, /* shift */ bool);
+    callback select-all();
+    callback double-clicked(/* job id */ int);
+    // A right click on a row (it is selected first unless it already is) or on the empty list (-1).
+    callback context-menu(/* job id */ int, /* window x */ length, /* window y */ length);
+    // Drag and drop: the selection goes in front of row `index` of the shown rows (the row count = the end).
+    callback drop-rows(/* index */ int);
+    callback column-resize-started(/* column id */ string);
+    callback column-resized(/* column id */ string, /* delta */ length);
+    callback toggle-chip(/* chip id */ string);
+    callback search-edited(string);
+    callback clear-filter();
+    callback toggle-paused();
+    callback toggle-pause-after();
+    callback cancel();
+    callback remove();
+    callback retry();
+    callback toggle-hold();
+    callback move-up();
+    callback move-down();
+    callback edit();
+    callback remove-finished();
+    // The Tag & Rate panel edits the selected job's RustView entry (user decision Q-G3).
+    callback edit-tags();
+}

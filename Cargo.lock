@@ -4860,6 +4860,7 @@ dependencies = [
 name = "rustcut"
 version = "0.0.12"
 dependencies = [
+ "arboard",
  "az",
  "chrono",
  "clap",

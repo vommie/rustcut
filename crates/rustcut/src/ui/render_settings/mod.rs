@@ -112,6 +112,46 @@ impl RenderSettingsBridge {
         self.state.borrow().profile().clone()
     }
 
+    /// The profile and its working copy as they are (a draft set aside while a job is edited).
+    pub fn selection(&self) -> Selection {
+        self.state.borrow().selection.clone()
+    }
+
+    /// Puts a draft's selection back.
+    pub fn put_selection(&self, selection: Selection) {
+        self.state.borrow_mut().selection = selection;
+        self.changed(false);
+    }
+
+    /// The settings of a job loaded into the editor become the working copy.
+    pub fn load_profile(&self, profile: &RenderProfile) {
+        {
+            let mut st = self.state.borrow_mut();
+            let st = &mut *st;
+            st.selection.load(&st.library, profile);
+        }
+        self.changed(false);
+    }
+
+    /// Every profile (id, name) for "Render again with".
+    pub fn profiles(&self) -> Vec<(String, String)> {
+        self.state
+            .borrow()
+            .library
+            .all()
+            .map(|p| (p.id.clone(), p.name.clone()))
+            .collect()
+    }
+
+    /// The profile of `id`; `""` is the working copy (the panel's current settings).
+    pub fn profile(&self, id: &str) -> Option<RenderProfile> {
+        let st = self.state.borrow();
+        if id.is_empty() {
+            return Some(st.profile().clone());
+        }
+        st.library.get(id).cloned()
+    }
+
     /// The capability check's result once known (encoder availability, the VAAPI device, vid.stab).
     pub fn capabilities(&self) -> Option<Arc<Capabilities>> {
         match &self.state.borrow().encoders {

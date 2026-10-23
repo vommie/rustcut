@@ -285,6 +285,15 @@ impl FiltersBridge {
         self.state.borrow().chain().clone()
     }
 
+    /// The chain of a job loaded into the editor, or of a draft put back (after its video opened).
+    pub fn load_chain(&self, chain: rustcut_core::edit::FilterChain) {
+        if self.state.borrow().crop_session().is_some() {
+            self.end_crop(true);
+        }
+        self.state.borrow_mut().load_chain(chain);
+        self.publish();
+    }
+
     /// The player shows a probe render (`true`) or the source again: the preview filters are taken off meanwhile and a
     /// crop being edited is kept as it is.
     pub fn suspend_preview(&self, suspended: bool) {

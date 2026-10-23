@@ -24,22 +24,26 @@ use slint::ComponentHandle as _;
 pub use cli::Cli;
 pub use persistence::SettingsWriter;
 
-use crate::MainWindow;
 use crate::desktop::instance::{self, Request};
 use crate::ui::dispatcher::{SlintSink, UiDispatcher};
 use crate::ui::dock::{DockBridge, PanelId, persist as dock_persist};
+use crate::ui::editing::{EditingParts, JobEditor};
 use crate::ui::editor::Editor;
 use crate::ui::export::{ExportBridge, ExportParts};
 use crate::ui::filters::FiltersBridge;
-use crate::ui::keymap::Action;
+use crate::ui::inspector::InspectorBridge;
+use crate::ui::keymap::{Action, Keymap};
+use crate::ui::logs::LogsBridge;
 use crate::ui::media_info::MediaInfoBridge;
+use crate::ui::menu::ContextMenuBridge;
 use crate::ui::open::{self, FileOpener, OpenerParts};
 use crate::ui::player::{PlayerBridge, PlayerBridgeError};
 use crate::ui::probe::{self, ProbeBridge};
-use crate::ui::queue::QueueBridge;
+use crate::ui::queue::{MenuKeys, QueueBridge};
 use crate::ui::render_settings::RenderSettingsBridge;
 use crate::ui::status::{self, Level};
 use crate::ui::tags::TagsBridge;
+use crate::{HoldConfirm, MainWindow};
 
 /// How long the runtime may take to finish its tasks at quit.
 const RUNTIME_SHUTDOWN: Duration = Duration::from_secs(2);
@@ -132,7 +136,20 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         records: sync_records,
     };
     let queue_service = start_queue(&runtime, &store, &loaded, &encoders, sync_link);
-    let queue = QueueBridge::install(&main, &ui, runtime.handle(), &queue_service);
+    main.global::<HoldConfirm<'_>>()
+        .set_duration(i64::from(loaded.settings.general.hold_to_confirm_ms));
+    let menu = ContextMenuBridge::install(&main);
+    let (keys, save_key) = queue_keys(&loaded.settings);
+    let queue = QueueBridge::install(
+        &main,
+        &ui,
+        runtime.handle(),
+        &queue_service,
+        &loaded.ui_state.queue,
+        &menu,
+        keys,
+        &save_key,
+    );
     let tags = TagsBridge::install(
         &main,
         &ui,
@@ -143,6 +160,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &loaded.ui_state.tags,
     );
     {
+        let dock_for_queue = Rc::downgrade(&dock);
         let dock = Rc::downgrade(&dock);
         tags.set_on_reveal(move || {
             if let Some(dock) = dock.upgrade() {
@@ -150,11 +168,37 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             }
         });
         let tags_weak = Rc::downgrade(&tags);
-        queue.set_on_edit_tags(move |id, name| {
+        queue.hooks().edit_tags = Some(Box::new(move |id, name| {
             if let Some(tags) = tags_weak.upgrade() {
                 tags.edit_job(id, name);
             }
-        });
+        }));
+        let dock = dock_for_queue;
+        queue.hooks().reveal = Some(Box::new(move |panel| {
+            if let Some(dock) = dock.upgrade() {
+                dock.reveal(panel);
+            }
+        }));
+    }
+    let inspector = InspectorBridge::install(
+        &main,
+        &ui,
+        runtime.handle().clone(),
+        &queue,
+        &tags,
+        &loaded.ui_state.job.collapsed,
+    );
+    let logs = LogsBridge::install(&main, &ui, runtime.handle().clone(), &queue, &loaded.ui_state.logs);
+    {
+        let (inspector, logs) = (Rc::downgrade(&inspector), Rc::downgrade(&logs));
+        queue.hooks().refreshed = Some(Box::new(move || {
+            if let Some(inspector) = inspector.upgrade() {
+                inspector.follow_queue();
+            }
+            if let Some(logs) = logs.upgrade() {
+                logs.follow_queue();
+            }
+        }));
     }
     let render = RenderSettingsBridge::install(
         &main,
@@ -165,6 +209,12 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &loaded.paths.cache_dir,
         encoders,
     );
+    {
+        let (a, b) = (Rc::downgrade(&render), Rc::downgrade(&render));
+        let mut hooks = queue.hooks();
+        hooks.profiles = Some(Box::new(move || a.upgrade().map(|r| r.profiles()).unwrap_or_default()));
+        hooks.profile = Some(Box::new(move |id| b.upgrade().and_then(|r| r.profile(id))));
+    }
     let media = MediaInfoBridge::install(
         &main,
         &ui,
@@ -204,6 +254,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     );
     editor.set_probe(&probe);
     editor.set_tags(&tags);
+    editor.set_queue(&queue);
     let export = ExportBridge::install(
         &main,
         &ExportParts {
@@ -234,6 +285,33 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         runtime.handle().clone(),
         loaded.ui_state.last_open_dir.clone(),
     );
+    let editing = JobEditor::install(
+        &main,
+        &ui,
+        runtime.handle().clone(),
+        &EditingParts {
+            player: &player,
+            editor: &editor,
+            filters: &filters,
+            render: &render,
+            export: &export,
+            tags: &tags,
+            queue: &queue,
+            inspector: &inspector,
+            opener: &opener,
+        },
+        loaded.settings.editor.draft_on_load,
+    );
+    export.set_editing(&editing);
+    opener.set_editing(&editing);
+    {
+        let editing = Rc::downgrade(&editing);
+        queue.hooks().edit = Some(Box::new(move |id| {
+            if let Some(editing) = editing.upgrade() {
+                editing.load(id);
+            }
+        }));
+    }
     let server = single_instance.then(|| listen(&socket, &runtime, &ui, &main)).flatten();
     shutdown::watch_signals(runtime.handle(), ui, main.as_weak());
 
@@ -263,12 +341,18 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     probe.save_into(&mut ui_state.export);
     export.save_into(&mut ui_state.export);
     tags.save_into(&mut ui_state.tags);
-    ui_state.queue.paused = queue.paused();
+    queue.save_into(&mut ui_state.queue);
+    ui_state.job.collapsed = inspector.collapsed();
+    logs.save_into(&mut ui_state.logs);
     persistence::save_ui_state(&loaded, &ui_state);
     drop(server);
+    drop(editing);
     drop(opener);
     drop(export);
+    drop(logs);
+    drop(inspector);
     drop(queue);
+    drop(menu);
     drop(tags);
     drop(probe);
     drop(render);
@@ -283,6 +367,27 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     stop_player(player);
     runtime.shutdown_timeout(RUNTIME_SHUTDOWN);
     Ok(Outcome::Quit)
+}
+
+/// The queue's key labels for its tooltips and menu (the keymap as the editor reads it), and the Save key.
+fn queue_keys(settings: &Settings) -> (MenuKeys, String) {
+    let (keymap, _notes) = Keymap::from_table(&settings.keymap);
+    let label = |action| {
+        keymap
+            .chords(action)
+            .first()
+            .map(crate::ui::keymap::Chord::label)
+            .unwrap_or_default()
+    };
+    (
+        MenuKeys {
+            move_up: label(Action::QueueMoveUp),
+            move_down: label(Action::QueueMoveDown),
+            move_top: label(Action::QueueMoveTop),
+            move_bottom: label(Action::QueueMoveBottom),
+        },
+        label(Action::Save),
+    )
 }
 
 /// The tokio runtime of the services (ADR-4). Built before the window: it takes about a millisecond (logged), and mpv's

@@ -149,6 +149,22 @@ impl TagsBridge {
         self.state.borrow().editing.is_some()
     }
 
+    /// RustView's name of tag `id` (the Job panel lists a job's tags by name).
+    pub fn tag_name(&self, id: u32) -> Option<String> {
+        self.state.borrow().name(id).map(str::to_owned)
+    }
+
+    /// The draft's tags and rating as they are (a draft set aside while a job is edited).
+    pub fn draft(&self) -> Choice {
+        self.state.borrow().draft.clone()
+    }
+
+    /// A job loaded into the editor, or a draft put back: its tags and rating become the draft.
+    pub fn load_draft(&self, choice: Choice) {
+        self.state.borrow_mut().load_draft(choice);
+        self.publish();
+    }
+
     /// Shows the panel (the save dialog's "Back to tagging").
     pub fn reveal(&self) {
         if let Some(hook) = self.on_reveal.borrow().as_ref() {

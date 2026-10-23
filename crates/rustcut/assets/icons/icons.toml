@@ -137,3 +137,18 @@ tags_expand = { tabler = "fold-down", doc = "Expand every tag branch" }
 tags_collapse = { tabler = "fold-up", doc = "Collapse every tag branch" }
 tags_hide = { tabler = "eye-off", doc = "Choose the tag branches to hide" }
 job_tags = { tabler = "tag", doc = "Edit the tags and the rating of the job" }
+
+# Queue panel, Job panel, Logs panel (M4.1)
+panel_job = { tabler = "file-info", doc = "Job panel (the inspector of the queue's current job)" }
+job_edit = { tabler = "edit", doc = "Edit the job in the editor" }
+job_load_new = { tabler = "file-import", doc = "Load the job into the editor as a new job" }
+job_duplicate = { tabler = "copy", doc = "Duplicate the job" }
+job_retry_with = { tabler = "repeat", doc = "Render the job again with another profile" }
+move_top = { tabler = "arrow-bar-to-up", doc = "Move to the top" }
+move_bottom = { tabler = "arrow-bar-to-down", doc = "Move to the bottom" }
+queue_pause_after = { tabler = "clock-pause", doc = "Pause after the running jobs" }
+remove_finished = { tabler = "clear-all", doc = "Remove every finished job" }
+filter_clear = { tabler = "filter-off", doc = "Show every job again" }
+copy = { tabler = "copy", doc = "Copy to the clipboard" }
+log_follow = { tabler = "arrow-autofit-down", doc = "Stay at the newest line" }
+job_details = { tabler = "file-description", doc = "Show the job in the Job panel" }

@@ -26,16 +26,19 @@ pub enum PanelId {
     TagRate,
     MediaInfo,
     Logs,
+    /// The inspector of the queue's current job (M4.1, user decision Q-Q1).
+    Job,
 }
 
 impl PanelId {
-    pub const ALL: [PanelId; 6] = [
+    pub const ALL: [PanelId; 7] = [
         PanelId::Export,
         PanelId::RenderSettings,
         PanelId::Queue,
         PanelId::TagRate,
         PanelId::MediaInfo,
         PanelId::Logs,
+        PanelId::Job,
     ];
 
     /// Stable name in `ui-state.toml` and in the Slint models.
@@ -47,6 +50,7 @@ impl PanelId {
             PanelId::TagRate => "tag-rate",
             PanelId::MediaInfo => "media-info",
             PanelId::Logs => "logs",
+            PanelId::Job => "job",
         }
     }
 
@@ -58,11 +62,13 @@ impl PanelId {
     pub fn title(self) -> &'static str {
         match self {
             PanelId::Export => "Export",
-            PanelId::RenderSettings => "Render Settings",
+            // Shorter than "Render Settings" (user, 2026-10-23); the key stays `render-settings`.
+            PanelId::RenderSettings => "Codecs",
             PanelId::Queue => "Queue",
             PanelId::TagRate => "Tag & Rate",
             PanelId::MediaInfo => "Media Info",
             PanelId::Logs => "Logs",
+            PanelId::Job => "Job",
         }
     }
 
@@ -74,14 +80,23 @@ impl PanelId {
             PanelId::TagRate => Icon::PanelTagRate,
             PanelId::MediaInfo => Icon::PanelMediaInfo,
             PanelId::Logs => Icon::PanelLogs,
+            PanelId::Job => Icon::PanelJob,
         }
     }
 
     /// The sidebar the panel lives in by default (where a panel missing from a file is put back).
     pub fn default_side(self) -> Side {
         match self {
-            PanelId::Export | PanelId::RenderSettings | PanelId::Queue => Side::Left,
+            PanelId::Export | PanelId::RenderSettings | PanelId::Queue | PanelId::Job => Side::Left,
             PanelId::TagRate | PanelId::MediaInfo | PanelId::Logs => Side::Right,
+        }
+    }
+
+    /// The panel a missing one joins (right after it) when a file of an older version lacks it.
+    pub const fn default_neighbor(self) -> Option<PanelId> {
+        match self {
+            PanelId::Job => Some(PanelId::RenderSettings),
+            _ => None,
         }
     }
 }
@@ -188,7 +203,7 @@ impl Default for DockLayout {
         DockLayout {
             left: Sidebar::new(
                 vec![
-                    group(vec![PanelId::Export, PanelId::RenderSettings], 3.0),
+                    group(vec![PanelId::Export, PanelId::RenderSettings, PanelId::Job], 3.0),
                     group(vec![PanelId::Queue], 2.0),
                 ],
                 DEFAULT_LEFT_WIDTH,
@@ -476,6 +491,21 @@ impl DockLayout {
         }
         for panel in PanelId::ALL {
             if seen.contains(&panel) {
+                continue;
+            }
+            let neighbor = panel.default_neighbor().and_then(|n| {
+                Side::BOTH.into_iter().find_map(|side| {
+                    let groups = &self.sidebar(side).groups;
+                    groups
+                        .iter()
+                        .enumerate()
+                        .find_map(|(g, group)| group.tabs.iter().position(|t| *t == n).map(|at| (side, g, at)))
+                })
+            });
+            if let Some((side, g, at)) = neighbor
+                && let Some(group) = self.sidebar_mut(side).groups.get_mut(g)
+            {
+                group.tabs.insert(at + 1, panel);
                 continue;
             }
             let sidebar = self.sidebar_mut(panel.default_side());

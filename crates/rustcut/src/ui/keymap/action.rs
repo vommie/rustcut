@@ -41,10 +41,15 @@ pub enum Action {
     MirrorVertical,
     ResetFilters,
     ProbeRender,
+    QueueMoveUp,
+    QueueMoveDown,
+    QueueMoveTop,
+    QueueMoveBottom,
+    QueueSelectAll,
 }
 
 impl Action {
-    pub const ALL: [Self; 36] = [
+    pub const ALL: [Self; 41] = [
         Self::Open,
         Self::Save,
         Self::Quit,
@@ -81,6 +86,11 @@ impl Action {
         Self::MirrorVertical,
         Self::ResetFilters,
         Self::ProbeRender,
+        Self::QueueMoveUp,
+        Self::QueueMoveDown,
+        Self::QueueMoveTop,
+        Self::QueueMoveBottom,
+        Self::QueueSelectAll,
     ];
 
     /// The key in `config.toml`'s `[keymap]` table.
@@ -122,6 +132,11 @@ impl Action {
             Self::MirrorVertical => "mirror_vertical",
             Self::ResetFilters => "reset_filters",
             Self::ProbeRender => "probe_render",
+            Self::QueueMoveUp => "queue_move_up",
+            Self::QueueMoveDown => "queue_move_down",
+            Self::QueueMoveTop => "queue_move_top",
+            Self::QueueMoveBottom => "queue_move_bottom",
+            Self::QueueSelectAll => "queue_select_all",
         }
     }
 
@@ -168,6 +183,11 @@ impl Action {
             Self::MirrorVertical => "Mirror top and bottom",
             Self::ResetFilters => "Reset all filters",
             Self::ProbeRender => "Probe render around the playhead",
+            Self::QueueMoveUp => "Move the selected jobs up",
+            Self::QueueMoveDown => "Move the selected jobs down",
+            Self::QueueMoveTop => "Move the selected jobs to the top",
+            Self::QueueMoveBottom => "Move the selected jobs to the bottom",
+            Self::QueueSelectAll => "Select every job shown in the queue",
         }
     }
 
@@ -208,6 +228,12 @@ impl Action {
             Self::RotateRight => &["R"],
             // A test render (M2.5); T is free in PyCutRv's and the NLE keys.
             Self::ProbeRender => &["T"],
+            // The queue (M4.1, HANDOFF 8.Q): Ctrl with the keys that move elsewhere.
+            Self::QueueMoveUp => &["Control+UpArrow"],
+            Self::QueueMoveDown => &["Control+DownArrow"],
+            Self::QueueMoveTop => &["Control+Home"],
+            Self::QueueMoveBottom => &["Control+End"],
+            Self::QueueSelectAll => &["Control+A"],
             Self::ToggleKeepFilters | Self::MirrorHorizontal | Self::MirrorVertical | Self::ResetFilters => &[],
         }
     }
@@ -246,6 +272,8 @@ impl Action {
                 | Self::NextCut
                 | Self::ZoomIn
                 | Self::ZoomOut
+                | Self::QueueMoveUp
+                | Self::QueueMoveDown
         )
     }
 }

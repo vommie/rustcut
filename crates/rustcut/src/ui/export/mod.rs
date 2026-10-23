@@ -7,6 +7,7 @@
 
 mod check;
 mod dialog;
+mod editing;
 mod metadata;
 mod save;
 mod state;
@@ -23,11 +24,12 @@ use slint::ComponentHandle as _;
 pub use check::{CardCheck, CardInput, Level as CheckLevel, card_check};
 pub use dialog::{Choice, ConflictDialog, DialogInput, DialogOption, Outcome, silent_outcome};
 pub use metadata::{MetadataFacts, Missing, missing};
-pub use state::{ExportState, JobFacts, MAX_COUNTER, SOURCE_FOLDER, codec_label};
+pub use state::{ExportDraft, ExportState, JobFacts, MAX_COUNTER, SOURCE_FOLDER, codec_label};
 
 use self::metadata::MetaPending;
 use self::save::Pending;
 use crate::app::SettingsWriter;
+use crate::ui::editing::JobEditor;
 use crate::ui::editor::Editor;
 use crate::ui::filters::FiltersBridge;
 use crate::ui::media_info::MediaInfoBridge;
@@ -73,6 +75,8 @@ pub struct ExportBridge {
     pending: RefCell<Option<Pending>>,
     /// The open question about missing tags or rating, with the job it is about.
     meta: RefCell<Option<MetaPending>>,
+    /// The editing of a queued job (set after it is installed; it needs the export first).
+    editing: RefCell<Weak<JobEditor>>,
 }
 
 impl ExportBridge {
@@ -104,16 +108,17 @@ impl ExportBridge {
             saving: Cell::new(false),
             pending: RefCell::new(None),
             meta: RefCell::new(None),
+            editing: RefCell::new(Weak::new()),
         });
         connect(&bridge, window);
         save::connect_dialog(&bridge, window);
         metadata::connect(&bridge, window);
         let weak = Rc::downgrade(&bridge);
-        parts.queue.set_on_job_ended(move || {
+        parts.queue.hooks().job_ended = Some(Box::new(move || {
             if let Some(b) = weak.upgrade() {
                 b.rescan();
             }
-        });
+        }));
         bridge.publish();
         bridge
     }
@@ -195,7 +200,14 @@ impl ExportBridge {
         let folder = st.target_folder();
         let file = facts.as_ref().map(|f| st.file(f));
         let scan = folder.as_deref().and_then(|f| self.scan_of(f));
-        let queue = self.queue.upgrade().map(|q| q.targets()).unwrap_or_default();
+        let mut queue = self.queue.upgrade().map(|q| q.targets()).unwrap_or_default();
+        // The edited job is no conflict for the save that updates it.
+        let edited = self.editing.borrow().upgrade().and_then(|e| e.info()).map(|e| e.id);
+        if let (Some(id), Some(folder), Some(Ok((_, name)))) = (edited, folder.as_deref(), file.as_ref())
+            && self.updates(&folder.join(name), false)
+        {
+            queue.retain(|q| q.id != id);
+        }
         let warnings = self.warnings.borrow();
         let fallback = rustcut_core::naming::NameError::Empty;
         let line = card_check(&CardInput {
@@ -246,16 +258,26 @@ impl ExportBridge {
         e.set_check_tooltip(line.tooltip.as_str().into());
         let saving = self.saving.get();
         e.set_can_save(line.can_save() && !saving);
+        let file_name = e.get_file_name();
+        let updates = folder
+            .as_deref()
+            .filter(|_| !file_name.is_empty())
+            .is_some_and(|f| self.updates(&f.join(file_name.as_str()), false));
         e.set_save_tooltip(
             if saving {
                 "Saving...".to_owned()
-            } else if line.can_save() {
-                "Save the job into the queue".to_owned()
-            } else {
+            } else if !line.can_save() {
                 format!("Cannot save: {}", line.text)
+            } else if updates {
+                "Update the edited job".to_owned()
+            } else if self.editing.borrow().upgrade().is_some_and(|ed| ed.info().is_some()) {
+                "Save as a new job (the edited job stays as it is)".to_owned()
+            } else {
+                "Save the job into the queue".to_owned()
             }
             .into(),
         );
+        self.publish_editing(&e, Some(file_name.as_str()).filter(|f| !f.is_empty()));
     }
 
     fn status(&self, level: Level, message: &str) {
@@ -391,4 +413,10 @@ fn connect(bridge: &Rc<ExportBridge>, window: &MainWindow) {
         b.publish();
     }));
     e.on_save(on(ExportBridge::save));
+    e.on_save_as_new(on(ExportBridge::save_as_new));
+    e.on_stop_editing(on(|b| {
+        if let Some(editing) = b.editing.borrow().upgrade() {
+            editing.stop();
+        }
+    }));
 }

@@ -577,7 +577,8 @@ export component FiltersCardBody inherits VerticalLayout {
 
         IconButton {
             icon: IconId.filter-reset;
-            tooltip: "Reset every filter (off, default values, default order)";
+            hold: true;
+            tooltip: "Hold to reset every filter (off, default values, default order; the key resets at once)";
             shortcut: Filters.key-reset;
             clicked => { Filters.reset(); }
         }

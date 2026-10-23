@@ -1,85 +1,60 @@
-// The queue panel of M2.6 (src/ui/queue/ fills `Queue`; user decision Q-X2): a compact list of two-line rows (the file
-// with its state and progress; folder, profile and length, or ETA, size estimate and speed while rendering, or the
-// failure) and a toolbar: pause/resume processing, and for the selected job cancel, retry, hold, move and remove. The
-// full queue panel (multi-select, drag & drop, filters, inspector) is M4.1.
+// The queue panel (src/ui/queue/ fills `Queue`; HANDOFF 8.Q, M4.1): the processing switches with the queue's summary
+// and the overall progress of the current run, the search and the state chips, the list (compact two-line rows in a
+// narrow sidebar, a table with more columns as it gets wider), and the actions for the selected jobs. Several jobs can
+// be selected (Ctrl, Shift), dragged to another place, and reached through the context menu; removing and canceling
+// are held (hold.slint, user decision Q-Q4).
 
 import { Theme } from "styles.slint";
-import { IconId } from "icons.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
 import { IconButton } from "controls.slint";
 import { TooltipHost } from "tooltip.slint";
-import { Export, Queue, QueueRowView } from "export_types.slint";
+import { SearchField } from "search_field.slint";
+import { Export } from "export_types.slint";
+import { Queue, QueueChipView } from "queue_types.slint";
+import { QueueColors, QueueHeader, QueueRow } from "queue_row.slint";
 
-component QueueRow inherits Rectangle {
-    in property <QueueRowView> job;
+component Chip inherits Rectangle {
+    in property <QueueChipView> chip;
+    in property <int> kind;
 
-    // waiting, held, rendering, paused, finished, failed, canceled
-    property <color> state-color: root.job.kind == 2 ? Theme.primary
-        : root.job.kind == 3 ? Theme.accent
-        : root.job.kind == 4 ? Theme.status-ok
-        : root.job.kind == 5 ? Theme.status-corrupt
-        : root.job.kind == 6 || root.job.kind == 1 ? Theme.status-deleted : Theme.text-muted;
-
-    height: 44px;
-    border-radius: 4px;
-    background: root.job.selected ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : transparent;
+    height: 20px;
+    width: row.preferred-width + 12px;
+    border-radius: 10px;
+    background: root.chip.on ? Theme.primary.with-alpha(0.22) : touch.has-hover ? Theme.surface-hover : Theme.surface;
+    border-width: 1px;
+    border-color: root.chip.on ? Theme.primary : Theme.border;
 
     host := TooltipHost {
-        text: root.job.tooltip;
+        text: (root.chip.on ? "Showing " : "Show only ") + root.chip.title.to-lowercase() + " jobs (" + root.chip.count + ")";
     }
 
-    VerticalLayout {
-            padding-left: 8px;
-            padding-right: 8px;
-            padding-top: 4px;
-            padding-bottom: 4px;
-            spacing: 2px;
+    row := HorizontalLayout {
+        x: 6px;
+        spacing: 4px;
 
-            HorizontalLayout {
-                spacing: 8px;
-
-                Text {
-                    horizontal-stretch: 1;
-                    text: root.job.name;
-                    color: Theme.text;
-                    font-size: 12px;
-                    font-weight: 600;
-                    overflow: elide;
-                }
-
-                Text {
-                    text: root.job.state;
-                    color: root.state-color;
-                    font-size: 11px;
-                    font-weight: 600;
-                }
-            }
-
-            Text {
-                text: root.job.detail;
-                color: root.job.kind == 5 ? Theme.status-corrupt : Theme.text-muted;
-                font-size: 11px;
-                overflow: elide;
-            }
+        Rectangle {
+            width: 7px;
 
             Rectangle {
-                height: 3px;
-                border-radius: 1.5px;
-                background: root.job.progress >= 0 ? Theme.surface-selected : transparent;
-
-                Rectangle {
-                    x: 0;
-                    width: parent.width * Math.clamp(root.job.progress, 0, 1);
-                    border-radius: 1.5px;
-                    background: root.state-color;
-                }
+                y: (parent.height - 7px) / 2;
+                height: 7px;
+                border-radius: 3.5px;
+                background: QueueColors.of(root.kind);
             }
+        }
+
+        Text {
+            text: root.chip.count;
+            color: root.chip.count == 0 ? Theme.status-deleted : Theme.text;
+            font-size: 11px;
+            vertical-alignment: center;
+        }
     }
 
-    // On top of the texts: selects the row and shows its tooltip.
     touch := TouchArea {
         clicked => {
             host.leave();
-            Queue.select(root.job.id);
+            Queue.toggle-chip(root.chip.id);
         }
         changed has-hover => {
             if self.has-hover {
@@ -92,10 +67,26 @@ component QueueRow inherits Rectangle {
 }
 
 export component QueuePanel inherits Rectangle {
+    // Where a drag would put the selection (an index into the shown rows; -1 = no drag).
+    property <int> drop-index: -1;
+    property <length> row-step: Queue.row-height + 2px;
+
+    // The width reaches Rust once more after the panel was created: a `changed width` during the dock's first layout
+    // can come before the handler is connected (M3.2).
+    Timer {
+        interval: 50ms;
+        running: true;
+        triggered => {
+            self.running = false;
+            Queue.width-changed(list-area.width);
+        }
+    }
+
     VerticalLayout {
         padding: 6px;
         spacing: 6px;
 
+        // Processing, summary, overall progress.
         HorizontalLayout {
             spacing: 4px;
 
@@ -106,26 +97,166 @@ export component QueuePanel inherits Rectangle {
                 clicked => { Queue.toggle-paused(); }
             }
 
-            Text {
-                horizontal-stretch: 1;
-                text: Queue.summary;
-                color: Theme.text-muted;
-                font-size: 11px;
-                vertical-alignment: center;
-                overflow: elide;
+            IconButton {
+                icon: IconId.queue-pause-after;
+                checked: Queue.pause-after;
+                tooltip: Queue.pause-after ? "Pausing after the running jobs: keep going instead"
+                    : "Pause after the running jobs (they finish, nothing new starts)";
+                clicked => { Queue.toggle-pause-after(); }
             }
+
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+                spacing: 2px;
+
+                Text {
+                    text: Queue.has-overall ? Queue.overall-text : Queue.summary;
+                    color: Theme.text-muted;
+                    font-size: 11px;
+                    overflow: elide;
+                }
+
+                if Queue.has-overall: Rectangle {
+                    height: 3px;
+                    border-radius: 1.5px;
+                    background: Theme.surface-selected;
+
+                    Rectangle {
+                        x: 0;
+                        width: parent.width * Math.clamp(Queue.overall, 0, 1);
+                        border-radius: 1.5px;
+                        background: Queue.paused ? Theme.accent : Theme.primary;
+                    }
+                }
+            }
+        }
+
+        // Search and state chips.
+        HorizontalLayout {
+            spacing: 4px;
+
+            search := SearchField {
+                horizontal-stretch: 1;
+                // The field keeps this width: the row's width without the buttons beside it.
+                field-width: Math.max(60px, parent.width - 30px);
+                text: Queue.search;
+                placeholder-text: "Search jobs";
+                enable-regex-toggle: false;
+                show-search-icon: true;
+                clear-tooltip: "Clear the search (Esc)";
+                search-changed(text) => { Queue.search-edited(text); }
+                cleared => { Queue.search-edited(""); }
+            }
+
+            IconButton {
+                icon: IconId.filter-clear;
+                enabled: Queue.filtered;
+                tooltip: Queue.filtered ? Queue.filter-note + ": show every job" : "Every job is shown";
+                clicked => { Queue.clear-filter(); }
+            }
+        }
+
+        HorizontalLayout {
+            spacing: 4px;
+            alignment: start;
+
+            for chip[i] in Queue.chips: Chip {
+                chip: chip;
+                // waiting, running, held, finished, failed, canceled -> the colors of their states
+                kind: i == 0 ? 0 : i == 1 ? 2 : i == 2 ? 1 : i == 3 ? 4 : i == 4 ? 5 : 6;
+            }
+        }
+
+        if !Queue.compact: QueueHeader { }
+
+        list-area := Rectangle {
+            vertical-stretch: 1;
+
+            changed width => {
+                Queue.width-changed(self.width);
+            }
+
+            flick := Flickable {
+                content-height: list.preferred-height;
+
+                list := VerticalLayout {
+                    alignment: start;
+                    spacing: 2px;
+
+                    for job[i] in Queue.rows: QueueRow {
+                        job: job;
+                        index: i;
+                        drag-moved(row, y) => {
+                            root.drop-index = Math.clamp(Math.round((row * root.row-step + y) / root.row-step), 0,
+                                Queue.rows.length);
+                            // Near the edges the list scrolls along.
+                            if row * root.row-step + y + flick.content-y < 16px {
+                                flick.content-y = Math.min(0px, flick.content-y + root.row-step / 2);
+                            } else if row * root.row-step + y + flick.content-y > flick.height - 16px {
+                                flick.content-y = Math.max(flick.height - flick.content-height,
+                                    flick.content-y - root.row-step / 2);
+                            }
+                        }
+                        drag-ended => {
+                            if root.drop-index >= 0 {
+                                Queue.drop-rows(root.drop-index);
+                            }
+                            root.drop-index = -1;
+                        }
+                    }
+                }
+
+                // Where the dragged jobs land.
+                if root.drop-index >= 0: Rectangle {
+                    x: 4px;
+                    y: Math.max(0px, root.drop-index * root.row-step - 2px);
+                    width: parent.width - 8px;
+                    height: 2px;
+                    background: Theme.primary;
+                }
+            }
+
+            if Queue.rows.length == 0: Text {
+                y: 12px;
+                width: parent.width;
+                text: Queue.empty-text;
+                color: Theme.status-deleted;
+                font-size: 11px;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+            }
+
+            // A right click below the rows: the menu for the selection.
+            TouchArea {
+                y: list.preferred-height + flick.content-y;
+                height: Math.max(0px, parent.height - self.y);
+                pointer-event(event) => {
+                    if event.kind == PointerEventKind.down && event.button == PointerEventButton.right {
+                        Queue.context-menu(-1, self.absolute-position.x + self.mouse-x,
+                            self.absolute-position.y + self.mouse-y);
+                    }
+                }
+            }
+        }
+
+        // Actions for the selected jobs.
+        HorizontalLayout {
+            spacing: 4px;
 
             IconButton {
                 icon: IconId.move-up;
                 enabled: Queue.can-move-up;
-                tooltip: "Move the job up";
+                tooltip: Queue.move-up-tooltip;
+                shortcut: Queue.key-move-up;
                 clicked => { Queue.move-up(); }
             }
 
             IconButton {
                 icon: IconId.move-down;
                 enabled: Queue.can-move-down;
-                tooltip: "Move the job down";
+                tooltip: Queue.move-down-tooltip;
+                shortcut: Queue.key-move-down;
                 clicked => { Queue.move-down(); }
             }
 
@@ -133,13 +264,20 @@ export component QueuePanel inherits Rectangle {
                 icon: IconId.job-hold;
                 enabled: Queue.can-hold;
                 checked: Queue.held;
-                tooltip: Queue.held ? "Held: release the job" : "Hold the job (it waits until released)";
+                tooltip: Queue.hold-tooltip;
                 clicked => { Queue.toggle-hold(); }
             }
 
             IconButton {
+                icon: IconId.job-edit;
+                enabled: Queue.can-edit;
+                tooltip: "Edit the job in the editor (it is held meanwhile)";
+                clicked => { Queue.edit(); }
+            }
+
+            IconButton {
                 icon: IconId.job-tags;
-                enabled: Queue.has-selection;
+                enabled: Queue.can-edit-tags;
                 tooltip: "Edit the job's tags and rating in the Tag & Rate panel";
                 clicked => { Queue.edit-tags(); }
             }
@@ -147,45 +285,37 @@ export component QueuePanel inherits Rectangle {
             IconButton {
                 icon: IconId.job-retry;
                 enabled: Queue.can-retry;
-                tooltip: "Render the job again";
+                tooltip: Queue.retry-tooltip;
                 clicked => { Queue.retry(); }
+            }
+
+            Rectangle {
+                horizontal-stretch: 1;
             }
 
             IconButton {
                 icon: IconId.job-cancel;
                 enabled: Queue.can-cancel;
-                tooltip: "Cancel the job (an existing target stays)";
+                hold: true;
+                tooltip: Queue.cancel-tooltip;
                 clicked => { Queue.cancel(); }
             }
 
             IconButton {
                 icon: IconId.job-remove;
                 enabled: Queue.can-remove;
-                tooltip: "Remove the job from the queue";
+                hold: true;
+                tooltip: Queue.remove-tooltip;
                 clicked => { Queue.remove(); }
             }
-        }
 
-        Flickable {
-            vertical-stretch: 1;
-            content-height: list.preferred-height;
-
-            list := VerticalLayout {
-                alignment: start;
-                spacing: 2px;
-
-                for job in Queue.rows: QueueRow {
-                    job: job;
-                }
+            IconButton {
+                icon: IconId.remove-finished;
+                enabled: Queue.can-remove-finished;
+                hold: true;
+                tooltip: Queue.remove-finished-tooltip;
+                clicked => { Queue.remove-finished(); }
             }
-        }
-
-        if Queue.rows.length == 0: Text {
-            vertical-stretch: 1;
-            text: Export.key-save == "" ? "Saved jobs appear here." : "Saved jobs appear here (" + Export.key-save + ").";
-            color: Theme.status-deleted;
-            font-size: 11px;
-            horizontal-alignment: center;
         }
     }
 }

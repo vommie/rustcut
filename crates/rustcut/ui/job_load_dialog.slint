@@ -1,0 +1,100 @@
+// The question before a queued job replaces the editor's draft (src/ui/editing/; setting `editor.draft_on_load = "ask"`,
+// user decision Q-Q3): replace it, keep it for later (it comes back when the editing ends), or cancel (Escape).
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { DialogButton } from "export_dialog.slint";
+import { JobLoad } from "job_types.slint";
+
+export component JobLoadDialog inherits Rectangle {
+    // The scrim: the window behind waits.
+    background: #000000a0;
+
+    TouchArea { }
+
+    keys := FocusScope {
+        init => { self.focus(); }
+
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                JobLoad.cancel();
+                return accept;
+            }
+            if event.text == Key.Return {
+                JobLoad.replace();
+                return accept;
+            }
+            accept
+        }
+
+        card := Rectangle {
+            width: Math.min(460px, root.width - 40px);
+            height: Math.min(content.preferred-height, root.height - 40px);
+            x: (root.width - self.width) / 2;
+            y: (root.height - self.height) / 2;
+            border-radius: 8px;
+            background: Theme.surface-variant;
+            border-width: 1px;
+            border-color: Theme.border;
+            drop-shadow-blur: 24px;
+            drop-shadow-color: #00000080;
+            clip: true;
+
+            content := VerticalLayout {
+                padding: 16px;
+                spacing: 12px;
+
+                HorizontalLayout {
+                    spacing: 12px;
+
+                    AppIcon {
+                        icon: IconId.job-edit;
+                        size: IconSize.xl;
+                        color: Theme.accent;
+                    }
+
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        spacing: 4px;
+
+                        Text {
+                            text: JobLoad.title;
+                            color: Theme.text;
+                            font-size: 15px;
+                            font-weight: 700;
+                            wrap: word-wrap;
+                        }
+
+                        Text {
+                            text: JobLoad.text;
+                            color: Theme.text-muted;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+
+                    DialogButton {
+                        text: "Cancel";
+                        clicked => { JobLoad.cancel(); }
+                    }
+
+                    DialogButton {
+                        text: "Keep for later";
+                        clicked => { JobLoad.set-aside(); }
+                    }
+
+                    DialogButton {
+                        text: "Replace";
+                        primary: true;
+                        clicked => { JobLoad.replace(); }
+                    }
+                }
+            }
+        }
+    }
+}

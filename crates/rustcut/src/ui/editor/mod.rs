@@ -26,7 +26,8 @@ use crate::ui::keymap::{Action, Keymap};
 use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::player::{self, PlaybackView, PlayerBridge};
 use crate::ui::probe::ProbeBridge;
-use crate::ui::sections::{Bound, Edge, SectionsState};
+use crate::ui::queue::QueueBridge;
+use crate::ui::sections::{Bound, Edge, SectionsDraft, SectionsState};
 use crate::ui::status::{self, Level};
 use crate::ui::tags::TagsBridge;
 use crate::ui::timeline::{Viewport, view};
@@ -75,6 +76,8 @@ pub struct Editor {
     probe_playing: Cell<bool>,
     /// The export panel that saves jobs (set after it is installed; it needs the editor first).
     export: RefCell<Weak<ExportBridge>>,
+    /// The queue panel (the queue keys move its selected jobs).
+    queue: RefCell<Weak<QueueBridge>>,
     /// The status line shows a refused edit: the next accepted one replaces it.
     warned: Cell<bool>,
     ticks: Rc<VecModel<TimelineTick>>,
@@ -122,6 +125,7 @@ impl Editor {
             tags: RefCell::new(Weak::new()),
             probe_playing: Cell::new(false),
             export: RefCell::new(Weak::new()),
+            queue: RefCell::new(Weak::new()),
             warned: Cell::new(false),
             ticks: Rc::new(VecModel::default()),
             blocks: Rc::new(VecModel::default()),
@@ -173,6 +177,11 @@ impl Editor {
         *self.export.borrow_mut() = Rc::downgrade(export);
     }
 
+    /// Connects the queue panel (the queue keys).
+    pub fn set_queue(&self, queue: &Rc<QueueBridge>) {
+        *self.queue.borrow_mut() = Rc::downgrade(queue);
+    }
+
     /// The sections a saved job gets: the list, or with an empty list the automatic section of `auto` (PyCutRv's
     /// auto section): the whole video, or the range between the marks.
     pub fn sections_for_save(&self, auto: AutoSection) -> Result<SectionList, &'static str> {
@@ -195,6 +204,28 @@ impl Editor {
                 .map_err(|_none| "Add a section first, or set both marks for the automatic section.")?,
         };
         Ok(vec![section].into())
+    }
+
+    /// The sections and marks of the draft (set aside while a job is edited).
+    pub fn sections_draft(&self) -> SectionsDraft {
+        self.state.borrow().sections.draft()
+    }
+
+    /// Puts a draft's sections back (after its video opened again).
+    pub fn put_sections(&self, draft: SectionsDraft) {
+        self.state.borrow_mut().sections.put_draft(draft);
+        self.publish();
+    }
+
+    /// The sections of a job loaded into the editor (after its source opened).
+    pub fn load_sections(&self, list: SectionList) {
+        self.state.borrow_mut().sections.load(list);
+        self.publish();
+    }
+
+    /// Whether the draft holds sections or marks that loading a job would replace.
+    pub fn has_work(&self) -> bool {
+        self.state.borrow().sections.has_work()
     }
 
     /// After a save with "clear sections": the list goes, the marks stay (PyCutRv).

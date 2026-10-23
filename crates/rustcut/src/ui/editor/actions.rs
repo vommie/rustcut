@@ -3,6 +3,7 @@
 
 use std::rc::Rc;
 
+use rustcut_core::queue::MoveTarget;
 use rustcut_core::time::Timestamp;
 use slint::ComponentHandle as _;
 use slint::platform::Key;
@@ -11,6 +12,7 @@ use super::Editor;
 use crate::ui::filters::FiltersBridge;
 use crate::ui::keymap::{Action, KeyPress};
 use crate::ui::player::ShuttleKey;
+use crate::ui::queue::QueueBridge;
 use crate::ui::sections::Bound;
 use crate::ui::status::Level;
 use crate::{MainWindow, Playback, Shortcuts};
@@ -165,6 +167,19 @@ impl Editor {
                     probe.render();
                 }
             }
+            Action::QueueMoveUp => self.with_queue(|q| q.move_selected(MoveTarget::Up)),
+            Action::QueueMoveDown => self.with_queue(|q| q.move_selected(MoveTarget::Down)),
+            Action::QueueMoveTop => self.with_queue(|q| q.move_selected(MoveTarget::Top)),
+            Action::QueueMoveBottom => self.with_queue(|q| q.move_selected(MoveTarget::Bottom)),
+            Action::QueueSelectAll => self.with_queue(QueueBridge::select_all),
+        }
+    }
+
+    /// Runs `f` with the queue panel when it exists.
+    fn with_queue(&self, f: impl FnOnce(&QueueBridge)) {
+        let queue = self.queue.borrow().upgrade();
+        if let Some(queue) = queue {
+            f(&queue);
         }
     }
 

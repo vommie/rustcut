@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
+use rustcut_core::job::{TargetNaming, TargetSpec};
 use rustcut_core::naming::{NameContext, NameError, file_name, render_stem, same_path, used_variables};
 use rustcut_core::render::{CodecFamily, Container, RenderProfile};
 use rustcut_core::settings::{ExportPanelState, ExportSettings, TargetFolder};
@@ -56,6 +57,19 @@ pub struct ExportState {
     pub auto_increment: bool,
     pub clear_sections: bool,
     pub template: String,
+    /// The name is the file name as it is, without the template (a loaded job whose name the template cannot make
+    /// again); typing a name or switching the counter ends it.
+    pub verbatim: bool,
+}
+
+/// What the card had before a job was loaded into the editor (user decision Q-Q3, "set aside").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExportDraft {
+    pub folder: Option<usize>,
+    pub name: String,
+    pub counter_enabled: bool,
+    pub counter: u32,
+    pub verbatim: bool,
 }
 
 impl ExportState {
@@ -71,6 +85,7 @@ impl ExportState {
             auto_increment: panel.auto_increment,
             clear_sections: panel.clear_sections_after_save,
             template: settings.name_template.clone(),
+            verbatim: false,
         }
     }
 
@@ -90,6 +105,68 @@ impl ExportState {
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default();
         self.counter = 1;
+        self.verbatim = false;
+    }
+
+    pub fn draft(&self) -> ExportDraft {
+        ExportDraft {
+            folder: self.folder,
+            name: self.name.clone(),
+            counter_enabled: self.counter_enabled,
+            counter: self.counter,
+            verbatim: self.verbatim,
+        }
+    }
+
+    /// Puts a draft back after its video opened again (a folder that is gone falls back to the source's folder).
+    pub fn put_draft(&mut self, draft: ExportDraft) {
+        self.folder = draft.folder.filter(|i| *i < self.folders.len());
+        self.name = draft.name;
+        self.counter_enabled = draft.counter_enabled;
+        self.counter = draft.counter.clamp(1, MAX_COUNTER);
+        self.verbatim = draft.verbatim;
+    }
+
+    /// The target of a job loaded into the editor (after its source opened): its folder (added to the named folders
+    /// when it is neither the source's folder nor one of them; `true` = the list changed), and the name and counter it
+    /// was saved with, as long as the template makes the same file name from them; else the file name itself.
+    pub fn load_target(&mut self, target: &TargetSpec, facts: &JobFacts) -> bool {
+        let source_folder = self.source.as_deref().and_then(Path::parent);
+        let mut added = false;
+        self.folder = if source_folder.is_some_and(|f| same_path(f, &target.folder)) {
+            None
+        } else if let Some(i) = self.folders.iter().position(|f| same_path(&f.path, &target.folder)) {
+            Some(i)
+        } else {
+            added = self.add_folder(&target.folder);
+            self.folder
+        };
+        self.verbatim = false;
+        if let Some(naming) = &target.naming {
+            self.name.clone_from(&naming.name);
+            self.counter_enabled = naming.counter.is_some();
+            if let Some(n) = naming.counter {
+                self.set_counter(n);
+            }
+            if self.file(facts).is_ok_and(|(stem, _)| stem == target.stem) {
+                return added;
+            }
+        }
+        self.name.clone_from(&target.stem);
+        self.counter_enabled = false;
+        if self.file(facts).is_ok_and(|(stem, _)| stem == target.stem) {
+            return added;
+        }
+        self.verbatim = true;
+        added
+    }
+
+    /// What the job's target remembers of the card (to show it again when the job is loaded).
+    pub fn naming(&self, counter: Option<u32>) -> Option<TargetNaming> {
+        (!self.verbatim).then(|| TargetNaming {
+            name: self.name.trim().to_owned(),
+            counter,
+        })
     }
 
     /// The folder the job writes into: the chosen named folder, else the source's folder.
@@ -183,6 +260,9 @@ impl ExportState {
 
     /// The stem with counter `counter`.
     pub fn stem_with(&self, facts: &JobFacts, counter: Option<u32>) -> Result<String, NameError> {
+        if self.verbatim {
+            return render_stem("{{ name }}", &self.context(facts, None));
+        }
         render_stem(&self.template, &self.context(facts, counter))
     }
 
@@ -195,7 +275,7 @@ impl ExportState {
 
     /// Whether the template shows the counter (else a different counter cannot free a name).
     pub fn template_uses_counter(&self) -> bool {
-        used_variables(&self.template).is_ok_and(|v| v.iter().any(|n| n == "counter"))
+        !self.verbatim && used_variables(&self.template).is_ok_and(|v| v.iter().any(|n| n == "counter"))
     }
 
     /// After a save with counter `used`: the next job gets the next number when auto-increment is on.
@@ -274,6 +354,57 @@ mod tests {
             (panel.target_folder, panel.counter, panel.counter_enabled),
             (None, 1, true)
         );
+    }
+
+    #[test]
+    fn a_loaded_target_shows_its_name_and_counter_again() {
+        use rustcut_core::job::{TargetNaming, TargetSpec};
+        let mut st = state();
+        st.file_opened(Path::new("/videos/Holiday.mp4"));
+        let target = |folder: &str, stem: &str, naming: Option<TargetNaming>| TargetSpec {
+            folder: PathBuf::from(folder),
+            stem: stem.into(),
+            overwrite: false,
+            naming,
+        };
+        let saved = target(
+            "/out/clips",
+            "Beach - 03",
+            Some(TargetNaming {
+                name: "Beach".into(),
+                counter: Some(3),
+            }),
+        );
+        assert!(!st.load_target(&saved, &facts()));
+        assert_eq!(
+            (st.folder, st.name.as_str(), st.active_counter()),
+            (Some(0), "Beach", Some(3))
+        );
+        assert_eq!(st.file(&facts()).unwrap().1, "Beach - 03.mkv");
+        assert_eq!(st.naming(st.active_counter()), saved.naming);
+
+        // A job of 0.0.12 (no naming) in the source's folder: the stem is the name.
+        assert!(!st.load_target(&target("/videos", "Old - 07", None), &facts()));
+        assert_eq!(
+            (st.folder, st.name.as_str(), st.active_counter()),
+            (None, "Old - 07", None)
+        );
+        assert_eq!(st.file(&facts()).unwrap().0, "Old - 07");
+
+        // A folder that is not in the list joins it; a template that cannot make the stem keeps it as it is.
+        st.template = "{{ name }} {{ codec }}".into();
+        assert!(st.load_target(&target("/media/New", "Odd name", None), &facts()));
+        assert_eq!(st.target_folder(), Some(PathBuf::from("/media/New")));
+        assert!(st.verbatim);
+        assert_eq!(st.file(&facts()).unwrap().0, "Odd name");
+        assert_eq!(st.naming(None), None);
+        assert!(!st.template_uses_counter());
+
+        let draft = st.draft();
+        st.file_opened(Path::new("/videos/Other.mp4"));
+        assert!(!st.verbatim);
+        st.put_draft(draft.clone());
+        assert_eq!(st.draft(), draft);
     }
 
     #[test]

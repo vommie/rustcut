@@ -2,4 +2,4 @@
 
 mod state;
 
-pub use state::{Bound, Edge, EdgeOwner, EditError, SectionRow, SectionsState};
+pub use state::{Bound, Edge, EdgeOwner, EditError, SectionRow, SectionsDraft, SectionsState};

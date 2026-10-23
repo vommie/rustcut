@@ -228,8 +228,8 @@ mod tests {
         let layout = DockLayout::default();
         let rail = rail_rows(&layout, Side::Left);
         let starts: Vec<bool> = rail.iter().map(|r| r.group_start).collect();
-        assert_eq!(starts, [false, false, true]);
-        assert!(rail[0].active && !rail[1].active && rail[2].active);
+        assert_eq!(starts, [false, false, false, true]);
+        assert!(rail[0].active && !rail[1].active && !rail[2].active && rail[3].active);
     }
 
     #[test]

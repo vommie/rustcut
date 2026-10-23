@@ -29,12 +29,21 @@ fn tabs(layout: &DockLayout, at: GroupRef) -> Vec<PanelId> {
 fn the_default_layout_is_valid_and_matches_adr_12() {
     let layout = DockLayout::default();
     assert!(layout.is_valid());
-    assert_eq!(tabs(&layout, LEFT_0), [PanelId::Export, PanelId::RenderSettings]);
+    assert_eq!(
+        tabs(&layout, LEFT_0),
+        [PanelId::Export, PanelId::RenderSettings, PanelId::Job]
+    );
     assert_eq!(tabs(&layout, LEFT_1), [PanelId::Queue]);
     assert_eq!(
         tabs(&layout, RIGHT_0),
         [PanelId::TagRate, PanelId::MediaInfo, PanelId::Logs]
     );
+    assert_eq!(
+        PanelId::RenderSettings.title(),
+        "Codecs",
+        "the shorter title (user, 2026-10-23)"
+    );
+    assert_eq!(PanelId::RenderSettings.key(), "render-settings", "the stored key stays");
 }
 
 #[test]
@@ -112,7 +121,10 @@ fn a_split_halves_the_weight_of_the_target() {
         }
     ));
     assert_eq!(tabs(&layout, LEFT_0), [PanelId::Logs]);
-    assert_eq!(tabs(&layout, LEFT_1), [PanelId::Export, PanelId::RenderSettings]);
+    assert_eq!(
+        tabs(&layout, LEFT_1),
+        [PanelId::Export, PanelId::RenderSettings, PanelId::Job]
+    );
     assert_eq!(layout.left.groups[0].weight, 1.5);
     assert_eq!(layout.left.groups[1].weight, 1.5);
 }
@@ -313,12 +325,12 @@ fn hit_testing_finds_tab_bars_splits_and_bodies() {
     let f = frame();
     let left0 = plan::group_rect(&layout.left, f.left, 0).unwrap();
     // The tab bar of the first left group, far right: appended there.
-    let hit = plan::hit_test(&layout, &f, PanelId::Logs, 200.0, left0.y + 10.0).unwrap();
+    let hit = plan::hit_test(&layout, &f, PanelId::Logs, 300.0, left0.y + 10.0).unwrap();
     assert_eq!(
         hit.target,
         DropTarget::Tabs {
             group: LEFT_0,
-            index: 2
+            index: 3
         }
     );
     // Just below the tab bar: a split above.
@@ -343,7 +355,7 @@ fn hit_testing_finds_tab_bars_splits_and_bodies() {
         hit.target,
         DropTarget::Tabs {
             group: LEFT_0,
-            index: 2
+            index: 3
         }
     );
     // The center of the window is not a drop target while both sidebars exist.
