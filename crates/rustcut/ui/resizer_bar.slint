@@ -1,0 +1,104 @@
+// Copied from RustView (crates/rustview/ui/resizer_bar.slint) unchanged.
+
+import { Theme } from "styles.slint";
+
+export component ResizerBar inherits Rectangle {
+    // Configuration Properties
+    in property <bool> is-horizontal: true; // true = vertical bar resizing horizontal width, false = horizontal bar resizing vertical height
+    in property <bool> is-enabled: true;
+
+    // Geometry & Sizing API
+    in property <length> thickness: 6px; // Grasp / hit-target thickness
+    in property <length> line-thickness: 1px; // Visible separator line thickness
+    in property <length> line-hover-thickness: 2px; // Separator line thickness when hovered or dragged
+
+    // Styling & Theme Color API
+    in property <color> idle-line-color: Theme.border;
+    in property <color> hover-line-color: Theme.primary;
+    in property <color> active-line-color: Theme.accent;
+    in property <color> hover-background: #89b4fa14;
+    in property <color> active-background: #89b4fa2c;
+
+    // Event Callbacks API (Pure Hooks)
+    callback drag-started();
+    callback dragged(length /* delta */); // Invariant delta from drag start (positive = right/down, negative = left/up)
+    callback drag-finished();
+
+    // Internal State Tracking
+    out property <bool> is-dragging: touch-area.pressed;
+    property <bool> is-active-hover: touch-area.has-hover || root.is-dragging;
+
+    preferred-width: root.is-horizontal ? root.thickness : 10000px;
+    min-width: root.is-horizontal ? root.thickness : 0px;
+    max-width: root.is-horizontal ? root.thickness : 100000px;
+
+    preferred-height: root.is-horizontal ? 10000px : root.thickness;
+    min-height: root.is-horizontal ? 0px : root.thickness;
+    max-height: root.is-horizontal ? 100000px : root.thickness;
+
+    horizontal-stretch: root.is-horizontal ? 0 : 1;
+    vertical-stretch: root.is-horizontal ? 1 : 0;
+    z: 10;
+
+    background: root.is-dragging
+        ? root.active-background
+        : (touch-area.has-hover ? root.hover-background : transparent);
+
+    animate background { duration: 100ms; }
+
+    touch-area := TouchArea {
+        width: 100%;
+        height: 100%;
+        enabled: root.is-enabled;
+        mouse-cursor: root.is-horizontal ? col-resize : row-resize;
+
+        property <length> start-abs: 0px;
+
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                if root.is-horizontal {
+                    self.start-abs = root.x + self.mouse-x;
+                } else {
+                    self.start-abs = root.y + self.mouse-y;
+                }
+                root.drag-started();
+            }
+            if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
+                root.drag-finished();
+            }
+        }
+
+        moved => {
+            if self.pressed {
+                if root.is-horizontal {
+                    let current-abs = root.x + self.mouse-x;
+                    let delta = current-abs - self.start-abs;
+                    root.dragged(delta);
+                } else {
+                    let current-abs = root.y + self.mouse-y;
+                    let delta = current-abs - self.start-abs;
+                    root.dragged(delta);
+                }
+            }
+        }
+    }
+
+    // Centered Visual Divider Line
+    Rectangle {
+        x: root.is-horizontal ? (parent.width - self.width) / 2 : 0px;
+        y: root.is-horizontal ? 0px : (parent.height - self.height) / 2;
+        width: root.is-horizontal
+            ? (root.is-active-hover ? root.line-hover-thickness : root.line-thickness)
+            : parent.width;
+        height: root.is-horizontal
+            ? parent.height
+            : (root.is-active-hover ? root.line-hover-thickness : root.line-thickness);
+        background: root.is-dragging
+            ? root.active-line-color
+            : (root.is-active-hover ? root.hover-line-color : root.idle-line-color);
+
+        animate background { duration: 120ms; }
+        animate width { duration: 80ms; }
+        animate height { duration: 80ms; }
+    }
+}

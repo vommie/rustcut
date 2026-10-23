@@ -1,0 +1,33 @@
+// Drawn over the whole window while a tab is dragged: the drop area and the ghost tab (the tabs of a hovered bar move
+// apart where the tab would go).
+
+import { Theme } from "styles.slint";
+import { Dock } from "dock_types.slint";
+import { DockTabGhost } from "dock_tab_bar.slint";
+
+export component DockOverlay inherits Rectangle {
+    // Rust sends window coordinates; this element may sit below a menu bar.
+    property <length> origin-x: self.absolute-position.x;
+    property <length> origin-y: self.absolute-position.y;
+
+    if Dock.dragging && Dock.drop-visible: Rectangle {
+        x: Dock.drop-x - root.origin-x;
+        y: Dock.drop-y - root.origin-y;
+        width: Dock.drop-width;
+        height: Dock.drop-height;
+        border-radius: 6px;
+        background: #89b4fa26;
+        border-width: 2px;
+        border-color: Theme.primary;
+        animate x, y, width, height { duration: 90ms; easing: ease-out; }
+    }
+
+
+    if Dock.dragging: DockTabGhost {
+        x: Dock.ghost-x - root.origin-x;
+        y: Dock.ghost-y - root.origin-y;
+        width: Dock.ghost-width;
+        title: Dock.ghost-title;
+        icon: Dock.ghost-icon;
+    }
+}

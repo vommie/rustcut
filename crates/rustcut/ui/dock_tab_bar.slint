@@ -1,0 +1,211 @@
+// A panel group's tab bar in RustView's sidebar tab style (adapted from RustView's ui/sidebar_panel_tab_bar.slint): tabs
+// at the positions Rust computed, drag detection that reports window coordinates, and the group's buttons at the end.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize, IconSlot } from "icons.slint";
+import { Dock, DockGroupView, DockMetrics, DockTabView } from "dock_types.slint";
+
+/// Distance in pixels (squared) the mouse moves with the button down before a press becomes a drag.
+global DragThreshold {
+    out property <float> squared: 20;
+}
+
+component DockTabItem inherits Rectangle {
+    in property <DockTabView> tab;
+
+    height: DockMetrics.tab-height;
+
+    card := Rectangle {
+        x: root.tab.shift;
+        width: 100%;
+        height: 100%;
+        border-radius: 4px;
+        animate x { duration: 180ms; easing: ease-out; }
+        opacity: root.tab.placeholder ? 0.22 : 1.0;
+        animate opacity { duration: 120ms; }
+
+        background: root.tab.active
+            ? (touch.has-hover ? Theme.surface-selected-hover : Theme.surface-selected)
+            : (touch.has-hover ? Theme.surface-hover : Theme.surface-variant);
+        border-width: 1px;
+        border-color: root.tab.active
+            ? (touch.has-hover ? Theme.accent : Theme.primary)
+            : (touch.has-hover ? Theme.primary : Theme.border);
+
+        touch := TouchArea {
+            property <length> press-x;
+            property <length> press-y;
+            property <bool> drag-active;
+
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                    self.press-x = self.mouse-x;
+                    self.press-y = self.mouse-y;
+                    self.drag-active = false;
+                }
+                if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
+                    if self.drag-active {
+                        self.drag-active = false;
+                        Dock.tab-drag-ended();
+                    } else {
+                        Dock.tab-clicked(root.tab.key);
+                    }
+                }
+            }
+
+            double-clicked => {
+                Dock.tab-double-clicked(root.tab.key);
+            }
+
+            moved => {
+                if self.pressed {
+                    if !self.drag-active {
+                        let dx = (self.mouse-x - self.press-x) / 1px;
+                        let dy = (self.mouse-y - self.press-y) / 1px;
+                        if dx * dx + dy * dy > DragThreshold.squared {
+                            self.drag-active = true;
+                            Dock.tab-drag-started(root.tab.key, self.absolute-position.x + self.press-x,
+                                self.absolute-position.y + self.press-y, self.press-x, root.width);
+                        }
+                    }
+                    if self.drag-active {
+                        Dock.tab-drag-moved(self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y);
+                    }
+                }
+            }
+        }
+
+        HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            spacing: 6px;
+            alignment: start;
+
+            IconSlot {
+                icon: root.tab.icon;
+                size: IconSize.md;
+                color: root.tab.active ? Theme.primary : Theme.text-muted;
+            }
+
+            Text {
+                text: root.tab.title;
+                font-size: 11px;
+                font-weight: root.tab.active ? 700 : 400;
+                color: root.tab.active ? Theme.primary : Theme.text;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+        }
+    }
+}
+
+/// Floating copy of the dragged tab (RustView's SidebarPanelTabGhost).
+export component DockTabGhost inherits Rectangle {
+    in property <string> title;
+    in property <IconId> icon;
+
+    height: DockMetrics.tab-height;
+    border-radius: 4px;
+    background: Theme.surface-selected-hover;
+    border-width: 1.5px;
+    border-color: Theme.accent;
+    drop-shadow-blur: 12px;
+    drop-shadow-color: #000000aa;
+    drop-shadow-offset-y: 2px;
+    clip: true;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 6px;
+
+        IconSlot {
+            icon: root.icon;
+            size: IconSize.md;
+            color: Theme.primary;
+        }
+
+        Text {
+            text: root.title;
+            font-size: 11px;
+            font-weight: 700;
+            color: Theme.accent;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+    }
+}
+
+/// A small square icon button at the end of a tab bar.
+export component DockBarButton inherits Rectangle {
+    in property <IconId> icon;
+    callback clicked();
+
+    width: DockMetrics.bar-button;
+    height: DockMetrics.bar-button;
+    border-radius: 4px;
+    background: touch.pressed ? Theme.surface-selected : (touch.has-hover ? Theme.surface-hover : transparent);
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+
+    AppIcon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        icon: root.icon;
+        size: IconSize.sm;
+        color: touch.has-hover ? Theme.text : Theme.text-muted;
+    }
+}
+
+export component DockTabBar inherits Rectangle {
+    in property <int> side;
+    in property <int> index;
+    in property <DockGroupView> group;
+
+    height: DockMetrics.tab-bar-height;
+    clip: true;
+
+    // Double click on the empty part of the bar: maximize or restore the group.
+    TouchArea {
+        double-clicked => { Dock.bar-double-clicked(root.side, root.index); }
+    }
+
+    tabs := Rectangle {
+        x: 4px;
+        y: (parent.height - DockMetrics.tab-height) / 2;
+        height: DockMetrics.tab-height;
+        width: buttons.x - 4px;
+
+        for tab in root.group.tabs: DockTabItem {
+            x: tab.x;
+            width: tab.width;
+            tab: tab;
+        }
+    }
+
+    buttons := HorizontalLayout {
+        x: parent.width - self.preferred-width - 4px;
+        y: (parent.height - DockMetrics.bar-button) / 2;
+        height: DockMetrics.bar-button;
+        spacing: 2px;
+
+        DockBarButton {
+            icon: root.group.shows_body ? IconId.chevron-down : IconId.chevron-right;
+            clicked => { Dock.group-collapse-clicked(root.side, root.index); }
+        }
+
+        if root.group.can_maximize: DockBarButton {
+            icon: root.group.maximized ? IconId.restore : IconId.maximize;
+            clicked => { Dock.group-maximize-clicked(root.side, root.index); }
+        }
+
+        if root.group.first: DockBarButton {
+            icon: root.side == 0 ? IconId.sidebar-left-collapse : IconId.sidebar-right-collapse;
+            clicked => { Dock.sidebar-collapse-clicked(root.side); }
+        }
+    }
+}

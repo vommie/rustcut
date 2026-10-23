@@ -34,10 +34,15 @@ tracing-subscriber.workspace = true
 clap.workspace = true
 parking_lot.workspace = true
 tokio.workspace = true
+serde.workspace = true
+toml.workspace = true
 
 [build-dependencies]
 slint-build.workspace = true
+# The icon manifest (assets/icons/icons.toml) is read by build/icon_registry.rs.
+toml.workspace = true
 
 [dev-dependencies]
+proptest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
