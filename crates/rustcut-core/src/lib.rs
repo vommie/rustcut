@@ -4,8 +4,15 @@
 //! filters), render planning and the ffmpeg runner, the queue engine, the SQLite store, settings, the RustView client and the
 //! hash service (see `HANDOFF.md`, section 5).
 
+pub mod actor;
 pub mod app_identity;
 pub mod edit;
+pub mod hashing;
+pub mod job;
 pub mod naming;
+pub mod queue;
 pub mod render;
+pub mod rustview;
+pub mod settings;
+pub mod store;
 pub mod time;

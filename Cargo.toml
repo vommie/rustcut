@@ -37,6 +37,18 @@ serde_json = "1"
 az = "1"
 # File-name templates (Jinja2 syntax) with a fuel limit; RustStart uses the same engine.
 minijinja = { version = "3", features = ["builtins", "serde", "fuel"] }
+# Async runtime of the services (actors, processes, timers); the UI thread never runs on it (ADR-4).
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+parking_lot = "0.12"
+# Queue, job history and job logs (ADR-5). `backup` copies the database before a migration.
+rusqlite = { version = "0.40", features = ["bundled", "backup"] }
+rusqlite_migration = "2"
+toml = "1"
+# Settings and UI state are written to a temporary file and renamed, so a crash never leaves half a file.
+atomic-write-file = "0.3"
+# XDG config, data and state folders.
+directories = "6"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
 # Lexical path normalization (`a/./b/../c` -> `a/c`) without touching the drive.
 path-clean = "1"
 

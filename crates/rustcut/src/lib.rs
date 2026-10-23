@@ -18,3 +18,4 @@ mod generated {
 pub use generated::*;
 
 pub mod app;
+pub mod ui;
