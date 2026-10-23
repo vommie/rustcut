@@ -20,6 +20,7 @@ pub use model::{
     AudioStream, ColorInfo, Container, FieldOrder, FrameRateMode, FrameTiming, MediaInfo, Ratio, Stream, StreamKind,
     VideoStream,
 };
+pub(crate) use probe::run as run_tool;
 pub use probe::{
     PROBE_TIMEOUT, ProbeError, ProbeOptions, TIMING_SAMPLE_SECS, TIMING_TIMEOUT, probe, probe_args, probe_frame_timing,
     probe_with_timing, timing_args,

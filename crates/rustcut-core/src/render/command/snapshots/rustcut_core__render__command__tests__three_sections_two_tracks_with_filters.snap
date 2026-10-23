@@ -1,0 +1,11 @@
+---
+source: crates/rustcut-core/src/render/command/tests.rs
+expression: describe(&plan)
+---
+target: /videos/out/Ärger: [cut], 'x'.mkv
+temp: /videos/out/.Ärger: [cut], 'x'.rustcut-part.mkv
+expected: Expectation { duration: Timestamp(5750000), audio_streams: 2, size: Size { width: 1040, height: 1860 } }
+transforms: None
+passlog: None
+encode (5750000):
+  ffmpeg -hide_banner -nostats -progress pipe:1 -loglevel level+info -y -ss 1.000000 -to 4.000000 -i file:/videos/in.mp4 -ss 30.500000 -to 31.250000 -i file:/videos/in.mp4 -ss 10.000000 -to 12.000000 -i file:/videos/in.mp4 -filter_complex [0:v:0][0:a:0][0:a:1][1:v:0][1:a:0][1:a:1][2:v:0][2:a:0][2:a:1]concat=n=3:v=1:a=2[vcat][aout0][aout1];[vcat]crop=w=iw-60:h=ih-40:x=40:y=10,transpose=dir=clock,hflip[vout] -map [vout] -map [aout0] -map [aout1] -fps_mode:v vfr -map_metadata 0 -map_chapters -1 -metadata:s:a:1 language=deu -metadata:s:a:1 'title=Kommentar: Regie' -c:v libsvtav1 -preset 6 -crf 26 -pix_fmt yuv420p10le -svtav1-params tune=0:film-grain=8:enable-variance-boost=1:variance-boost-strength=2 -c:a libopus -b:a 128k -ar 48000 -f matroska 'file:/videos/out/.Ärger: [cut], 'x'.rustcut-part.mkv'

@@ -145,15 +145,15 @@ pub async fn probe_with_timing(file: &Path, options: &ProbeOptions) -> Result<Me
 }
 
 /// What a finished tool wrote and how it ended.
-pub(super) struct Output {
-    pub(super) program: String,
-    pub(super) stdout: Vec<u8>,
-    pub(super) stderr: String,
-    pub(super) status: ExitStatus,
+pub(crate) struct Output {
+    pub(crate) program: String,
+    pub(crate) stdout: Vec<u8>,
+    pub(crate) stderr: String,
+    pub(crate) status: ExitStatus,
 }
 
 impl Output {
-    pub(super) fn failure(&self) -> ProbeError {
+    pub(crate) fn failure(&self) -> ProbeError {
         ProbeError::Failed {
             program: self.program.clone(),
             status: self.status.to_string(),
@@ -164,7 +164,7 @@ impl Output {
 
 /// Runs `program` (ffprobe or ffmpeg) with `args` and collects its output within `timeout`; more than `max_stdout` bytes
 /// on stdout is an error, stderr is cut at [`MAX_STDERR`]. Dropping the future kills the program.
-pub(super) async fn run(
+pub(crate) async fn run(
     program: &Path,
     args: Vec<OsString>,
     timeout: Duration,
