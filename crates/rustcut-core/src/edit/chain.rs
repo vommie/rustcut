@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{Filter, FilterKind};
+use super::{Filter, FilterKind, Orientation};
 
 /// Width and height of a video frame in pixels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -171,6 +171,64 @@ impl FilterChain {
         Ok(size)
     }
 
+    /// The chain with every filter from `kind` on switched off: what reaches `kind`.
+    pub fn before(&self, kind: FilterKind) -> Self {
+        let cut = self.position(kind).unwrap_or(self.slots.len());
+        let mut chain = self.clone();
+        for slot in chain.slots.iter_mut().skip(cut) {
+            slot.enabled = false;
+        }
+        chain
+    }
+
+    /// The size of the frame that reaches `kind` from a `source`-sized video.
+    pub fn size_before(&self, kind: FilterKind, source: Size) -> Result<Size, ChainError> {
+        self.before(kind).output_size(source)
+    }
+
+    /// The sample aspect ratio (pixel width / height) of the frame that reaches `kind` from a source with `source_sar`:
+    /// quarter turns invert it, a resize makes the pixels square (`setsar=1`).
+    pub fn sample_aspect_before(&self, kind: FilterKind, source_sar: f64) -> f64 {
+        self.before(kind)
+            .active()
+            .fold(source_sar, |sar, filter| match *filter {
+                Filter::Rotate { rotation } => Orientation::from_rotation(rotation).sample_aspect(sar),
+                Filter::Resize { .. } => 1.0,
+                _ => sar,
+            })
+    }
+
+    /// The enabled rotations and mirrors after `kind`, as one transform (how the output shows `kind`'s frame).
+    pub fn orientation_after(&self, kind: FilterKind) -> Orientation {
+        let start = self.position(kind).map_or(self.slots.len(), |i| i + 1);
+        self.slots
+            .iter()
+            .skip(start)
+            .filter(|s| s.enabled && !s.filter.is_identity())
+            .fold(Orientation::IDENTITY, |o, slot| match slot.filter {
+                Filter::Rotate { rotation } => o.then(Orientation::from_rotation(rotation)),
+                Filter::Mirror(mirror) => o.then(Orientation::from_mirror(mirror)),
+                _ => o,
+            })
+    }
+
+    /// What the preview shows while the crop is edited on the video: the whole frame that reaches the crop, turned and
+    /// mirrored like the output. The crop is off; after it only rotations, mirrors and deinterlacing stay (a resize would
+    /// distort the uncropped frame).
+    pub fn for_crop_editing(&self) -> Self {
+        let crop_at = self.position(FilterKind::Crop).unwrap_or(0);
+        let mut chain = self.clone();
+        for (i, slot) in chain.slots.iter_mut().enumerate() {
+            let kind = slot.filter.kind();
+            let dropped =
+                kind == FilterKind::Crop || (i > crop_at && matches!(kind, FilterKind::Resize | FilterKind::Deshake));
+            if dropped {
+                slot.enabled = false;
+            }
+        }
+        chain
+    }
+
     fn position(&self, kind: FilterKind) -> Option<usize> {
         self.slots.iter().position(|s| s.filter.kind() == kind)
     }
@@ -300,6 +358,75 @@ mod tests {
             vec![FilterKind::Crop, FilterKind::Deinterlace]
         );
         assert!(!chain.move_down(FilterKind::Resize));
+    }
+
+    #[test]
+    fn what_reaches_the_crop_and_how_the_output_shows_it() {
+        let mut chain = chain_with(&[
+            Filter::Resize {
+                width: Some(960),
+                height: None,
+                algorithm: crate::edit::ResizeAlgorithm::Bicubic,
+            },
+            Filter::Rotate {
+                rotation: Rotation::Clockwise,
+            },
+            Filter::Mirror(crate::edit::Mirror {
+                horizontal: true,
+                vertical: false,
+            }),
+        ]);
+        // Default order: deinterlace, crop, deshake, rotate, mirror, resize.
+        assert_eq!(
+            chain.size_before(FilterKind::Crop, Size::new(1920, 1080)).unwrap(),
+            Size::new(1920, 1080)
+        );
+        assert_eq!(
+            chain.orientation_after(FilterKind::Crop),
+            Orientation::CLOCKWISE.then(Orientation::MIRROR_HORIZONTAL)
+        );
+        assert!((chain.sample_aspect_before(FilterKind::Crop, 1.5) - 1.5).abs() < 1e-12);
+        // Resize and rotate moved in front of the crop: the crop sees a turned, smaller, square-pixel frame.
+        while chain.move_up(FilterKind::Rotate) {}
+        while chain.move_up(FilterKind::Resize) {}
+        assert_eq!(
+            chain.order().take(3).collect::<Vec<_>>(),
+            vec![FilterKind::Resize, FilterKind::Rotate, FilterKind::Deinterlace]
+        );
+        assert_eq!(
+            chain.size_before(FilterKind::Crop, Size::new(1920, 1080)).unwrap(),
+            Size::new(540, 960)
+        );
+        assert!((chain.sample_aspect_before(FilterKind::Crop, 1.5) - 1.0).abs() < 1e-12);
+        assert_eq!(
+            chain.orientation_after(FilterKind::Crop),
+            Orientation::MIRROR_HORIZONTAL
+        );
+    }
+
+    #[test]
+    fn crop_editing_shows_the_whole_frame_turned_like_the_output() {
+        let chain = chain_with(&[
+            Filter::Crop(Crop::new(10, 0, 10, 0)),
+            Filter::Rotate {
+                rotation: Rotation::CounterClockwise,
+            },
+            Filter::Resize {
+                width: Some(640),
+                height: Some(640),
+                algorithm: crate::edit::ResizeAlgorithm::Bicubic,
+            },
+        ]);
+        let editing = chain.for_crop_editing();
+        assert_eq!(
+            editing.active().map(Filter::kind).collect::<Vec<_>>(),
+            vec![FilterKind::Rotate]
+        );
+        // The crop keeps its values (only switched off).
+        assert_eq!(
+            editing.get(FilterKind::Crop).map(|s| s.filter),
+            Some(Filter::Crop(Crop::new(10, 0, 10, 0)))
+        );
     }
 
     proptest! {

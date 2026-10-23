@@ -26,8 +26,8 @@ pub const TIMING_TIMEOUT: Duration = Duration::from_secs(10);
 pub const TIMING_SAMPLE_SECS: u32 = 10;
 /// More output than this is not a media description (ffprobe writes a few kilobytes per file).
 const MAX_OUTPUT: u64 = 16 * 1024 * 1024;
-/// stderr kept for the error message.
-const MAX_STDERR: u64 = 64 * 1024;
+/// stderr kept (ffmpeg's detection filters write a line per frame there; ffprobe only its errors).
+const MAX_STDERR: u64 = 1024 * 1024;
 
 /// What ffprobe to run and how long to wait for it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,14 +62,18 @@ pub enum ProbeError {
     NotFound { program: String },
     #[error("{program} could not be started: {error}")]
     Spawn { program: String, error: String },
-    #[error("ffprobe did not finish within {secs} s")]
-    TimedOut { secs: u64 },
+    #[error("{program} did not finish within {secs} s")]
+    TimedOut { program: String, secs: u64 },
     /// ffprobe could not read the file (broken, not a media file, no access); its own words.
     #[error("{0}")]
     Unreadable(String),
-    #[error("ffprobe failed ({status}): {message}")]
-    Failed { status: String, message: String },
-    #[error("ffprobe's output is not readable: {0}")]
+    #[error("{program} failed ({status}): {message}")]
+    Failed {
+        program: String,
+        status: String,
+        message: String,
+    },
+    #[error("the tool's output is not readable: {0}")]
     Output(String),
 }
 
@@ -99,7 +103,7 @@ pub fn timing_args(file: &Path, stream_index: u32) -> Vec<OsString> {
 /// Probes `file`'s container and streams (without [`MediaInfo::frame_timing`]). Must run on the tokio runtime;
 /// dropping the future kills ffprobe.
 pub async fn probe(file: &Path, options: &ProbeOptions) -> Result<MediaInfo, ProbeError> {
-    let output = run(probe_args(file), options, options.timeout).await?;
+    let output = run(options.program(), probe_args(file), options.timeout, MAX_OUTPUT).await?;
     match (decode(&output.stdout), output.status.success()) {
         (Ok(info), true) => Ok(info),
         (Err(DecodeError::Reported(reason)), _) => Err(ProbeError::Unreadable(reason)),
@@ -115,7 +119,13 @@ pub async fn probe_frame_timing(
     stream_index: u32,
     options: &ProbeOptions,
 ) -> Result<Option<FrameTiming>, ProbeError> {
-    let output = run(timing_args(file, stream_index), options, options.timing_timeout).await?;
+    let output = run(
+        options.program(),
+        timing_args(file, stream_index),
+        options.timing_timeout,
+        MAX_OUTPUT,
+    )
+    .await?;
     if !output.status.success() {
         return Err(output.failure());
     }
@@ -134,24 +144,32 @@ pub async fn probe_with_timing(file: &Path, options: &ProbeOptions) -> Result<Me
     Ok(info)
 }
 
-struct Output {
-    stdout: Vec<u8>,
-    stderr: String,
-    status: ExitStatus,
+/// What a finished tool wrote and how it ended.
+pub(super) struct Output {
+    pub(super) program: String,
+    pub(super) stdout: Vec<u8>,
+    pub(super) stderr: String,
+    pub(super) status: ExitStatus,
 }
 
 impl Output {
-    fn failure(&self) -> ProbeError {
+    pub(super) fn failure(&self) -> ProbeError {
         ProbeError::Failed {
+            program: self.program.clone(),
             status: self.status.to_string(),
             message: last_line(&self.stderr).unwrap_or_else(|| "no message".into()),
         }
     }
 }
 
-/// Runs ffprobe with `args` and collects its output within `timeout`.
-async fn run(args: Vec<OsString>, options: &ProbeOptions, timeout: Duration) -> Result<Output, ProbeError> {
-    let program = options.program();
+/// Runs `program` (ffprobe or ffmpeg) with `args` and collects its output within `timeout`; more than `max_stdout` bytes
+/// on stdout is an error, stderr is cut at [`MAX_STDERR`]. Dropping the future kills the program.
+pub(super) async fn run(
+    program: &Path,
+    args: Vec<OsString>,
+    timeout: Duration,
+    max_stdout: u64,
+) -> Result<Output, ProbeError> {
     let program_name = || program.display().to_string();
     let mut child = Command::new(program)
         .args(args)
@@ -173,7 +191,7 @@ async fn run(args: Vec<OsString>, options: &ProbeOptions, timeout: Duration) -> 
     let stderr = child.stderr.take();
     let collect = async {
         tokio::join!(
-            read_capped(stdout, MAX_OUTPUT),
+            read_capped(stdout, max_stdout),
             read_capped(stderr, MAX_STDERR),
             child.wait()
         )
@@ -181,13 +199,16 @@ async fn run(args: Vec<OsString>, options: &ProbeOptions, timeout: Duration) -> 
     let (out, err, status) = tokio::time::timeout(timeout, collect)
         .await
         .map_err(|_elapsed| ProbeError::TimedOut {
+            program: program_name(),
             secs: timeout.as_secs(),
         })?;
     let status = status.map_err(|e| ProbeError::Failed {
+        program: program_name(),
         status: "no exit status".into(),
         message: e.to_string(),
     })?;
     Ok(Output {
+        program: program_name(),
         stdout: out.map_err(ProbeError::Output)?,
         stderr: String::from_utf8_lossy(&err.unwrap_or_default()).into_owned(),
         status,
@@ -202,7 +223,7 @@ async fn read_capped(pipe: Option<impl AsyncRead + Unpin>, limit: u64) -> Result
     limited
         .read_to_end(&mut buffer)
         .await
-        .map_err(|e| format!("reading ffprobe's output failed: {e}"))?;
+        .map_err(|e| format!("reading the tool's output failed: {e}"))?;
     if u64::try_from(buffer.len()).unwrap_or(u64::MAX) > limit {
         return Err(format!("more than {limit} bytes"));
     }
@@ -273,7 +294,7 @@ mod tests {
         };
         let started = std::time::Instant::now();
         let error = probe(Path::new("/tmp/x.mp4"), &options).await.unwrap_err();
-        assert_eq!(error, ProbeError::TimedOut { secs: 0 });
+        assert!(matches!(error, ProbeError::TimedOut { secs: 0, .. }), "{error:?}");
         assert!(started.elapsed() < Duration::from_secs(5));
     }
 

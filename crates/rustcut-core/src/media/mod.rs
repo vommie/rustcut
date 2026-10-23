@@ -1,13 +1,20 @@
 //! Media probing (ADR-3): ffprobe's JSON as a typed, tolerant [`MediaInfo`] (container, streams, rotation, frame rate incl.
 //! a variable-frame-rate check from packet timestamps), the supervised ffprobe runner, and the readable summary the
-//! Media Info panel shows. Interlace detection (`idet`) and crop detection follow with the filters (M2.3).
+//! Media Info panel shows, and the picture checks of the filters (black borders with `cropdetect`, interlacing with
+//! `idet`).
 
+mod detect;
 mod ffprobe;
 mod model;
 mod probe;
 mod summary;
 mod timing;
 
+pub use detect::{
+    CROP_SAMPLES, CropBox, CropDetection, DetectOptions, IdetCounts, Interlacing, combine_crop_samples,
+    crop_sample_times, cropdetect_args, detect_crop, detect_interlace, idet_args, idet_start, parse_cropdetect,
+    parse_idet,
+};
 pub use ffprobe::{DecodeError, decode, decode_timing};
 pub use model::{
     AudioStream, ColorInfo, Container, FieldOrder, FrameRateMode, FrameTiming, MediaInfo, Ratio, Stream, StreamKind,
