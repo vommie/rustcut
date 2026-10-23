@@ -1,9 +1,14 @@
-// Main window of RustCut. Until the dock layout (M1.2) exists it shows the video area and the status line.
+// Main window of RustCut: the dock (ADR-12) with its two sidebars around the video, a slim status line, the View menu.
 
 import { Theme } from "styles.slint";
 import { PlayerView } from "player_view.slint";
+import { IconId } from "icons.slint";
+import { ResizerBar } from "resizer_bar.slint";
+import { Dock, DockCardView, DockGroupView, DockMetrics, DockRailItem, DockTabView } from "dock_types.slint";
+import { DockSidebar } from "dock_sidebar.slint";
+import { DockOverlay } from "dock_overlay.slint";
 
-export { Theme }
+export { Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView }
 
 export component MainWindow inherits Window {
     in property <string> app-name: "RustCut";
@@ -14,6 +19,20 @@ export component MainWindow inherits Window {
     // Size of the video area in logical pixels: the player renders its texture at this size times the scale factor.
     out property <length> video-width: player.width;
     out property <length> video-height: player.height;
+    // Where the sidebars and the center are, in window coordinates (the dock's hit testing while a tab is dragged).
+    out property <length> left-frame-x: left-sidebar.absolute-position.x;
+    out property <length> left-frame-y: left-sidebar.absolute-position.y;
+    out property <length> left-frame-width: left-sidebar.width;
+    out property <length> left-frame-height: left-sidebar.height;
+    out property <length> right-frame-x: right-sidebar.absolute-position.x;
+    out property <length> right-frame-y: right-sidebar.absolute-position.y;
+    out property <length> right-frame-width: right-sidebar.width;
+    out property <length> right-frame-height: right-sidebar.height;
+    out property <length> center-frame-x: center-area.absolute-position.x;
+    out property <length> center-frame-y: center-area.absolute-position.y;
+    out property <length> center-frame-width: center-area.width;
+    out property <length> center-frame-height: center-area.height;
+    out property <length> window-width: root.width;
 
     title: root.app-name;
     preferred-width: 1280px;
@@ -23,13 +42,79 @@ export component MainWindow inherits Window {
     background: Theme.background;
     default-font-size: Theme.font-size;
 
+    MenuBar {
+        Menu {
+            title: "View";
+
+            MenuItem {
+                title: Dock.left-collapsed ? "Expand Left Sidebar" : "Collapse Left Sidebar";
+                enabled: Dock.left-shown;
+                activated => { Dock.toggle-sidebar(0); }
+            }
+
+            MenuItem {
+                title: Dock.right-collapsed ? "Expand Right Sidebar" : "Collapse Right Sidebar";
+                enabled: Dock.right-shown;
+                activated => { Dock.toggle-sidebar(1); }
+            }
+
+            MenuSeparator { }
+
+            MenuItem {
+                title: "Reset Layout";
+                activated => { Dock.reset-layout(); }
+            }
+        }
+    }
+
     VerticalLayout {
-        player := PlayerView {
+        HorizontalLayout {
             vertical-stretch: 1;
-            frame: root.video-frame;
-            has-video: root.has-video;
-            app-name: root.app-name;
-            app-version: root.app-version;
+
+            left-sidebar := DockSidebar {
+                width: !Dock.left-shown ? 0px : (Dock.left-collapsed ? DockMetrics.rail-width : Dock.left-width);
+                side: 0;
+                groups: Dock.left-groups;
+                rail: Dock.left-rail;
+                total-fixed: Dock.left-total-fixed;
+                collapsed: Dock.left-collapsed;
+            }
+
+            if Dock.left-shown && !Dock.left-collapsed: ResizerBar {
+                is-horizontal: true;
+                thickness: 5px;
+                drag-started => { Dock.sidebar-resize-started(0); }
+                dragged(delta) => { Dock.sidebar-resized(0, delta); }
+            }
+
+            center-area := VerticalLayout {
+                horizontal-stretch: 1;
+                min-width: 240px;
+
+                player := PlayerView {
+                    vertical-stretch: 1;
+                    frame: root.video-frame;
+                    has-video: root.has-video;
+                    app-name: root.app-name;
+                    app-version: root.app-version;
+                }
+            }
+
+            if Dock.right-shown && !Dock.right-collapsed: ResizerBar {
+                is-horizontal: true;
+                thickness: 5px;
+                drag-started => { Dock.sidebar-resize-started(1); }
+                dragged(delta) => { Dock.sidebar-resized(1, delta); }
+            }
+
+            right-sidebar := DockSidebar {
+                width: !Dock.right-shown ? 0px : (Dock.right-collapsed ? DockMetrics.rail-width : Dock.right-width);
+                side: 1;
+                groups: Dock.right-groups;
+                rail: Dock.right-rail;
+                total-fixed: Dock.right-total-fixed;
+                collapsed: Dock.right-collapsed;
+            }
         }
 
         // One slim status line (HANDOFF.md section 6: one place per piece of information).
@@ -50,5 +135,12 @@ export component MainWindow inherits Window {
                 vertical-alignment: center;
             }
         }
+    }
+
+    DockOverlay {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
     }
 }

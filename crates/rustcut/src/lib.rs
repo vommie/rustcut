@@ -18,4 +18,5 @@ mod generated {
 pub use generated::*;
 
 pub mod app;
+pub mod icons;
 pub mod ui;

@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Dock layout in RustView's style: the left sidebar holds Export (with collapsible cards) and Render Settings above the
+  Queue, the right sidebar holds Tag & Rate, Media Info and Logs. Drag a tab into another group or sidebar, onto the top
+  or bottom of a group to split off a new group, or to the window edge to bring back an emptied sidebar; the drop area
+  lights up while dragging. Click the active tab (or the chevron) to collapse a group, double-click a tab bar (or use the
+  maximize button) to let a group fill its sidebar, collapse a whole sidebar to a rail of panel icons, and resize the
+  sidebars and the groups with the bars between them. The layout is kept in `ui-state.toml`; View > Reset Layout
+  restores the default arrangement. The panels themselves arrive with their milestones.
 - Video playback: a file given on the command line (`rustcut VIDEO`) plays in the main window. mpv draws into RustCut's own
   OpenGL context, so later overlays (crop handles, section markers) can be drawn directly over the video. On a software
   OpenGL renderer (for example llvmpipe in a virtual machine) the preview uses mpv's fast scaling automatically, so playback

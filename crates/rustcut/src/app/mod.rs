@@ -15,6 +15,7 @@ use slint::ComponentHandle as _;
 pub use cli::Cli;
 
 use crate::MainWindow;
+use crate::ui::dock::{DockBridge, persist as dock_persist};
 use crate::ui::player::{PlayerBridge, PlayerBridgeError};
 
 /// Errors that end the application before or while the event loop runs.
@@ -61,6 +62,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<(), AppError> {
     window.set_app_name(APP_NAME.into());
     window.set_app_version(VERSION.into());
     restore_window(&window, &loaded.ui_state.window);
+    let dock = DockBridge::install(&window, dock_persist::from_table(loaded.ui_state.dock.as_ref()));
     let player = PlayerBridge::start(&window)?;
     if let Some(first) = cli.files.first() {
         player.open(first);
@@ -75,6 +77,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<(), AppError> {
 
     let mut ui_state = loaded.ui_state.clone();
     capture_window(&window, &mut ui_state);
+    ui_state.dock = dock_persist::to_table(&dock.layout());
     persistence::save_ui_state(&loaded, &ui_state);
     drop(player);
     Ok(())

@@ -4168,25 +4168,28 @@ dependencies = [
 
 [[package]]
 name = "rustcut"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "az",
  "clap",
  "parking_lot",
+ "proptest",
  "rustcut-core",
  "rustcut-player",
+ "serde",
  "slint",
  "slint-build",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "toml",
  "tracing",
  "tracing-subscriber",
 ]
 
 [[package]]
 name = "rustcut-core"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "atomic-write-file",
  "az",
@@ -4209,7 +4212,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-player"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "glow",
  "hdrhistogram",

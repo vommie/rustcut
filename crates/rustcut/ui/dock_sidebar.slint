@@ -1,0 +1,156 @@
+// A dock area: its panel groups placed by the plan Rust computed, resizer bars between them, or a rail of panel icons
+// while the sidebar is collapsed.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { ResizerBar } from "resizer_bar.slint";
+import { Dock, DockGroupView, DockMetrics, DockRailItem } from "dock_types.slint";
+import { DockTabBar } from "dock_tab_bar.slint";
+import { DockPanelContent } from "dock_panels.slint";
+
+component DockGroup inherits Rectangle {
+    in property <int> side;
+    in property <int> index;
+    in property <DockGroupView> group;
+
+    border-radius: 6px;
+    background: Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+    clip: true;
+
+    DockTabBar {
+        y: 0;
+        width: parent.width;
+        side: root.side;
+        index: root.index;
+        group: root.group;
+    }
+
+    if root.group.shows_body: Rectangle {
+        y: DockMetrics.tab-bar-height;
+        width: parent.width;
+        height: parent.height - DockMetrics.tab-bar-height;
+        clip: true;
+
+        Rectangle {
+            y: 0;
+            height: 1px;
+            background: Theme.border;
+        }
+
+        DockPanelContent {
+            y: 1px;
+            height: parent.height - 1px;
+            key: root.group.active_key;
+        }
+    }
+}
+
+component RailButton inherits Rectangle {
+    in property <IconId> icon;
+    in property <bool> active;
+    callback clicked();
+
+    width: DockMetrics.rail-width - 8px;
+    height: DockMetrics.rail-width - 8px;
+    border-radius: 4px;
+    background: touch.has-hover ? Theme.surface-hover : (root.active ? Theme.surface-selected : transparent);
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+
+    AppIcon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        icon: root.icon;
+        size: IconSize.lg;
+        color: root.active ? Theme.primary : (touch.has-hover ? Theme.text : Theme.text-muted);
+    }
+}
+
+component DockRail inherits Rectangle {
+    in property <int> side;
+    in property <[DockRailItem]> items;
+
+    VerticalLayout {
+        padding: 4px;
+        spacing: 4px;
+        alignment: start;
+
+        RailButton {
+            icon: root.side == 0 ? IconId.sidebar-left-expand : IconId.sidebar-right-expand;
+            clicked => { Dock.rail-clicked(root.side, ""); }
+        }
+
+        Rectangle {
+            height: 1px;
+            background: Theme.border;
+        }
+
+        for item in root.items: VerticalLayout {
+            spacing: 4px;
+
+            if item.group-start: Rectangle {
+                height: 1px;
+                background: Theme.border;
+            }
+
+            RailButton {
+                icon: item.icon;
+                active: item.active;
+                clicked => { Dock.rail-clicked(root.side, item.key); }
+            }
+        }
+    }
+}
+
+export component DockSidebar inherits Rectangle {
+    in property <int> side;
+    in property <[DockGroupView]> groups;
+    in property <[DockRailItem]> rail;
+    in property <length> total-fixed;
+    in property <bool> collapsed;
+
+    property <length> extra: Math.max(0px, root.height - root.total-fixed);
+
+    background: Theme.background;
+    clip: true;
+
+    if root.collapsed: DockRail {
+        width: parent.width;
+        height: parent.height;
+        side: root.side;
+        items: root.rail;
+    }
+
+    if !root.collapsed: Rectangle {
+        width: parent.width;
+        height: parent.height;
+
+        for group[i] in root.groups: DockGroup {
+            x: DockMetrics.sidebar-padding;
+            y: group.fixed_before + group.frac_before * root.extra;
+            width: parent.width - 2 * DockMetrics.sidebar-padding;
+            height: group.fixed + group.frac * root.extra;
+            side: root.side;
+            index: i;
+            group: group;
+        }
+
+        for group[i] in root.groups: ResizerBar {
+            is-horizontal: false;
+            is-enabled: group.resizable_below;
+            visible: i < root.groups.length - 1;
+            x: DockMetrics.sidebar-padding;
+            y: group.fixed_before + group.fixed + (group.frac_before + group.frac) * root.extra;
+            width: parent.width - 2 * DockMetrics.sidebar-padding;
+            height: DockMetrics.resizer;
+            thickness: DockMetrics.resizer;
+            idle-line-color: transparent;
+            drag-started => { Dock.group-resize-started(root.side, i, root.height); }
+            dragged(delta) => { Dock.group-resized(root.side, i, delta); }
+        }
+    }
+}

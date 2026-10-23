@@ -1,0 +1,114 @@
+// Dock layout (ADR-12): the data Rust publishes and the callbacks it handles. The model and its geometry live in Rust
+// (src/ui/dock/); Slint only places what the plan says: a group's y = fixed_before + frac_before * extra and its height =
+// fixed + frac * extra, where extra is the sidebar height minus `total_fixed`.
+
+import { IconId } from "icons.slint";
+
+/// One tab of a group's tab bar, at the position Rust computed.
+export struct DockTabView {
+    key: string,
+    title: string,
+    icon: IconId,
+    active: bool,
+    x: length,
+    width: length,
+    /// Displacement while another tab is dragged over this bar (animated).
+    shift: length,
+    /// The tab being dragged (shown faded at its place).
+    placeholder: bool,
+}
+
+/// One panel group of a sidebar.
+export struct DockGroupView {
+    tabs: [DockTabView],
+    active_key: string,
+    /// The body is shown (expanded and not hidden by a maximized neighbor).
+    shows_body: bool,
+    collapsed: bool,
+    maximized: bool,
+    can_maximize: bool,
+    /// The first group carries the button that collapses the whole sidebar.
+    first: bool,
+    fixed_before: length,
+    frac_before: float,
+    fixed: length,
+    frac: float,
+    /// The bar below this group can be dragged (both neighbors show their bodies).
+    resizable_below: bool,
+}
+
+/// One icon of a collapsed sidebar's rail.
+export struct DockRailItem {
+    key: string,
+    title: string,
+    icon: IconId,
+    active: bool,
+    /// First panel of a group after the first one: a separator goes above it.
+    group_start: bool,
+}
+
+/// A collapsible card inside a panel.
+export struct DockCardView {
+    id: string,
+    title: string,
+    collapsed: bool,
+    note: string,
+}
+
+/// Sizes shared with Rust (`src/ui/dock/plan.rs`, `metrics`), set by Rust at startup.
+export global DockMetrics {
+    in property <length> sidebar-padding: 6px;
+    in property <length> tab-bar-height: 30px;
+    in property <length> tab-height: 26px;
+    in property <length> bar-button: 22px;
+    in property <length> resizer: 6px;
+    in property <length> rail-width: 36px;
+}
+
+/// State and actions of the dock. Sides are 0 = left, 1 = right.
+export global Dock {
+    in property <[DockGroupView]> left-groups;
+    in property <[DockGroupView]> right-groups;
+    in property <[DockRailItem]> left-rail;
+    in property <[DockRailItem]> right-rail;
+    in property <length> left-width: 330px;
+    in property <length> right-width: 330px;
+    in property <length> left-total-fixed;
+    in property <length> right-total-fixed;
+    in property <bool> left-shown: true;
+    in property <bool> right-shown: true;
+    in property <bool> left-collapsed;
+    in property <bool> right-collapsed;
+    in property <[DockCardView]> export-cards;
+
+    // Dragging a tab: the ghost follows the cursor and the drop area lights up (window coordinates).
+    in property <bool> dragging;
+    in property <length> ghost-x;
+    in property <length> ghost-y;
+    in property <length> ghost-width: 100px;
+    in property <string> ghost-title;
+    in property <IconId> ghost-icon;
+    in property <bool> drop-visible;
+    in property <length> drop-x;
+    in property <length> drop-y;
+    in property <length> drop-width;
+    in property <length> drop-height;
+
+    callback tab-clicked(string /* key */);
+    callback tab-double-clicked(string /* key */);
+    callback bar-double-clicked(int /* side */, int /* group */);
+    callback group-collapse-clicked(int /* side */, int /* group */);
+    callback group-maximize-clicked(int /* side */, int /* group */);
+    callback sidebar-collapse-clicked(int /* side */);
+    callback rail-clicked(int /* side */, string /* key; empty = expand only */);
+    callback tab-drag-started(string /* key */, length /* x */, length /* y */, length /* grab offset */, length /* width */);
+    callback tab-drag-moved(length /* x */, length /* y */);
+    callback tab-drag-ended();
+    callback sidebar-resize-started(int /* side */);
+    callback sidebar-resized(int /* side */, length /* delta */);
+    callback group-resize-started(int /* side */, int /* upper group */, length /* sidebar height */);
+    callback group-resized(int /* side */, int /* upper group */, length /* delta */);
+    callback card-toggled(string /* card id */);
+    callback reset-layout();
+    callback toggle-sidebar(int /* side */);
+}

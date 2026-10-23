@@ -1,0 +1,40 @@
+# RustCut icon manifest - the single source of truth for every icon in the application (same scheme as RustView's).
+#
+# `build.rs` (see `build/icon_registry.rs`) validates this file against the SVG files on disk and generates
+#   * `icon_registry.slint` -> Slint enum `IconId` + `IconRegistry` lookup (used by `AppIcon` in `ui/icons.slint`)
+#   * `icon_registry.rs`    -> Rust enum `crate::icons::Icon` incl. metadata, name lookup and Slint conversion
+# so Rust and Slint never drift apart. To add an icon: add ONE line below, copy the SVG with
+# `icon copy tabler <name> crates/rustcut/assets/icons/tabler/outline` (original file name), then use `Icon::<PascalCase>`
+# in Rust or `IconId.<kebab-case>` in Slint.
+#
+# Entry format (key = icon id in snake_case):
+#   tabler = "<name>"    Tabler icon file name WITHOUT extension (file names are never renamed).
+#   style  = "outline"   Tabler variant: "outline" (default) or "filled".
+#   custom = "<file>"    Non-Tabler SVG below `assets/icons/custom/`.
+#   color  = true        Icon keeps its own colors and is never tinted (default: false = monochrome).
+#   doc    = "..."       Short description (shown in the generated API docs).
+#   aliases = [...]      Additional names accepted by `Icon::from_name`.
+
+[library]
+tabler_version = "3.49.0"
+
+[icons]
+# --- Generic UI glyphs -------------------------------------------------------------------------------------------
+chevron_down = { tabler = "chevron-down", doc = "Chevron pointing down (expanded)" }
+chevron_right = { tabler = "chevron-right", doc = "Chevron pointing right (collapsed)" }
+maximize = { tabler = "arrows-maximize", doc = "Maximize a panel group inside its sidebar" }
+restore = { tabler = "arrows-minimize", doc = "Restore a maximized panel group" }
+
+# --- Dock layout ---------------------------------------------------------------------------------------------------
+sidebar_left_collapse = { tabler = "layout-sidebar-left-collapse", doc = "Collapse the left sidebar to its rail" }
+sidebar_left_expand = { tabler = "layout-sidebar-left-expand", doc = "Expand the left sidebar" }
+sidebar_right_collapse = { tabler = "layout-sidebar-right-collapse", doc = "Collapse the right sidebar to its rail" }
+sidebar_right_expand = { tabler = "layout-sidebar-right-expand", doc = "Expand the right sidebar" }
+
+# --- Panels --------------------------------------------------------------------------------------------------------
+panel_export = { tabler = "file-export", doc = "Export panel (job finalization, filters, sections)" }
+panel_render_settings = { tabler = "adjustments-horizontal", doc = "Render settings panel" }
+panel_queue = { tabler = "list-details", doc = "Queue panel" }
+panel_tag_rate = { tabler = "tags", doc = "Tag & Rate panel" }
+panel_media_info = { tabler = "info-circle", doc = "Media info panel" }
+panel_logs = { tabler = "file-text", doc = "Logs panel" }
