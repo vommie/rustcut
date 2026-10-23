@@ -9,6 +9,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- RustView link (0.0.11): RustCut now talks to RustView through `rustview api` in the background (never blocking the
+  window; one call at a time, each with the time limit `rustview.timeout_secs`, the program from `rustview.binary` or
+  `rustview` in your PATH). Each queued job gets its record in the RustView library according to
+  `rustview.write_timing`: "at_enqueue" (default) writes a pending record when the job is saved, which RustView
+  completes once the file exists, and writes it once more after the render was verified; "after_render" writes it
+  only after the render. Before the first write RustCut asks whether RustView already has a record for the file: such
+  a record keeps its source app and is never deleted by RustCut; only the values RustCut changed are given back when
+  the job does not produce the file. A job that fails, is canceled or removed before it finished loses the pending
+  record RustCut created; a waiting job whose file name changes moves its record along. A record stays when the file
+  exists or when RustView now says another app made it. While RustView cannot be reached, RustCut tries again after
+  2 s, then 4 s, 8 s, ... up to every 2 minutes; nothing is lost when RustCut quits meanwhile (the next start
+  continues). Jobs carry no tags or rating yet (the Tag & Rate panel arrives with the next milestone).
+- Known-source warning: when a video opens, its MD5 comes from RustView's record of the file if the record matches
+  the file's size and time (shown as "From the RustView library" in Media Info, no need to read the file), else from
+  the sidecar `.<name>.md5` or by reading the file. RustView is then asked whether a job was made from this video
+  before; the banner over the video shows when (UTC) and the files made from it (the video's own library record does
+  not count). The source's MD5 is registered in RustView only when a job of it is saved, never just by opening it.
+  Switch the warning off with `warnings.known_source = false`.
 - Saving jobs (0.0.10): Save (Ctrl+S or F9, also File > Save Job) turns the open video into a job of the render
   queue: its sections (with an empty list the automatic section of `editor.auto_section`, else Save asks for a
   section), the filter chain in its order, a copy of the Render Settings panel's current settings (changing them later
