@@ -1,8 +1,12 @@
-//! Interface of the hash service (implemented in M2.1): MD5 of a source for RustView's known-source check, taken from
-//! RustView itself, a sidecar `.<name>.md5`, or computed in the background (cancelable, progress shown non-modally; PyCutRv
-//! hashed on the UI thread, bug 4).
+//! The hash service (M2.1): MD5 of a source for RustView's known-source check, taken from a sidecar `.<name>.md5` or
+//! computed in the background (cancelable, progress shown non-modally; PyCutRv hashed on the UI thread, bug 4). Taking
+//! the hash from RustView itself (`get-media`, no disk read) joins with the RustView client (M3.1).
+
+mod service;
 
 use std::path::{Path, PathBuf};
+
+pub use service::{HashHandle, HashService, PROGRESS_INTERVAL, spawn_hash_service};
 
 use crate::actor::Reply;
 

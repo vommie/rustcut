@@ -9,6 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Media Info panel: when a video opens, it shows the container (format, duration, start time, size, overall bit rate,
+  title) and every stream: codec and profile, resolution, rotation (and the size it is shown at), aspect ratio, frame rate
+  (a variable frame rate is detected and shown with its range), frame count, scan type (progressive or interlaced),
+  pixel format and bit depth, color, sample rate, channels, sample format, bit rate, language, title, and stream
+  durations or start times that differ from the container's (for example audio that ends early). A file that cannot be
+  read says why. The information comes from `ffprobe` (setting `advanced.ffprobe`, otherwise from `PATH`); a stalled
+  ffprobe is stopped after 20 seconds.
+- The MD5 of the open video is shown in the Media Info panel. A sidecar file `.<name>.md5` next to the video is used
+  when it exists (it is never changed or deleted); otherwise the MD5 is computed in the background with a progress bar
+  and a Cancel button, without slowing down the window. It is computed automatically while the known-source warning
+  (`warnings.known_source`) is on, else on demand with "Compute". The warning itself (a banner above the video when
+  RustView knows the video already) arrives with the RustView connection.
 - Transport bar under the video: play/pause, previous and next frame, a seek bar that jumps to the clicked spot (drag it to
   scrub), the current and the total time (`H:MM:SS.mmm`), mute and volume. The mouse wheel over the video changes the
   volume (`player.wheel_volume_step`, 5 % per notch). Volume and mute are kept for the next start.

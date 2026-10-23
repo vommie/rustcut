@@ -1,0 +1,24 @@
+---
+source: crates/rustcut-core/tests/probe_golden.rs
+expression: hevc_10bit.mkv
+---
+[Container]
+Format: Matroska / WebM
+Duration: 0:00:08.021
+Size: 1.33 MB
+Bit rate: 1.33 Mbit/s
+[Video]
+Codec: H.265 / HEVC (High Efficiency Video Coding)
+Profile: Main 10
+Resolution: 1280 x 720
+Aspect ratio: 16:9
+Frame rate: 25 fps
+Scan: Progressive
+Pixel format: yuv420p10le (10-bit)
+Color: Limited range
+[Audio]
+Codec: AAC (Advanced Audio Coding)
+Profile: LC
+Sample rate: 48 kHz
+Channels: 1 (mono)
+Sample format: fltp

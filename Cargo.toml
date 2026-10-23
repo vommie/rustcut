@@ -6,7 +6,7 @@ default-members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustc
 [workspace.package]
 # Single source of truth for the app version: the About page, the package script and the PKGBUILD read it from here.
 # Claude bumps the patch number whenever a state is testable; major and minor belong to the user.
-version = "0.0.4"
+version = "0.0.5"
 edition = "2024"
 # The lowest toolchain known to work (rusqlite_migration needs 1.95). rust-toolchain.toml pins `stable`.
 rust-version = "1.95"
@@ -38,7 +38,7 @@ az = "1"
 # File-name templates (Jinja2 syntax) with a fuel limit; RustStart uses the same engine.
 minijinja = { version = "3", features = ["builtins", "serde", "fuel"] }
 # Async runtime of the services (actors, processes, timers); the UI thread never runs on it (ADR-4).
-tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "signal", "io-util", "net"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "signal", "io-util", "net", "process"] }
 parking_lot = "0.12"
 # Queue, job history and job logs (ADR-5). `backup` copies the database before a migration.
 rusqlite = { version = "0.40", features = ["bundled", "backup"] }
@@ -70,6 +70,18 @@ rfd = "0.17"
 interprocess = { version = "2", features = ["tokio"] }
 # A stable hash (FNV-1a) of the profile folder in the socket name, so separate profiles never reach each other.
 fnv = "1"
+
+# Tolerant decoding of ffprobe's JSON: numbers that come as strings, and one broken field becomes `None` instead of failing the
+# whole probe (the `ffprobe`/`easy-ffprobe` crates require fields that some files and ffprobe versions leave out).
+serde_with = { version = "3", default-features = false, features = ["macros", "std"] }
+# MD5 of a source for RustView's known-source check (RustCrypto).
+md-5 = "0.11"
+# Lowercase hex of digests (RustView stores MD5s as 32 lowercase hex digits).
+hex = "0.4"
+# File sizes in the Media Info panel ("10.34 MB").
+humansize = "2"
+# Language names of audio and subtitle tracks from their ISO 639 codes ("deu" -> "German").
+isolang = "2"
 
 # Tests only.
 proptest = "1"

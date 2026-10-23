@@ -1,0 +1,224 @@
+// The Media Info panel (dock panel `media-info`): what ffprobe says about the open file, one card per section (container,
+// each stream), and the source's MD5 in the container card with its progress while it is computed. Filled from
+// src/ui/media_info/ through the `MediaInfoPanel` global. The decoder in use is not repeated here: the status line shows it.
+
+import { Theme } from "styles.slint";
+
+export struct MediaInfoRow {
+    label: string,
+    value: string,
+}
+
+export struct MediaInfoSection {
+    title: string,
+    rows: [MediaInfoRow],
+}
+
+export global MediaInfoPanel {
+    // 0 = no file, 1 = sections (while ffprobe reads, the container card says so and already shows the MD5 row).
+    in property <int> state;
+    in property <[MediaInfoSection]> sections;
+
+    // The MD5 row of the container card.
+    in property <string> hash-text;
+    in property <string> hash-note;
+    // 0 to 1 while computing with a known size; below 0 = no bar.
+    in property <float> hash-progress: -1;
+    in property <bool> hash-is-digest;
+    in property <bool> hash-can-compute;
+    in property <bool> hash-can-cancel;
+
+    callback compute-hash();
+    callback cancel-hash();
+}
+
+/// Width of the label column.
+global MediaInfoMetrics {
+    out property <length> label-width: 92px;
+    out property <length> font-size: 12px;
+}
+
+/// A small text button inside a row ("Compute", "Cancel").
+component RowAction inherits Rectangle {
+    in property <string> text;
+    callback clicked();
+
+    width: label.preferred-width + 12px;
+    height: 20px;
+    border-radius: 3px;
+    background: touch.pressed ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : transparent;
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+
+    label := Text {
+        text: root.text;
+        color: Theme.primary;
+        font-size: MediaInfoMetrics.font-size;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+component InfoRowView inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> value;
+
+    spacing: 8px;
+
+    Text {
+        width: MediaInfoMetrics.label-width;
+        text: root.label;
+        color: Theme.text-muted;
+        font-size: MediaInfoMetrics.font-size;
+        wrap: word-wrap;
+    }
+
+    Text {
+        horizontal-stretch: 1;
+        text: root.value;
+        color: Theme.text;
+        font-size: MediaInfoMetrics.font-size;
+        wrap: word-wrap;
+    }
+}
+
+/// The source's MD5: the digest, or the progress of computing it, with Compute / Cancel.
+component HashRowView inherits HorizontalLayout {
+    spacing: 8px;
+
+    Text {
+        width: MediaInfoMetrics.label-width;
+        text: "MD5";
+        color: Theme.text-muted;
+        font-size: MediaInfoMetrics.font-size;
+    }
+
+    VerticalLayout {
+        horizontal-stretch: 1;
+        spacing: 3px;
+
+        hash-value := Text {
+            text: MediaInfoPanel.hash-text;
+            color: Theme.text;
+            font-size: MediaInfoMetrics.font-size;
+            font-family: MediaInfoPanel.hash-is-digest ? "monospace" : "";
+            wrap: char-wrap;
+        }
+
+        if MediaInfoPanel.hash-progress >= 0: Rectangle {
+            height: 4px;
+            border-radius: 2px;
+            background: Theme.surface-hover;
+
+            Rectangle {
+                x: 0;
+                width: parent.width * Math.clamp(MediaInfoPanel.hash-progress, 0, 1);
+                border-radius: 2px;
+                background: Theme.primary;
+            }
+        }
+
+        if MediaInfoPanel.hash-note != "": Text {
+            text: MediaInfoPanel.hash-note;
+            color: Theme.text-muted;
+            font-size: 11px;
+            wrap: word-wrap;
+        }
+
+        if MediaInfoPanel.hash-can-compute || MediaInfoPanel.hash-can-cancel: HorizontalLayout {
+            alignment: start;
+
+            if MediaInfoPanel.hash-can-compute: compute := RowAction {
+                text: "Compute";
+                clicked => { MediaInfoPanel.compute-hash(); }
+            }
+            if MediaInfoPanel.hash-can-cancel: cancel := RowAction {
+                text: "Cancel";
+                clicked => { MediaInfoPanel.cancel-hash(); }
+            }
+        }
+    }
+}
+
+component SectionCard inherits Rectangle {
+    in property <MediaInfoSection> section;
+    in property <bool> with-hash;
+
+    border-radius: 6px;
+    background: Theme.surface-variant;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    VerticalLayout {
+        padding: 8px;
+        padding-top: 6px;
+        spacing: 4px;
+
+        Text {
+            text: root.section.title;
+            color: Theme.text;
+            font-size: MediaInfoMetrics.font-size;
+            font-weight: 600;
+            overflow: elide;
+        }
+
+        for row in root.section.rows: InfoRowView {
+            label: row.label;
+            value: row.value;
+        }
+
+        if root.with-hash: HashRowView { }
+    }
+}
+
+component PanelNote inherits Rectangle {
+    in property <string> title;
+    in property <string> note;
+
+    VerticalLayout {
+        alignment: center;
+        padding: 12px;
+        spacing: 4px;
+
+        Text {
+            text: root.title;
+            color: Theme.text;
+            font-size: 13px;
+            font-weight: 600;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+
+        if root.note != "": Text {
+            text: root.note;
+            color: Theme.text-muted;
+            font-size: 11px;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+    }
+}
+
+export component MediaInfoPanelView inherits Rectangle {
+    if MediaInfoPanel.state == 0: PanelNote {
+        title: "No video open";
+        note: "Streams, codecs and sizes of the open video show here.";
+    }
+    if MediaInfoPanel.state == 1: Flickable {
+        content-height: stack.preferred-height;
+
+        stack := VerticalLayout {
+            padding: 6px;
+            spacing: 6px;
+            alignment: start;
+
+            for section[index] in MediaInfoPanel.sections: SectionCard {
+                section: section;
+                with-hash: index == 0;
+            }
+        }
+    }
+}

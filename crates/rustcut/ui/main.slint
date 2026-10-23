@@ -11,8 +11,13 @@ import { DockOverlay } from "dock_overlay.slint";
 import { Playback } from "player_types.slint";
 import { PlayerTransport } from "player_transport.slint";
 import { Status, StatusLine } from "status_line.slint";
+import { MediaInfoPanel, MediaInfoRow, MediaInfoSection } from "media_info_panel.slint";
+import { KnownSource, KnownSourceBanner } from "source_banner.slint";
 
-export { Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status }
+export {
+    Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
+    MediaInfoRow, MediaInfoSection, KnownSource
+}
 
 export component MainWindow inherits Window {
     in property <string> app-name: "RustCut";
@@ -161,6 +166,8 @@ export component MainWindow inherits Window {
             center-area := VerticalLayout {
                 horizontal-stretch: 1;
                 min-width: 240px;
+
+                KnownSourceBanner { }
 
                 player := PlayerView {
                     vertical-stretch: 1;

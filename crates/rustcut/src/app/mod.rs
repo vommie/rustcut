@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 
 use clap::Parser as _;
 use rustcut_core::app_identity::{APP_NAME, VERSION};
+use rustcut_core::hashing::{HashCommand, HashService, spawn_hash_service};
 use rustcut_core::settings::AppPaths;
 use slint::ComponentHandle as _;
 
@@ -22,6 +23,7 @@ use crate::MainWindow;
 use crate::desktop::instance::{self, Request};
 use crate::ui::dispatcher::{SlintSink, UiDispatcher};
 use crate::ui::dock::{DockBridge, persist as dock_persist};
+use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::open::{self, FileOpener};
 use crate::ui::player::{PlayerBridge, PlayerBridgeError};
 
@@ -98,9 +100,12 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     let quit = shutdown::QuitPath::install(&main, &loaded.ui_state.window);
     let dock = DockBridge::install(&main, dock_persist::from_table(loaded.ui_state.dock.as_ref()));
     let player = PlayerBridge::start(&main, &ui, &loaded.settings.player, &loaded.ui_state.export)?;
+    let (hashing, _hash_task) = spawn_hash_service(runtime.handle());
+    let media = MediaInfoBridge::install(&main, &ui, runtime.handle().clone(), hashing.clone(), &loaded.settings);
     let opener = FileOpener::install(
         &main,
         &player,
+        &media,
         runtime.handle().clone(),
         loaded.ui_state.last_open_dir.clone(),
     );
@@ -127,7 +132,9 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     persistence::save_ui_state(&loaded, &ui_state);
     drop(server);
     drop(opener);
+    drop(media);
     drop(main);
+    stop_hashing(&hashing);
     stop_player(player);
     runtime.shutdown_timeout(RUNTIME_SHUTDOWN);
     Ok(Outcome::Quit)
@@ -196,6 +203,17 @@ fn listen(
             tracing::warn!(error = %e, "[Instance] Not listening for a second start; it opens its own window");
             None
         }
+    }
+}
+
+/// Stops the hash service: a running read ends at its next chunk (the service waits for it at most two seconds).
+fn stop_hashing(hashing: &HashService) {
+    if hashing
+        .handle
+        .blocking_request(|reply| HashCommand::Shutdown { reply })
+        .is_err()
+    {
+        tracing::debug!("[App] The hash service had already stopped");
     }
 }
 

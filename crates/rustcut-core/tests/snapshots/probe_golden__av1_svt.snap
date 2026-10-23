@@ -1,0 +1,24 @@
+---
+source: crates/rustcut-core/tests/probe_golden.rs
+expression: av1_svt.mkv
+---
+[Container]
+Format: Matroska / WebM
+Duration: 0:00:08.021
+Size: 1.11 MB
+Bit rate: 1.1 Mbit/s
+[Video]
+Codec: Alliance for Open Media AV1
+Profile: Main
+Resolution: 854 x 480
+Aspect ratio: 1.78:1
+Frame rate: 25 fps
+Scan: Progressive
+Pixel format: yuv420p (8-bit)
+Color: Limited range
+[Audio]
+Codec: AAC (Advanced Audio Coding)
+Profile: LC
+Sample rate: 48 kHz
+Channels: 1 (mono)
+Sample format: fltp

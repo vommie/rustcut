@@ -24,6 +24,7 @@ chevron_down = { tabler = "chevron-down", doc = "Chevron pointing down (expanded
 chevron_right = { tabler = "chevron-right", doc = "Chevron pointing right (collapsed)" }
 maximize = { tabler = "arrows-maximize", doc = "Maximize a panel group inside its sidebar" }
 restore = { tabler = "arrows-minimize", doc = "Restore a maximized panel group" }
+close = { tabler = "x", doc = "Dismiss a banner" }
 
 # --- Dock layout ---------------------------------------------------------------------------------------------------
 sidebar_left_collapse = { tabler = "layout-sidebar-left-collapse", doc = "Collapse the left sidebar to its rail" }
