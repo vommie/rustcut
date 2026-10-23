@@ -6,7 +6,7 @@ default-members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustc
 [workspace.package]
 # Single source of truth for the app version: the About page, the package script and the PKGBUILD read it from here.
 # Claude bumps the patch number whenever a state is testable; major and minor belong to the user.
-version = "0.0.7"
+version = "0.0.8"
 edition = "2024"
 # The lowest toolchain known to work (rusqlite_migration needs 1.95). rust-toolchain.toml pins `stable`.
 rust-version = "1.95"
@@ -38,7 +38,7 @@ az = "1"
 # File-name templates (Jinja2 syntax) with a fuel limit; RustStart uses the same engine.
 minijinja = { version = "3", features = ["builtins", "serde", "fuel"] }
 # Async runtime of the services (actors, processes, timers); the UI thread never runs on it (ADR-4).
-tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "signal", "io-util", "net", "process"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "signal", "io-util", "net", "process", "fs"] }
 parking_lot = "0.12"
 # Queue, job history and job logs (ADR-5). `backup` copies the database before a migration.
 rusqlite = { version = "0.40", features = ["bundled", "backup"] }
@@ -82,6 +82,14 @@ hex = "0.4"
 humansize = "2"
 # Language names of audio and subtitle tracks from their ISO 639 codes ("deu" -> "German").
 isolang = "2"
+
+# Process control of the ffmpeg renders: signals to the process group (pause = SIGSTOP/SIGCONT, cancel), niceness, and the
+# no-replace rename that puts a verified render onto its target without ever clobbering a file that appeared meanwhile.
+rustix = { version = "1", features = ["process", "fs"] }
+# The idle I/O class for the renders (`ioprio_set` on the process group), so the desktop stays responsive.
+ioprio = "0.2"
+# Shell quoting of the ffmpeg command line in the job log (copy and paste it into a terminal to reproduce a render).
+shlex = "2"
 
 # Tests only.
 proptest = "1"

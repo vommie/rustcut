@@ -9,6 +9,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Render engine (not yet reachable from the window; the queue that drives it comes next): a job's sections are cut with
+  frame-accurate seeking and joined, every audio track of the source is kept with its language and title, the filters
+  run exactly as previewed (also on rotated phone videos and odd sizes, which are rounded to even pixels), and global
+  metadata is copied; subtitles and chapters are left out. Variable frame rates (screen and phone recordings) keep
+  their timing in every container. Deshake renders in two passes (motion analysis, then the transform); two-pass
+  bit-rate profiles get their first pass. ffmpeg runs at a lower CPU and idle I/O priority (`render.nice`,
+  `render.idle_io`), can be paused without using any CPU, and is stopped when it makes no progress for
+  `render.stall_timeout_secs`. The output is written to a hidden `.<name>.rustcut-part.<ext>` file next to the target,
+  checked with ffprobe (video, every audio track, size, duration) and only then renamed onto the target. A failed or
+  canceled render removes only its temp file: an existing file at the target is never touched, and without
+  "overwrite" a file that appeared meanwhile is never replaced. Each render keeps a log with the exact ffmpeg command
+  lines and ffmpeg's messages; a failure names ffmpeg's actual reason.
+- Encoder check at start, in the background (about half a second): every encoder RustCut knows is tried with a
+  one-frame test encode, so hardware encoders (VAAPI, NVENC, QSV) are offered later only when they really work here; the
+  result, with the reason for each encoder that does not work, is written to the log.
+
 - Filters card in the Export panel: deinterlace, crop, deshake, rotate, mirror and resize, one row each with a switch,
   shown in the order they run (move a filter up or down to change it), their settings while switched on, the output size
   ("Output 1916×1076", or the even size the render makes of an odd one, or a warning when the crop removes everything),
