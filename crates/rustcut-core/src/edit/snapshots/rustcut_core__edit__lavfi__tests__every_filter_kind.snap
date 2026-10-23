@@ -1,0 +1,15 @@
+---
+source: crates/rustcut-core/src/edit/lavfi.rs
+expression: "lines.join(\"\\n\")"
+---
+bwdif=mode=send_frame
+yadif=mode=send_field
+w3fdif=mode=field
+kerndeint
+crop=w=iw-24:h=ih-20:x=14:y=8
+transpose=dir=clock
+transpose=dir=cclock
+hflip,vflip
+hflip,vflip
+scale=w=1280:h=-2:flags=lanczos,setsar=1
+scale=w=1280:h=720:flags=bicubic,setsar=1

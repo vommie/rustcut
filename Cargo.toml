@@ -31,6 +31,19 @@ thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Numeric conversions that say what happens on overflow (saturate, check) instead of the silent truncation of `as`.
+az = "1"
+# File-name templates (Jinja2 syntax) with a fuel limit; RustStart uses the same engine.
+minijinja = { version = "3", features = ["builtins", "serde", "fuel"] }
+# Lexical path normalization (`a/./b/../c` -> `a/c`) without touching the drive.
+path-clean = "1"
+
+# Tests only.
+proptest = "1"
+insta = "1"
+tempfile = "3"
 
 # Lints. The rust and clippy groups below are the project's definition of "safe and robust"; `scripts/check-all.sh` and
 # `cargo cl` turn every warning into an error. Generated Slint code and tests are exempt where noted (clippy.toml, `mod generated`).

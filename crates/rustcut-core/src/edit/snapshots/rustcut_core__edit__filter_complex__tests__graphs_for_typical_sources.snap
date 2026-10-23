@@ -1,0 +1,7 @@
+---
+source: crates/rustcut-core/src/edit/filter_complex.rs
+expression: "format!(\"{}\\n{}\\n{}\", one.graph, three_two_tracks.graph, silent.graph)"
+---
+[0:v:0][0:a:0]concat=n=1:v=1:a=1[vcat][aout0];[vcat]null[vout]
+[0:v:0][0:a:0][0:a:1][1:v:0][1:a:0][1:a:1][2:v:0][2:a:0][2:a:1]concat=n=3:v=1:a=2[vcat][aout0][aout1];[vcat]hflip,scale=w=1280:h=-2[vout]
+[0:v:0][1:v:0]concat=n=2:v=1:a=0[vcat];[vcat]hflip[vout]

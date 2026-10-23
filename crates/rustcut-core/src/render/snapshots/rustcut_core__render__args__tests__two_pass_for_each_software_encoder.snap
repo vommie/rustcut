@@ -1,0 +1,10 @@
+---
+source: crates/rustcut-core/src/render/args.rs
+expression: "lines.join(\"\\n\")"
+---
+-c:v libx264 -preset medium -b:v 2500k -pix_fmt yuv420p -g 240 -pass 1 -passlogfile /data/rustcut/passlog/job-3: try
+-c:v libx264 -preset medium -b:v 2500k -pix_fmt yuv420p -g 240 -pass 2 -passlogfile /data/rustcut/passlog/job-3: try
+-c:v libx265 -preset medium -b:v 2500k -pix_fmt yuv420p -g 240 -x265-params pass=1:stats=/data/rustcut/passlog/job-3\: try
+-c:v libx265 -preset medium -b:v 2500k -pix_fmt yuv420p -g 240 -x265-params pass=2:stats=/data/rustcut/passlog/job-3\: try
+-c:v libaom-av1 -cpu-used 4 -b:v 2500k -pix_fmt yuv420p -g 240 -pass 1 -passlogfile /data/rustcut/passlog/job-3: try
+-c:v libaom-av1 -cpu-used 4 -b:v 2500k -pix_fmt yuv420p -g 240 -pass 2 -passlogfile /data/rustcut/passlog/job-3: try

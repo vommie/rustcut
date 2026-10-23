@@ -14,5 +14,14 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+az.workspace = true
+minijinja.workspace = true
+path-clean.workspace = true
+serde.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
+insta.workspace = true
+proptest.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
