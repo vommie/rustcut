@@ -9,6 +9,7 @@ use crate::edit::{CropAspect, FilterChain};
 use crate::render::{DEFAULT_PROBE_SECS, PROBE_SECS, RenderProfile};
 use crate::settings::WhenDone;
 
+#[serde_as]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiState {
@@ -19,6 +20,9 @@ pub struct UiState {
     pub export: ExportPanelState,
     pub queue: QueuePanelState,
     pub timeline: TimelineState,
+    /// The Tag & Rate panel. A value this version cannot read counts as missing (the other parts stay).
+    #[serde_as(as = "DefaultOnError")]
+    pub tags: TagPanelState,
     /// Path of the last opened video's folder (the file dialog starts there).
     pub last_open_dir: Option<std::path::PathBuf>,
 }
@@ -161,6 +165,80 @@ impl Default for TimelineState {
     }
 }
 
+/// The Tag & Rate panel (M3.2): the tree's expanded branches, the tag filter, the tag history, hidden branches, locked
+/// tags and what the last saved job had. Tag ids are RustView's; ids RustView no longer knows are dropped by the app once
+/// the tag tree is loaded.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TagPanelState {
+    pub expanded: Vec<u32>,
+    pub filter: String,
+    pub regex: bool,
+    /// Recently used tags, newest first (at most [`TagPanelState::HISTORY_MAX`]).
+    pub history: Vec<u32>,
+    pub history_collapsed: bool,
+    /// Height of the tag history's body in logical pixels.
+    pub history_height: u32,
+    /// Branches hidden from the tree (the tag and everything below it).
+    pub hidden: Vec<u32>,
+    /// Tags that stay assigned from one job to the next (right click, user decision Q-G2).
+    pub locked: Vec<u32>,
+    /// Tags and rating of the last saved job ("apply last tags", "last rating").
+    pub last_tags: Vec<u32>,
+    pub last_rating: Option<u8>,
+}
+
+impl TagPanelState {
+    /// Longest tag history (RustView's default).
+    pub const HISTORY_MAX: usize = 20;
+    /// Smallest and largest height of the tag history's body (RustView's limits).
+    pub const HISTORY_HEIGHT: std::ops::RangeInclusive<u32> = 40..=500;
+
+    fn sanitize(&mut self, notes: &mut Vec<String>) {
+        for list in [
+            &mut self.expanded,
+            &mut self.history,
+            &mut self.hidden,
+            &mut self.locked,
+            &mut self.last_tags,
+        ] {
+            let mut seen = std::collections::HashSet::new();
+            list.retain(|id| seen.insert(*id));
+        }
+        if self.history.len() > Self::HISTORY_MAX {
+            notes.push(format!("tag history shortened to {}", Self::HISTORY_MAX));
+            self.history.truncate(Self::HISTORY_MAX);
+        }
+        if !Self::HISTORY_HEIGHT.contains(&self.history_height) {
+            notes.push(format!("tag history height {} brought into range", self.history_height));
+            self.history_height = self
+                .history_height
+                .clamp(*Self::HISTORY_HEIGHT.start(), *Self::HISTORY_HEIGHT.end());
+        }
+        if self.last_rating.is_some_and(|r| r > 5) {
+            notes.push("last rating dropped".into());
+            self.last_rating = None;
+        }
+    }
+}
+
+impl Default for TagPanelState {
+    fn default() -> Self {
+        Self {
+            expanded: Vec::new(),
+            filter: String::new(),
+            regex: false,
+            history: Vec::new(),
+            history_collapsed: false,
+            history_height: 96,
+            hidden: Vec::new(),
+            locked: Vec::new(),
+            last_tags: Vec::new(),
+            last_rating: None,
+        }
+    }
+}
+
 /// Window positions beyond this (physical pixels, any direction) are not on any screen.
 const MAX_POSITION: i32 = 32_768;
 
@@ -204,6 +282,7 @@ impl VersionedFile for UiState {
                 1.0
             };
         }
+        self.tags.sanitize(&mut notes);
         notes
     }
 }
@@ -227,6 +306,52 @@ mod tests {
             load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value(),
             state
         );
+    }
+
+    #[test]
+    fn the_tag_panel_round_trips_is_sanitized_and_old_files_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = UiState {
+            tags: TagPanelState {
+                expanded: vec![1, 2],
+                filter: "be.*".into(),
+                regex: true,
+                history: vec![5, 3],
+                history_collapsed: true,
+                history_height: 120,
+                hidden: vec![9],
+                locked: vec![3],
+                last_tags: vec![3, 5],
+                last_rating: Some(4),
+            },
+            ..UiState::default()
+        };
+        save(dir.path(), &state).unwrap();
+        assert_eq!(
+            load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value(),
+            state
+        );
+
+        let mut bad = UiState::default();
+        bad.tags.history = (0..30).chain([1, 1]).collect();
+        bad.tags.locked = vec![4, 4, 2];
+        bad.tags.history_height = 9;
+        bad.tags.last_rating = Some(9);
+        assert_eq!(bad.sanitize().len(), 3);
+        assert_eq!(bad.tags.history.len(), TagPanelState::HISTORY_MAX);
+        assert_eq!(bad.tags.locked, vec![4, 2]);
+        assert_eq!((bad.tags.history_height, bad.tags.last_rating), (40, None));
+
+        // A file of 0.0.11 has no `[tags]`; a `[tags]` this version cannot read keeps the rest of the file.
+        for tags in ["", "[tags]\nhistory = \"many\"\n"] {
+            std::fs::write(
+                dir.path().join("ui-state.toml"),
+                format!("version = 1\n[timeline]\nzoom = 4.0\n{tags}"),
+            )
+            .unwrap();
+            let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+            assert_eq!((read.timeline.zoom, read.tags.clone()), (4.0, TagPanelState::default()));
+        }
     }
 
     #[test]

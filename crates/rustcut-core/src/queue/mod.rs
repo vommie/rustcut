@@ -11,7 +11,7 @@ mod summary;
 use std::path::PathBuf;
 
 use crate::actor::Reply;
-use crate::job::{JobId, JobSpec, JobState};
+use crate::job::{JobId, JobMetadata, JobSpec, JobState};
 use crate::render::RenderEnv;
 use crate::render::RenderProfile;
 use crate::rustview::SyncState;
@@ -106,6 +106,8 @@ pub struct QueueSnapshot {
 pub enum QueueError {
     #[error("job {0} does not exist")]
     NoSuchJob(JobId),
+    #[error("job {0} was written by another RustCut version and cannot be read")]
+    Unreadable(JobId),
     #[error("job {id} cannot be changed while it is {state}")]
     NotEditable { id: JobId, state: crate::job::JobStateKind },
     #[error("the source and the target are the same file")]
@@ -179,6 +181,19 @@ pub enum QueueCommand {
     /// The ffmpeg path, work folders, hardware and priorities for renders started from now on (settings changed, the
     /// capability check found a VAAPI device).
     SetRenderEnv(Box<RenderEnv>),
+    /// The RustView metadata (tags, rating, source hash) a job wants (the Tag & Rate panel edits it, M3.2).
+    Metadata {
+        id: JobId,
+        reply: Reply<Result<JobMetadata, QueueError>>,
+    },
+    /// Replaces the RustView metadata of a job in any state (user decision Q-G3). A job still to render re-syncs as
+    /// edited, a finished job's record is written once more (its file exists), a failed or canceled job only keeps the
+    /// values for a restart.
+    UpdateMetadata {
+        id: JobId,
+        metadata: JobMetadata,
+        reply: Reply<Result<(), QueueError>>,
+    },
     /// Stops rendering jobs (they wait again at the next start) and ends the actor.
     Shutdown {
         reply: Reply<()>,

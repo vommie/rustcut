@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use super::work::{Stop, validate};
 use super::{Actor, StaleFiles, summarize, summary_rows};
-use crate::job::{JobId, JobSpec, JobState, JobStateKind};
+use crate::job::{JobId, JobMetadata, JobSpec, JobState, JobStateKind};
 use crate::queue::{QueueCommand, QueueError, QueueEvent, QueueSnapshot};
 use crate::render::{Control, RenderProfile};
 use crate::rustview::SyncPhase;
@@ -88,6 +88,17 @@ impl Actor {
                 tracing::debug!("[Queue] Render environment updated");
                 self.env = Arc::new(*env);
             }
+            QueueCommand::Metadata { id, reply } => {
+                let answer = match self.model.get(id).map(|r| &r.spec) {
+                    Some(SpecSlot::Decoded(spec)) => Ok(spec.metadata.clone()),
+                    Some(SpecSlot::Unreadable { .. }) => Err(QueueError::Unreadable(id)),
+                    None => Err(QueueError::NoSuchJob(id)),
+                };
+                let _ = reply.send(answer);
+            }
+            QueueCommand::UpdateMetadata { id, metadata, reply } => {
+                let _ = reply.send(self.update_metadata(id, metadata).await);
+            }
             // Handled by the loop before it gets here.
             QueueCommand::Shutdown { reply } => {
                 let _ = reply.send(());
@@ -120,6 +131,28 @@ impl Actor {
         self.store_spec(id, spec).await?;
         self.sync_job(id, SyncPhase::Edited);
         self.kick().await;
+        Ok(())
+    }
+
+    /// New tags, rating or source hash for a job in any state; see [`QueueCommand::UpdateMetadata`].
+    async fn update_metadata(&mut self, id: JobId, metadata: JobMetadata) -> Result<(), QueueError> {
+        let record = self.model.get(id).ok_or(QueueError::NoSuchJob(id))?;
+        let SpecSlot::Decoded(spec) = &record.spec else {
+            return Err(QueueError::Unreadable(id));
+        };
+        if spec.metadata == metadata {
+            return Ok(());
+        }
+        let kind = record.state.kind();
+        let mut spec = spec.clone();
+        spec.metadata = metadata;
+        self.store_spec(id, spec).await?;
+        tracing::info!(job = id.0, state = %kind, "[Queue] RustView metadata of a job changed");
+        match kind {
+            JobStateKind::Finished => self.sync_job(id, SyncPhase::Finished),
+            JobStateKind::Failed | JobStateKind::Canceled => {}
+            _ => self.sync_job(id, SyncPhase::Edited),
+        }
         Ok(())
     }
 
