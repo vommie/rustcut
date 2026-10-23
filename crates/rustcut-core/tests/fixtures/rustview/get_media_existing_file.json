@@ -1,0 +1,25 @@
+{
+  "success": true,
+  "found": true,
+  "media": {
+    "id": 658,
+    "folder_id": 36,
+    "folder_path": "/videos/out",
+    "filename": "clip - 02.mp4",
+    "full_path": "/videos/out/clip - 02.mp4",
+    "file_size": 10341341,
+    "modification_time": 1792780315,
+    "rating": 5,
+    "tags": [
+      1
+    ],
+    "file_hash": "ccec6b36fb7daf1f41d7eb2437de81a0",
+    "width": 1280,
+    "height": 720,
+    "media_type": "Video",
+    "format": "Mp4",
+    "is_deleted": false,
+    "is_corrupted": false,
+    "source": "RustCut"
+  }
+}

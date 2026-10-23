@@ -32,10 +32,19 @@ pub enum HashStatus {
     },
     Ready {
         md5: String,
-        from_sidecar: bool,
+        origin: HashOrigin,
     },
     Failed(String),
     Canceled,
+}
+
+/// Where the MD5 came from (ADR-6 order: RustView's record, the sidecar, reading the file).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HashOrigin {
+    /// RustView's record of the file (its size and time match, so the file was not read).
+    Library,
+    Sidecar,
+    Computed,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,6 +53,9 @@ pub struct MediaPanelState {
     pub generation: u64,
     pub probe: ProbeStatus,
     pub hash: HashStatus,
+    /// A job of this file was saved before its hash was known: register the hash in RustView once it is (bug 3: only
+    /// sources of jobs are registered).
+    pub register_hash: bool,
 }
 
 impl Default for MediaPanelState {
@@ -53,6 +65,7 @@ impl Default for MediaPanelState {
             generation: 0,
             probe: ProbeStatus::Idle,
             hash: HashStatus::Idle,
+            register_hash: false,
         }
     }
 }
@@ -89,6 +102,7 @@ impl MediaPanelState {
     pub fn opening(&mut self, file: &Path, hash_now: bool) -> u64 {
         self.generation = self.generation.wrapping_add(1);
         self.file = Some(file.to_path_buf());
+        self.register_hash = false;
         self.probe = ProbeStatus::Running;
         self.hash = if hash_now {
             HashStatus::Running { done: 0, total: 0 }
@@ -160,12 +174,37 @@ impl MediaPanelState {
             },
             HashEvent::Finished { md5, from_sidecar, .. } => HashStatus::Ready {
                 md5: md5.clone(),
-                from_sidecar: *from_sidecar,
+                origin: if *from_sidecar {
+                    HashOrigin::Sidecar
+                } else {
+                    HashOrigin::Computed
+                },
             },
             HashEvent::Failed { error, .. } => HashStatus::Failed(error.clone()),
             HashEvent::Canceled { .. } => HashStatus::Canceled,
         };
         true
+    }
+
+    /// RustView's record of the open file gave its MD5 (only while that open is still current and the hash still
+    /// wanted). `false` when it is about an older open.
+    pub fn hash_from_library(&mut self, generation: u64, md5: &str) -> bool {
+        if generation != self.generation || !matches!(self.hash, HashStatus::Running { .. }) {
+            return false;
+        }
+        self.hash = HashStatus::Ready {
+            md5: md5.to_owned(),
+            origin: HashOrigin::Library,
+        };
+        true
+    }
+
+    /// The open file and its MD5, once known.
+    pub fn ready_hash(&self) -> Option<(PathBuf, String)> {
+        match (&self.file, &self.hash) {
+            (Some(file), HashStatus::Ready { md5, .. }) => Some((file.clone(), md5.clone())),
+            _ => None,
+        }
     }
 
     /// The probed file, once known.
@@ -238,14 +277,14 @@ impl MediaPanelState {
                 can_cancel: true,
                 ..plain("Computing...", String::new(), false)
             },
-            HashStatus::Ready { md5, from_sidecar } => HashView {
+            HashStatus::Ready { md5, origin } => HashView {
                 is_digest: true,
                 ..plain(
                     md5,
-                    if *from_sidecar {
-                        "From the sidecar file".into()
-                    } else {
-                        String::new()
+                    match origin {
+                        HashOrigin::Library => "From the RustView library".into(),
+                        HashOrigin::Sidecar => "From the sidecar file".into(),
+                        HashOrigin::Computed => String::new(),
                     },
                     false,
                 )
@@ -402,6 +441,28 @@ mod tests {
         assert_eq!(s.hash_view().text, "Canceled");
         assert_eq!(s.hash_requested(), Some(PathBuf::from("/v/a.mp4")));
         assert_eq!(s.hash_view().text, "Computing...");
+    }
+
+    #[test]
+    fn rustviews_hash_counts_only_for_the_current_open() {
+        let mut s = MediaPanelState::default();
+        let first = s.opening(Path::new("/v/a.mp4"), true);
+        let second = s.opening(Path::new("/v/b.mp4"), true);
+        assert!(!s.hash_from_library(first, "8f618d1ebd606025257057ee18536e64"));
+        assert!(s.hash_from_library(second, "8f618d1ebd606025257057ee18536e64"));
+        let view = s.hash_view();
+        assert_eq!(view.note, "From the RustView library");
+        assert_eq!(
+            s.ready_hash(),
+            Some((PathBuf::from("/v/b.mp4"), "8f618d1ebd606025257057ee18536e64".into()))
+        );
+        assert!(
+            !s.hash_from_library(second, "00000000000000000000000000000000"),
+            "a known hash is not replaced"
+        );
+        s.register_hash = true;
+        s.opening(Path::new("/v/c.mp4"), false);
+        assert!(!s.register_hash && s.ready_hash().is_none());
     }
 
     #[test]

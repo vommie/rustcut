@@ -92,7 +92,10 @@ impl ExportBridge {
             return Err(format!("The render settings cannot be used: {}", issue.message));
         }
         let filters = self.filters.upgrade().ok_or_else(gone)?.chain();
-        let info = self.media.upgrade().and_then(|m| m.current());
+        let media = self.media.upgrade();
+        let info = media.as_ref().and_then(|m| m.current());
+        // Tags and rating come with the Tag & Rate panel (M3.2); the source hash goes to RustView's hash list.
+        let source_hash = media.as_ref().and_then(|m| m.source_hash(&source));
         let facts = JobFacts::new(&profile, sections.len(), sections.total_duration());
         let st = self.state.borrow();
         let folder = st.target_folder().ok_or("Choose a target folder.")?;
@@ -114,7 +117,10 @@ impl ExportBridge {
                 stem: stem.clone(),
                 overwrite: false,
             },
-            metadata: JobMetadata::default(),
+            metadata: JobMetadata {
+                source_hash,
+                ..JobMetadata::default()
+            },
         };
         Ok(Draft {
             spec,
@@ -195,6 +201,8 @@ impl ExportBridge {
         spec.target.overwrite = outcome.overwrite;
         let file = file_name(&outcome.stem, draft.facts.container);
         let counter = outcome.counter;
+        let source = spec.source.clone();
+        let with_hash = spec.metadata.source_hash.is_some();
         let handle = queue.handle().clone();
         let remove = outcome.remove;
         let task = self.runtime.spawn(async move {
@@ -220,7 +228,12 @@ impl ExportBridge {
             let result = task.await.unwrap_or_else(|e| Err(QueueError::Store(e.to_string())));
             bridge.saving.set(false);
             match result {
-                Ok(id) => bridge.saved(id, &file, counter),
+                Ok(id) => {
+                    if let Some(media) = bridge.media.upgrade() {
+                        media.job_saved(&source, with_hash);
+                    }
+                    bridge.saved(id, &file, counter);
+                }
                 Err(e) => bridge.status(Level::Error, &format!("The job was not saved: {e}")),
             }
             bridge.rescan();

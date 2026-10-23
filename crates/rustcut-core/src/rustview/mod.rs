@@ -1,13 +1,22 @@
-//! The RustView link (ADR-6): typed models of `rustview api <cmd> --json`, the [`RustViewClient`] trait (the CLI transport
-//! comes in M3.1) and the interface of the sync actor that makes RustView match each job.
+//! The RustView link (ADR-6): typed models of `rustview api <cmd> --json`, the [`RustViewClient`] trait with its CLI
+//! transport ([`CliClient`]), and the sync actor that makes RustView match each job.
 
+mod cli;
 mod client;
 mod models;
+mod source;
 mod sync;
 
+pub use cli::{CliClient, DEFAULT_BINARY, decode};
 pub use client::{RustViewClient, RustViewError, SOURCE_APP};
 pub use models::{
     ApiErrorResponse, BatchHashCheck, DeleteMedia, GetMedia, HashCheck, HashCheckItem, HashInsert, MediaDetails,
     SetMedia, SetMediaAction, TagItem, TagTree,
 };
-pub use sync::{ConnectionState, JobSyncRecord, SyncCommand, SyncEvent, SyncPhase, SyncState};
+pub use source::{is_md5, trusted_hash};
+#[cfg(test)]
+pub(crate) use sync::fake;
+pub use sync::{
+    ConnectionState, JobSyncRecord, SyncCommand, SyncEvent, SyncHandle, SyncPhase, SyncRecords, SyncService, SyncState,
+    spawn_sync,
+};

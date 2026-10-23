@@ -12,7 +12,7 @@ use crate::queue::{JobSummary, MoveTarget, QueueSnapshot};
 use crate::render::{HardwareContext, RenderPriority, WorkDirs};
 use crate::store::{Store, spawn_store};
 
-fn env(dir: &Path) -> RenderEnv {
+pub(super) fn env(dir: &Path) -> RenderEnv {
     RenderEnv {
         ffmpeg: PathBuf::from("ffmpeg"),
         probe: crate::media::ProbeOptions::default(),
@@ -29,7 +29,7 @@ fn env(dir: &Path) -> RenderEnv {
     }
 }
 
-fn options(paused: bool) -> QueueOptions {
+pub(super) fn options(paused: bool) -> QueueOptions {
     QueueOptions {
         workers: 1,
         paused,
@@ -38,7 +38,7 @@ fn options(paused: bool) -> QueueOptions {
     }
 }
 
-fn spec_in(dir: &Path, stem: &str) -> Box<JobSpec> {
+pub(super) fn spec_in(dir: &Path, stem: &str) -> Box<JobSpec> {
     let mut spec = sample_spec();
     spec.source = dir.join("missing-source.mp4");
     spec.target.folder = dir.to_path_buf();
@@ -46,7 +46,7 @@ fn spec_in(dir: &Path, stem: &str) -> Box<JobSpec> {
     Box::new(spec)
 }
 
-async fn snapshot(queue: &QueueService) -> QueueSnapshot {
+pub(super) async fn snapshot(queue: &QueueService) -> QueueSnapshot {
     queue
         .handle
         .request(|reply| QueueCommand::Snapshot { reply })
@@ -54,7 +54,7 @@ async fn snapshot(queue: &QueueService) -> QueueSnapshot {
         .unwrap()
 }
 
-async fn enqueue(queue: &QueueService, spec: Box<JobSpec>) -> Result<JobId, QueueError> {
+pub(super) async fn enqueue(queue: &QueueService, spec: Box<JobSpec>) -> Result<JobId, QueueError> {
     queue
         .handle
         .request(|reply| QueueCommand::Enqueue {
@@ -67,7 +67,7 @@ async fn enqueue(queue: &QueueService, spec: Box<JobSpec>) -> Result<JobId, Queu
 }
 
 /// The next row update of `id` that satisfies `done`.
-async fn wait_for(
+pub(super) async fn wait_for(
     events: &mut broadcast::Receiver<QueueEvent>,
     id: JobId,
     done: impl Fn(&JobSummary) -> bool,

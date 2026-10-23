@@ -6,7 +6,7 @@ default-members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustc
 [workspace.package]
 # Single source of truth for the app version: the About page, the package script and the PKGBUILD read it from here.
 # Claude bumps the patch number whenever a state is testable; major and minor belong to the user.
-version = "0.0.10"
+version = "0.0.11"
 edition = "2024"
 # The lowest toolchain known to work (rusqlite_migration needs 1.95). rust-toolchain.toml pins `stable`.
 rust-version = "1.95"
@@ -91,6 +91,9 @@ rustix = { version = "1", features = ["process", "fs"] }
 ioprio = "0.2"
 # Shell quoting of the ffmpeg command line in the job log (copy and paste it into a terminal to reproduce a render).
 shlex = "2"
+# The growing pause between attempts while RustView cannot be reached (exponential, capped), used as a plain iterator of
+# delays by the sync actor.
+backon = { version = "1", default-features = false, features = ["std"] }
 
 # Tests only.
 proptest = "1"

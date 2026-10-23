@@ -16,6 +16,7 @@ workspace = true
 [dependencies]
 atomic-write-file.workspace = true
 az.workspace = true
+backon.workspace = true
 chrono.workspace = true
 directories.workspace = true
 hex.workspace = true

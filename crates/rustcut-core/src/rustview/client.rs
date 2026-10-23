@@ -1,5 +1,5 @@
-//! The RustView client interface. The CLI transport (`rustview api <cmd> --json`, exit codes 0 and 2, timeout) implements
-//! it in M3.1; tests use fakes. Calls are made only by the sync actor (serialized; RustView's LMDB has one writer anyway).
+//! The RustView client interface. The CLI transport ([`super::CliClient`]: `rustview api <cmd> --json`, exit codes 0 and
+//! 2, timeout) implements it; tests use fakes. Calls are made only by the sync actor (serialized; RustView's LMDB has one writer anyway).
 
 use std::future::Future;
 use std::path::Path;
@@ -40,8 +40,20 @@ pub trait RustViewClient: Send + Sync + 'static {
     /// `found: false` (exit code 2) is a normal answer, not an error.
     fn get_media(&self, path: &Path) -> impl Future<Output = Result<GetMedia>> + Send;
 
-    /// Creates or updates a record; `tags`/`rating`/`hash` `None` leave the stored value alone.
+    /// Creates or updates a record; `tags`/`rating`/`hash` `None` leave the stored value alone, an empty tag list clears
+    /// the tags. The record keeps its source app (a new one gets RustView's default).
     fn set_media(
+        &self,
+        path: &Path,
+        rating: Option<u8>,
+        tags: Option<&[u32]>,
+        hash: Option<&str>,
+    ) -> impl Future<Output = Result<SetMedia>> + Send;
+
+    /// Like [`set_media`](Self::set_media), and marks the record as RustCut's ([`SOURCE_APP`]): for records RustCut
+    /// creates (pending stubs that RustView completes once the file exists). A record that existed before RustCut wrote
+    /// to it is written with `set_media`, so its source stays.
+    fn set_own_media(
         &self,
         path: &Path,
         rating: Option<u8>,

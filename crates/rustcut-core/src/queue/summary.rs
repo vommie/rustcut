@@ -12,12 +12,7 @@ use super::JobSummary;
 
 /// The panel's row of a job. A job whose spec this version cannot read shows its stored paths and why.
 pub fn summarize(record: &JobRecord) -> JobSummary {
-    let sync = record
-        .sync
-        .as_deref()
-        .and_then(|json| serde_json::from_str::<JobSyncRecord>(json).ok())
-        .unwrap_or_default()
-        .state;
+    let sync = JobSyncRecord::from_column(record.sync.as_deref()).state;
     let (name, profile, sections, duration, note) = match &record.spec {
         SpecSlot::Decoded(spec) => (
             spec.target.stem.clone(),

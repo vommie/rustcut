@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "total_requested": 2,
+  "known_count": 1,
+  "unknown_count": 1,
+  "results": [
+    {
+      "hash": "8f618d1ebd606025257057ee18536e64",
+      "known": true,
+      "hash_id": 1,
+      "date_time": "2026-10-23 18:31:49",
+      "associated_files": [
+        "/videos/out/clip - 01.mkv"
+      ]
+    },
+    {
+      "hash": "00000000000000000000000000000000",
+      "known": false,
+      "associated_files": []
+    }
+  ]
+}
