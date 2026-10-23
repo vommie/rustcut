@@ -66,6 +66,23 @@ pub struct Preset {
     pub label: &'static str,
 }
 
+/// Where an option's value goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Setting {
+    /// Its own ffmpeg option (`-aq-mode <value>`).
+    Option(&'static str),
+    /// A key inside the codec params (`-x264-params aq-mode=<value>`).
+    Param(&'static str),
+}
+
+/// The adaptive quantization modes of an encoder (how bits move between flat and detailed areas of a frame).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AqSpec {
+    pub setting: Setting,
+    /// The modes; the label of the encoder's default says so.
+    pub modes: &'static [Preset],
+}
+
 /// Where the tune value goes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TuneTarget {
@@ -104,6 +121,22 @@ pub struct EncoderSpec {
     /// Whether it synthesizes film grain (SVT-AV1 `film-grain`).
     pub film_grain: bool,
     pub recommended_audio: AudioCodec,
+    /// A constant quantizer (`-qp`) next to constant quality; `None` when the encoder has none or its quality scale
+    /// already is a quantizer (rav1e, VAAPI).
+    pub constant_qp: Option<QualityScale>,
+    /// Adaptive quantization modes; `None` = not adjustable.
+    pub aq: Option<AqSpec>,
+    /// Whether keyframes at scene cuts can be switched off (`scenecut=0`, x264 and x265).
+    pub scene_cuts: bool,
+    /// Whether it has SVT-AV1's variance boost (more bits for low-contrast areas).
+    pub variance_boost: bool,
+    /// Codec parameter keys that conflict with options RustCut always passes; the passthrough refuses them.
+    pub reserved_params: &'static [&'static str],
+    /// The simple view's quality slider: the value at its "smallest file" end and at its "best quality" end (a useful
+    /// part of the scale, chosen so the same slider position looks about the same with every encoder).
+    pub simple_quality: (u16, u16),
+    /// The simple view's speeds, fastest first (see [`super::Speed`]); `None` when the encoder has no presets.
+    pub speeds: Option<[&'static str; 5]>,
 }
 
 impl VideoEncoder {
@@ -160,6 +193,11 @@ impl EncoderSpec {
     pub fn has_tune(&self, value: &str) -> bool {
         self.tunes.iter().any(|p| p.value == value)
     }
+
+    /// The label of a speed preset value (`slow` -> "Slow").
+    pub fn preset_label(&self, value: &str) -> Option<&'static str> {
+        self.presets.iter().find(|p| p.value == value).map(|p| p.label)
+    }
 }
 
 #[cfg(test)]
@@ -198,6 +236,35 @@ mod tests {
                 spec.ffmpeg_name
             );
             assert_eq!(spec.film_grain, encoder == VideoEncoder::SvtAv1);
+            assert_eq!(spec.variance_boost, encoder == VideoEncoder::SvtAv1);
+            assert_eq!(spec.speeds.is_some(), !spec.presets.is_empty(), "{}", spec.ffmpeg_name);
+            for preset in spec.speeds.iter().flatten() {
+                assert!(spec.has_preset(preset), "{}: speed {preset}", spec.ffmpeg_name);
+            }
+            let (low, high) = spec.simple_quality;
+            assert!(
+                q.min <= high && high < low && low <= q.max,
+                "{}: slider range",
+                spec.ffmpeg_name
+            );
+            assert!(
+                (high..=low).contains(&q.default),
+                "{}: the default is on the slider",
+                spec.ffmpeg_name
+            );
+            if let Some(qp) = spec.constant_qp {
+                assert!(qp.min <= qp.default && qp.default <= qp.max, "{}", spec.ffmpeg_name);
+            }
+            if spec.scene_cuts || spec.variance_boost || !spec.reserved_params.is_empty() {
+                assert!(spec.params_option.is_some(), "{}", spec.ffmpeg_name);
+            }
+            if let Some(AqSpec {
+                setting: Setting::Param(_),
+                ..
+            }) = spec.aq
+            {
+                assert!(spec.params_option.is_some(), "{}", spec.ffmpeg_name);
+            }
             assert_eq!(
                 spec.backend == EncoderBackend::Software,
                 encoder.spec().pix_fmt_8 == "yuv420p"

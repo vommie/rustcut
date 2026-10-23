@@ -6,6 +6,7 @@ use serde_with::{DefaultOnError, serde_as};
 
 use super::file::VersionedFile;
 use crate::edit::{CropAspect, FilterChain};
+use crate::render::{DEFAULT_PROBE_SECS, PROBE_SECS, RenderProfile};
 use crate::settings::WhenDone;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -71,8 +72,16 @@ pub struct ExportPanelState {
     /// The aspect ratio a crop keeps while it is dragged on the video.
     #[serde_as(as = "DefaultOnError")]
     pub crop_aspect: CropAspect,
-    /// Render profile of the next job (id).
+    /// Render profile of the next job (id): the profile the Render Settings panel's working copy came from.
     pub profile: Option<String>,
+    /// The Render Settings panel's working copy (the last used settings; user decision Q-E4). A value this version
+    /// cannot read counts as missing (the panel starts from the profile).
+    #[serde_as(as = "DefaultOnError")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub render: Option<RenderProfile>,
+    /// The probe render's switches.
+    #[serde_as(as = "DefaultOnError")]
+    pub probe: ProbeState,
     pub muted: bool,
     /// Player volume in percent.
     pub volume: u8,
@@ -91,8 +100,29 @@ impl Default for ExportPanelState {
             filters: None,
             crop_aspect: CropAspect::Free,
             profile: None,
+            render: None,
+            probe: ProbeState::default(),
             muted: false,
             volume: 100,
+        }
+    }
+}
+
+/// The probe render's switches in the Render Settings panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProbeState {
+    /// Length in seconds.
+    pub seconds: u16,
+    /// Render with the profile's own speed (and estimate the job's size) instead of the fastest one.
+    pub exact: bool,
+}
+
+impl Default for ProbeState {
+    fn default() -> Self {
+        Self {
+            seconds: DEFAULT_PROBE_SECS,
+            exact: false,
         }
     }
 }
@@ -160,6 +190,11 @@ impl VersionedFile for UiState {
             self.export.volume = 150;
         }
         self.queue.columns.retain(|_, width| *width >= 24 && *width <= 4_000);
+        let seconds = self.export.probe.seconds;
+        if !PROBE_SECS.contains(&seconds) {
+            notes.push(format!("probe length {seconds} s brought into range"));
+            self.export.probe.seconds = seconds.clamp(*PROBE_SECS.start(), *PROBE_SECS.end());
+        }
         let zoom = self.timeline.zoom;
         if !zoom.is_finite() || !(1.0..=TimelineState::MAX_ZOOM).contains(&zoom) {
             notes.push(format!("timeline zoom {zoom} reset"));
@@ -264,6 +299,44 @@ mod tests {
         assert!(value.export.keep_filters);
         assert_eq!(value.export.filters, None);
         assert_eq!(value.export.crop_aspect, CropAspect::Free);
+    }
+
+    #[test]
+    fn the_render_working_copy_and_probe_switches() {
+        use crate::render::{VideoEncoder, builtin_profiles};
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = UiState::default();
+        let mut working = builtin_profiles().remove(0);
+        working.set_encoder(VideoEncoder::X264);
+        state.export.profile = Some("av1-balanced".into());
+        state.export.render = Some(working);
+        state.export.probe = ProbeState {
+            seconds: 20,
+            exact: true,
+        };
+        save(dir.path(), &state).unwrap();
+        assert_eq!(
+            load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value(),
+            state
+        );
+
+        // 0.0.8 wrote neither; a broken copy or switch does not reset the rest.
+        std::fs::write(
+            dir.path().join("ui-state.toml"),
+            "version = 1\n[export]\nvolume = 60\nprofile = \"x265-quality\"\nprobe = 3\n\
+             [export.render]\nid = 1\n",
+        )
+        .unwrap();
+        let value = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+        assert_eq!(value.export.volume, 60);
+        assert_eq!(value.export.profile.as_deref(), Some("x265-quality"));
+        assert_eq!(value.export.render, None);
+        assert_eq!(value.export.probe, ProbeState::default());
+
+        let mut state = UiState::default();
+        state.export.probe.seconds = 600;
+        assert_eq!(state.sanitize().len(), 1);
+        assert_eq!(state.export.probe.seconds, 60);
     }
 
     #[test]

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use serde_with::formats::PreferMany;
-use serde_with::{DefaultOnError, OneOrMany, serde_as};
+use serde_with::{DefaultOnError, OneOrMany, VecSkipError, serde_as};
 
 use super::file::VersionedFile;
 use crate::edit::{Deinterlacer, DeshakeParams};
@@ -159,10 +159,13 @@ impl Default for ExportSettings {
     }
 }
 
+#[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RenderSettings {
-    /// The user's own profiles (built-ins are not stored).
+    /// The user's own profiles (built-ins are not stored). A profile that cannot be read (a hand-edited typo) is skipped
+    /// and dropped at the next save, so one broken entry never resets the other settings.
+    #[serde_as(as = "DefaultOnError<VecSkipError<_>>")]
     pub profiles: Vec<RenderProfile>,
     /// Profile selected for new jobs.
     pub default_profile: String,
@@ -526,6 +529,47 @@ mod tests {
         save(dir.path(), &Settings::default()).unwrap();
         let text = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
         assert!(!text.contains("keymap"), "{text}");
+    }
+
+    #[test]
+    fn user_profiles_round_trip_and_a_broken_one_is_skipped() {
+        use crate::render::{RateControl, VideoEncoder, builtin_profiles};
+        let dir = tempfile::tempdir().unwrap();
+        let mut settings = Settings::default();
+        let mut mine = builtin_profiles().remove(0);
+        mine.id = "mine".into();
+        mine.name = "Mine".into();
+        mine.set_encoder(VideoEncoder::X265);
+        mine.video.rate_control = RateControl::ConstantQp { qp: 20 };
+        mine.video.scene_cuts = Some(false);
+        settings.render.profiles = vec![mine.clone()];
+        settings.render.default_profile = "mine".into();
+        save(dir.path(), &settings).unwrap();
+        let read = load::<Settings>(dir.path(), &dir.path().join("b"))
+            .unwrap()
+            .into_value();
+        assert_eq!(read, settings);
+
+        // A profile of 0.0.8 (no expert fields) and one with an encoder this version does not know.
+        let text = "version = 1\n[queue]\nworkers = 2\n[render]\ndefault_profile = \"old\"\n\
+                    [[render.profiles]]\nid = \"future\"\nname = \"Future\"\n[render.profiles.video]\n\
+                    encoder = \"vvc_next\"\nrate_control = { mode = \"quality\", value = 30 }\n\
+                    [[render.profiles]]\nid = \"old\"\nname = \"Old\"\ncontainer = \"mp4\"\n\
+                    [render.profiles.video]\nencoder = \"libx264_typo\"\nrate_control = { mode = \"quality\", value = 20 }\n\
+                    [[render.profiles]]\nid = \"kept\"\nname = \"Kept\"\n[render.profiles.video]\nencoder = \"x264\"\n\
+                    rate_control = { mode = \"quality\", value = 21 }\npreset = \"slow\"\n\
+                    codec_params = [{ key = \"ref\", value = \"4\" }]\n[render.profiles.audio]\ncodec = \"aac\"\n";
+        std::fs::write(dir.path().join("config.toml"), text).unwrap();
+        let outcome = load::<Settings>(dir.path(), &dir.path().join("b")).unwrap();
+        let read = outcome.into_value();
+        assert_eq!(read.queue.workers, 2, "the other settings stay");
+        let ids: Vec<&str> = read.render.profiles.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, ["kept"]);
+        let kept = &read.render.profiles[0];
+        assert_eq!(kept.video.preset.as_deref(), Some("slow"));
+        assert_eq!((kept.video.aq_mode.as_deref(), kept.video.scene_cuts), (None, None));
+        assert_eq!(read.render.default_profile, DEFAULT_PROFILE_ID, "\"old\" is gone");
+        assert!(!dir.path().join("b").exists(), "no migration, no backup");
     }
 
     #[test]

@@ -1,42 +1,27 @@
 //! The built-in render profiles (ADR-14). Users copy and edit them; the built-ins themselves stay as shipped.
 
-use super::{
-    AudioCodec, AudioSettings, BitDepth, CodecParam, Container, RateControl, RenderProfile, VideoEncoder, VideoSettings,
-};
+use super::{AudioCodec, AudioSettings, BitDepth, Container, RateControl, RenderProfile, VideoEncoder, VideoSettings};
 
 /// Id of the profile new installations start with: PyCutRv's settings (SVT-AV1 preset 6, CRF 26, 10-bit, film grain 8).
 pub const DEFAULT_PROFILE_ID: &str = "av1-balanced";
 
 fn svt(value: u16, preset: &str) -> VideoSettings {
     VideoSettings {
-        encoder: VideoEncoder::SvtAv1,
         rate_control: RateControl::Quality { value },
         preset: Some(preset.to_owned()),
         tune: Some("0".to_owned()),
-        profile: None,
-        level: None,
         bit_depth: BitDepth::Ten,
-        keyint: None,
         film_grain: Some(8),
-        codec_params: vec![
-            CodecParam::new("enable-variance-boost", "1"),
-            CodecParam::new("variance-boost-strength", "2"),
-        ],
+        variance_boost: Some(2),
+        ..VideoSettings::new(VideoEncoder::SvtAv1)
     }
 }
 
 fn x26x(encoder: VideoEncoder, value: u16, preset: &str) -> VideoSettings {
     VideoSettings {
-        encoder,
         rate_control: RateControl::Quality { value },
         preset: Some(preset.to_owned()),
-        tune: None,
-        profile: None,
-        level: None,
-        bit_depth: BitDepth::Eight,
-        keyint: None,
-        film_grain: None,
-        codec_params: Vec::new(),
+        ..VideoSettings::new(encoder)
     }
 }
 

@@ -2,8 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::container::{CompatIssue, Severity};
-use super::{AudioCodec, Container, TuneTarget, VideoEncoder};
+use super::color::ColorSettings;
+use super::container::Severity;
+use super::{AudioCodec, Container, VideoEncoder};
 
 /// A complete set of encoding settings under a name.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -43,6 +44,42 @@ pub struct VideoSettings {
     /// Extra `key=value` parameters for the encoder's params option (`-svtav1-params`, `-x265-params`, ...).
     #[serde(default)]
     pub codec_params: Vec<CodecParam>,
+    /// Adaptive quantization mode (a value of the encoder's list); `None` = the encoder's default.
+    #[serde(default)]
+    pub aq_mode: Option<String>,
+    /// `Some(false)` = no extra keyframes at scene cuts (x264/x265 `scenecut=0`); `None` = the encoder's default (on).
+    #[serde(default)]
+    pub scene_cuts: Option<bool>,
+    /// SVT-AV1 variance boost: `Some(0)` = off, 1 to 4 = its strength; `None` = the encoder's default.
+    #[serde(default)]
+    pub variance_boost: Option<u8>,
+    /// Color tags of the output; the default passes the source's on.
+    #[serde(default)]
+    pub color: ColorSettings,
+}
+
+impl VideoSettings {
+    /// `encoder` at its default quality and preset, everything else left to the encoder.
+    pub fn new(encoder: VideoEncoder) -> Self {
+        Self {
+            encoder,
+            rate_control: RateControl::Quality {
+                value: encoder.spec().quality.default,
+            },
+            preset: None,
+            tune: None,
+            profile: None,
+            level: None,
+            bit_depth: BitDepth::Eight,
+            keyint: None,
+            film_grain: None,
+            codec_params: Vec::new(),
+            aq_mode: None,
+            scene_cuts: None,
+            variance_boost: None,
+            color: ColorSettings::default(),
+        }
+    }
 }
 
 /// How the encoder decides the bit rate.
@@ -51,6 +88,8 @@ pub struct VideoSettings {
 pub enum RateControl {
     /// Constant quality on the encoder's scale (CRF / QP / CQ, see [`super::QualityScale`]).
     Quality { value: u16 },
+    /// A constant quantizer for every frame (`-qp`): predictable, but larger than constant quality at the same look.
+    ConstantQp { qp: u16 },
     /// Average bit rate in kbit/s, one pass.
     AverageBitrate { kbps: u32 },
     /// Average bit rate in kbit/s, two passes (better distribution, twice the time).
@@ -99,6 +138,8 @@ pub struct AudioSettings {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ProfileField {
     Name,
+    /// The encoder itself (not available here).
+    Encoder,
     Container,
     RateControl,
     Preset,
@@ -108,235 +149,52 @@ pub enum ProfileField {
     BitDepth,
     Keyint,
     FilmGrain,
+    VarianceBoost,
+    AqMode,
+    SceneCuts,
+    Color,
     CodecParams,
     Audio,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ProfileIssue {
     pub field: ProfileField,
     pub severity: Severity,
     pub message: String,
 }
 
+impl ProfileIssue {
+    pub fn error(field: ProfileField, message: impl Into<String>) -> Self {
+        Self {
+            field,
+            severity: Severity::Error,
+            message: message.into(),
+        }
+    }
+
+    pub fn warning(field: ProfileField, message: impl Into<String>) -> Self {
+        Self {
+            field,
+            severity: Severity::Warning,
+            message: message.into(),
+        }
+    }
+}
+
 impl RenderProfile {
     /// Everything that is wrong or questionable; an [`Severity::Error`] blocks rendering with this profile.
     pub fn validate(&self) -> Vec<ProfileIssue> {
-        let mut issues = Vec::new();
-        let mut push = |field, severity, message: String| {
-            issues.push(ProfileIssue {
-                field,
-                severity,
-                message,
-            });
-        };
-        if self.name.trim().is_empty() {
-            push(
-                ProfileField::Name,
-                Severity::Error,
-                "the profile needs a name".to_owned(),
-            );
-        }
-        let v = &self.video;
-        let spec = v.encoder.spec();
-        match v.rate_control {
-            RateControl::Quality { value } => {
-                let q = spec.quality;
-                if !(q.min..=q.max).contains(&value) {
-                    push(
-                        ProfileField::RateControl,
-                        Severity::Error,
-                        format!("{} of {} must be {} to {}", q.label, spec.display_name, q.min, q.max),
-                    );
-                }
-            }
-            RateControl::AverageBitrate { kbps } | RateControl::TwoPass { kbps } if kbps == 0 => {
-                push(
-                    ProfileField::RateControl,
-                    Severity::Error,
-                    "the bit rate must be above 0".to_owned(),
-                );
-            }
-            RateControl::TargetSize { mebibytes: 0 } => {
-                push(
-                    ProfileField::RateControl,
-                    Severity::Error,
-                    "the target size must be above 0".to_owned(),
-                );
-            }
-            RateControl::AverageBitrate { .. } | RateControl::TwoPass { .. } | RateControl::TargetSize { .. } => {}
-        }
-        if matches!(
-            v.rate_control,
-            RateControl::TwoPass { .. } | RateControl::TargetSize { .. }
-        ) && !spec.two_pass
-        {
-            push(
-                ProfileField::RateControl,
-                Severity::Error,
-                format!("{} has no two-pass mode", spec.display_name),
-            );
-        }
-        if let Some(preset) = &v.preset
-            && !spec.has_preset(preset)
-        {
-            push(
-                ProfileField::Preset,
-                Severity::Error,
-                format!("{} has no preset `{preset}`", spec.display_name),
-            );
-        }
-        if let Some(tune) = &v.tune
-            && !spec.has_tune(tune)
-        {
-            push(
-                ProfileField::Tune,
-                Severity::Error,
-                format!("{} has no tune `{tune}`", spec.display_name),
-            );
-        }
-        if let Some(profile) = &v.profile {
-            if spec.profiles.is_empty() {
-                push(
-                    ProfileField::Profile,
-                    Severity::Error,
-                    format!("{} takes no profile", spec.display_name),
-                );
-            } else if !spec.profiles.contains(&profile.as_str()) {
-                push(
-                    ProfileField::Profile,
-                    Severity::Error,
-                    format!("{} has no profile `{profile}`", spec.display_name),
-                );
-            } else if v.bit_depth == BitDepth::Ten && !profile.ends_with("10") {
-                push(
-                    ProfileField::Profile,
-                    Severity::Error,
-                    format!("profile `{profile}` cannot encode 10-bit"),
-                );
-            } else if v.bit_depth == BitDepth::Eight && profile.ends_with("10") {
-                push(
-                    ProfileField::Profile,
-                    Severity::Warning,
-                    format!("profile `{profile}` is meant for 10-bit"),
-                );
-            }
-        }
-        if let Some(level) = &v.level
-            && (level.is_empty() || !level.chars().all(|c| c.is_ascii_digit() || c == '.'))
-        {
-            push(
-                ProfileField::Level,
-                Severity::Error,
-                format!("`{level}` is not a level (expected e.g. 4.1)"),
-            );
-        }
-        if v.bit_depth == BitDepth::Ten && spec.pix_fmt_10.is_none() {
-            push(
-                ProfileField::BitDepth,
-                Severity::Error,
-                format!("{} cannot encode 10-bit", spec.display_name),
-            );
-        }
-        if v.bit_depth == BitDepth::Ten && v.encoder == VideoEncoder::X264 {
-            push(
-                ProfileField::BitDepth,
-                Severity::Warning,
-                "10-bit H.264 does not play on many devices".to_owned(),
-            );
-        }
-        if v.keyint == Some(0) {
-            push(
-                ProfileField::Keyint,
-                Severity::Error,
-                "the keyframe interval must be above 0".to_owned(),
-            );
-        }
-        if let Some(grain) = v.film_grain {
-            if !spec.film_grain {
-                push(
-                    ProfileField::FilmGrain,
-                    Severity::Error,
-                    format!("{} has no film grain synthesis", spec.display_name),
-                );
-            } else if grain > 50 {
-                push(
-                    ProfileField::FilmGrain,
-                    Severity::Error,
-                    "film grain must be 0 to 50".to_owned(),
-                );
-            }
-        }
-        for (i, p) in v.codec_params.iter().enumerate() {
-            if spec.params_option.is_none() {
-                push(
-                    ProfileField::CodecParams,
-                    Severity::Error,
-                    format!("{} takes no codec parameters", spec.display_name),
-                );
-                break;
-            }
-            if p.key.is_empty() || !p.key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-                push(
-                    ProfileField::CodecParams,
-                    Severity::Error,
-                    format!("`{}` is not a parameter name", p.key),
-                );
-            }
-            if p.value.is_empty() || p.value.contains([':', '=']) || p.value.chars().any(char::is_whitespace) {
-                push(
-                    ProfileField::CodecParams,
-                    Severity::Error,
-                    format!("the value of `{}` must be non-empty without `:`, `=` or spaces", p.key),
-                );
-            }
-            if v.codec_params.iter().skip(i + 1).any(|q| q.key == p.key) {
-                push(
-                    ProfileField::CodecParams,
-                    Severity::Error,
-                    format!("`{}` is set twice", p.key),
-                );
-            }
-            if v.film_grain.is_some() && p.key == "film-grain" {
-                push(
-                    ProfileField::CodecParams,
-                    Severity::Error,
-                    "film grain is set twice (field and parameter)".to_owned(),
-                );
-            }
-            if v.tune.is_some() && matches!(spec.tune_target, TuneTarget::CodecParam(key) if key == p.key) {
-                push(
-                    ProfileField::CodecParams,
-                    Severity::Error,
-                    format!("`{}` is set twice (tune and parameter)", p.key),
-                );
-            }
-        }
-        if let Some(rate) = self.audio.bitrate_kbps
-            && (rate == 0 || !self.audio.codec.takes_bitrate())
-        {
-            let message = if rate == 0 {
-                "the audio bit rate must be above 0".to_owned()
-            } else {
-                format!("{} takes no bit rate", self.audio.codec.spec().display_name)
-            };
-            push(ProfileField::Audio, Severity::Warning, message);
-        }
-        if self.audio.channels == Some(0) {
-            push(
-                ProfileField::Audio,
-                Severity::Error,
-                "the channel count must be above 0".to_owned(),
-            );
-        }
-        for CompatIssue { severity, message } in self.container.check(v.encoder, self.audio.codec) {
-            push(ProfileField::Container, severity, message);
-        }
-        issues
+        super::validate::validate(self)
     }
 
     /// Whether [`RenderProfile::validate`] found no error (warnings allowed).
     pub fn is_usable(&self) -> bool {
         self.validate().iter().all(|i| i.severity != Severity::Error)
+    }
+
+    /// Whether the encoding settings (container, video, audio) are the same, whatever the names.
+    pub fn same_settings(&self, other: &Self) -> bool {
+        self.container == other.container && self.video == other.video && self.audio == other.audio
     }
 }

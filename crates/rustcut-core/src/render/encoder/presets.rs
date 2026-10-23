@@ -283,3 +283,79 @@ pub(super) const NVENC_TUNES: &[Preset] = &[
 ];
 
 pub(super) const NONE: &[Preset] = &[];
+
+pub(super) const X264_AQ: &[Preset] = &[
+    Preset {
+        value: "0",
+        label: "Off",
+    },
+    Preset {
+        value: "1",
+        label: "Variance (default)",
+    },
+    Preset {
+        value: "2",
+        label: "Auto-variance",
+    },
+    Preset {
+        value: "3",
+        label: "Auto-variance, dark scenes favored",
+    },
+];
+
+pub(super) const X265_AQ: &[Preset] = &[
+    Preset {
+        value: "0",
+        label: "Off",
+    },
+    Preset {
+        value: "1",
+        label: "Variance",
+    },
+    Preset {
+        value: "2",
+        label: "Auto-variance (default)",
+    },
+    Preset {
+        value: "3",
+        label: "Auto-variance, dark scenes favored",
+    },
+    Preset {
+        value: "4",
+        label: "Auto-variance with edges",
+    },
+];
+
+pub(super) const SVT_AQ: &[Preset] = &[
+    Preset {
+        value: "0",
+        label: "Off",
+    },
+    Preset {
+        value: "1",
+        label: "Variance",
+    },
+    Preset {
+        value: "2",
+        label: "Prediction efficiency (default)",
+    },
+];
+
+pub(super) const AOM_AQ: &[Preset] = &[
+    Preset {
+        value: "0",
+        label: "Off (default)",
+    },
+    Preset {
+        value: "1",
+        label: "Variance",
+    },
+    Preset {
+        value: "2",
+        label: "Complexity",
+    },
+    Preset {
+        value: "3",
+        label: "Cyclic refresh",
+    },
+];

@@ -144,4 +144,24 @@ pub(crate) mod tests {
         assert_eq!(read.metadata, JobMetadata::default());
         assert!(!read.target.overwrite);
     }
+
+    #[test]
+    fn a_profile_snapshot_of_0_0_8_still_reads() {
+        // What 0.0.8 stored: no AQ mode, scene cuts, variance boost or color fields.
+        let row = r#"{"source":"/a.mkv","sections":[{"start":0,"end":1000000}],"target":{"folder":"/o","stem":"a"},
+            "profile":{"id":"av1-balanced","name":"AV1 balanced","container":"mkv","video":{"encoder":"svt_av1",
+            "rate_control":{"mode":"quality","value":26},"preset":"6","tune":"0","profile":null,"level":null,
+            "bit_depth":"ten","keyint":null,"film_grain":8,"codec_params":[{"key":"enable-variance-boost","value":"1"},
+            {"key":"variance-boost-strength","value":"2"}]},"audio":{"codec":"opus","bitrate_kbps":128,"channels":null,
+            "sample_rate":null}}}"#;
+        let read: JobSpec = serde_json::from_str(row).unwrap();
+        let v = &read.profile.video;
+        assert_eq!(
+            (v.aq_mode.as_deref(), v.scene_cuts, v.variance_boost),
+            (None, None, None)
+        );
+        assert_eq!(v.color, crate::render::ColorSettings::default());
+        assert_eq!(v.codec_params.len(), 2);
+        assert!(read.profile.is_usable(), "{:?}", read.profile.validate());
+    }
 }

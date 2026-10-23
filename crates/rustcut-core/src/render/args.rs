@@ -3,7 +3,8 @@
 use std::path::Path;
 
 use super::{
-    AudioSettings, BitDepth, EncoderBackend, RateControl, RenderProfile, TuneTarget, VideoEncoder, VideoSettings,
+    AudioCodec, AudioSettings, BitDepth, EncoderBackend, RateControl, RenderProfile, Setting, TuneTarget, VideoEncoder,
+    VideoSettings,
 };
 use crate::time::Timestamp;
 
@@ -70,6 +71,12 @@ pub fn video_args(v: &VideoSettings, ctx: &EncodeContext<'_>, audio: &AudioSetti
             args.extend([spec.quality.option.to_owned(), value.to_string()]);
             args.extend(spec.quality.extra.iter().map(|s| (*s).to_owned()));
         }
+        RateControl::ConstantQp { qp } => {
+            // Validation refuses encoders without a QP mode; their quality option is the closest meaning.
+            let scale = spec.constant_qp.unwrap_or(spec.quality);
+            args.extend([scale.option.to_owned(), qp.to_string()]);
+            args.extend(scale.extra.iter().map(|s| (*s).to_owned()));
+        }
         RateControl::AverageBitrate { kbps } | RateControl::TwoPass { kbps } => {
             args.extend(["-b:v".into(), format!("{kbps}k")]);
         }
@@ -104,6 +111,22 @@ pub fn video_args(v: &VideoSettings, ctx: &EncodeContext<'_>, audio: &AudioSetti
     if let Some(grain) = v.film_grain {
         params.push(format!("film-grain={grain}"));
     }
+    if let (Some(boost), true) = (v.variance_boost, spec.variance_boost) {
+        params.push(format!("enable-variance-boost={}", u8::from(boost > 0)));
+        if boost > 0 {
+            params.push(format!("variance-boost-strength={boost}"));
+        }
+    }
+    if let (Some(mode), Some(aq)) = (&v.aq_mode, spec.aq) {
+        match aq.setting {
+            Setting::Option(option) => args.extend([option.to_owned(), mode.clone()]),
+            Setting::Param(key) => params.push(format!("{key}={mode}")),
+        }
+    }
+    if v.scene_cuts == Some(false) && spec.scene_cuts {
+        params.push("scenecut=0".to_owned());
+    }
+    args.extend(v.color.args());
     params.extend(v.codec_params.iter().map(|p| format!("{}={}", p.key, p.value)));
     if v.rate_control.is_two_pass() {
         let (number, log) = match ctx.pass {
@@ -135,10 +158,14 @@ pub fn video_args(v: &VideoSettings, ctx: &EncodeContext<'_>, audio: &AudioSetti
 pub fn audio_args(a: &AudioSettings) -> Vec<String> {
     let spec = a.codec.spec();
     let mut args: Vec<String> = vec!["-c:a".into(), spec.ffmpeg_name.into()];
-    if !a.codec.takes_bitrate() {
+    if a.codec == AudioCodec::Copy {
         return args;
     }
-    if let Some(kbps) = a.bitrate_kbps.filter(|&k| k > 0).or(spec.default_bitrate) {
+    if let Some(kbps) = a
+        .bitrate_kbps
+        .filter(|&k| k > 0 && a.codec.takes_bitrate())
+        .or(spec.default_bitrate)
+    {
         args.extend(["-b:a".into(), format!("{kbps}k")]);
     }
     if let Some(rate) = spec.required_sample_rate.or(a.sample_rate) {
@@ -164,7 +191,7 @@ pub fn profile_args(p: &RenderProfile, ctx: &EncodeContext<'_>) -> Result<Vec<St
     Ok(args)
 }
 
-fn target_kbps(mebibytes: u32, ctx: &EncodeContext<'_>, audio: &AudioSettings) -> Result<u64, ArgsError> {
+pub(super) fn target_kbps(mebibytes: u32, ctx: &EncodeContext<'_>, audio: &AudioSettings) -> Result<u64, ArgsError> {
     let micros = u64::try_from(ctx.duration.as_micros())
         .ok()
         .filter(|&us| us > 0)
@@ -230,16 +257,9 @@ mod tests {
         for encoder in [VideoEncoder::X264, VideoEncoder::X265, VideoEncoder::Aom] {
             let mut p = builtin_profiles().remove(0);
             p.video = VideoSettings {
-                encoder,
                 rate_control: RateControl::TwoPass { kbps: 2500 },
-                preset: None,
-                tune: None,
-                profile: None,
-                level: None,
-                bit_depth: BitDepth::Eight,
                 keyint: Some(240),
-                film_grain: None,
-                codec_params: Vec::new(),
+                ..VideoSettings::new(encoder)
             };
             p.container = Container::Mkv;
             for pass in [VideoPass::First { log: &log }, VideoPass::Second { log: &log }] {
@@ -290,7 +310,13 @@ mod tests {
             "-c:a libopus -b:a 128k -ar 48000 -ac 2"
         );
         assert_eq!(a(AudioCodec::Aac, Some(256), None, None), "-c:a aac -b:a 256k");
-        assert_eq!(a(AudioCodec::Flac, Some(256), Some(2), None), "-c:a flac");
+        assert_eq!(a(AudioCodec::Flac, Some(256), Some(2), None), "-c:a flac -ac 2");
+        assert_eq!(
+            a(AudioCodec::Flac, None, None, Some(44_100)),
+            "-c:a flac -ar 44100",
+            "lossless audio can still be resampled"
+        );
+        assert_eq!(a(AudioCodec::Copy, Some(128), Some(2), Some(44_100)), "-c:a copy");
         assert_eq!(a(AudioCodec::Copy, None, None, None), "-c:a copy");
     }
 
@@ -300,21 +326,53 @@ mod tests {
         for encoder in [VideoEncoder::HevcVaapi, VideoEncoder::Av1Nvenc, VideoEncoder::H264Qsv] {
             let spec = encoder.spec();
             let v = VideoSettings {
-                encoder,
                 rate_control: RateControl::Quality {
                     value: spec.quality.default,
                 },
-                preset: None,
-                tune: None,
-                profile: None,
-                level: None,
                 bit_depth: BitDepth::Ten,
-                keyint: None,
-                film_grain: None,
                 codec_params: vec![CodecParam::new("ignored", "1")],
+                ..VideoSettings::new(encoder)
             };
             lines.push(video_args(&v, &single(), &AudioSettings::default()).unwrap().join(" "));
         }
+        insta::assert_snapshot!(lines.join("\n"));
+    }
+
+    #[test]
+    fn expert_options() {
+        use crate::render::{ColorRange, ColorSettings, ColorTags};
+        let mut lines = Vec::new();
+        for encoder in [
+            VideoEncoder::X264,
+            VideoEncoder::X265,
+            VideoEncoder::SvtAv1,
+            VideoEncoder::Aom,
+        ] {
+            let spec = encoder.spec();
+            let v = VideoSettings {
+                rate_control: spec.constant_qp.map_or(RateControl::Quality { value: 30 }, |q| {
+                    RateControl::ConstantQp { qp: q.default }
+                }),
+                aq_mode: spec.aq.and_then(|aq| aq.modes.last()).map(|m| m.value.to_owned()),
+                scene_cuts: spec.scene_cuts.then_some(false),
+                variance_boost: spec.variance_boost.then_some(3),
+                color: ColorSettings {
+                    tags: ColorTags::Bt709,
+                    range: ColorRange::Limited,
+                },
+                ..VideoSettings::new(encoder)
+            };
+            lines.push(video_args(&v, &single(), &AudioSettings::default()).unwrap().join(" "));
+        }
+        let off = VideoSettings {
+            variance_boost: Some(0),
+            ..VideoSettings::new(VideoEncoder::SvtAv1)
+        };
+        lines.push(
+            video_args(&off, &single(), &AudioSettings::default())
+                .unwrap()
+                .join(" "),
+        );
         insta::assert_snapshot!(lines.join("\n"));
     }
 
