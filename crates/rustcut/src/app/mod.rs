@@ -15,6 +15,7 @@ use slint::ComponentHandle as _;
 pub use cli::Cli;
 
 use crate::MainWindow;
+use crate::ui::player::{PlayerBridge, PlayerBridgeError};
 
 /// Errors that end the application before or while the event loop runs.
 #[derive(Debug, thiserror::Error)]
@@ -23,6 +24,8 @@ pub enum AppError {
     Platform(#[from] slint::PlatformError),
     #[error("no home folder is known; start with --home <dir>")]
     NoHome,
+    #[error("the player could not be started: {0}")]
+    Player(#[from] PlayerBridgeError),
 }
 
 /// Runs the application and returns the process exit code.
@@ -49,13 +52,6 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<(), AppError> {
     let paths = AppPaths::resolve(cli.home.as_deref()).ok_or(AppError::NoHome)?;
     let loaded = persistence::load_all(paths);
     log.apply_setting(&loaded.settings.advanced.log_level);
-    if !cli.files.is_empty() {
-        tracing::info!(
-            count = cli.files.len(),
-            "[App] Files on the command line (opening arrives with the player)"
-        );
-    }
-
     select_backend()?;
     let window = MainWindow::new()?;
     // The XDG app id must be set after the backend exists and before the window is mapped (taskbar grouping, desktop file).
@@ -65,11 +61,22 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<(), AppError> {
     window.set_app_name(APP_NAME.into());
     window.set_app_version(VERSION.into());
     restore_window(&window, &loaded.ui_state.window);
+    let player = PlayerBridge::start(&window)?;
+    if let Some(first) = cli.files.first() {
+        player.open(first);
+    }
+    if cli.files.len() > 1 {
+        tracing::info!(
+            count = cli.files.len(),
+            "[App] Only the first file on the command line is opened"
+        );
+    }
     window.run()?;
 
     let mut ui_state = loaded.ui_state.clone();
     capture_window(&window, &mut ui_state);
     persistence::save_ui_state(&loaded, &ui_state);
+    drop(player);
     Ok(())
 }
 

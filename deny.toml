@@ -38,7 +38,11 @@ allow = [
     "LicenseRef-Slint-Royalty-free-2.0",
 ]
 # Narrow exceptions: only these crates may use these licenses.
-exceptions = []
+exceptions = [
+    # The bindings to libmpv are LGPL-2.1; RustCut is MIT and links libmpv dynamically (as RustView does).
+    { allow = ["LGPL-2.1"], crate = "libmpv2" },
+    { allow = ["LGPL-2.1"], crate = "libmpv2-sys" },
+]
 
 [bans]
 multiple-versions = "warn"

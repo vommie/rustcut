@@ -1,0 +1,42 @@
+// The video area: mpv's frame as an image (rustcut-player renders it at exactly this element's size), and the empty state.
+
+import { Theme } from "styles.slint";
+
+export component PlayerView inherits Rectangle {
+    in property <image> frame;
+    in property <bool> has-video;
+    in property <string> app-name;
+    in property <string> app-version;
+
+    background: Theme.fullscreen-background;
+    clip: true;
+
+    Image {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        source: root.frame;
+        image-fit: fill;
+        visible: root.has-video;
+    }
+
+    if !root.has-video: VerticalLayout {
+        alignment: center;
+        spacing: 6px;
+
+        Text {
+            text: root.app-name;
+            color: Theme.text;
+            font-size: 22px;
+            font-weight: 600;
+            horizontal-alignment: center;
+        }
+
+        Text {
+            text: "Version " + root.app-version;
+            color: Theme.text-muted;
+            horizontal-alignment: center;
+        }
+    }
+}

@@ -6,7 +6,7 @@ default-members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustc
 [workspace.package]
 # Single source of truth for the app version: the About page, the package script and the PKGBUILD read it from here.
 # Claude bumps the patch number whenever a state is testable; major and minor belong to the user.
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 # The lowest toolchain known to work (rusqlite_migration needs 1.95). rust-toolchain.toml pins `stable`.
 rust-version = "1.95"
@@ -51,6 +51,17 @@ directories = "6"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
 # Lexical path normalization (`a/./b/../c` -> `a/c`) without touching the drive.
 path-clean = "1"
+# libmpv bindings (LGPL-2.1, linked dynamically like RustView); the default `render` feature brings the render API that draws
+# into an OpenGL framebuffer (ADR-2).
+libmpv2 = "6"
+# The raw libmpv functions libmpv2 does not wrap (`mpv_request_log_messages`), used in one documented `unsafe` block.
+libmpv2-sys = "4"
+# OpenGL bindings for the player's framebuffer texture on Slint's context.
+glow = "0.18"
+# Keeps the mpv handle and the render context that borrows it in one struct (no hand-written self-referential unsafe code).
+self_cell = "1"
+# Latency histograms for the player's frame-time statistics (mean, percentiles, maximum).
+hdrhistogram = { version = "7", default-features = false }
 
 # Tests only.
 proptest = "1"
@@ -60,7 +71,7 @@ tempfile = "3"
 # Lints. The rust and clippy groups below are the project's definition of "safe and robust"; `scripts/check-all.sh` and
 # `cargo cl` turn every warning into an error. Generated Slint code and tests are exempt where noted (clippy.toml, `mod generated`).
 [workspace.lints.rust]
-# Only `rustcut-player` may contain unsafe code (libmpv and OpenGL); it allows it at its crate root with a reason.
+# Only `rustcut-player` may contain unsafe code (libmpv and OpenGL), in the modules that talk to FFI, each allowing it with a reason.
 unsafe_code = "deny"
 unsafe_op_in_unsafe_fn = "deny"
 unused_must_use = "deny"

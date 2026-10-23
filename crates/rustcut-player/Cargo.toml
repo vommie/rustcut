@@ -14,3 +14,12 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+glow.workspace = true
+hdrhistogram.workspace = true
+libmpv2.workspace = true
+libmpv2-sys.workspace = true
+parking_lot.workspace = true
+self_cell.workspace = true
+slint.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

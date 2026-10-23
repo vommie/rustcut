@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Video playback: a file given on the command line (`rustcut VIDEO`) plays in the main window. mpv draws into RustCut's own
+  OpenGL context, so later overlays (crop handles, section markers) can be drawn directly over the video. On a software
+  OpenGL renderer (for example llvmpipe in a virtual machine) the preview uses mpv's fast scaling automatically, so playback
+  keeps the video's frame rate; the rendered output is not affected.
 - First runnable build: RustCut opens its main window in RustView's color palette, with a one-line status bar.
 - Command line: `rustcut [FILE]... [--home DIR]` (`--home` keeps settings, data and logs in an isolated folder).
 - The window size and maximized state are restored at the next start (`~/.config/rustcut/ui-state.toml`).
