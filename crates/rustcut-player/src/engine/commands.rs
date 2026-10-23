@@ -88,7 +88,8 @@ impl Session {
             fast_applied: false,
             audio,
             duration: None,
-            af: String::new(),
+            // The core starts with this chain (`PlayerOptions::apply`).
+            af: audio::filter_chain(audio, None),
         }
     }
 
@@ -218,6 +219,7 @@ pub(crate) fn run(mpv: &Arc<Mpv>, commands: &Receiver<Command>, mut session: Ses
 }
 
 fn execute(mpv: &Mpv, op: &Op) {
+    tracing::debug!(op = ?op, "[Player] mpv call");
     let result = match op {
         Op::Command(name, args) => {
             let args: Vec<&str> = args.iter().map(String::as_str).collect();

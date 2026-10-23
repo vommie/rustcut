@@ -24,7 +24,7 @@ pub struct UiState {
 pub struct WindowState {
     pub width: u32,
     pub height: u32,
-    /// Position when known (X11); `None` lets the window manager place it.
+    /// Position of the window frame in physical screen pixels when known (X11); `None` lets the window manager place it.
     pub x: Option<i32>,
     pub y: Option<i32>,
     pub maximized: bool,
@@ -98,6 +98,9 @@ pub struct QueuePanelState {
     pub when_done: Option<WhenDone>,
 }
 
+/// Window positions beyond this (physical pixels, any direction) are not on any screen.
+const MAX_POSITION: i32 = 32_768;
+
 impl VersionedFile for UiState {
     const FILE_NAME: &'static str = "ui-state.toml";
     const VERSION: u32 = 1;
@@ -113,6 +116,11 @@ impl VersionedFile for UiState {
                 maximized: w.maximized,
                 ..WindowState::default()
             };
+        }
+        let far = |v: Option<i32>| v.is_some_and(|v| !(-MAX_POSITION..=MAX_POSITION).contains(&v));
+        if far(self.window.x) || far(self.window.y) || self.window.x.is_some() != self.window.y.is_some() {
+            notes.push("window position reset".into());
+            (self.window.x, self.window.y) = (None, None);
         }
         if self.export.volume > 150 {
             notes.push("volume limited to 150".into());
@@ -154,5 +162,18 @@ mod tests {
         assert_eq!(state.sanitize().len(), 2);
         assert_eq!((state.window.width, state.window.maximized), (1280, true));
         assert!(state.queue.columns.is_empty());
+    }
+
+    #[test]
+    fn positions_off_every_screen_or_half_known_are_dropped() {
+        let mut state = UiState::default();
+        (state.window.x, state.window.y) = (Some(-40), Some(1200));
+        assert!(state.sanitize().is_empty());
+        state.window.x = Some(900_000);
+        assert_eq!(state.sanitize(), vec!["window position reset".to_owned()]);
+        assert_eq!((state.window.x, state.window.y), (None, None));
+        state.window.y = Some(10);
+        assert_eq!(state.sanitize().len(), 1);
+        assert_eq!(state.window.y, None);
     }
 }

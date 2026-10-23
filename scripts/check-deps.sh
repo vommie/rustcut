@@ -101,6 +101,7 @@ check optional cmd:xdotool xdotool     "clicks, typing and window lookup"
 check optional cmd:import  imagemagick "window screenshots"
 check optional cmd:xprop   xorg-xprop  "window properties"
 check optional cmd:wmctrl  wmctrl      "closes the test window like the user does (scripts/session.sh)"
+check optional cmd:python3 python      "talks to Slint's MCP server of a running test instance (scripts/mcp.py)"
 
 section "Debugging and profiling (optional)"
 check optional cmd:samply         samply         "sampling profiler (cargo build --profile profiling, samply record)"
