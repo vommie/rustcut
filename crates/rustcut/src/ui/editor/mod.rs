@@ -28,6 +28,7 @@ use crate::ui::player::{self, PlaybackView, PlayerBridge};
 use crate::ui::probe::ProbeBridge;
 use crate::ui::sections::{Bound, Edge, SectionsState};
 use crate::ui::status::{self, Level};
+use crate::ui::tags::TagsBridge;
 use crate::ui::timeline::{Viewport, view};
 use crate::util::model::sync;
 use crate::{Export, MainWindow, SectionRowView, Sections, Shortcuts, Timeline, TimelineBlock, TimelineTick};
@@ -68,6 +69,8 @@ pub struct Editor {
     state: RefCell<State>,
     /// The probe render (set after it is installed; it needs the editor first).
     probe: RefCell<Weak<ProbeBridge>>,
+    /// The Tag & Rate panel (Escape ends the editing of a job's tags).
+    tags: RefCell<Weak<TagsBridge>>,
     /// The player shows the probe render: the timeline, the marks and the sections wait (user decision Q-E1).
     probe_playing: Cell<bool>,
     /// The export panel that saves jobs (set after it is installed; it needs the editor first).
@@ -116,6 +119,7 @@ impl Editor {
                 edge_hovered: false,
             }),
             probe: RefCell::new(Weak::new()),
+            tags: RefCell::new(Weak::new()),
             probe_playing: Cell::new(false),
             export: RefCell::new(Weak::new()),
             warned: Cell::new(false),
@@ -152,6 +156,11 @@ impl Editor {
             st.drag = None;
         }
         self.publish();
+    }
+
+    /// Connects the Tag & Rate panel: Escape cancels the editing of a job's tags.
+    pub fn set_tags(&self, tags: &Rc<TagsBridge>) {
+        *self.tags.borrow_mut() = Rc::downgrade(tags);
     }
 
     /// Connects the probe render (its key, Escape while it plays).

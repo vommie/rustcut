@@ -138,6 +138,13 @@ export component QueuePanel inherits Rectangle {
             }
 
             IconButton {
+                icon: IconId.job-tags;
+                enabled: Queue.has-selection;
+                tooltip: "Edit the job's tags and rating in the Tag & Rate panel";
+                clicked => { Queue.edit-tags(); }
+            }
+
+            IconButton {
                 icon: IconId.job-retry;
                 enabled: Queue.can-retry;
                 tooltip: "Render the job again";

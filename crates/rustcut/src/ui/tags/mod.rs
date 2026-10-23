@@ -251,7 +251,7 @@ impl TagsBridge {
     }
 
     fn tree_changed(&self, tree: std::sync::Arc<TagTree>) {
-        tracing::info!(tags = tree.tags.len(), "[Tags] Tag tree loaded");
+        tracing::debug!(tags = tree.tags.len(), "[Tags] Tag tree loaded");
         self.state.borrow_mut().set_tree(tree);
         self.publish();
     }
@@ -388,6 +388,7 @@ impl TagsBridge {
     }
 
     fn tree_height_changed(&self, height: f32) {
+        tracing::debug!(height, "[Tags] Tag tree height");
         self.tree_height.set(height);
         if TagTreeBuilder::rows_per_column(height) != self.rows_per_column.get() {
             self.publish_tree();
@@ -395,6 +396,7 @@ impl TagsBridge {
     }
 
     fn history_width_changed(&self, width: f32) {
+        tracing::debug!(width, "[Tags] Tag history width");
         if (width - self.history_width.get()).abs() > 0.5 {
             self.history_width.set(width);
             self.publish_history();

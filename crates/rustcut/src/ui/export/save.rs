@@ -29,7 +29,7 @@ const SIMILAR_SHOWN: usize = 4;
 /// A job waiting for its target: everything but the target's stem and the overwrite flag.
 #[derive(Debug, Clone)]
 pub(super) struct Draft {
-    spec: JobSpec,
+    pub(super) spec: JobSpec,
     folder: PathBuf,
     facts: JobFacts,
     /// The stem the card shows.
@@ -45,7 +45,7 @@ pub(super) struct Pending {
 impl ExportBridge {
     /// Builds the job and checks its target; see the module documentation.
     pub fn save(self: &Rc<Self>) {
-        if self.saving.get() || self.pending.borrow().is_some() {
+        if self.saving.get() || self.pending.borrow().is_some() || self.meta.borrow().is_some() {
             return;
         }
         let draft = match self.draft() {
@@ -55,6 +55,13 @@ impl ExportBridge {
                 return;
             }
         };
+        if let Some(draft) = self.ask_metadata(draft) {
+            self.check_target(draft);
+        }
+    }
+
+    /// Reads the target folder on the runtime, then queues the job or asks about the conflict.
+    pub(super) fn check_target(self: &Rc<Self>, draft: Draft) {
         self.saving.set(true);
         self.publish();
         let folder = draft.folder.clone();
@@ -94,8 +101,9 @@ impl ExportBridge {
         let filters = self.filters.upgrade().ok_or_else(gone)?.chain();
         let media = self.media.upgrade();
         let info = media.as_ref().and_then(|m| m.current());
-        // Tags and rating come with the Tag & Rate panel (M3.2); the source hash goes to RustView's hash list.
+        // The Tag & Rate panel's tags and rating; the source hash goes to RustView's hash list.
         let source_hash = media.as_ref().and_then(|m| m.source_hash(&source));
+        let (tags, rating) = self.tags.upgrade().map(|t| t.draft_metadata()).unwrap_or_default();
         let facts = JobFacts::new(&profile, sections.len(), sections.total_duration());
         let st = self.state.borrow();
         let folder = st.target_folder().ok_or("Choose a target folder.")?;
@@ -118,8 +126,9 @@ impl ExportBridge {
                 overwrite: false,
             },
             metadata: JobMetadata {
+                tags,
+                rating,
                 source_hash,
-                ..JobMetadata::default()
             },
         };
         Ok(Draft {
@@ -203,6 +212,7 @@ impl ExportBridge {
         let counter = outcome.counter;
         let source = spec.source.clone();
         let with_hash = spec.metadata.source_hash.is_some();
+        let (tags, rating) = (spec.metadata.tags.clone(), spec.metadata.rating);
         let handle = queue.handle().clone();
         let remove = outcome.remove;
         let task = self.runtime.spawn(async move {
@@ -231,6 +241,9 @@ impl ExportBridge {
                 Ok(id) => {
                     if let Some(media) = bridge.media.upgrade() {
                         media.job_saved(&source, with_hash);
+                    }
+                    if let Some(panel) = bridge.tags.upgrade() {
+                        panel.job_saved(&tags, rating);
                     }
                     bridge.saved(id, &file, counter);
                 }

@@ -27,7 +27,7 @@ pub use persistence::SettingsWriter;
 use crate::MainWindow;
 use crate::desktop::instance::{self, Request};
 use crate::ui::dispatcher::{SlintSink, UiDispatcher};
-use crate::ui::dock::{DockBridge, persist as dock_persist};
+use crate::ui::dock::{DockBridge, PanelId, persist as dock_persist};
 use crate::ui::editor::Editor;
 use crate::ui::export::{ExportBridge, ExportParts};
 use crate::ui::filters::FiltersBridge;
@@ -39,6 +39,7 @@ use crate::ui::probe::{self, ProbeBridge};
 use crate::ui::queue::QueueBridge;
 use crate::ui::render_settings::RenderSettingsBridge;
 use crate::ui::status::{self, Level};
+use crate::ui::tags::TagsBridge;
 
 /// How long the runtime may take to finish its tasks at quit.
 const RUNTIME_SHUTDOWN: Duration = Duration::from_secs(2);
@@ -132,6 +133,29 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     };
     let queue_service = start_queue(&runtime, &store, &loaded, &encoders, sync_link);
     let queue = QueueBridge::install(&main, &ui, runtime.handle(), &queue_service);
+    let tags = TagsBridge::install(
+        &main,
+        &ui,
+        runtime.handle().clone(),
+        &sync,
+        queue_service.handle.clone(),
+        loaded.settings.rustview.enabled,
+        &loaded.ui_state.tags,
+    );
+    {
+        let dock = Rc::downgrade(&dock);
+        tags.set_on_reveal(move || {
+            if let Some(dock) = dock.upgrade() {
+                dock.reveal(PanelId::TagRate);
+            }
+        });
+        let tags_weak = Rc::downgrade(&tags);
+        queue.set_on_edit_tags(move |id, name| {
+            if let Some(tags) = tags_weak.upgrade() {
+                tags.edit_job(id, name);
+            }
+        });
+    }
     let render = RenderSettingsBridge::install(
         &main,
         runtime.handle().clone(),
@@ -179,6 +203,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &editor.key_label(Action::ProbeRender),
     );
     editor.set_probe(&probe);
+    editor.set_tags(&tags);
     let export = ExportBridge::install(
         &main,
         &ExportParts {
@@ -188,6 +213,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             media: &media,
             render: &render,
             queue: &queue,
+            tags: &tags,
         },
         runtime.handle().clone(),
         &loaded.settings,
@@ -236,12 +262,14 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     render.save_into(&mut ui_state.export);
     probe.save_into(&mut ui_state.export);
     export.save_into(&mut ui_state.export);
+    tags.save_into(&mut ui_state.tags);
     ui_state.queue.paused = queue.paused();
     persistence::save_ui_state(&loaded, &ui_state);
     drop(server);
     drop(opener);
     drop(export);
     drop(queue);
+    drop(tags);
     drop(probe);
     drop(render);
     drop(editor);

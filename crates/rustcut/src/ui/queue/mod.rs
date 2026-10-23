@@ -21,6 +21,8 @@ use crate::ui::dispatcher::{CoalesceKey, UiDispatcher, rate};
 use crate::util::model::sync;
 use crate::{MainWindow, Queue, QueueRowView};
 
+type EditTagsHook = Box<dyn Fn(JobId, String)>;
+
 const REFRESH: CoalesceKey = CoalesceKey::new("queue", 0);
 
 thread_local! {
@@ -42,6 +44,8 @@ pub struct QueueBridge {
     rows: Rc<VecModel<QueueRowView>>,
     /// Called on the UI thread after a job ended (the export panel looks at the target folder again).
     on_job_ended: RefCell<Option<Box<dyn Fn()>>>,
+    /// "Edit tags and rating" of the selected job (id, name): the Tag & Rate panel takes it.
+    on_edit_tags: RefCell<Option<EditTagsHook>>,
 }
 
 impl QueueBridge {
@@ -58,6 +62,7 @@ impl QueueBridge {
             shared: Arc::new(Mutex::new(Shared::default())),
             rows: Rc::new(VecModel::default()),
             on_job_ended: RefCell::new(None),
+            on_edit_tags: RefCell::new(None),
         });
         BRIDGE.with(|b| *b.borrow_mut() = Rc::downgrade(&bridge));
         window
@@ -84,6 +89,10 @@ impl QueueBridge {
 
     pub fn set_on_job_ended(&self, hook: impl Fn() + 'static) {
         *self.on_job_ended.borrow_mut() = Some(Box::new(hook));
+    }
+
+    pub fn set_on_edit_tags(&self, hook: impl Fn(JobId, String) + 'static) {
+        *self.on_edit_tags.borrow_mut() = Some(Box::new(hook));
     }
 
     /// Shows the current view (UI thread).
@@ -170,6 +179,12 @@ impl QueueBridge {
                 ids,
                 to: MoveTarget::Down,
             }),
+            Act::EditTags => {
+                let name = self.shared.lock().view.selected_row().map(|r| r.name.clone());
+                if let (Some(name), Some(hook)) = (name, self.on_edit_tags.borrow().as_ref()) {
+                    hook(id, name);
+                }
+            }
             Act::Remove => {
                 let (reply, _answer) = tokio::sync::oneshot::channel();
                 self.send(QueueCommand::Remove { ids, reply });
@@ -186,6 +201,7 @@ enum Act {
     Up,
     Down,
     Remove,
+    EditTags,
 }
 
 fn connect(bridge: &Rc<QueueBridge>, window: &MainWindow) {
@@ -210,6 +226,7 @@ fn connect(bridge: &Rc<QueueBridge>, window: &MainWindow) {
     q.on_move_up(bind(bridge, Act::Up));
     q.on_move_down(bind(bridge, Act::Down));
     q.on_remove(bind(bridge, Act::Remove));
+    q.on_edit_tags(bind(bridge, Act::EditTags));
 }
 
 /// A button's handler: `action` on the selected job.
