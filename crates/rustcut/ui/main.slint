@@ -1,12 +1,19 @@
-// Main window of RustCut. Until the dock layout (M1.2) and the player (M1.1) exist it shows an empty themed workspace.
+// Main window of RustCut. Until the dock layout (M1.2) exists it shows the video area and the status line.
 
 import { Theme } from "styles.slint";
+import { PlayerView } from "player_view.slint";
 
 export { Theme }
 
 export component MainWindow inherits Window {
     in property <string> app-name: "RustCut";
     in property <string> app-version;
+    // The frame mpv drew into Slint's OpenGL context (rustcut-player); empty until the first video frame.
+    in property <image> video-frame;
+    in property <bool> has-video;
+    // Size of the video area in logical pixels: the player renders its texture at this size times the scale factor.
+    out property <length> video-width: player.width;
+    out property <length> video-height: player.height;
 
     title: root.app-name;
     preferred-width: 1280px;
@@ -17,27 +24,12 @@ export component MainWindow inherits Window {
     default-font-size: Theme.font-size;
 
     VerticalLayout {
-        Rectangle {
+        player := PlayerView {
             vertical-stretch: 1;
-
-            VerticalLayout {
-                alignment: center;
-                spacing: 6px;
-
-                Text {
-                    text: root.app-name;
-                    color: Theme.text;
-                    font-size: 22px;
-                    font-weight: 600;
-                    horizontal-alignment: center;
-                }
-
-                Text {
-                    text: "Version " + root.app-version;
-                    color: Theme.text-muted;
-                    horizontal-alignment: center;
-                }
-            }
+            frame: root.video-frame;
+            has-video: root.has-video;
+            app-name: root.app-name;
+            app-version: root.app-version;
         }
 
         // One slim status line (HANDOFF.md section 6: one place per piece of information).
