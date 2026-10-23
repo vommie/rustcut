@@ -196,6 +196,8 @@ impl<C: ComponentHandle + 'static> Surface<C> {
     }
 
     fn teardown(&mut self) {
+        // First: freeing the render context stops mpv's video and may end the file, and the event thread must already
+        // know that the surface is gone when that end arrives.
         self.player.surface_lost();
         if let Some(gpu) = self.gpu.take() {
             if let Some(target) = gpu.target {

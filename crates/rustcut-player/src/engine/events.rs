@@ -1,6 +1,7 @@
 //! The mpv event thread: waits on its own client handle and hands typed events to the app. The observed properties
 //! (position, duration, pause, mute, volume, ...) arrive here as property changes.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 
 use libmpv2::events::{Event, PropertyData};
@@ -19,6 +20,8 @@ pub enum EndReason {
     Quit,
     /// Playback failed (unreadable or broken file).
     Error,
+    /// The video surface went away (the window closed): mpv stopped the video, and a file without audio ended with it.
+    SurfaceLost,
     /// Anything newer than this list.
     Other,
 }
@@ -98,8 +101,9 @@ pub(super) fn observe(client: &Mpv) {
     }
 }
 
-/// Runs until mpv shuts down. The file's duration also goes to the command thread (the end mute needs it).
-pub(super) fn run(client: &Mpv, on_event: &dyn Fn(PlayerEvent), commands: &Sender<Command>) {
+/// Runs until mpv shuts down. The file's duration also goes to the command thread (the end mute needs it). `surface` says
+/// whether a render context exists (see [`failed_end`]).
+pub(super) fn run(client: &Mpv, on_event: &dyn Fn(PlayerEvent), commands: &Sender<Command>, surface: &AtomicBool) {
     tracing::debug!("[Player] Event thread started");
     // mpv's first error message since the current file started: the detail of a failure (the first one names the cause,
     // later ones repeat it in general words).
@@ -108,10 +112,9 @@ pub(super) fn run(client: &Mpv, on_event: &dyn Fn(PlayerEvent), commands: &Sende
         let event = match client.wait_event(-1.0) {
             // libmpv2 turns an end of file with an error into `Err(Raw(code))`; this app makes no asynchronous requests,
             // so a raw error code always comes from there.
-            Some(Err(libmpv2::Error::Raw(code))) => PlayerEvent::PlaybackFailed {
-                reason: describe_failure(code).to_owned(),
-                detail: first_error.take(),
-            },
+            Some(Err(libmpv2::Error::Raw(code))) => {
+                failed_end(code, first_error.take(), surface.load(Ordering::Acquire))
+            }
             Some(Err(e)) => PlayerEvent::Error(e.to_string()),
             Some(Ok(Event::Shutdown)) => {
                 on_event(PlayerEvent::Shutdown);
@@ -156,6 +159,20 @@ pub(super) fn run(client: &Mpv, on_event: &dyn Fn(PlayerEvent), commands: &Sende
         on_event(event);
     }
     tracing::debug!("[Player] Event thread ended");
+}
+
+/// What an end of file with mpv's error `code` means; `detail` is mpv's first error message since the file started,
+/// `surface` whether a render context exists. Freeing the render context while a video plays makes mpv stop the video
+/// with `MPV_ERROR_VO_INIT_FAILED` (`do_kill` in mpv's `player/client.c`), which ends a file without audio: without the
+/// surface that is RustCut taking the output away (the window closed), not a failure of the file.
+fn failed_end(code: i32, detail: Option<String>, surface: bool) -> PlayerEvent {
+    if code == libmpv2_sys::mpv_error_MPV_ERROR_VO_INIT_FAILED && !surface {
+        return PlayerEvent::Ended(EndReason::SurfaceLost);
+    }
+    PlayerEvent::PlaybackFailed {
+        reason: describe_failure(code).to_owned(),
+        detail,
+    }
 }
 
 /// Hardware decoders that are not available log errors while mpv probes them (`hwdec=auto-copy`: Vulkan, CUDA, VAAPI in a
@@ -242,6 +259,30 @@ mod tests {
     fn hardware_decoder_probes_are_not_failure_details() {
         assert!(is_hwdec_probe("ffmpeg") && is_hwdec_probe("vaapi"));
         assert!(!is_hwdec_probe("ffmpeg/demuxer") && !is_hwdec_probe("lavf") && !is_hwdec_probe("cplayer"));
+    }
+
+    #[test]
+    fn a_video_output_closed_with_the_surface_is_no_failure() {
+        let vo = libmpv2_sys::mpv_error_MPV_ERROR_VO_INIT_FAILED;
+        // The window closed: freeing the render context ended the file.
+        assert_eq!(failed_end(vo, None, false), PlayerEvent::Ended(EndReason::SurfaceLost));
+        // The same error while the surface exists is a real failure of the video output.
+        assert_eq!(
+            failed_end(vo, Some("vo/libmpv: failed".into()), true),
+            PlayerEvent::PlaybackFailed {
+                reason: "The video output could not be started.".into(),
+                detail: Some("vo/libmpv: failed".into()),
+            }
+        );
+        // Other errors stay failures without the surface too.
+        let broken = libmpv2_sys::mpv_error_MPV_ERROR_LOADING_FAILED;
+        assert_eq!(
+            failed_end(broken, None, false),
+            PlayerEvent::PlaybackFailed {
+                reason: "The file could not be loaded.".into(),
+                detail: None,
+            }
+        );
     }
 
     #[test]
