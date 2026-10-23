@@ -1,0 +1,194 @@
+// Tooltips, ported from RustView (crates/rustview/ui/tooltips.slint and global_tooltip_layer.slint): a host inside each
+// element starts a hover timer and fills `GlobalTooltip`; one `TooltipLayer` on top of the main window draws the bubble
+// (no popup window, so it never grabs the pointer). RustCut drops RustView's native-window cut-outs (the video is a Slint
+// image here) and its busy reasons.
+
+import { Theme } from "styles.slint";
+
+export global TooltipSettings {
+    in-out property <bool> enabled: true;
+    in-out property <duration> delay: 600ms;
+    out property <color> background: #181825f2;
+    out property <color> border: #45475acc;
+    out property <color> text: #cdd6f4;
+    out property <color> shortcut-color: #f9e2af;
+    out property <length> font-size: 12px;
+    out property <length> padding-h: 9px;
+    out property <length> padding-v: 5px;
+    out property <length> max-width: 320px;
+}
+
+/// What the bubble shows and where (window coordinates).
+export global GlobalTooltip {
+    in-out property <bool> is-visible: false;
+    in-out property <string> text;
+    in-out property <string> shortcut;
+    in-out property <length> pos-x;
+    in-out property <length> pos-y;
+
+    public function show(text: string, shortcut: string, x: length, y: length) {
+        root.text = text;
+        root.shortcut = shortcut;
+        root.pos-x = x;
+        root.pos-y = y;
+        root.is-visible = true;
+    }
+
+    public function hide() {
+        root.is-visible = false;
+    }
+}
+
+/// Embedded in an element: shows `text` (and the key `shortcut`) below the element after the hover delay.
+export component TooltipHost inherits Rectangle {
+    in property <string> text;
+    in property <string> shortcut;
+
+    property <bool> is-hovered;
+
+    x: 0;
+    y: 0;
+    width: 100%;
+    height: 100%;
+
+    timer := Timer {
+        interval: TooltipSettings.delay;
+        running: false;
+        triggered => {
+            self.running = false;
+            if root.is-hovered && TooltipSettings.enabled && root.text != "" {
+                GlobalTooltip.show(root.text, root.shortcut, root.absolute-position.x,
+                    root.absolute-position.y + root.height + 4px);
+            }
+        }
+    }
+
+    public function enter() {
+        root.is-hovered = true;
+        if TooltipSettings.enabled && root.text != "" {
+            timer.running = true;
+        }
+    }
+
+    public function leave() {
+        root.is-hovered = false;
+        timer.running = false;
+        GlobalTooltip.hide();
+    }
+}
+
+/// A transparent area with a tooltip over its children (labels, fields).
+export component TooltipArea inherits Rectangle {
+    in property <string> text;
+    in property <string> shortcut;
+
+    host := TooltipHost {
+        text: root.text;
+        shortcut: root.shortcut;
+    }
+
+    touch := TouchArea {
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                host.leave();
+            }
+        }
+    }
+
+    changed has-hover => {
+        if self.has-hover {
+            host.enter();
+        } else {
+            host.leave();
+        }
+    }
+    out property <bool> has-hover: touch.has-hover && root.text != "";
+
+    @children
+}
+
+/// The bubble of `GlobalTooltip`, on the highest level of the window; it stays inside the window.
+export component TooltipLayer inherits Rectangle {
+    property <bool> active: GlobalTooltip.is-visible && TooltipSettings.enabled;
+    property <length> room: root.width - 16px - 2 * TooltipSettings.padding-h - (GlobalTooltip.shortcut != "" ? 60px : 0px);
+    property <length> text-w: Math.max(40px, Math.min(Math.min(TooltipSettings.max-width, root.room), measure.preferred-width));
+    property <length> bubble-w: bubble-layout.preferred-width;
+    property <length> bubble-h: Math.max(bubble-layout.preferred-height, wrapped.preferred-height + 2 * TooltipSettings.padding-v);
+
+    visible: root.active;
+    background: transparent;
+
+    measure := Text {
+        visible: false;
+        text: GlobalTooltip.text;
+        font-size: TooltipSettings.font-size;
+    }
+
+    wrapped := Text {
+        visible: false;
+        width: root.text-w;
+        wrap: word-wrap;
+        text: GlobalTooltip.text;
+        font-size: TooltipSettings.font-size;
+    }
+
+    // The hosts report window coordinates; the layer may start below the menu bar.
+    property <length> want-x: GlobalTooltip.pos-x - root.absolute-position.x;
+    property <length> want-y: GlobalTooltip.pos-y - root.absolute-position.y;
+
+    Rectangle {
+        x: Math.max(8px, Math.min(root.width - root.bubble-w - 8px, root.want-x));
+        y: root.want-y + root.bubble-h + 8px > root.height
+            ? Math.max(8px, root.want-y - root.bubble-h - 34px)
+            : root.want-y;
+        width: root.bubble-w;
+        height: root.bubble-h;
+        background: TooltipSettings.background;
+        border-radius: 4px;
+        border-width: 1px;
+        border-color: TooltipSettings.border;
+        drop-shadow-blur: 8px;
+        drop-shadow-color: #000000aa;
+        drop-shadow-offset-y: 2px;
+
+        bubble-layout := HorizontalLayout {
+            padding-left: TooltipSettings.padding-h;
+            padding-right: TooltipSettings.padding-h;
+            padding-top: TooltipSettings.padding-v;
+            padding-bottom: TooltipSettings.padding-v;
+            spacing: 6px;
+            alignment: center;
+
+            Text {
+                width: root.text-w;
+                wrap: word-wrap;
+                text: GlobalTooltip.text;
+                font-size: TooltipSettings.font-size;
+                color: TooltipSettings.text;
+                vertical-alignment: center;
+            }
+
+            if GlobalTooltip.shortcut != "": Rectangle {
+                background: #ffffff14;
+                border-radius: 3px;
+                border-width: 1px;
+                border-color: #ffffff22;
+                height: 18px;
+                y: (parent.height - self.height) / 2;
+
+                HorizontalLayout {
+                    padding-left: 5px;
+                    padding-right: 5px;
+
+                    Text {
+                        text: GlobalTooltip.shortcut;
+                        font-size: 10.5px;
+                        font-weight: 700;
+                        color: TooltipSettings.shortcut-color;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+    }
+}

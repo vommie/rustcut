@@ -20,10 +20,21 @@ export global Shortcuts {
     in property <keys> zoom-in;
     in property <keys> zoom-out;
     in property <keys> zoom-fit;
+    in property <keys> filter-preview;
+    in property <keys> filter-keep;
+    in property <keys> filter-reset;
+    in property <keys> crop-edit;
+    in property <keys> auto-crop;
+    in property <keys> rotate-left;
+    in property <keys> rotate-right;
+    in property <keys> mirror-horizontal;
+    in property <keys> mirror-vertical;
 
     // A key press that no focused element took; true when it ran (or deliberately ignored) a keymap action.
     callback key-pressed(/* text */ string, /* control */ bool, /* alt */ bool, /* shift */ bool, /* meta */ bool,
         /* repeat */ bool) -> bool;
+    // A key was released (only Ctrl matters: holding it over the video edits the crop).
+    callback key-released(/* text */ string);
     // A text field got or lost the keyboard.
     callback editing-changed(bool);
     // Gives the keyboard back to the shortcuts (Enter or Escape in a field, a click on the video or the timeline).

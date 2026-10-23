@@ -1,11 +1,13 @@
 // The Sections card of the Export panel (src/ui/editor/ fills the `Sections` global and handles its callbacks): the current
-// section's start and end (from the playhead with "Set" or the keys, or typed), "Add section", the list of added sections
-// with editable times, durations and the total, and the buttons that move and delete the selected section.
+// section's start and end (from the playhead with the set buttons or the keys, or typed), adding the section, the list of
+// added sections with editable times, durations and the total, and the buttons that move and delete the selected section.
+// Buttons are icons with tooltips (user rule 2026-10-23).
 // Times: a click seeks there, a double click edits (Enter keeps, Escape cancels; user decision 2026-10-23).
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Shortcuts } from "shortcuts.slint";
+import { IconButton } from "controls.slint";
 
 export struct SectionRowView {
     number: int,
@@ -32,6 +34,11 @@ export global Sections {
     in property <string> summary;
     // A warning about the list (overlaps); empty when there is none.
     in property <string> note;
+    // The keys of the actions, for the tooltips.
+    in property <string> key-set-start;
+    in property <string> key-set-end;
+    in property <string> key-add;
+    in property <string> key-delete;
 
     // 0 = start, 1 = end.
     callback set-mark(int);
@@ -139,49 +146,6 @@ export component TimeField inherits Rectangle {
     }
 }
 
-component SmallButton inherits Rectangle {
-    in property <string> text;
-    in property <IconId> icon: IconId.none;
-    in property <bool> enabled: true;
-    callback clicked();
-
-    height: 24px;
-    min-width: self.icon != IconId.none && self.text == "" ? 26px : 0px;
-    horizontal-stretch: 0;
-    border-radius: 4px;
-    background: !root.enabled ? transparent : touch.pressed ? Theme.surface-selected
-        : touch.has-hover ? Theme.surface-hover : Theme.surface;
-    border-width: 1px;
-    border-color: Theme.border;
-
-    touch := TouchArea {
-        enabled: root.enabled;
-        mouse-cursor: MouseCursor.pointer;
-        clicked => { root.clicked(); }
-    }
-
-    HorizontalLayout {
-        padding-left: root.text == "" ? 5px : 8px;
-        padding-right: root.text == "" ? 5px : 8px;
-        spacing: 4px;
-        alignment: center;
-
-        if root.icon != IconId.none: AppIcon {
-            y: (parent.height - self.height) / 2;
-            icon: root.icon;
-            size: IconSize.sm;
-            color: root.enabled ? Theme.text : Theme.status-deleted;
-        }
-
-        if root.text != "": Text {
-            text: root.text;
-            color: root.enabled ? Theme.text : Theme.status-deleted;
-            font-size: 12px;
-            vertical-alignment: center;
-        }
-    }
-}
-
 component MarkRow inherits HorizontalLayout {
     in property <string> label;
     in property <string> time;
@@ -205,9 +169,11 @@ component MarkRow inherits HorizontalLayout {
         committed(text) => { return Sections.edit-mark(root.which, text); }
     }
 
-    SmallButton {
-        text: "Set";
+    IconButton {
+        icon: IconId.mark-set;
         enabled: Sections.has-media;
+        tooltip: root.which == 0 ? "Set the start to the playhead" : "Set the end to the playhead";
+        shortcut: root.which == 0 ? Sections.key-set-start : Sections.key-set-end;
         clicked => { Sections.set-mark(root.which); }
     }
 }
@@ -301,10 +267,11 @@ export component SectionsCardBody inherits VerticalLayout {
     HorizontalLayout {
         spacing: 6px;
 
-        SmallButton {
-            text: "Add section";
+        IconButton {
             icon: IconId.section-add;
             enabled: Sections.can-add;
+            tooltip: "Add the current section (start to end) to the list";
+            shortcut: Sections.key-add;
             clicked => { Sections.add(); }
         }
 
@@ -369,21 +336,25 @@ export component SectionsCardBody inherits VerticalLayout {
     HorizontalLayout {
         spacing: 4px;
 
-        SmallButton {
+        IconButton {
             icon: IconId.section-up;
             enabled: Sections.can-move-up;
+            tooltip: "Move the selected section up (the output keeps the list order)";
             clicked => { Sections.move-up(); }
         }
 
-        SmallButton {
+        IconButton {
             icon: IconId.section-down;
             enabled: Sections.can-move-down;
+            tooltip: "Move the selected section down";
             clicked => { Sections.move-down(); }
         }
 
-        SmallButton {
+        IconButton {
             icon: IconId.section-delete;
             enabled: Sections.can-delete;
+            tooltip: "Delete the selected section";
+            shortcut: Sections.key-delete;
             clicked => { Sections.delete(); }
         }
 

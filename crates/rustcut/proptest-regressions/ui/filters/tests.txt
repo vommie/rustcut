@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 4b31bddf6ed173b51dc1e62a8fa0d6d56fdb5b25412a0c09da1f6884572459e0 # shrinks to w = 528, h = 40, sar = 1.1631892730970388, o = Orientation { m: [[-1, 0], [0, -1]] }, vw = 100.0, vh = 100.0, handle = Bottom, t = 0, r = 867, b = 29, l = 532, dx = 0.0, dy = 0.0, aspect = None
+cc ef417bedeb9c8dccddb47bf90c4ab5528466cd2a18842e50bc9659223e0a710a # shrinks to w = 2290, h = 200, o = Orientation { m: [[0, 1], [1, 0]] }, vw = 200.0, vh = 200.0, dx = -22.039698

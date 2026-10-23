@@ -57,6 +57,29 @@ section_delete = { tabler = "trash", doc = "Delete the selected section" }
 section_up = { tabler = "arrow-up", doc = "Move the selected section up" }
 section_down = { tabler = "arrow-down", doc = "Move the selected section down" }
 
+# --- Filters -------------------------------------------------------------------------------------------------------
+filter_preview = { tabler = "eye", doc = "The player shows the filters" }
+filter_preview_off = { tabler = "eye-off", doc = "The player shows the video without filters" }
+filter_keep = { tabler = "pin", doc = "Keep the filters for the next video" }
+filter_kept = { tabler = "pinned", doc = "The filters are kept for the next video" }
+filter_reset = { tabler = "restore", doc = "Reset every filter" }
+move_up = { tabler = "arrow-up", doc = "Move one place up" }
+move_down = { tabler = "arrow-down", doc = "Move one place down" }
+crop_edit = { tabler = "crop", doc = "Edit the crop on the video" }
+crop_auto = { tabler = "wand", doc = "Detect the black borders" }
+crop_aspect = { tabler = "aspect-ratio", doc = "Aspect ratio the crop keeps" }
+edge_top = { tabler = "border-top", doc = "Top edge" }
+edge_right = { tabler = "border-right", doc = "Right edge" }
+edge_bottom = { tabler = "border-bottom", doc = "Bottom edge" }
+edge_left = { tabler = "border-left", doc = "Left edge" }
+rotate_left = { tabler = "rotate", doc = "Rotate a quarter counter-clockwise" }
+rotate_right = { tabler = "rotate-clockwise", doc = "Rotate a quarter clockwise" }
+mirror_horizontal = { tabler = "flip-horizontal", doc = "Mirror left and right" }
+mirror_vertical = { tabler = "flip-vertical", doc = "Mirror top and bottom" }
+size_width = { tabler = "arrows-horizontal", doc = "Width" }
+size_height = { tabler = "arrows-vertical", doc = "Height" }
+mark_set = { tabler = "current-location", doc = "Set to the playhead" }
+
 # --- Status --------------------------------------------------------------------------------------------------------
 status_ok = { tabler = "circle-check", doc = "Success message" }
 status_warning = { tabler = "alert-triangle", doc = "Warning message" }

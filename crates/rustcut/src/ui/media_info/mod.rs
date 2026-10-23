@@ -25,6 +25,28 @@ pub use state::{HashStatus, HashView, MediaPanelState, PanelState, ProbeStatus, 
 use crate::ui::dispatcher::{CoalesceKey, UiDispatcher, rate};
 use crate::{KnownSource, MainWindow, MediaInfoPanel, MediaInfoRow, MediaInfoSection};
 
+/// The function that sees the probe result of the open file.
+type ProbeHook = Box<dyn Fn(Option<&Arc<MediaInfo>>)>;
+
+thread_local! {
+    /// Called on the UI thread whenever the probe of the open file has news (the filters need the picture's size and
+    /// rotation). Results are posted from the runtime as `Send` closures, which cannot carry UI-thread objects.
+    static PROBE_HOOK: RefCell<Option<ProbeHook>> = const { RefCell::new(None) };
+}
+
+/// Installs the function that sees the probe results (UI thread; replaces the previous one).
+pub fn set_probe_hook(hook: impl Fn(Option<&Arc<MediaInfo>>) + 'static) {
+    PROBE_HOOK.with(|h| *h.borrow_mut() = Some(Box::new(hook)));
+}
+
+fn notify_probe(info: Option<&Arc<MediaInfo>>) {
+    PROBE_HOOK.with(|hook| {
+        if let Some(hook) = hook.borrow().as_ref() {
+            hook(info);
+        }
+    });
+}
+
 /// Coalesced refreshes of the panel body and of the MD5 row.
 const SECTIONS_KEY: CoalesceKey = CoalesceKey::new("media-info", 0);
 const HASH_KEY: CoalesceKey = CoalesceKey::new("media-hash", 0);
@@ -253,8 +275,12 @@ fn post_sections(ui: &UiDispatcher, state: &Arc<Mutex<MediaPanelState>>, window:
     let window = window.clone();
     ui.post_latest(SECTIONS_KEY, rate::PROGRESS, move || {
         if let Some(window) = window.upgrade() {
-            let view = state.lock().sections_view();
+            let (view, info) = {
+                let state = state.lock();
+                (state.sections_view(), state.info())
+            };
             show_sections(&window, &view);
+            notify_probe(info.as_ref());
         }
     });
 }

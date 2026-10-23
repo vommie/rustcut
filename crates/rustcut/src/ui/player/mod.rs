@@ -20,7 +20,7 @@ use parking_lot::Mutex;
 use rustcut_core::settings::{ExportPanelState, PlayerSettings};
 use rustcut_player::{
     AudioOptions, OpenOptions, Player, PlayerError, PlayerEvent, PlayerOptions, SurfaceError, SurfaceHooks,
-    attach_surface,
+    VideoFilter, attach_surface,
 };
 use slint::ComponentHandle as _;
 
@@ -161,6 +161,12 @@ impl PlayerBridge {
                 play: Some(self.auto_play),
             },
         )
+    }
+
+    /// The preview's video filters (sent to the player's command thread).
+    pub fn set_video_filter(&self, filter: VideoFilter) {
+        tracing::debug!(lavfi = %filter.lavfi, rotates = filter.rotates_source, "[Player] Video filters");
+        self.command(|p| p.set_video_filter(filter));
     }
 
     /// The file that is open (also when it failed to play).

@@ -17,6 +17,7 @@ use slint::winit_030::{EventResult, WinitWindowAccessor as _};
 use self::drop::{DropAction, DropTracker};
 use crate::app::window::title;
 use crate::ui::editor::Editor;
+use crate::ui::filters::FiltersBridge;
 use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::player::PlayerBridge;
 use crate::ui::status::{self, Level};
@@ -32,6 +33,7 @@ pub struct FileOpener {
     player: Weak<PlayerBridge>,
     media: Weak<MediaInfoBridge>,
     editor: Weak<Editor>,
+    filters: Weak<FiltersBridge>,
     runtime: tokio::runtime::Handle,
     last_open_dir: RefCell<Option<PathBuf>>,
     drops: RefCell<DropTracker>,
@@ -44,6 +46,7 @@ impl FileOpener {
         player: &Rc<PlayerBridge>,
         media: &Rc<MediaInfoBridge>,
         editor: &Rc<Editor>,
+        filters: &Rc<FiltersBridge>,
         runtime: tokio::runtime::Handle,
         last_open_dir: Option<PathBuf>,
     ) -> Rc<Self> {
@@ -52,6 +55,7 @@ impl FileOpener {
             player: Rc::downgrade(player),
             media: Rc::downgrade(media),
             editor: Rc::downgrade(editor),
+            filters: Rc::downgrade(filters),
             runtime,
             last_open_dir: RefCell::new(last_open_dir),
             drops: RefCell::new(DropTracker::default()),
@@ -106,6 +110,10 @@ impl FileOpener {
 
     fn open_checked(&self, path: &Path) {
         let Some(player) = self.player.upgrade() else { return };
+        // Before the player loads the file: the previous file's filters must not show on the new one.
+        if let Some(filters) = self.filters.upgrade() {
+            filters.file_opening(path);
+        }
         if let Err(e) = player.open(path) {
             self.report(Level::Error, &format!("Cannot open {}: {e}", path.display()));
             return;

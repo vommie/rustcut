@@ -1,0 +1,222 @@
+// The crop drawn over the video while it is edited (src/ui/filters/ computes every number: where the picture is, the
+// kept area, the handle under the pointer). Outside the kept area the picture is dimmed; the edit mode shows handles at
+// the corners and edges, the quick mode (Ctrl held) highlights the edge or corner nearest to the pointer.
+
+import { Theme } from "styles.slint";
+
+export global CropOverlay {
+    in property <bool> active;
+    // Ctrl held: the nearest edge follows the pointer.
+    in property <bool> quick;
+    in property <length> picture-x;
+    in property <length> picture-y;
+    in property <length> picture-width;
+    in property <length> picture-height;
+    in property <length> kept-x;
+    in property <length> kept-y;
+    in property <length> kept-width;
+    in property <length> kept-height;
+    // 0 top-left, 1 top, 2 top-right, 3 right, 4 bottom-right, 5 bottom, 6 bottom-left, 7 left, 8 inside, -1 none.
+    in property <int> handle: -1;
+    in property <bool> dragging;
+    // "1440×1080 · 4:3"
+    in property <string> size-text;
+    in property <string> hint;
+
+    // The pointer over the video in its coordinates: 0 down, 1 up, 2 move. `control` = Ctrl is held.
+    callback pointer(/* kind */ int, /* x */ length, /* y */ length, /* control */ bool);
+    callback left();
+    callback resized(/* width */ length, /* height */ length);
+}
+
+/// The pointer shape for a handle.
+export global CropCursor {
+    public pure function of(handle: int, quick: bool) -> MouseCursor {
+        if handle == 0 || handle == 4 {
+            return MouseCursor.nwse-resize;
+        }
+        if handle == 2 || handle == 6 {
+            return MouseCursor.nesw-resize;
+        }
+        if handle == 1 || handle == 5 {
+            return MouseCursor.ns-resize;
+        }
+        if handle == 3 || handle == 7 {
+            return MouseCursor.ew-resize;
+        }
+        if handle == 8 {
+            return MouseCursor.move;
+        }
+        return quick ? MouseCursor.crosshair : MouseCursor.default;
+    }
+}
+
+component Shade inherits Rectangle {
+    background: #000000a8;
+}
+
+component Grip inherits Rectangle {
+    in property <bool> hot;
+
+    width: root.hot ? 12px : 9px;
+    height: self.width;
+    border-radius: 2px;
+    background: root.hot ? Theme.primary : Theme.accent;
+    border-width: 1px;
+    border-color: #11111b;
+}
+
+/// Drawn over the video area (same size as the video element).
+export component CropOverlayView inherits Rectangle {
+    property <length> px: CropOverlay.picture-x;
+    property <length> py: CropOverlay.picture-y;
+    property <length> pw: CropOverlay.picture-width;
+    property <length> ph: CropOverlay.picture-height;
+    property <length> kx: CropOverlay.kept-x;
+    property <length> ky: CropOverlay.kept-y;
+    property <length> kw: CropOverlay.kept-width;
+    property <length> kh: CropOverlay.kept-height;
+    property <int> h: CropOverlay.handle;
+    property <color> line: Theme.accent;
+    property <color> hot: Theme.primary;
+
+    // Dimmed picture outside the kept area.
+    Shade {
+        x: root.px;
+        y: root.py;
+        width: root.pw;
+        height: Math.max(0, root.ky - root.py);
+    }
+
+    Shade {
+        x: root.px;
+        y: root.ky + root.kh;
+        width: root.pw;
+        height: Math.max(0, root.py + root.ph - root.ky - root.kh);
+    }
+
+    Shade {
+        x: root.px;
+        y: root.ky;
+        width: Math.max(0, root.kx - root.px);
+        height: root.kh;
+    }
+
+    Shade {
+        x: root.kx + root.kw;
+        y: root.ky;
+        width: Math.max(0, root.px + root.pw - root.kx - root.kw);
+        height: root.kh;
+    }
+
+    // Thirds while dragging (composition help).
+    if CropOverlay.dragging: Rectangle {
+        x: root.kx;
+        y: root.ky;
+        width: root.kw;
+        height: root.kh;
+
+        for i in [1, 2]: Rectangle {
+            x: parent.width * i / 3;
+            y: 0;
+            width: 1px;
+            height: parent.height;
+            background: #ffffff40;
+        }
+
+        for i in [1, 2]: Rectangle {
+            x: 0;
+            y: parent.height * i / 3;
+            width: parent.width;
+            height: 1px;
+            background: #ffffff40;
+        }
+    }
+
+    // The kept area's frame; the grabbed or nearest edges are thicker and blue.
+    Rectangle {
+        x: root.kx;
+        y: root.ky;
+        width: root.kw;
+        background: (root.h == 0 || root.h == 1 || root.h == 2 || root.h == 8) ? root.hot : root.line;
+        height: (root.h == 0 || root.h == 1 || root.h == 2) ? 3px : 1.5px;
+    }
+
+    Rectangle {
+        x: root.kx;
+        y: root.ky + root.kh - self.height;
+        width: root.kw;
+        background: (root.h == 4 || root.h == 5 || root.h == 6 || root.h == 8) ? root.hot : root.line;
+        height: (root.h == 4 || root.h == 5 || root.h == 6) ? 3px : 1.5px;
+    }
+
+    Rectangle {
+        x: root.kx;
+        y: root.ky;
+        height: root.kh;
+        background: (root.h == 0 || root.h == 7 || root.h == 6 || root.h == 8) ? root.hot : root.line;
+        width: (root.h == 0 || root.h == 7 || root.h == 6) ? 3px : 1.5px;
+    }
+
+    Rectangle {
+        x: root.kx + root.kw - self.width;
+        y: root.ky;
+        height: root.kh;
+        background: (root.h == 2 || root.h == 3 || root.h == 4 || root.h == 8) ? root.hot : root.line;
+        width: (root.h == 2 || root.h == 3 || root.h == 4) ? 3px : 1.5px;
+    }
+
+    // Handles of the edit mode (the quick mode needs no aiming).
+    if !CropOverlay.quick: Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+
+        for g[i] in [
+            { x: 0.0, y: 0.0 }, { x: 0.5, y: 0.0 }, { x: 1.0, y: 0.0 }, { x: 1.0, y: 0.5 },
+            { x: 1.0, y: 1.0 }, { x: 0.5, y: 1.0 }, { x: 0.0, y: 1.0 }, { x: 0.0, y: 0.5 },
+        ]: Grip {
+            hot: root.h == i;
+            x: root.kx + root.kw * g.x - self.width / 2;
+            y: root.ky + root.kh * g.y - self.height / 2;
+        }
+    }
+
+    // Size of the kept area.
+    if root.kw > 0: Rectangle {
+        x: Math.min(root.kx + 6px, root.px + root.pw - self.width - 4px);
+        y: Math.min(root.ky + 6px, root.py + root.ph - self.height - 4px);
+        width: size-label.preferred-width + 12px;
+        height: 20px;
+        border-radius: 10px;
+        background: #11111bd0;
+
+        size-label := Text {
+            text: CropOverlay.size-text;
+            color: Theme.text;
+            font-size: 11px;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+        }
+    }
+
+    // What the keys do.
+    if CropOverlay.hint != "": Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: parent.height - self.height - 10px;
+        width: Math.min(parent.width - 20px, hint-label.preferred-width + 20px);
+        height: 24px;
+        border-radius: 12px;
+        background: #11111bd8;
+
+        hint-label := Text {
+            text: CropOverlay.hint;
+            color: Theme.text-muted;
+            font-size: 11px;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+    }
+}

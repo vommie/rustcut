@@ -12,6 +12,7 @@ use libmpv2::Mpv;
 
 use super::audio::{self, AudioOptions};
 use super::options::{self, PreviewQuality};
+use super::video::{self, VideoFilter};
 
 /// What the app (and the player's own threads) ask mpv to do.
 #[derive(Debug, Clone, PartialEq)]
@@ -39,6 +40,8 @@ pub(crate) enum Command {
     /// Playback speed (1 = normal).
     SetSpeed(f64),
     SetAudio(AudioOptions),
+    /// The preview's video filters.
+    SetVideoFilter(VideoFilter),
     /// The loaded file's duration in seconds (from the event thread; the end mute needs it).
     Duration(f64),
     /// A render context exists now; `software` = the OpenGL renderer is a software rasterizer.
@@ -79,6 +82,8 @@ pub(crate) struct Session {
     duration: Option<f64>,
     /// The `af` value last set, so an unchanged chain does not restart the audio output.
     af: String,
+    /// The video filters last set (a change reinitializes mpv's filters and redraws the frame).
+    vf: VideoFilter,
 }
 
 impl Session {
@@ -92,6 +97,7 @@ impl Session {
             duration: None,
             // The core starts with this chain (`PlayerOptions::apply`).
             af: audio::filter_chain(audio, None),
+            vf: VideoFilter::default(),
         }
     }
 
@@ -134,6 +140,7 @@ impl Session {
                 self.audio = audio;
                 self.audio_ops()
             }
+            Command::SetVideoFilter(filter) => self.video_ops(filter),
             Command::SetPaused(paused) => vec![Op::Flag("pause", paused)],
             Command::TogglePause => vec![Op::TogglePause],
             Command::Seek { seconds, exact } => {
@@ -174,6 +181,22 @@ impl Session {
         ops
     }
 
+    fn video_ops(&mut self, filter: VideoFilter) -> Vec<Op> {
+        if filter == self.vf {
+            return Vec::new();
+        }
+        let mut ops = Vec::new();
+        if filter.rotates_source != self.vf.rotates_source {
+            ops.push(Op::Text("video-rotate", video::video_rotate_value(&filter).to_owned()));
+        }
+        if filter.lavfi != self.vf.lavfi {
+            tracing::debug!(lavfi = %filter.lavfi, "[Player] Video filters");
+            ops.push(Op::Text("vf", video::vf_value(&filter)));
+        }
+        self.vf = filter;
+        ops
+    }
+
     fn audio_ops(&mut self) -> Vec<Op> {
         let chain = audio::filter_chain(self.audio, self.duration);
         if chain == self.af {
@@ -189,7 +212,8 @@ const MIN_SPEED: f64 = 0.01;
 const MAX_SPEED: f64 = 100.0;
 
 /// Drops commands that a later one in the same burst makes pointless: of consecutive seeks only the last runs (a drag on the
-/// timeline, held arrow keys), likewise for volume changes (the mouse wheel) and speed changes.
+/// timeline, held arrow keys), likewise for volume changes (the mouse wheel), speed changes and video filters (typing a
+/// number into a filter field).
 pub(crate) fn coalesce(batch: Vec<Command>) -> Vec<Command> {
     let mut out: Vec<Command> = Vec::with_capacity(batch.len());
     for command in batch {
@@ -198,6 +222,7 @@ pub(crate) fn coalesce(batch: Vec<Command>) -> Vec<Command> {
             (Some(Command::Seek { .. }), Command::Seek { .. })
                 | (Some(Command::SetVolume(_)), Command::SetVolume(_))
                 | (Some(Command::SetSpeed(_)), Command::SetSpeed(_))
+                | (Some(Command::SetVideoFilter(_)), Command::SetVideoFilter(_))
         );
         if replaces_last {
             out.pop();
@@ -227,7 +252,7 @@ pub(crate) fn run(mpv: &Arc<Mpv>, commands: &Receiver<Command>, mut session: Ses
     tracing::debug!("[Player] Command thread ended (no senders left)");
 }
 
-fn execute(mpv: &Mpv, op: &Op) {
+pub(crate) fn execute(mpv: &Mpv, op: &Op) {
     tracing::debug!(op = ?op, "[Player] mpv call");
     let result = match op {
         Op::Command(name, args) => {
@@ -381,6 +406,38 @@ mod tests {
             coalesce(batch),
             vec![seek(3.0), Command::SetPaused(true), seek(4.0), Command::SetVolume(20.0)]
         );
+    }
+
+    #[test]
+    fn video_filters_are_set_only_on_change_and_rotation_follows() {
+        let mut s = Session::new(PreviewQuality::High, AudioOptions::default());
+        let crop = VideoFilter {
+            lavfi: "transpose=dir=clock,crop=w=iw-4:h=ih:x=0:y=0".into(),
+            rotates_source: true,
+        };
+        assert_eq!(
+            s.handle(Command::SetVideoFilter(crop.clone())),
+            vec![
+                Op::Text("video-rotate", "no".into()),
+                Op::Text(
+                    "vf",
+                    "@rcvf:lavfi=graph=%44%transpose=dir=clock,crop=w=iw-4:h=ih:x=0:y=0".into()
+                ),
+            ]
+        );
+        assert!(s.handle(Command::SetVideoFilter(crop)).is_empty());
+        assert_eq!(
+            s.handle(Command::SetVideoFilter(VideoFilter::default())),
+            vec![Op::Text("video-rotate", "0".into()), Op::Text("vf", String::new())]
+        );
+        let batch = vec![
+            Command::SetVideoFilter(VideoFilter::default()),
+            Command::SetVideoFilter(VideoFilter {
+                lavfi: "hflip".into(),
+                rotates_source: false,
+            }),
+        ];
+        assert_eq!(coalesce(batch).len(), 1);
     }
 
     #[test]

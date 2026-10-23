@@ -1,4 +1,5 @@
-// The video area: mpv's frame as an image (rustcut-player renders it at exactly this element's size), the empty state, the
+// The video area: mpv's frame as an image (rustcut-player renders it at exactly this element's size), the crop being
+// edited (handles, or the nearest edge while Ctrl is held; the pointer goes to src/ui/filters/), the empty state, the
 // non-modal error overlay with Reload (click or F5), and the hint while a file is dragged over the window. The mouse wheel
 // changes the volume.
 
@@ -6,6 +7,7 @@ import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Playback } from "player_types.slint";
 import { Shortcuts } from "shortcuts.slint";
+import { CropCursor, CropOverlay, CropOverlayView } from "crop_overlay.slint";
 
 export component PlayerView inherits Rectangle {
     in property <image> frame;
@@ -25,10 +27,39 @@ export component PlayerView inherits Rectangle {
         visible: Playback.has-video;
     }
 
+    changed width => { CropOverlay.resized(self.width, self.height); }
+    changed height => { CropOverlay.resized(self.width, self.height); }
+    init => { CropOverlay.resized(self.width, self.height); }
+
+    if CropOverlay.active && Playback.has-video: CropOverlayView {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+    }
+
     TouchArea {
+        mouse-cursor: CropOverlay.active ? CropCursor.of(CropOverlay.handle, CropOverlay.quick) : MouseCursor.default;
+
         pointer-event(event) => {
             if event.kind == PointerEventKind.down {
                 Shortcuts.release-focus();
+            }
+            if !Playback.has-video {
+                return;
+            }
+            if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                CropOverlay.pointer(0, self.mouse-x, self.mouse-y, event.modifiers.control);
+            } else if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
+                CropOverlay.pointer(1, self.mouse-x, self.mouse-y, event.modifiers.control);
+            } else if event.kind == PointerEventKind.move {
+                CropOverlay.pointer(2, self.mouse-x, self.mouse-y, event.modifiers.control);
+            }
+        }
+
+        changed has-hover => {
+            if !self.has-hover {
+                CropOverlay.left();
             }
         }
 

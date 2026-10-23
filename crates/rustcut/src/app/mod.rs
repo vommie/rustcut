@@ -24,6 +24,7 @@ use crate::desktop::instance::{self, Request};
 use crate::ui::dispatcher::{SlintSink, UiDispatcher};
 use crate::ui::dock::{DockBridge, persist as dock_persist};
 use crate::ui::editor::Editor;
+use crate::ui::filters::FiltersBridge;
 use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::open::{self, FileOpener};
 use crate::ui::player::{PlayerBridge, PlayerBridgeError};
@@ -103,12 +104,27 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     let player = PlayerBridge::start(&main, &ui, &loaded.settings.player, &loaded.ui_state.export)?;
     let (hashing, _hash_task) = spawn_hash_service(runtime.handle());
     let media = MediaInfoBridge::install(&main, &ui, runtime.handle().clone(), hashing.clone(), &loaded.settings);
-    let editor = Editor::install(&main, &player, &media, &loaded.settings, &loaded.ui_state.timeline);
+    let filters = FiltersBridge::install(
+        &main,
+        &player,
+        runtime.handle().clone(),
+        &loaded.settings,
+        &loaded.ui_state.export,
+    );
+    let editor = Editor::install(
+        &main,
+        &player,
+        &media,
+        &filters,
+        &loaded.settings,
+        &loaded.ui_state.timeline,
+    );
     let opener = FileOpener::install(
         &main,
         &player,
         &media,
         &editor,
+        &filters,
         runtime.handle().clone(),
         loaded.ui_state.last_open_dir.clone(),
     );
@@ -133,10 +149,12 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     (ui_state.export.volume, ui_state.export.muted) = player.volume_and_mute();
     ui_state.last_open_dir = opener.last_open_dir();
     ui_state.timeline = editor.timeline_state();
+    filters.save_into(&mut ui_state.export);
     persistence::save_ui_state(&loaded, &ui_state);
     drop(server);
     drop(opener);
     drop(editor);
+    drop(filters);
     drop(media);
     drop(main);
     stop_hashing(&hashing);

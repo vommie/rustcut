@@ -2,8 +2,10 @@
 //! on quit; restored before the first frame.
 
 use serde::{Deserialize, Serialize};
+use serde_with::{DefaultOnError, serde_as};
 
 use super::file::VersionedFile;
+use crate::edit::{CropAspect, FilterChain};
 use crate::settings::WhenDone;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -44,6 +46,7 @@ impl Default for WindowState {
 }
 
 /// Controls of the Export panel that keep their value between videos.
+#[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ExportPanelState {
@@ -58,8 +61,16 @@ pub struct ExportPanelState {
     pub clear_sections_after_save: bool,
     /// Show the filters in the player.
     pub preview_filters: bool,
-    /// Keep the filters for the next video.
+    /// Keep the filters for the next video (and the next start).
     pub keep_filters: bool,
+    /// The filter chain kept for the next video: written only while `keep_filters` is on. A value this version cannot
+    /// read counts as missing (the other settings stay).
+    #[serde_as(as = "DefaultOnError")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filters: Option<FilterChain>,
+    /// The aspect ratio a crop keeps while it is dragged on the video.
+    #[serde_as(as = "DefaultOnError")]
+    pub crop_aspect: CropAspect,
     /// Render profile of the next job (id).
     pub profile: Option<String>,
     pub muted: bool,
@@ -77,6 +88,8 @@ impl Default for ExportPanelState {
             clear_sections_after_save: true,
             preview_filters: true,
             keep_filters: false,
+            filters: None,
+            crop_aspect: CropAspect::Free,
             profile: None,
             muted: false,
             volume: 100,
@@ -215,6 +228,42 @@ mod tests {
         .unwrap();
         let value = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
         assert_eq!((value.window.width, value.timeline.zoom), (1000, 1.0));
+    }
+
+    #[test]
+    fn kept_filters_round_trip_and_bad_values_read_as_missing() {
+        use crate::edit::{Crop, Filter, FilterKind, Rotation};
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = UiState::default();
+        let mut chain = FilterChain::default();
+        chain.set(Filter::Crop(Crop::new(2, 4, 6, 8)));
+        chain.set_enabled(FilterKind::Crop, true);
+        chain.set(Filter::Rotate {
+            rotation: Rotation::CounterClockwise,
+        });
+        chain.move_up(FilterKind::Rotate);
+        state.export.keep_filters = true;
+        state.export.filters = Some(chain);
+        state.export.crop_aspect = CropAspect::Wide;
+        save(dir.path(), &state).unwrap();
+        let text = std::fs::read_to_string(dir.path().join("ui-state.toml")).unwrap();
+        assert!(text.contains("crop_aspect = \"16:9\""), "{text}");
+        assert_eq!(
+            load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value(),
+            state
+        );
+
+        // A file of 0.0.6 has neither field; a broken chain or aspect does not reset the rest.
+        std::fs::write(
+            dir.path().join("ui-state.toml"),
+            "version = 1\n[export]\nvolume = 70\nkeep_filters = true\ncrop_aspect = \"7:3\"\nfilters = 5\n",
+        )
+        .unwrap();
+        let value = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+        assert_eq!(value.export.volume, 70);
+        assert!(value.export.keep_filters);
+        assert_eq!(value.export.filters, None);
+        assert_eq!(value.export.crop_aspect, CropAspect::Free);
     }
 
     #[test]

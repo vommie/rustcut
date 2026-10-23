@@ -1,5 +1,5 @@
 //! The actions a key can trigger, with their ids in `config.toml`, their titles and their default keys (PyCutRv's keys plus
-//! NLE-style keys, user decision 2026-10-23).
+//! NLE-style keys and the filter keys C, Shift+C, P, R, Shift+R; user decisions 2026-10-23).
 
 /// Everything the keymap can bind. The order is the order of the Settings window's list and decides which binding wins
 /// when two defaults would collide.
@@ -31,10 +31,19 @@ pub enum Action {
     ZoomIn,
     ZoomOut,
     ZoomFit,
+    CropEdit,
+    AutoCrop,
+    ToggleFilterPreview,
+    ToggleKeepFilters,
+    RotateLeft,
+    RotateRight,
+    MirrorHorizontal,
+    MirrorVertical,
+    ResetFilters,
 }
 
 impl Action {
-    pub const ALL: [Self; 26] = [
+    pub const ALL: [Self; 35] = [
         Self::Open,
         Self::Save,
         Self::Quit,
@@ -61,6 +70,15 @@ impl Action {
         Self::ZoomIn,
         Self::ZoomOut,
         Self::ZoomFit,
+        Self::CropEdit,
+        Self::AutoCrop,
+        Self::ToggleFilterPreview,
+        Self::ToggleKeepFilters,
+        Self::RotateLeft,
+        Self::RotateRight,
+        Self::MirrorHorizontal,
+        Self::MirrorVertical,
+        Self::ResetFilters,
     ];
 
     /// The key in `config.toml`'s `[keymap]` table.
@@ -92,6 +110,15 @@ impl Action {
             Self::ZoomIn => "zoom_in",
             Self::ZoomOut => "zoom_out",
             Self::ZoomFit => "zoom_fit",
+            Self::CropEdit => "crop_edit",
+            Self::AutoCrop => "auto_crop",
+            Self::ToggleFilterPreview => "toggle_filter_preview",
+            Self::ToggleKeepFilters => "toggle_keep_filters",
+            Self::RotateLeft => "rotate_left",
+            Self::RotateRight => "rotate_right",
+            Self::MirrorHorizontal => "mirror_horizontal",
+            Self::MirrorVertical => "mirror_vertical",
+            Self::ResetFilters => "reset_filters",
         }
     }
 
@@ -128,6 +155,15 @@ impl Action {
             Self::ZoomIn => "Zoom timeline in",
             Self::ZoomOut => "Zoom timeline out",
             Self::ZoomFit => "Fit timeline",
+            Self::CropEdit => "Edit the crop on the video",
+            Self::AutoCrop => "Detect black borders (auto-crop)",
+            Self::ToggleFilterPreview => "Show / hide the filters in the player",
+            Self::ToggleKeepFilters => "Keep the filters for the next video",
+            Self::RotateLeft => "Rotate left",
+            Self::RotateRight => "Rotate right",
+            Self::MirrorHorizontal => "Mirror left and right",
+            Self::MirrorVertical => "Mirror top and bottom",
+            Self::ResetFilters => "Reset all filters",
         }
     }
 
@@ -160,6 +196,13 @@ impl Action {
             Self::ZoomIn => &["Control+Plus"],
             Self::ZoomOut => &["Control+HyphenMinus"],
             Self::ZoomFit => &["Control+Digit0"],
+            // Filter keys (user decision 2026-10-23; PyCutRv had none).
+            Self::CropEdit => &["C"],
+            Self::AutoCrop => &["Shift+C"],
+            Self::ToggleFilterPreview => &["P"],
+            Self::RotateLeft => &["Shift+R"],
+            Self::RotateRight => &["R"],
+            Self::ToggleKeepFilters | Self::MirrorHorizontal | Self::MirrorVertical | Self::ResetFilters => &[],
         }
     }
 

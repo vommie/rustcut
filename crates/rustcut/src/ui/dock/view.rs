@@ -16,7 +16,7 @@ const EXPORT_CARDS: [(&str, &str, &str); 3] = [
     (
         "filters",
         "Filters",
-        "Crop, deinterlace, resize, rotate, mirror and deshake arrive with milestone M2.3.",
+        "Crop, deinterlace, resize, rotate, mirror and deshake.",
     ),
     ("sections", "Sections", "The section list arrives with milestone M2.2."),
 ];

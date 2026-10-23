@@ -11,6 +11,7 @@ mod commands;
 mod events;
 mod log;
 mod options;
+mod video;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -23,6 +24,7 @@ pub use audio::AudioOptions;
 use commands::{Command, Session};
 pub use events::{EndReason, PlayerEvent, Property};
 pub use options::{PlayerOptions, PreviewQuality};
+pub use video::VideoFilter;
 
 /// Errors of the mpv core.
 #[derive(Debug, thiserror::Error)]
@@ -162,6 +164,11 @@ impl Player {
     /// Volume in percent (0-150).
     pub fn set_volume(&self, percent: f64) -> Result<(), PlayerError> {
         self.command(Command::SetVolume(percent))
+    }
+
+    /// Changes the preview's video filters (a burst of changes is coalesced; an unchanged filter is not set again).
+    pub fn set_video_filter(&self, filter: VideoFilter) -> Result<(), PlayerError> {
+        self.command(Command::SetVideoFilter(filter))
     }
 
     /// Changes the preview's audio filters.
