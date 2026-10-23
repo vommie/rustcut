@@ -14,8 +14,9 @@ use std::time::{Duration, Instant};
 use clap::Parser as _;
 use rustcut_core::app_identity::{APP_NAME, VERSION};
 use rustcut_core::hashing::{HashCommand, HashService, spawn_hash_service};
-use rustcut_core::queue::{QueueCommand, QueueOptions, QueueService, spawn_queue};
+use rustcut_core::queue::{QueueCommand, QueueOptions, QueueService, SyncLink, spawn_queue_linked};
 use rustcut_core::render::{HardwareContext, RenderEnv, probe_dir, spawn_capability_check};
+use rustcut_core::rustview::{CliClient, SyncCommand, SyncService, spawn_sync};
 use rustcut_core::settings::{AppPaths, Settings};
 use rustcut_core::store::{Store, StoreCommand, StoreHandle, spawn_store};
 use slint::ComponentHandle as _;
@@ -122,7 +123,14 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &loaded.settings,
     );
     let (store, store_thread, store_problem) = open_store(&loaded.paths);
-    let queue_service = start_queue(&runtime, &store, &loaded, &encoders);
+    // The RustView link (ADR-6): one `rustview api` call at a time on the runtime; the queue tells it about the jobs.
+    let (sync, sync_records, _sync_task) =
+        spawn_sync(runtime.handle(), loaded.settings.rustview.clone(), CliClient::new);
+    let sync_link = SyncLink {
+        handle: sync.handle.clone(),
+        records: sync_records,
+    };
+    let queue_service = start_queue(&runtime, &store, &loaded, &encoders, sync_link);
     let queue = QueueBridge::install(&main, &ui, runtime.handle(), &queue_service);
     let render = RenderSettingsBridge::install(
         &main,
@@ -133,7 +141,14 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &loaded.paths.cache_dir,
         encoders,
     );
-    let media = MediaInfoBridge::install(&main, &ui, runtime.handle().clone(), hashing.clone(), &loaded.settings);
+    let media = MediaInfoBridge::install(
+        &main,
+        &ui,
+        runtime.handle().clone(),
+        hashing.clone(),
+        Some(sync.handle.clone()),
+        &loaded.settings,
+    );
     let filters = FiltersBridge::install(
         &main,
         &player,
@@ -234,6 +249,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     drop(media);
     drop(main);
     stop_hashing(&hashing);
+    stop_sync(&sync);
     stop_queue(&queue_service);
     stop_store(&store, store_thread);
     stop_player(player);
@@ -344,6 +360,7 @@ fn start_queue(
     store: &StoreHandle,
     loaded: &persistence::Loaded,
     encoders: &tokio::sync::watch::Receiver<Option<std::sync::Arc<rustcut_core::render::Capabilities>>>,
+    sync: SyncLink,
 ) -> QueueService {
     let settings: &Settings = &loaded.settings;
     let options = QueueOptions {
@@ -353,7 +370,7 @@ fn start_queue(
         when_done: loaded.ui_state.queue.when_done.unwrap_or(settings.queue.when_done),
     };
     let env = RenderEnv::new(settings, &loaded.paths, HardwareContext::default());
-    let (service, _task) = spawn_queue(runtime.handle(), store.clone(), env.clone(), options);
+    let (service, _task) = spawn_queue_linked(runtime.handle(), store.clone(), env.clone(), options, Some(sync));
     let mut capabilities = encoders.clone();
     let handle = service.handle.clone();
     runtime.spawn(async move {
@@ -393,6 +410,18 @@ fn stop_store(store: &StoreHandle, thread: Option<std::thread::JoinHandle<()>>) 
         && thread.join().is_err()
     {
         tracing::warn!("[App] The database thread ended with a panic");
+    }
+}
+
+/// Stops the RustView sync: a running `rustview` call is dropped (its child killed); records it reported before are
+/// stored by the queue, which stops after it. Unfinished work is picked up at the next start from the stored records.
+fn stop_sync(sync: &SyncService) {
+    if sync
+        .handle
+        .blocking_request(|reply| SyncCommand::Shutdown { reply })
+        .is_err()
+    {
+        tracing::debug!("[App] The RustView sync had already stopped");
     }
 }
 

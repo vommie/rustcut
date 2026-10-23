@@ -1,6 +1,8 @@
 //! The Media Info panel and the source hash: when a file opens, ffprobe runs on the runtime (the previous probe is
-//! aborted, which kills its ffprobe; the frame-timing sample follows as a second call) and the hash service gets the file (sidecar first, else MD5 in the background) when
-//! the known-source warning needs it; otherwise the panel offers "Compute". Results land in the shared
+//! aborted, which kills its ffprobe; the frame-timing sample follows as a second call), and when the known-source warning
+//! needs the hash it is taken from RustView's record of the file (ADR-6, no disk read), else from the hash service
+//! (sidecar first, else MD5 in the background); otherwise the panel offers "Compute". Once the hash is known, RustView
+//! is asked whether the file was cut before (the banner). Results land in the shared
 //! [`MediaPanelState`] under a short lock; the UI thread is only told to refresh, through the [`UiDispatcher`] at
 //! `rate::PROGRESS`, and reads the current views when the refresh runs, so a late result can never show for the wrong file.
 //! No file system call happens on the UI thread.
@@ -16,11 +18,12 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use rustcut_core::hashing::{HashCommand, HashEvent, HashService};
 use rustcut_core::media::{InfoSection, MediaInfo, ProbeOptions, probe, probe_frame_timing};
+use rustcut_core::rustview::{SyncCommand, SyncHandle, trusted_hash};
 use rustcut_core::settings::Settings;
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 use tokio::sync::broadcast::error::RecvError;
 
-pub use state::{HashStatus, HashView, MediaPanelState, PanelState, ProbeStatus, SectionsView};
+pub use state::{HashOrigin, HashStatus, HashView, MediaPanelState, PanelState, ProbeStatus, SectionsView};
 
 use crate::ui::dispatcher::{CoalesceKey, UiDispatcher, rate};
 use crate::{KnownSource, MainWindow, MediaInfoPanel, MediaInfoRow, MediaInfoSection};
@@ -57,8 +60,10 @@ pub struct MediaInfoBridge {
     ui: UiDispatcher,
     runtime: tokio::runtime::Handle,
     hashing: HashService,
+    /// The RustView sync actor (lookups of the source's record and hash); `None` without RustView.
+    sync: Option<SyncHandle>,
     probe_options: ProbeOptions,
-    /// Hash every opened file (the known-source warning needs the hash).
+    /// Hash every opened file and look it up in RustView (the known-source warning).
     auto_hash: bool,
     probe_task: RefCell<Option<tokio::task::AbortHandle>>,
     events_task: tokio::task::AbortHandle,
@@ -71,15 +76,21 @@ impl MediaInfoBridge {
         ui: &UiDispatcher,
         runtime: tokio::runtime::Handle,
         hashing: HashService,
+        sync: Option<SyncHandle>,
         settings: &Settings,
     ) -> Rc<Self> {
         let state = Arc::new(Mutex::new(MediaPanelState::default()));
+        let known_source = settings.warnings.known_source;
         let events_task = runtime
             .spawn(forward_hash_events(
                 hashing.clone(),
-                Arc::clone(&state),
-                ui.clone(),
-                window.as_weak(),
+                Lookup {
+                    sync: sync.clone(),
+                    known_source,
+                    state: Arc::clone(&state),
+                    ui: ui.clone(),
+                    window: window.as_weak(),
+                },
             ))
             .abort_handle();
         let bridge = Rc::new(Self {
@@ -88,11 +99,12 @@ impl MediaInfoBridge {
             ui: ui.clone(),
             runtime,
             hashing,
+            sync,
             probe_options: ProbeOptions {
                 program: settings.advanced.ffprobe.clone(),
                 ..ProbeOptions::default()
             },
-            auto_hash: settings.warnings.known_source,
+            auto_hash: known_source,
             probe_task: RefCell::new(None),
             events_task,
         });
@@ -169,12 +181,70 @@ impl MediaInfoBridge {
         });
         *self.probe_task.borrow_mut() = Some(task.abort_handle());
         if self.auto_hash {
-            self.send_hash(HashCommand::Hash {
-                path: path.to_path_buf(),
-                reply: None,
-            });
+            self.request_hash(path.to_path_buf(), generation);
         }
         self.refresh();
+    }
+
+    /// The open file's MD5, once known (a job of it carries it to RustView's hash list).
+    pub fn source_hash(&self, source: &Path) -> Option<String> {
+        self.state
+            .lock()
+            .ready_hash()
+            .filter(|(file, _)| file == source)
+            .map(|(_, md5)| md5)
+    }
+
+    /// A job of `source` was queued. When it went without the hash (not known yet at saving), the hash is registered
+    /// in RustView as soon as it is known (only sources of jobs are registered, bug 3).
+    pub fn job_saved(&self, source: &Path, with_hash: bool) {
+        if with_hash {
+            return;
+        }
+        let ready = {
+            let mut state = self.state.lock();
+            if state.file.as_deref() != Some(source) {
+                return;
+            }
+            let ready = state.ready_hash().map(|(_, md5)| md5);
+            state.register_hash = ready.is_none();
+            ready
+        };
+        if let Some(md5) = ready {
+            register_hash(self.sync.as_ref(), md5);
+        }
+    }
+
+    /// Asks RustView for the file's record first (its hash when the record is current), else the hash service.
+    fn request_hash(&self, path: std::path::PathBuf, generation: u64) {
+        let Some(sync) = self.sync.clone() else {
+            self.send_hash(HashCommand::Hash { path, reply: None });
+            return;
+        };
+        let lookup = Lookup {
+            sync: Some(sync.clone()),
+            known_source: self.auto_hash,
+            state: Arc::clone(&self.state),
+            ui: self.ui.clone(),
+            window: self.window.clone(),
+        };
+        let hashing = self.hashing.handle.clone();
+        self.runtime.spawn(async move {
+            match library_hash(&sync, &path).await {
+                Some(md5) => {
+                    if lookup.state.lock().hash_from_library(generation, &md5) {
+                        tracing::info!(path = %path.display(), "[Media] Hash taken from the RustView library");
+                        post_hash(&lookup.ui, &lookup.state, &lookup.window);
+                        lookup.hash_known(&path, &md5).await;
+                    }
+                }
+                None => {
+                    if hashing.send(HashCommand::Hash { path, reply: None }).is_err() {
+                        tracing::warn!("[Media] The hash service has stopped");
+                    }
+                }
+            }
+        });
     }
 
     /// What the probe found about the open file, once it is known.
@@ -183,10 +253,13 @@ impl MediaInfoBridge {
     }
 
     fn compute_hash(&self) {
-        let file = self.state.lock().hash_requested();
+        let (file, generation) = {
+            let mut state = self.state.lock();
+            (state.hash_requested(), state.generation)
+        };
         if let Some(path) = file {
             tracing::info!(path = %path.display(), "[Media] Hash requested");
-            self.send_hash(HashCommand::Hash { path, reply: None });
+            self.request_hash(path, generation);
         }
         self.refresh_hash();
     }
@@ -233,13 +306,90 @@ impl Drop for MediaInfoBridge {
     }
 }
 
-/// Applies the hash service's events to the panel state and refreshes the MD5 row (runtime).
-async fn forward_hash_events(
-    hashing: HashService,
+/// The MD5 from RustView's record of `path` when that record describes the file as it is now (runtime).
+async fn library_hash(sync: &SyncHandle, path: &Path) -> Option<String> {
+    let answer = sync
+        .request(|reply| SyncCommand::GetMedia {
+            path: path.to_path_buf(),
+            reply,
+        })
+        .await;
+    let media = match answer {
+        Ok(Ok(found)) if found.found => found.media?,
+        Ok(Ok(_)) => return None,
+        Ok(Err(e)) => {
+            tracing::debug!(error = %e, "[Media] RustView not asked for the hash");
+            return None;
+        }
+        Err(_gone) => return None,
+    };
+    let meta = tokio::fs::metadata(path).await.ok()?;
+    let modified = meta
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|d| i64::try_from(d.as_secs()).ok())?;
+    let hash = trusted_hash(&media, meta.len(), modified);
+    if hash.is_none() {
+        tracing::debug!(path = %path.display(), "[Media] RustView's record of the file is not current; reading it");
+    }
+    hash
+}
+
+/// Sends the hash of a job's source to RustView's hash list.
+fn register_hash(sync: Option<&SyncHandle>, md5: String) {
+    if let Some(sync) = sync
+        && sync.send(SyncCommand::InsertHash { md5 }).is_err()
+    {
+        tracing::debug!("[Media] The RustView sync has stopped");
+    }
+}
+
+/// What the known-source check needs on the runtime.
+struct Lookup {
+    sync: Option<SyncHandle>,
+    known_source: bool,
     state: Arc<Mutex<MediaPanelState>>,
     ui: UiDispatcher,
     window: slint::Weak<MainWindow>,
-) {
+}
+
+impl Lookup {
+    /// The open file's MD5 is known: register it if a job was saved without it, and ask RustView whether the file was
+    /// cut before (the banner shows only while that file is still open).
+    async fn hash_known(&self, path: &Path, md5: &str) {
+        let register = std::mem::take(&mut self.state.lock().register_hash);
+        if register {
+            register_hash(self.sync.as_ref(), md5.to_owned());
+        }
+        let Some(sync) = self.sync.as_ref().filter(|_| self.known_source) else {
+            return;
+        };
+        let generation = {
+            let state = self.state.lock();
+            if state.file.as_deref() != Some(path) {
+                return;
+            }
+            state.generation
+        };
+        let view = known_source::lookup(sync, path, md5).await;
+        let window = self.window.clone();
+        let state = Arc::clone(&self.state);
+        self.ui.post(move || {
+            if state.lock().generation != generation {
+                return;
+            }
+            if let Some(window) = window.upgrade() {
+                known_source::show(&window, view.as_ref());
+            }
+        });
+    }
+}
+
+/// Applies the hash service's events to the panel state and refreshes the MD5 row (runtime).
+async fn forward_hash_events(hashing: HashService, lookup: Lookup) {
+    let Lookup { state, ui, window, .. } = &lookup;
     let mut events = hashing.events.subscribe();
     loop {
         match events.recv().await {
@@ -247,10 +397,10 @@ async fn forward_hash_events(
                 if !state.lock().apply_hash(&event) {
                     continue;
                 }
+                post_hash(ui, state, window);
                 if let HashEvent::Finished { path, md5, .. } = &event {
-                    known_source::source_hash_ready(path, md5);
+                    lookup.hash_known(path, md5).await;
                 }
-                post_hash(&ui, &state, &window);
             }
             Err(RecvError::Lagged(missed)) => {
                 // A missed Finished would leave the row computing forever: ask again (answered from memory).
