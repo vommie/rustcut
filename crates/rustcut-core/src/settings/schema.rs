@@ -261,8 +261,13 @@ impl Default for RustViewSettings {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WarningSettings {
+    /// Ask when the target file exists. Off: the job takes the next free name without asking (the next counter
+    /// number when the counter is on, else "Name (n)"); an existing file is never replaced unasked.
     pub target_exists: bool,
+    /// Ask when another job in the queue writes the same file. Off: the job is saved anyway (the queue never renders
+    /// two jobs with the same target at once).
     pub target_queued: bool,
+    /// Show the files in the target folder whose names start with the typed name (a hint, never a question).
     pub base_name_in_folder: bool,
     pub no_tags: bool,
     pub no_rating: bool,

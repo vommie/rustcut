@@ -1,15 +1,29 @@
-//! Interface of the queue engine actor (implemented in M2.6): it owns the jobs, schedules them on N workers, persists
-//! through the store actor and publishes [`QueueEvent`]s that the `UiDispatcher` coalesces for the queue panel.
+//! The queue engine (M2.6): it owns the jobs, schedules them on N workers, persists through the store actor and
+//! publishes [`QueueEvent`]s that the `UiDispatcher` coalesces for the queue panel. This file is the frozen interface;
+//! [`model`] is the pure state (scheduler, moves), [`actor`] runs it.
+
+mod actor;
+mod model;
+#[cfg(test)]
+mod model_tests;
+mod summary;
 
 use std::path::PathBuf;
 
 use crate::actor::Reply;
 use crate::job::{JobId, JobSpec, JobState};
+use crate::render::RenderEnv;
 use crate::render::RenderProfile;
 use crate::rustview::SyncState;
 use crate::settings::WhenDone;
 use crate::store::LogLine;
 use crate::time::Timestamp;
+
+pub use actor::{
+    QueueHandle, QueueOptions, QueueService, RECOVERED_NOTE, STOPPED_NOTE, spawn_queue, validate as validate_spec,
+};
+pub use model::{MAX_WORKERS, Model, Refused, Tally, moved};
+pub use summary::{StaleFiles, summarize};
 
 /// Where selected jobs move to. Several selected jobs keep their relative order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -161,6 +175,9 @@ pub enum QueueCommand {
         limit: usize,
         reply: Reply<Result<Vec<LogLine>, QueueError>>,
     },
+    /// The ffmpeg path, work folders, hardware and priorities for renders started from now on (settings changed, the
+    /// capability check found a VAAPI device).
+    SetRenderEnv(Box<RenderEnv>),
     /// Stops rendering jobs (they wait again at the next start) and ends the actor.
     Shutdown {
         reply: Reply<()>,

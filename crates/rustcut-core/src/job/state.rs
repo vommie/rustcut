@@ -13,7 +13,8 @@ pub enum JobState {
     Waiting,
     /// Postponed by the user; skipped by the scheduler until released (PyCutRv "Pending").
     Held,
-    /// `pass` of `passes` is running (deshake analysis and two-pass encoding add passes).
+    /// `pass` of `passes` is running (deshake analysis and two-pass encoding add passes); pass 0 = starting (the source
+    /// is probed again and the passes are planned, so their number is not known yet).
     Rendering {
         pass: u8,
         passes: u8,
@@ -121,9 +122,11 @@ impl JobState {
             | (K::Rendering, K::Paused | K::Finished | K::Failed | K::Canceled | K::Waiting)
             | (K::Paused, K::Rendering | K::Canceled | K::Waiting)
             | (K::Finished | K::Failed | K::Canceled, K::Waiting) => true,
-            // The next pass of the same render.
-            (K::Rendering, K::Rendering) => match (self, next) {
-                (Self::Rendering { pass: a, .. }, Self::Rendering { pass: b, .. }) => b > a,
+            // The next pass of the same render (pass 0 = starting: the source is probed and the passes planned); a
+            // paused render learns its next pass when it was paused between two passes.
+            (K::Rendering, K::Rendering) | (K::Paused, K::Paused) => match (self, next) {
+                (Self::Rendering { pass: a, .. }, Self::Rendering { pass: b, .. })
+                | (Self::Paused { pass: a, .. }, Self::Paused { pass: b, .. }) => b > a,
                 _ => false,
             },
             _ => false,
