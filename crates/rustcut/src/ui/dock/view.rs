@@ -11,14 +11,14 @@ const EXPORT_CARDS: [(&str, &str, &str); 3] = [
     (
         "finalize",
         "Job Finalization",
-        "Target folder, file name and saving the job arrive with milestone M2.6.",
+        "Target folder, file name, counter and saving the job.",
     ),
     (
         "filters",
         "Filters",
         "Crop, deinterlace, resize, rotate, mirror and deshake.",
     ),
-    ("sections", "Sections", "The section list arrives with milestone M2.2."),
+    ("sections", "Sections", "The current section and the section list."),
 ];
 
 /// The cards of the Render Settings panel (M2.5): id and title.

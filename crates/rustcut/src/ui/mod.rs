@@ -3,12 +3,14 @@
 pub mod dispatcher;
 pub mod dock;
 pub mod editor;
+pub mod export;
 pub mod filters;
 pub mod keymap;
 pub mod media_info;
 pub mod open;
 pub mod player;
 pub mod probe;
+pub mod queue;
 pub mod render_settings;
 pub mod sections;
 pub mod status;

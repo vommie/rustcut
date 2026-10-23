@@ -97,3 +97,24 @@ probe_cancel = { tabler = "player-stop", doc = "Stop the probe render" }
 probe_play = { tabler = "player-play", doc = "Play the probe render again" }
 probe_exact = { tabler = "target-arrow", doc = "Probe with the exact settings" }
 probe_back = { tabler = "arrow-back", doc = "Back from the probe render to the source" }
+
+# Export (M2.6)
+job_save = { tabler = "device-floppy", doc = "Save the job into the queue" }
+target_folder = { tabler = "folder", doc = "Target folder" }
+folder_add = { tabler = "folder-plus", doc = "Add a target folder" }
+folder_remove = { tabler = "folder-minus", doc = "Remove the target folder from the list" }
+target_name = { tabler = "file-pencil", doc = "File name of the job" }
+counter = { tabler = "hash", doc = "Counter in the file name" }
+auto_increment = { tabler = "sort-ascending-numbers", doc = "Raise the counter after each save" }
+clear_sections = { tabler = "eraser", doc = "Clear the section list after each save" }
+existing_file = { tabler = "file", doc = "The target file exists" }
+reveal_file = { tabler = "folder-search", doc = "Show the file in the file manager" }
+play_file = { tabler = "player-play", doc = "Play the file in the default player" }
+
+# Queue (M2.6)
+queue_pause = { tabler = "player-pause", doc = "Pause processing (running renders stop where they are)" }
+queue_resume = { tabler = "player-play", doc = "Resume processing" }
+job_cancel = { tabler = "circle-x", doc = "Cancel the job" }
+job_retry = { tabler = "refresh", doc = "Render the job again" }
+job_remove = { tabler = "trash", doc = "Remove the job from the queue" }
+job_hold = { tabler = "hand-stop", doc = "Hold the job (it waits until released)" }

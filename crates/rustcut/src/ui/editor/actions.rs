@@ -111,10 +111,11 @@ impl Editor {
         let playback = window.global::<Playback<'_>>();
         match action {
             Action::Open => window.invoke_open_file(),
-            Action::Save => self.status(
-                Level::Info,
-                "Saving jobs arrives with the render queue in a later version.",
-            ),
+            Action::Save => {
+                if let Some(export) = self.export.borrow().upgrade() {
+                    export.save();
+                }
+            }
             Action::Quit => window.invoke_quit(),
             Action::TogglePause => self.with_player(|p| p.toggle_pause()),
             Action::ShuttleReverse => self.with_player(|p| p.shuttle(ShuttleKey::Reverse)),

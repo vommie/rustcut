@@ -1,0 +1,474 @@
+// The conflict dialog of saving a job (src/ui/export/dialog.rs; user decision Q-X1: modal like PyCutRv's, with every
+// way out in one place): what stands in the way of the target (the existing file with play and reveal, the queued jobs
+// that write it, similar names in the folder), the choices with the file name each leads to (next free number, "(n)",
+// a typed name checked while typing, overwrite, remove the queued jobs, save anyway), "Don't ask again", Cancel and
+// Save. Keys: 1-6 pick a choice, Up/Down move, Enter saves, Escape cancels.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { Shortcuts } from "shortcuts.slint";
+import { IconButton, Switch } from "controls.slint";
+import { TooltipArea } from "tooltip.slint";
+import { ConflictJobView, ConflictOptionView, Export } from "export_types.slint";
+
+/// A text button of the dialog's footer.
+component DialogButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 30px;
+    min-width: 84px;
+    preferred-width: label.preferred-width + 28px;
+    horizontal-stretch: 0;
+    border-radius: 5px;
+    background: !root.enabled ? Theme.surface-variant
+        : root.primary ? (touch.pressed ? Theme.primary.darker(0.2) : touch.has-hover ? Theme.primary.brighter(0.1) : Theme.primary)
+        : (touch.pressed ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : Theme.surface);
+    border-width: 1px;
+    border-color: root.primary && root.enabled ? Theme.primary : Theme.border;
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+
+    label := Text {
+        text: root.text;
+        color: !root.enabled ? Theme.status-deleted : root.primary ? Theme.background : Theme.text;
+        font-size: 12px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+}
+
+/// One fact about the target: an icon, a title and what follows.
+component FactBlock inherits Rectangle {
+    in property <IconId> icon;
+    in property <color> tint: Theme.text-muted;
+
+    border-radius: 5px;
+    background: Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    HorizontalLayout {
+        padding: 8px;
+        spacing: 8px;
+
+        AppIcon {
+            icon: root.icon;
+            size: IconSize.md;
+            color: root.tint;
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 3px;
+
+            @children
+        }
+    }
+}
+
+/// A choice: the radio mark, its key, the title, the file name it leads to and a line about it.
+component OptionRow inherits Rectangle {
+    in property <ConflictOptionView> option;
+    in property <int> index;
+    in property <bool> selected;
+    in property <string> typed;
+    callback picked();
+    callback confirmed();
+    callback typed-changed(string);
+
+    property <bool> usable: root.option.enabled || root.option.typed;
+
+    min-height: 44px;
+    border-radius: 5px;
+    background: root.selected ? Theme.primary.with-alpha(0.14) : touch.has-hover && root.usable ? Theme.surface-hover : transparent;
+    border-width: 1px;
+    border-color: root.selected ? Theme.primary : transparent;
+
+    touch := TouchArea {
+        enabled: root.usable;
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.picked(); }
+        double-clicked => {
+            root.picked();
+            root.confirmed();
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        padding-top: 5px;
+        padding-bottom: 5px;
+        spacing: 8px;
+
+        // Radio mark.
+        Rectangle {
+            y: 3px;
+            width: 14px;
+            height: 14px;
+            border-radius: 7px;
+            border-width: 1.5px;
+            border-color: root.selected ? Theme.primary : root.usable ? Theme.text-muted : Theme.status-deleted;
+
+            Rectangle {
+                visible: root.selected;
+                width: 6px;
+                height: 6px;
+                border-radius: 3px;
+                background: Theme.primary;
+            }
+        }
+
+        // The key that picks it.
+        Rectangle {
+            y: 1px;
+            width: 16px;
+            height: 17px;
+            border-radius: 3px;
+            background: Theme.surface-selected.with-alpha(0.6);
+
+            Text {
+                text: root.index + 1;
+                color: Theme.text-muted;
+                font-size: 10px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 2px;
+
+            HorizontalLayout {
+                spacing: 10px;
+
+                Text {
+                    min-width: 120px;
+                    horizontal-stretch: 0;
+                    text: root.option.title;
+                    color: !root.usable ? Theme.status-deleted : root.option.destructive ? Theme.accent : Theme.text;
+                    font-size: 12px;
+                    font-weight: 600;
+                    vertical-alignment: center;
+                }
+
+                if !root.option.typed: Text {
+                    horizontal-stretch: 1;
+                    text: root.option.file;
+                    color: root.usable ? Theme.primary : Theme.status-deleted;
+                    font-size: 12px;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+
+                if root.option.typed: Rectangle {
+                    horizontal-stretch: 1;
+                    height: 22px;
+                    border-radius: 3px;
+                    background: Theme.background;
+                    border-width: 1px;
+                    border-color: input.has-focus ? Theme.primary : Theme.border;
+
+                    input := TextInput {
+                        x: 5px;
+                        width: parent.width - 10px;
+                        height: parent.height;
+                        single-line: true;
+                        text: root.typed;
+                        color: Theme.text;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        selection-background-color: Theme.primary.with-alpha(0.4);
+
+                        edited => { root.typed-changed(self.text); }
+                        accepted => { root.confirmed(); }
+                        key-pressed(event) => {
+                            if event.text == Key.Escape {
+                                Export.dialog-cancel();
+                                return accept;
+                            }
+                            reject
+                        }
+                        changed has-focus => {
+                            Shortcuts.editing-changed(self.has-focus);
+                            if self.has-focus {
+                                root.picked();
+                            }
+                        }
+                    }
+                }
+            }
+
+            Text {
+                text: root.option.typed && root.option.file != "" ? root.option.file + ": " + root.option.detail : root.option.detail;
+                color: root.option.typed && !root.option.enabled ? Theme.accent : Theme.text-muted;
+                font-size: 11px;
+                wrap: word-wrap;
+            }
+        }
+    }
+}
+
+export component ConflictDialog inherits Rectangle {
+    // The scrim: the window behind waits.
+    background: #000000a0;
+
+    TouchArea { }
+
+    keys := FocusScope {
+        init => { self.focus(); }
+
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                Export.dialog-cancel();
+                return accept;
+            }
+            if event.text == Key.Return {
+                Export.dialog-confirm();
+                return accept;
+            }
+            if event.text == Key.UpArrow {
+                Export.dialog-step(-1);
+                return accept;
+            }
+            if event.text == Key.DownArrow {
+                Export.dialog-step(1);
+                return accept;
+            }
+            if event.text == "1" || event.text == "2" || event.text == "3" || event.text == "4" || event.text == "5"
+                || event.text == "6" {
+                Export.dialog-select(event.text.to-float() - 1);
+                return accept;
+            }
+            accept
+        }
+
+        card := Rectangle {
+            width: Math.min(620px, root.width - 40px);
+            height: Math.min(content.preferred-height, root.height - 40px);
+            x: (root.width - self.width) / 2;
+            y: (root.height - self.height) / 2;
+            border-radius: 8px;
+            background: Theme.surface-variant;
+            border-width: 1px;
+            border-color: Theme.border;
+            drop-shadow-blur: 24px;
+            drop-shadow-color: #00000080;
+            clip: true;
+
+            content := VerticalLayout {
+                padding: 16px;
+                spacing: 12px;
+
+                // Header.
+                HorizontalLayout {
+                    spacing: 12px;
+
+                    AppIcon {
+                        icon: IconId.status-warning;
+                        size: IconSize.xl;
+                        color: Theme.accent;
+                    }
+
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        spacing: 3px;
+
+                        Text {
+                            text: Export.dialog-title;
+                            color: Theme.text;
+                            font-size: 15px;
+                            font-weight: 700;
+                            wrap: word-wrap;
+                        }
+
+                        TooltipArea {
+                            text: Export.dialog-folder;
+                            height: 18px;
+
+                            Text {
+                                width: parent.width;
+                                text: Export.dialog-file + "  in  " + Export.dialog-folder;
+                                color: Theme.text-muted;
+                                font-size: 12px;
+                                overflow: elide;
+                            }
+                        }
+                    }
+                }
+
+                // What stands in the way.
+                if Export.dialog-exists != "": FactBlock {
+                    icon: IconId.existing-file;
+                    tint: Theme.accent;
+
+                    HorizontalLayout {
+                        spacing: 6px;
+
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            spacing: 2px;
+
+                            Text {
+                                text: "The file exists";
+                                color: Theme.text;
+                                font-size: 12px;
+                                font-weight: 600;
+                            }
+
+                            Text {
+                                text: Export.dialog-exists;
+                                color: Theme.text-muted;
+                                font-size: 11px;
+                                wrap: word-wrap;
+                            }
+                        }
+
+                        IconButton {
+                            icon: IconId.play-file;
+                            tooltip: "Play the existing file in the default player";
+                            clicked => { Export.dialog-play-existing(); }
+                        }
+
+                        IconButton {
+                            icon: IconId.reveal-file;
+                            tooltip: "Show the existing file in the file manager";
+                            clicked => { Export.dialog-reveal(); }
+                        }
+                    }
+                }
+
+                if Export.dialog-jobs.length > 0: FactBlock {
+                    icon: IconId.panel-queue;
+                    tint: Theme.accent;
+
+                    Text {
+                        text: Export.dialog-jobs-title;
+                        color: Theme.text;
+                        font-size: 12px;
+                        font-weight: 600;
+                    }
+
+                    for job in Export.dialog-jobs: HorizontalLayout {
+                        spacing: 8px;
+
+                        Text {
+                            width: 40px;
+                            text: job.id;
+                            color: Theme.text-muted;
+                            font-size: 11px;
+                        }
+
+                        Text {
+                            horizontal-stretch: 1;
+                            text: job.name;
+                            color: Theme.text;
+                            font-size: 11px;
+                            overflow: elide;
+                        }
+
+                        Text {
+                            text: job.state;
+                            color: job.running ? Theme.primary : Theme.text-muted;
+                            font-size: 11px;
+                        }
+                    }
+                }
+
+                if Export.dialog-similar != "": FactBlock {
+                    icon: IconId.panel-media-info;
+
+                    TooltipArea {
+                        text: Export.dialog-similar-tooltip;
+                        min-height: 30px;
+
+                        VerticalLayout {
+                            spacing: 2px;
+
+                            Text {
+                                text: "Similar names in the folder";
+                                color: Theme.text;
+                                font-size: 12px;
+                                font-weight: 600;
+                            }
+
+                            Text {
+                                text: Export.dialog-similar;
+                                color: Theme.text-muted;
+                                font-size: 11px;
+                                overflow: elide;
+                            }
+                        }
+                    }
+                }
+
+                // The ways out.
+                Text {
+                    text: "Save the job as";
+                    color: Theme.text-muted;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+
+                VerticalLayout {
+                    spacing: 2px;
+
+                    for option[i] in Export.dialog-options: OptionRow {
+                        option: option;
+                        index: i;
+                        selected: i == Export.dialog-selected;
+                        typed: Export.dialog-typed;
+                        picked => { Export.dialog-select(i); }
+                        confirmed => { Export.dialog-confirm(); }
+                        typed-changed(text) => { Export.dialog-type(text); }
+                    }
+                }
+
+                // Footer.
+                HorizontalLayout {
+                    spacing: 8px;
+
+                    Switch {
+                        y: (parent.height - self.height) / 2;
+                        checked: Export.dialog-dont-ask;
+                        tooltip: "Can be switched on again in the settings (Warnings)";
+                        toggled => { Export.dialog-toggle-dont-ask(); }
+                    }
+
+                    Text {
+                        horizontal-stretch: 1;
+                        text: Export.dialog-dont-ask-text;
+                        color: Theme.text-muted;
+                        font-size: 11px;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+
+                    DialogButton {
+                        text: "Cancel";
+                        clicked => { Export.dialog-cancel(); }
+                    }
+
+                    DialogButton {
+                        text: Export.dialog-confirm-text;
+                        primary: true;
+                        enabled: Export.dialog-can-confirm;
+                        max-width: 280px;
+                        clicked => { Export.dialog-confirm(); }
+                    }
+                }
+            }
+        }
+    }
+}

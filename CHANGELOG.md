@@ -9,6 +9,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Saving jobs (0.0.10): Save (Ctrl+S or F9, also File > Save Job) turns the open video into a job of the render
+  queue: its sections (with an empty list the automatic section of `editor.auto_section`, else Save asks for a
+  section), the filter chain in its order, a copy of the Render Settings panel's current settings (changing them later
+  does not change the job) and what the probe found about the source.
+- Job Finalization card (Export panel): the target folder ("Source folder" = next to the video, always first, then
+  your named folders; the folder icons add a folder through the system's folder dialog or take the chosen one off the
+  list, the folder itself stays; stored in `config.toml`, `[[export.target_folders]]`), the name (the video's file
+  name when a video opens), the counter with its switch, auto-increment (the counter goes up after each save) and
+  "clear the sections after each save" (both kept in `ui-state.toml`). Below them the file the job will write
+  (naming template `export.name_template`) and a live check: free, a hint when other files in the folder start with
+  the same name, a conflict that Save will ask about (the file exists, or a job in the queue writes it), or why the
+  job cannot be saved (no video, the name is the source file itself, the folder cannot be read). Opening another
+  video starts the counter at 1 again.
+- Conflict dialog when saving: when the file exists or a queued job writes the same file, a dialog shows the
+  existing file (size and date, play it or show it in the file manager), the queued jobs, similar names in the folder,
+  and every way out with the file name it leads to: the next free number (the counter continues after it for the
+  next job; "Add a number" when the counter is off), "Name (n)", another name typed in the dialog (checked while you
+  type), overwrite (the old file is replaced only after the new render is verified), remove the queued jobs, or save
+  anyway. Keys 1-6 pick, Up/Down move, Enter saves, Escape cancels. "Don't ask again" switches the warning off in
+  `config.toml` (`[warnings]` `target_exists`: then a free name is taken without asking, an existing file is never
+  replaced unasked; `target_queued`: then the job is saved anyway).
+- Render queue: saved jobs render one after the other (`queue.workers` renders at the same time, default 1) at low
+  priority; two jobs that write the same file never render at the same time, and a job that cannot render fails on
+  its own without holding up the jobs behind it. The queue is stored in the profile's database
+  (`~/.local/share/rustcut/queue.sqlite`) with each render's log, and comes back after a restart; a render stopped by
+  quitting, a crash or a kill waits again at the next start (with a note), and what it left (the hidden temp file, the
+  deshake and two-pass work files) is deleted. Removing a job never touches its source or the source's `.md5` file.
+- Queue panel (a first version; the full panel follows): two-line rows with the file, the state, a progress bar,
+  and the folder, profile and length, or while rendering the pass, ETA, the estimated file size, speed and fps, or
+  why a job failed; the job id, attempt, target, source and notes in the tooltip. Buttons: pause/resume processing
+  (paused renders stop where they are; kept across restarts), and for the selected job move up/down, hold/release,
+  render again, cancel (an existing target stays) and remove.
 - Render Settings panel (left sidebar, next to Export), in five cards:
   - Profile: quick selection of the built-in profiles and your own. Changes go to a working copy marked "(modified)";
     icons drop the changes, save them into your own profile, save them as a new profile, rename or delete your profile.

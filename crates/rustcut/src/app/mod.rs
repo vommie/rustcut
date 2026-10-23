@@ -14,8 +14,10 @@ use std::time::{Duration, Instant};
 use clap::Parser as _;
 use rustcut_core::app_identity::{APP_NAME, VERSION};
 use rustcut_core::hashing::{HashCommand, HashService, spawn_hash_service};
+use rustcut_core::queue::{QueueCommand, QueueOptions, QueueService, spawn_queue};
 use rustcut_core::render::{HardwareContext, RenderEnv, probe_dir, spawn_capability_check};
-use rustcut_core::settings::AppPaths;
+use rustcut_core::settings::{AppPaths, Settings};
+use rustcut_core::store::{Store, StoreCommand, StoreHandle, spawn_store};
 use slint::ComponentHandle as _;
 
 pub use cli::Cli;
@@ -26,13 +28,16 @@ use crate::desktop::instance::{self, Request};
 use crate::ui::dispatcher::{SlintSink, UiDispatcher};
 use crate::ui::dock::{DockBridge, persist as dock_persist};
 use crate::ui::editor::Editor;
+use crate::ui::export::{ExportBridge, ExportParts};
 use crate::ui::filters::FiltersBridge;
 use crate::ui::keymap::Action;
 use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::open::{self, FileOpener, OpenerParts};
 use crate::ui::player::{PlayerBridge, PlayerBridgeError};
 use crate::ui::probe::{self, ProbeBridge};
+use crate::ui::queue::QueueBridge;
 use crate::ui::render_settings::RenderSettingsBridge;
+use crate::ui::status::{self, Level};
 
 /// How long the runtime may take to finish its tasks at quit.
 const RUNTIME_SHUTDOWN: Duration = Duration::from_secs(2);
@@ -114,13 +119,17 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         runtime.handle(),
         loaded.paths.config_dir.clone(),
         loaded.settings_read_only,
+        &loaded.settings,
     );
+    let (store, store_thread, store_problem) = open_store(&loaded.paths);
+    let queue_service = start_queue(&runtime, &store, &loaded, &encoders);
+    let queue = QueueBridge::install(&main, &ui, runtime.handle(), &queue_service);
     let render = RenderSettingsBridge::install(
         &main,
         runtime.handle().clone(),
         &loaded.settings,
         &loaded.ui_state.export,
-        writer,
+        writer.clone(),
         &loaded.paths.cache_dir,
         encoders,
     );
@@ -155,6 +164,22 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &editor.key_label(Action::ProbeRender),
     );
     editor.set_probe(&probe);
+    let export = ExportBridge::install(
+        &main,
+        &ExportParts {
+            player: &player,
+            editor: &editor,
+            filters: &filters,
+            media: &media,
+            render: &render,
+            queue: &queue,
+        },
+        runtime.handle().clone(),
+        &loaded.settings,
+        &loaded.ui_state.export,
+        writer,
+    );
+    editor.set_export(&export);
     let opener = FileOpener::install(
         &main,
         &OpenerParts {
@@ -163,6 +188,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             editor: &editor,
             filters: &filters,
             probe: &probe,
+            export: &export,
         },
         runtime.handle().clone(),
         loaded.ui_state.last_open_dir.clone(),
@@ -170,6 +196,9 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     let server = single_instance.then(|| listen(&socket, &runtime, &ui, &main)).flatten();
     shutdown::watch_signals(runtime.handle(), ui, main.as_weak());
 
+    if let Some(problem) = store_problem {
+        status::show(&main, Level::Warning, &problem);
+    }
     if let Some(first) = cli.files.first() {
         opener.open(first.clone());
     }
@@ -191,9 +220,13 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     filters.save_into(&mut ui_state.export);
     render.save_into(&mut ui_state.export);
     probe.save_into(&mut ui_state.export);
+    export.save_into(&mut ui_state.export);
+    ui_state.queue.paused = queue.paused();
     persistence::save_ui_state(&loaded, &ui_state);
     drop(server);
     drop(opener);
+    drop(export);
+    drop(queue);
     drop(probe);
     drop(render);
     drop(editor);
@@ -201,6 +234,8 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     drop(media);
     drop(main);
     stop_hashing(&hashing);
+    stop_queue(&queue_service);
+    stop_store(&store, store_thread);
     stop_player(player);
     runtime.shutdown_timeout(RUNTIME_SHUTDOWN);
     Ok(Outcome::Quit)
@@ -269,6 +304,95 @@ fn listen(
             tracing::warn!(error = %e, "[Instance] Not listening for a second start; it opens its own window");
             None
         }
+    }
+}
+
+/// Opens the queue database and starts its thread. A database that cannot be used (newer, damaged, no access) is left
+/// alone: the queue runs on a database in memory for this run, and the returned text says so in the status line.
+fn open_store(paths: &AppPaths) -> (StoreHandle, Option<std::thread::JoinHandle<()>>, Option<String>) {
+    let (store, problem) = match Store::open(&paths.database(), &paths.data_backups()) {
+        Ok(store) => (store, None),
+        Err(e) => {
+            tracing::error!(error = %e, "[Store] The queue database cannot be used; jobs are kept in memory for this run");
+            let problem = format!("The queue database cannot be used ({e}); jobs are kept only until RustCut quits.");
+            match Store::open_in_memory() {
+                Ok(store) => (store, Some(problem)),
+                Err(e) => {
+                    tracing::error!(error = %e, "[Store] Not even a database in memory could be opened");
+                    return (StoreHandle::closed(), None, Some(problem));
+                }
+            }
+        }
+    };
+    match spawn_store(store) {
+        Ok((handle, thread)) => (handle, Some(thread), problem),
+        Err(e) => {
+            tracing::error!(error = %e, "[Store] The database thread could not be started");
+            (
+                StoreHandle::closed(),
+                None,
+                Some(format!("The queue database thread could not be started: {e}")),
+            )
+        }
+    }
+}
+
+/// Starts the queue engine with the settings and the panel's last processing state; once the capability check knows
+/// the hardware (a VAAPI device), the renders get it.
+fn start_queue(
+    runtime: &tokio::runtime::Runtime,
+    store: &StoreHandle,
+    loaded: &persistence::Loaded,
+    encoders: &tokio::sync::watch::Receiver<Option<std::sync::Arc<rustcut_core::render::Capabilities>>>,
+) -> QueueService {
+    let settings: &Settings = &loaded.settings;
+    let options = QueueOptions {
+        workers: settings.queue.workers,
+        paused: loaded.ui_state.queue.paused,
+        pause_on_start: settings.queue.pause_on_start,
+        when_done: loaded.ui_state.queue.when_done.unwrap_or(settings.queue.when_done),
+    };
+    let env = RenderEnv::new(settings, &loaded.paths, HardwareContext::default());
+    let (service, _task) = spawn_queue(runtime.handle(), store.clone(), env.clone(), options);
+    let mut capabilities = encoders.clone();
+    let handle = service.handle.clone();
+    runtime.spawn(async move {
+        while capabilities.changed().await.is_ok() {
+            let hardware = capabilities.borrow_and_update().as_ref().map(|c| c.hardware.clone());
+            if let Some(hardware) = hardware {
+                if hardware != HardwareContext::default() {
+                    let _ = handle.send(QueueCommand::SetRenderEnv(Box::new(RenderEnv { hardware, ..env })));
+                }
+                return;
+            }
+        }
+    });
+    service
+}
+
+/// Stops the queue: running renders end (they wait again at the next start); takes at most a few seconds.
+fn stop_queue(queue: &QueueService) {
+    if queue
+        .handle
+        .blocking_request(|reply| QueueCommand::Shutdown { reply })
+        .is_err()
+    {
+        tracing::debug!("[App] The queue had already stopped");
+    }
+}
+
+/// Closes the database after the commands before it and joins its thread.
+fn stop_store(store: &StoreHandle, thread: Option<std::thread::JoinHandle<()>>) {
+    if store
+        .blocking_request(|reply| StoreCommand::Shutdown { reply })
+        .is_err()
+    {
+        tracing::debug!("[App] The database had already stopped");
+    }
+    if let Some(thread) = thread
+        && thread.join().is_err()
+    {
+        tracing::warn!("[App] The database thread ended with a panic");
     }
 }
 

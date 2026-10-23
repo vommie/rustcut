@@ -1,7 +1,8 @@
 // Main window of RustCut: the dock (ADR-12) with its two sidebars around the video, the banners above it (known source,
 // probe render), the timeline and the transport bar, a
 // slim status line, the menus (File, Playback, Sections, Filters, View) with the keymap's shortcuts, the key scope that
-// hands every other key press to the keymap (src/ui/editor/), and the tooltip layer on top.
+// hands every other key press to the keymap (src/ui/editor/), the modal conflict dialog of saving a job (src/ui/export/)
+// and the tooltip layer on top.
 
 import { Theme } from "styles.slint";
 import { PlayerView } from "player_view.slint";
@@ -23,11 +24,14 @@ import { CropOverlay } from "crop_overlay.slint";
 import { TooltipLayer } from "tooltip.slint";
 import { OptionRowView, Probe, RenderIssueView, RenderSettings } from "render_types.slint";
 import { ProbeBanner } from "probe_banner.slint";
+import { ConflictJobView, ConflictOptionView, Export, Queue, QueueRowView } from "export_types.slint";
+import { ConflictDialog } from "export_dialog.slint";
 
 export {
     Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
     MediaInfoRow, MediaInfoSection, KnownSource, Shortcuts, Timeline, TimelineBlock, TimelineTick, Sections,
-    SectionRowView, Filters, FilterRowView, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe
+    SectionRowView, Filters, FilterRowView, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe, Export,
+    ConflictJobView, ConflictOptionView, Queue, QueueRowView
 }
 
 export component MainWindow inherits Window {
@@ -88,6 +92,13 @@ export component MainWindow inherits Window {
                 title: "Open...";
                 shortcut: Shortcuts.open;
                 activated => { root.open-file(); }
+            }
+
+            MenuItem {
+                title: "Save Job";
+                shortcut: Shortcuts.save;
+                enabled: Export.can-save && !Export.dialog-open;
+                activated => { Export.save(); }
             }
 
             MenuSeparator { }
@@ -403,6 +414,13 @@ export component MainWindow inherits Window {
     }
 
     DockOverlay {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+    }
+
+    if Export.dialog-open: ConflictDialog {
         x: 0;
         y: 0;
         width: parent.width;

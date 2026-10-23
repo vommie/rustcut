@@ -17,6 +17,7 @@ use slint::winit_030::{EventResult, WinitWindowAccessor as _};
 use self::drop::{DropAction, DropTracker};
 use crate::app::window::title;
 use crate::ui::editor::Editor;
+use crate::ui::export::ExportBridge;
 use crate::ui::filters::FiltersBridge;
 use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::player::PlayerBridge;
@@ -36,6 +37,7 @@ pub struct FileOpener {
     editor: Weak<Editor>,
     filters: Weak<FiltersBridge>,
     probe: Weak<ProbeBridge>,
+    export: Weak<ExportBridge>,
     runtime: tokio::runtime::Handle,
     last_open_dir: RefCell<Option<PathBuf>>,
     drops: RefCell<DropTracker>,
@@ -48,6 +50,7 @@ pub struct OpenerParts<'a> {
     pub editor: &'a Rc<Editor>,
     pub filters: &'a Rc<FiltersBridge>,
     pub probe: &'a Rc<ProbeBridge>,
+    pub export: &'a Rc<ExportBridge>,
 }
 
 impl FileOpener {
@@ -65,6 +68,7 @@ impl FileOpener {
             editor: Rc::downgrade(parts.editor),
             filters: Rc::downgrade(parts.filters),
             probe: Rc::downgrade(parts.probe),
+            export: Rc::downgrade(parts.export),
             runtime,
             last_open_dir: RefCell::new(last_open_dir),
             drops: RefCell::new(DropTracker::default()),
@@ -137,6 +141,9 @@ impl FileOpener {
         }
         if let Some(editor) = self.editor.upgrade() {
             editor.file_opened();
+        }
+        if let Some(export) = self.export.upgrade() {
+            export.file_opened(path);
         }
         if let Some(folder) = path.parent() {
             *self.last_open_dir.borrow_mut() = Some(folder.to_path_buf());

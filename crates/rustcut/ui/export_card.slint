@@ -1,0 +1,242 @@
+// The Job Finalization card of the Export panel (src/ui/export/ fills `Export`): the target folder (the source's folder
+// or a named one, added and removed here), the name, the counter with auto-increment, clearing the sections after a
+// save, the file name the job will write with the live conflict check, and Save. Buttons are icons with tooltips (user
+// rule 2026-10-23).
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { Shortcuts } from "shortcuts.slint";
+import { ChoiceButton, FieldIcon, IconButton, NumberField, Switch } from "controls.slint";
+import { TooltipArea, TooltipHost } from "tooltip.slint";
+import { Export } from "export_types.slint";
+
+/// The name: shows the text, a click turns it into a field whose every edit updates the file name at once.
+component NameField inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    callback edited(string);
+
+    property <bool> editing;
+
+    min-width: 40px;
+    height: 22px;
+    horizontal-stretch: 1;
+    border-radius: 3px;
+    background: root.editing ? Theme.background : touch.has-hover && root.enabled ? Theme.surface-hover : Theme.surface;
+    border-width: 1px;
+    border-color: root.editing ? Theme.primary : Theme.border;
+
+    host := TooltipHost {
+        text: "Name of the output (the naming template adds the counter)";
+    }
+
+    if !root.editing: Text {
+        x: 5px;
+        width: parent.width - 10px;
+        text: root.text == "" ? "Name" : root.text;
+        color: !root.enabled || root.text == "" ? Theme.status-deleted : Theme.text;
+        font-size: 12px;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled && !root.editing;
+        mouse-cursor: MouseCursor.text;
+        clicked => {
+            host.leave();
+            input.text = root.text;
+            root.editing = true;
+            input.focus();
+            input.select-all();
+        }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+
+    input := TextInput {
+        x: 5px;
+        width: parent.width - 10px;
+        height: parent.height;
+        visible: root.editing;
+        enabled: root.editing;
+        single-line: true;
+        color: Theme.text;
+        font-size: 12px;
+        vertical-alignment: center;
+        selection-background-color: Theme.primary.with-alpha(0.4);
+
+        edited => { root.edited(self.text); }
+        accepted => {
+            root.editing = false;
+            Shortcuts.release-focus();
+        }
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.editing = false;
+                Shortcuts.release-focus();
+                return accept;
+            }
+            reject
+        }
+        changed has-focus => {
+            Shortcuts.editing-changed(self.has-focus);
+            if !self.has-focus {
+                root.editing = false;
+            }
+        }
+    }
+}
+
+export component FinalizeCardBody inherits VerticalLayout {
+    padding: 8px;
+    padding-top: 2px;
+    spacing: 6px;
+
+    HorizontalLayout {
+        spacing: 4px;
+
+        FieldIcon {
+            icon: IconId.target-folder;
+            tooltip: "Target folder";
+        }
+
+        ChoiceButton {
+            items: Export.folders;
+            current: Export.folder-index;
+            tooltip: Export.folder-path;
+            selected(index) => { Export.select-folder(index); }
+        }
+
+        IconButton {
+            icon: IconId.folder-add;
+            tooltip: "Add a target folder";
+            clicked => { Export.add-folder(); }
+        }
+
+        IconButton {
+            icon: IconId.folder-remove;
+            tooltip: "Remove this folder from the list (the folder itself stays)";
+            enabled: Export.can-remove-folder;
+            clicked => { Export.remove-folder(); }
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 4px;
+
+        FieldIcon {
+            icon: IconId.target-name;
+            tooltip: "Name";
+        }
+
+        NameField {
+            text: Export.name;
+            enabled: Export.has-source;
+            edited(text) => { Export.name-edited(text); }
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 4px;
+
+        FieldIcon {
+            icon: IconId.counter;
+            tooltip: "Counter in the file name";
+        }
+
+        Switch {
+            y: (parent.height - self.height) / 2;
+            checked: Export.counter-enabled;
+            tooltip: Export.counter-enabled ? "The file name ends with the counter" : "No counter in the file name";
+            toggled => { Export.toggle-counter(); }
+        }
+
+        NumberField {
+            text: Export.counter;
+            enabled: Export.counter-enabled;
+            tooltip: "Counter of the next job (mouse wheel steps)";
+            committed(text) => { Export.counter-committed(text) }
+            stepped(steps) => { Export.counter-stepped(steps); }
+        }
+
+        IconButton {
+            icon: IconId.auto-increment;
+            checked: Export.auto-increment;
+            tooltip: Export.auto-increment ? "The counter goes up after each save" : "The counter stays after a save";
+            clicked => { Export.toggle-auto-increment(); }
+        }
+
+        IconButton {
+            icon: IconId.clear-sections;
+            checked: Export.clear-sections;
+            tooltip: Export.clear-sections ? "The section list is cleared after each save" : "The sections stay after a save";
+            clicked => { Export.toggle-clear-sections(); }
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 6px;
+
+        TooltipArea {
+            horizontal-stretch: 1;
+            min-height: 34px;
+            text: Export.check-tooltip;
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 1px;
+
+                Text {
+                    text: Export.file-name == "" ? "No file name yet" : Export.file-name;
+                    color: Export.file-name == "" ? Theme.status-deleted : Theme.text;
+                    font-size: 12px;
+                    font-weight: 600;
+                    overflow: elide;
+                }
+
+                HorizontalLayout {
+                    spacing: 4px;
+
+                    AppIcon {
+                        y: (parent.height - self.height) / 2;
+                        visible: Export.check-text != "";
+                        icon: Export.check-level == 0 ? IconId.status-ok
+                            : Export.check-level == 1 ? IconId.panel-media-info
+                            : Export.check-level == 2 ? IconId.status-warning : IconId.status-error;
+                        size: IconSize.xs;
+                        color: Export.check-level == 0 ? Theme.status-ok
+                            : Export.check-level == 1 ? Theme.text-muted
+                            : Export.check-level == 2 ? Theme.accent : Theme.status-corrupt;
+                    }
+
+                    Text {
+                        horizontal-stretch: 1;
+                        text: Export.check-text;
+                        color: Export.check-level == 3 ? Theme.status-corrupt
+                            : Export.check-level == 2 ? Theme.accent : Theme.text-muted;
+                        font-size: 11px;
+                        overflow: elide;
+                    }
+                }
+            }
+        }
+
+        save-button := IconButton {
+            y: (parent.height - self.height) / 2;
+            icon: IconId.job-save;
+            icon-size: IconSize.lg;
+            height: 30px;
+            width: 34px;
+            enabled: Export.can-save;
+            tooltip: Export.save-tooltip;
+            shortcut: Export.key-save;
+            clicked => { Export.save(); }
+        }
+    }
+}

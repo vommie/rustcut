@@ -6,7 +6,7 @@ default-members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustc
 [workspace.package]
 # Single source of truth for the app version: the About page, the package script and the PKGBUILD read it from here.
 # Claude bumps the patch number whenever a state is testable; major and minor belong to the user.
-version = "0.0.9"
+version = "0.0.10"
 edition = "2024"
 # The lowest toolchain known to work (rusqlite_migration needs 1.95). rust-toolchain.toml pins `stable`.
 rust-version = "1.95"
@@ -80,6 +80,7 @@ md-5 = "0.11"
 hex = "0.4"
 # File sizes in the Media Info panel ("10.34 MB").
 humansize = "2"
+opener = { version = "0.9", features = ["reveal"] }
 # Language names of audio and subtitle tracks from their ISO 639 codes ("deu" -> "German").
 isolang = "2"
 

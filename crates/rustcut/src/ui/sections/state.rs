@@ -73,6 +73,12 @@ impl SectionsState {
         self.duration = None;
     }
 
+    /// After a save with "clear sections": the list goes, the marks stay (PyCutRv).
+    pub fn clear_list(&mut self) {
+        self.list.clear();
+        self.selected = None;
+    }
+
     /// The video's duration once known (times are limited to it from now on; the list is cut to it).
     pub fn set_duration(&mut self, duration: Option<Timestamp>) {
         self.duration = duration.filter(|d| d.as_micros() > 0);
