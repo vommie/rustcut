@@ -1,15 +1,19 @@
 //! `config.toml`: everything the Settings window changes. Every field has a default (`#[serde(default)]`), so files of
 //! older versions load; renamed or reshaped keys need a [`super::MigrationStep`].
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use serde_with::formats::PreferMany;
+use serde_with::{DefaultOnError, OneOrMany, serde_as};
 
 use super::file::VersionedFile;
 use crate::edit::{Deinterlacer, DeshakeParams};
 use crate::naming::DEFAULT_TEMPLATE;
 use crate::render::{DEFAULT_PROFILE_ID, RenderProfile, is_builtin_id};
 
+#[serde_as]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -24,6 +28,12 @@ pub struct Settings {
     pub warnings: WarningSettings,
     pub desktop: DesktopSettings,
     pub advanced: AdvancedSettings,
+    /// Key bindings by action id (`set_start = ["I", "Home"]`); a missing action keeps its default, an empty list unbinds
+    /// it. Owned, validated and sanitized by the app's keymap (key names are Slint's); the core only stores it. A value
+    /// that is neither a string nor a list of strings reads as missing, so a typo never resets the other settings.
+    #[serde_as(as = "DefaultOnError<BTreeMap<_, DefaultOnError<Option<OneOrMany<_, PreferMany>>>>>")]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub keymap: BTreeMap<String, Option<Vec<String>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,9 +100,9 @@ pub enum AutoSection {
 #[serde(default)]
 pub struct EditorSettings {
     pub auto_section: AutoSection,
-    /// Seconds for the short seek keys (arrow keys).
+    /// Seconds for the short seek keys (arrow keys; PyCutRv: 2).
     pub seek_step_secs: u16,
-    /// Seconds for the long seek keys (Shift + arrow keys).
+    /// Seconds for the long seek keys (Shift + arrow keys; PyCutRv: 10).
     pub seek_step_long_secs: u16,
 }
 
@@ -100,8 +110,8 @@ impl Default for EditorSettings {
     fn default() -> Self {
         Self {
             auto_section: AutoSection::Off,
-            seek_step_secs: 5,
-            seek_step_long_secs: 60,
+            seek_step_secs: 2,
+            seek_step_long_secs: 10,
         }
     }
 }
@@ -379,6 +389,18 @@ impl VersionedFile for Settings {
             self.player.wheel_volume_step = self.player.wheel_volume_step.clamp(1, 25);
         }
         if fix(
+            "editor.seek_step_secs limited to 1-3600",
+            !(1..=3_600).contains(&self.editor.seek_step_secs),
+        ) {
+            self.editor.seek_step_secs = self.editor.seek_step_secs.clamp(1, 3_600);
+        }
+        if fix(
+            "editor.seek_step_long_secs limited to 1-3600",
+            !(1..=3_600).contains(&self.editor.seek_step_long_secs),
+        ) {
+            self.editor.seek_step_long_secs = self.editor.seek_step_long_secs.clamp(1, 3_600);
+        }
+        if fix(
             "export.name_template was empty",
             self.export.name_template.trim().is_empty(),
         ) {
@@ -438,6 +460,75 @@ mod tests {
     }
 
     #[test]
+    fn a_file_of_0_0_5_without_a_keymap_still_loads() {
+        // What 0.0.5 wrote (no `[keymap]`, the old seek steps): every value is kept, the keymap uses its defaults.
+        let dir = tempfile::tempdir().unwrap();
+        let old = "version = 1\n[editor]\nauto_section = \"off\"\nseek_step_secs = 5\nseek_step_long_secs = 60\n\
+                   [player]\nauto_play = false\n";
+        std::fs::write(dir.path().join("config.toml"), old).unwrap();
+        let outcome = load::<Settings>(dir.path(), &dir.path().join("b")).unwrap();
+        assert!(
+            matches!(outcome, LoadOutcome::Loaded { ref notes, .. } if notes.is_empty()),
+            "{outcome:?}"
+        );
+        let value = outcome.into_value();
+        assert!(value.keymap.is_empty());
+        assert_eq!((value.editor.seek_step_secs, value.editor.seek_step_long_secs), (5, 60));
+        assert!(!value.player.auto_play);
+        // Nothing to back up: no migration happened.
+        assert!(!dir.path().join("b").exists());
+    }
+
+    #[test]
+    fn the_keymap_table_is_tolerant() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = "version = 1\n[queue]\nworkers = 2\n[keymap]\nset_start = [\"I\", \"Home\"]\nadd_section = \"Plus\"\n\
+                    toggle_mute = []\nreload = 5\nseek_back = [\"LeftArrow\", 3]\n";
+        std::fs::write(dir.path().join("config.toml"), text).unwrap();
+        let value = load::<Settings>(dir.path(), &dir.path().join("b"))
+            .unwrap()
+            .into_value();
+        assert_eq!(
+            value.queue.workers, 2,
+            "a bad keymap value must not reset the other settings"
+        );
+        let get = |k: &str| value.keymap.get(k).cloned();
+        assert_eq!(get("set_start"), Some(Some(vec!["I".to_owned(), "Home".to_owned()])));
+        assert_eq!(get("add_section"), Some(Some(vec!["Plus".to_owned()])));
+        assert_eq!(get("toggle_mute"), Some(Some(vec![])));
+        assert_eq!(get("reload"), Some(None));
+        assert_eq!(get("seek_back"), Some(None));
+
+        // A keymap that is not a table at all reads as empty.
+        std::fs::write(dir.path().join("config.toml"), "version = 1\nkeymap = 7\n").unwrap();
+        let value = load::<Settings>(dir.path(), &dir.path().join("b"))
+            .unwrap()
+            .into_value();
+        assert!(value.keymap.is_empty());
+    }
+
+    #[test]
+    fn the_keymap_round_trips_as_lists() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut settings = Settings::default();
+        settings.keymap.insert("add_section".into(), Some(vec!["Plus".into()]));
+        settings.keymap.insert("toggle_mute".into(), Some(vec![]));
+        save(dir.path(), &settings).unwrap();
+        let text = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
+        assert!(text.contains("add_section = [\"Plus\"]"), "{text}");
+        assert_eq!(
+            load::<Settings>(dir.path(), &dir.path().join("b"))
+                .unwrap()
+                .into_value(),
+            settings
+        );
+        // Defaults write no keymap table.
+        save(dir.path(), &Settings::default()).unwrap();
+        let text = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
+        assert!(!text.contains("keymap"), "{text}");
+    }
+
+    #[test]
     fn sanitizing_repairs_bad_values() {
         let mut s = Settings::default();
         s.queue.workers = 0;
@@ -446,8 +537,10 @@ mod tests {
         s.export.name_template = " ".into();
         s.render.profiles = vec![crate::render::builtin_profiles().remove(0)];
         s.advanced.log_keep_days = 0;
+        s.editor.seek_step_secs = 0;
         let notes = s.sanitize();
-        assert_eq!(notes.len(), 6, "{notes:?}");
+        assert_eq!(notes.len(), 7, "{notes:?}");
+        assert_eq!(s.editor.seek_step_secs, 1);
         assert_eq!(s.advanced.log_keep_days, 1);
         assert_eq!((s.queue.workers, s.render.nice), (1, 19));
         assert_eq!(s.render.default_profile, DEFAULT_PROFILE_ID);

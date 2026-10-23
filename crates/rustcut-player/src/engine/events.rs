@@ -50,6 +50,8 @@ pub enum Property {
     EndReached(bool),
     /// The hardware decoder in use (`hwdec-current`); `no` or empty for software decoding.
     HwDecoder(String),
+    /// Playback speed (1 = normal).
+    Speed(f64),
 }
 
 /// What the player reports to the app.
@@ -76,7 +78,7 @@ pub enum PlayerEvent {
 }
 
 /// The observed properties: name, format and the id mpv returns with each change.
-const OBSERVED: [(&str, Format); 7] = [
+const OBSERVED: [(&str, Format); 8] = [
     ("time-pos", Format::Double),
     ("duration", Format::Double),
     ("pause", Format::Flag),
@@ -84,6 +86,7 @@ const OBSERVED: [(&str, Format); 7] = [
     ("volume", Format::Double),
     ("eof-reached", Format::Flag),
     ("hwdec-current", Format::String),
+    ("speed", Format::Double),
 ];
 
 /// Asks mpv to report changes of the [`OBSERVED`] properties on `client` (its current values arrive at once).
@@ -171,6 +174,7 @@ fn property(name: &str, change: &PropertyData<'_>) -> Option<Property> {
         ("volume", PropertyData::Double(v)) => Property::Volume(*v),
         ("eof-reached", PropertyData::Flag(v)) => Property::EndReached(*v),
         ("hwdec-current", PropertyData::Str(v)) => Property::HwDecoder((*v).to_owned()),
+        ("speed", PropertyData::Double(v)) => Property::Speed(*v),
         _ => return None,
     })
 }
@@ -217,7 +221,12 @@ mod tests {
             Some(Property::HwDecoder("vaapi-copy".into()))
         );
         assert_eq!(property("pause", &PropertyData::Double(1.0)), None);
-        assert_eq!(property("speed", &PropertyData::Double(1.0)), None);
+        assert_eq!(
+            property("speed", &PropertyData::Double(2.0)),
+            Some(Property::Speed(2.0))
+        );
+        assert_eq!(property("speed", &PropertyData::Flag(true)), None);
+        assert_eq!(property("chapter", &PropertyData::Double(1.0)), None);
         // Every observed property has a mapping.
         for (name, format) in OBSERVED {
             let sample = match format {

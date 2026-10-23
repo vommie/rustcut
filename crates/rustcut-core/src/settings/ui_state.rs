@@ -15,6 +15,7 @@ pub struct UiState {
     pub dock: Option<toml::Table>,
     pub export: ExportPanelState,
     pub queue: QueuePanelState,
+    pub timeline: TimelineState,
     /// Path of the last opened video's folder (the file dialog starts there).
     pub last_open_dir: Option<std::path::PathBuf>,
 }
@@ -98,6 +99,25 @@ pub struct QueuePanelState {
     pub when_done: Option<WhenDone>,
 }
 
+/// The timeline under the video.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TimelineState {
+    /// Zoom factor: the visible part is the duration divided by it (1 = the whole video).
+    pub zoom: f64,
+}
+
+impl TimelineState {
+    /// Largest zoom factor that is stored (the app limits it further by the shortest visible span).
+    pub const MAX_ZOOM: f64 = 100_000.0;
+}
+
+impl Default for TimelineState {
+    fn default() -> Self {
+        Self { zoom: 1.0 }
+    }
+}
+
 /// Window positions beyond this (physical pixels, any direction) are not on any screen.
 const MAX_POSITION: i32 = 32_768;
 
@@ -127,6 +147,15 @@ impl VersionedFile for UiState {
             self.export.volume = 150;
         }
         self.queue.columns.retain(|_, width| *width >= 24 && *width <= 4_000);
+        let zoom = self.timeline.zoom;
+        if !zoom.is_finite() || !(1.0..=TimelineState::MAX_ZOOM).contains(&zoom) {
+            notes.push(format!("timeline zoom {zoom} reset"));
+            self.timeline.zoom = if zoom.is_finite() {
+                zoom.clamp(1.0, TimelineState::MAX_ZOOM)
+            } else {
+                1.0
+            };
+        }
         notes
     }
 }
@@ -162,6 +191,30 @@ mod tests {
         assert_eq!(state.sanitize().len(), 2);
         assert_eq!((state.window.width, state.window.maximized), (1280, true));
         assert!(state.queue.columns.is_empty());
+    }
+
+    #[test]
+    fn the_timeline_zoom_is_kept_in_range_and_old_files_load() {
+        let mut state = UiState::default();
+        state.timeline.zoom = 0.2;
+        assert_eq!(state.sanitize().len(), 1);
+        assert_eq!(state.timeline.zoom, 1.0);
+        state.timeline.zoom = 1e9;
+        state.sanitize();
+        assert_eq!(state.timeline.zoom, TimelineState::MAX_ZOOM);
+        state.timeline.zoom = f64::NAN;
+        state.sanitize();
+        assert_eq!(state.timeline.zoom, 1.0);
+
+        // A file of 0.0.5 has no `[timeline]`.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("ui-state.toml"),
+            "version = 1\n[window]\nwidth = 1000\n",
+        )
+        .unwrap();
+        let value = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+        assert_eq!((value.window.width, value.timeline.zoom), (1000, 1.0));
     }
 
     #[test]

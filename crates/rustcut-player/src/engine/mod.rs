@@ -145,6 +145,11 @@ impl Player {
         self.command(Command::Seek { seconds, exact })
     }
 
+    /// Playback speed (1 = normal; mpv keeps the pitch of the audio).
+    pub fn set_speed(&self, speed: f64) -> Result<(), PlayerError> {
+        self.command(Command::SetSpeed(speed))
+    }
+
     /// Shows the next (or, with `back`, the previous) frame and pauses.
     pub fn frame_step(&self, back: bool) -> Result<(), PlayerError> {
         self.command(Command::FrameStep { back })
@@ -221,15 +226,25 @@ mod tests {
             player
                 .open(Path::new("/nonexistent/video.mkv"), OpenOptions::default())
                 .unwrap();
+            // The observed properties report their values on their own, without a file. They arrive from mpv's core
+            // asynchronously: dropping the player at once could shut down before them (the test was flaky that way).
+            let mut events = Vec::new();
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            while !events.contains(&PlayerEvent::Property(Property::Muted(false))) {
+                let left = deadline.saturating_duration_since(std::time::Instant::now());
+                match event_rx.recv_timeout(left) {
+                    Ok(event) => events.push(event),
+                    Err(_timeout) => break,
+                }
+            }
             drop(player);
-            let events: Vec<_> = event_rx.try_iter().collect();
+            events.extend(event_rx.try_iter());
             done_tx.send(events).unwrap();
         });
         let events = done_rx
-            .recv_timeout(Duration::from_secs(10))
+            .recv_timeout(Duration::from_secs(15))
             .expect("Player::drop hung");
         assert_eq!(events.last(), Some(&PlayerEvent::Shutdown));
-        // The observed properties report their values at once.
         assert!(
             events.contains(&PlayerEvent::Property(Property::Muted(false))),
             "{events:?}"
