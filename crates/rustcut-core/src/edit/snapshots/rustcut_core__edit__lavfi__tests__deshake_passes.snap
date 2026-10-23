@@ -1,0 +1,7 @@
+---
+source: crates/rustcut-core/src/edit/lavfi.rs
+expression: "format!(\"detect:    {detect}\\ntransform: {transform}\\npreview:   {preview}\")"
+---
+detect:    bwdif=mode=send_frame,crop=w=iw-0:h=ih-140:x=0:y=0,vidstabdetect=result=/home/user/My\\: Videos\, \[old\]/job-7.trf:shakiness=5:accuracy=10:stepsize=12:tripod=1
+transform: bwdif=mode=send_frame,crop=w=iw-0:h=ih-140:x=0:y=0,vidstabtransform=input=/home/user/My\\: Videos\, \[old\]/job-7.trf:smoothing=10:optzoom=0:zoom=0:crop=black:interpol=bicubic:tripod=1,scale=w=1280:h=-2:flags=bicubic,setsar=1
+preview:   bwdif=mode=send_frame,crop=w=iw-0:h=ih-140:x=0:y=0,scale=w=1280:h=-2:flags=bicubic,setsar=1

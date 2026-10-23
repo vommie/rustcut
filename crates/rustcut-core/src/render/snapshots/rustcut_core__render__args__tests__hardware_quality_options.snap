@@ -1,0 +1,7 @@
+---
+source: crates/rustcut-core/src/render/args.rs
+expression: "lines.join(\"\\n\")"
+---
+-c:v hevc_vaapi -qp 25 -rc_mode CQP
+-c:v av1_nvenc -preset p5 -cq 32 -rc vbr -b:v 0 -pix_fmt p010le
+-c:v h264_qsv -preset medium -global_quality 25 -pix_fmt nv12

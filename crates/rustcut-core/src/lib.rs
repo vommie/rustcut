@@ -5,3 +5,7 @@
 //! hash service (see `HANDOFF.md`, section 5).
 
 pub mod app_identity;
+pub mod edit;
+pub mod naming;
+pub mod render;
+pub mod time;
