@@ -8,7 +8,9 @@ use az::CheckedAs as _;
 use serde::Deserialize;
 use serde_with::{DefaultOnError, DisplayFromStr, PickFirst, serde_as};
 
-use super::model::{AudioStream, ColorInfo, Container, FieldOrder, MediaInfo, Ratio, Stream, StreamKind, VideoStream};
+use super::model::{
+    AudioStream, ColorInfo, Container, FieldOrder, FrameTiming, MediaInfo, Ratio, Stream, StreamKind, VideoStream,
+};
 use super::timing;
 use crate::time::{FrameRate, Timestamp};
 
@@ -191,6 +193,14 @@ pub fn decode(json: &[u8]) -> Result<MediaInfo, DecodeError> {
         info.frame_timing = timing::analyze(&pts);
     }
     Ok(info)
+}
+
+/// The frame spacing in the output of the timing sample (`-select_streams N -show_entries packet=pts_time`); `None` for
+/// output that is not JSON or holds too few timestamps.
+pub fn decode_timing(json: &[u8]) -> Option<FrameTiming> {
+    let raw: RawProbe = serde_json::from_slice(json).ok()?;
+    let pts: Vec<f64> = raw.packets.iter().filter_map(|p| p.pts_time).collect();
+    timing::analyze(&pts)
 }
 
 fn stream(position: usize, raw: RawStream) -> Stream {

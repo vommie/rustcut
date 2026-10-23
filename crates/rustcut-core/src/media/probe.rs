@@ -1,21 +1,28 @@
 //! Running ffprobe (ADR-3): a supervised child process on the tokio runtime with a time limit and a cap on its output.
 //! The child is killed when the probe is dropped (a newer file was opened, the app quits) or takes too long, so a hanging
 //! network share or a hostile file never leaves a process behind or blocks anything.
+//!
+//! Two calls: [`probe`] reads the container and the streams (a few milliseconds, only the header is parsed), then
+//! [`probe_frame_timing`] samples the primary video's packet timestamps for the variable-frame-rate check. The sample is
+//! separate because demuxing can be slow: in a preallocated, partly downloaded file ffprobe scans gigabytes of zeros for
+//! the next packet. Then only the frame-rate check waits or gives up, never the media description.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
+use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 
 use tokio::io::{AsyncRead, AsyncReadExt as _};
 use tokio::process::Command;
 
-use super::ffprobe::{DecodeError, decode};
-use super::model::MediaInfo;
+use super::ffprobe::{DecodeError, decode, decode_timing};
+use super::model::{FrameTiming, MediaInfo};
 
-/// How long ffprobe may take before it is killed (PyCutRv allowed 8 s; files on slow shares need more).
+/// How long the probe may take before ffprobe is killed (PyCutRv allowed 8 s; files on slow shares need more).
 pub const PROBE_TIMEOUT: Duration = Duration::from_secs(20);
-/// Seconds of packet timestamps read for the frame-spacing check (demuxing only, a few milliseconds).
+/// How long the frame-timing sample may take; after that the frame rate is shown without the check.
+pub const TIMING_TIMEOUT: Duration = Duration::from_secs(10);
+/// Seconds of packet timestamps read for the frame-spacing check (demuxing only, a few milliseconds normally).
 pub const TIMING_SAMPLE_SECS: u32 = 10;
 /// More output than this is not a media description (ffprobe writes a few kilobytes per file).
 const MAX_OUTPUT: u64 = 16 * 1024 * 1024;
@@ -27,7 +34,10 @@ const MAX_STDERR: u64 = 64 * 1024;
 pub struct ProbeOptions {
     /// `None` = `ffprobe` from `PATH` (settings: `advanced.ffprobe`).
     pub program: Option<PathBuf>,
+    /// Time limit of [`probe`].
     pub timeout: Duration,
+    /// Time limit of [`probe_frame_timing`].
+    pub timing_timeout: Duration,
 }
 
 impl Default for ProbeOptions {
@@ -35,6 +45,7 @@ impl Default for ProbeOptions {
         Self {
             program: None,
             timeout: PROBE_TIMEOUT,
+            timing_timeout: TIMING_TIMEOUT,
         }
     }
 }
@@ -62,37 +73,88 @@ pub enum ProbeError {
     Output(String),
 }
 
-/// The arguments for `file`: format, streams and errors as JSON, plus the packet timestamps of the first
-/// [`TIMING_SAMPLE_SECS`] seconds (stream index and time only). `-i` keeps a path that starts with `-` a path.
+const COMMON_ARGS: [&str; 5] = ["-v", "error", "-hide_banner", "-print_format", "json"];
+
+/// The arguments of [`probe`]: format, streams and errors as JSON. `-i` keeps a path that starts with `-` a path.
 pub fn probe_args(file: &Path) -> Vec<OsString> {
-    let mut args: Vec<OsString> = [
-        "-v",
-        "error",
-        "-hide_banner",
-        "-print_format",
-        "json",
-        "-show_error",
-        "-show_format",
-        "-show_streams",
-        "-show_entries",
-        "packet=stream_index,pts_time",
-    ]
-    .iter()
-    .map(OsString::from)
-    .collect();
-    args.push("-read_intervals".into());
+    let mut args: Vec<OsString> = COMMON_ARGS.iter().map(OsString::from).collect();
+    args.extend(["-show_error", "-show_format", "-show_streams", "-i"].map(OsString::from));
+    args.push(file.as_os_str().to_owned());
+    args
+}
+
+/// The arguments of [`probe_frame_timing`]: the timestamps of stream `stream_index` in the first
+/// [`TIMING_SAMPLE_SECS`] seconds.
+pub fn timing_args(file: &Path, stream_index: u32) -> Vec<OsString> {
+    let mut args: Vec<OsString> = COMMON_ARGS.iter().map(OsString::from).collect();
+    args.push("-select_streams".into());
+    args.push(stream_index.to_string().into());
+    args.extend(["-show_entries", "packet=pts_time", "-read_intervals"].map(OsString::from));
     args.push(format!("%+{TIMING_SAMPLE_SECS}").into());
     args.push("-i".into());
     args.push(file.as_os_str().to_owned());
     args
 }
 
-/// Probes `file` with ffprobe. Must run on the tokio runtime; dropping the future kills ffprobe.
+/// Probes `file`'s container and streams (without [`MediaInfo::frame_timing`]). Must run on the tokio runtime;
+/// dropping the future kills ffprobe.
 pub async fn probe(file: &Path, options: &ProbeOptions) -> Result<MediaInfo, ProbeError> {
+    let output = run(probe_args(file), options, options.timeout).await?;
+    match (decode(&output.stdout), output.status.success()) {
+        (Ok(info), true) => Ok(info),
+        (Err(DecodeError::Reported(reason)), _) => Err(ProbeError::Unreadable(reason)),
+        (Err(DecodeError::Malformed(message)), true) => Err(ProbeError::Output(message)),
+        (_, false) => Err(output.failure()),
+    }
+}
+
+/// Samples the packet timestamps of stream `stream_index` (the primary video) for [`MediaInfo::frame_timing`]. `None`
+/// when there are too few frames to tell.
+pub async fn probe_frame_timing(
+    file: &Path,
+    stream_index: u32,
+    options: &ProbeOptions,
+) -> Result<Option<FrameTiming>, ProbeError> {
+    let output = run(timing_args(file, stream_index), options, options.timing_timeout).await?;
+    if !output.status.success() {
+        return Err(output.failure());
+    }
+    Ok(decode_timing(&output.stdout))
+}
+
+/// [`probe`], then [`probe_frame_timing`] of the primary video; a failed sample only leaves the frame timing empty.
+pub async fn probe_with_timing(file: &Path, options: &ProbeOptions) -> Result<MediaInfo, ProbeError> {
+    let mut info = probe(file, options).await?;
+    if let Some(index) = info.primary_video().map(|(stream, _)| stream.index) {
+        match probe_frame_timing(file, index, options).await {
+            Ok(timing) => info.frame_timing = timing,
+            Err(e) => tracing::warn!(path = %file.display(), error = %e, "[Media] Frame timing not sampled"),
+        }
+    }
+    Ok(info)
+}
+
+struct Output {
+    stdout: Vec<u8>,
+    stderr: String,
+    status: ExitStatus,
+}
+
+impl Output {
+    fn failure(&self) -> ProbeError {
+        ProbeError::Failed {
+            status: self.status.to_string(),
+            message: last_line(&self.stderr).unwrap_or_else(|| "no message".into()),
+        }
+    }
+}
+
+/// Runs ffprobe with `args` and collects its output within `timeout`.
+async fn run(args: Vec<OsString>, options: &ProbeOptions, timeout: Duration) -> Result<Output, ProbeError> {
     let program = options.program();
-    let program_name = program.display().to_string();
+    let program_name = || program.display().to_string();
     let mut child = Command::new(program)
-        .args(probe_args(file))
+        .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -100,43 +162,36 @@ pub async fn probe(file: &Path, options: &ProbeOptions) -> Result<MediaInfo, Pro
         .spawn()
         .map_err(|e| match e.kind() {
             std::io::ErrorKind::NotFound => ProbeError::NotFound {
-                program: program_name.clone(),
+                program: program_name(),
             },
             _ => ProbeError::Spawn {
-                program: program_name.clone(),
+                program: program_name(),
                 error: e.to_string(),
             },
         })?;
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
-    let run = async {
+    let collect = async {
         tokio::join!(
             read_capped(stdout, MAX_OUTPUT),
             read_capped(stderr, MAX_STDERR),
             child.wait()
         )
     };
-    let (out, err, status) =
-        tokio::time::timeout(options.timeout, run)
-            .await
-            .map_err(|_elapsed| ProbeError::TimedOut {
-                secs: options.timeout.as_secs(),
-            })?;
+    let (out, err, status) = tokio::time::timeout(timeout, collect)
+        .await
+        .map_err(|_elapsed| ProbeError::TimedOut {
+            secs: timeout.as_secs(),
+        })?;
     let status = status.map_err(|e| ProbeError::Failed {
         status: "no exit status".into(),
         message: e.to_string(),
     })?;
-    let out = out.map_err(ProbeError::Output)?;
-    let stderr_text = String::from_utf8_lossy(&err.unwrap_or_default()).into_owned();
-    match (decode(&out), status.success()) {
-        (Ok(info), true) => Ok(info),
-        (Err(DecodeError::Reported(reason)), _) => Err(ProbeError::Unreadable(reason)),
-        (Err(DecodeError::Malformed(message)), true) => Err(ProbeError::Output(message)),
-        (_, false) => Err(ProbeError::Failed {
-            status: status.to_string(),
-            message: last_line(&stderr_text).unwrap_or_else(|| "no message".into()),
-        }),
-    }
+    Ok(Output {
+        stdout: out.map_err(ProbeError::Output)?,
+        stderr: String::from_utf8_lossy(&err.unwrap_or_default()).into_owned(),
+        status,
+    })
 }
 
 /// Reads a pipe to its end, failing when it carries more than `limit` bytes.
@@ -170,7 +225,14 @@ mod tests {
         let args = probe_args(Path::new("-odd name.mp4"));
         assert_eq!(args.last().map(OsString::as_os_str), Some("-odd name.mp4".as_ref()));
         assert_eq!(args.get(args.len() - 2).map(OsString::as_os_str), Some("-i".as_ref()));
-        assert!(args.iter().any(|a| a == "%+10"));
+        assert!(args.iter().any(|a| a == "-show_streams"));
+        let timing = timing_args(Path::new("/v/a.mkv"), 2);
+        let text: Vec<String> = timing.iter().map(|a| a.to_string_lossy().into_owned()).collect();
+        assert_eq!(
+            text.join(" "),
+            "-v error -hide_banner -print_format json -select_streams 2 -show_entries packet=pts_time \
+             -read_intervals %+10 -i /v/a.mkv"
+        );
     }
 
     #[test]
@@ -207,6 +269,7 @@ mod tests {
         let options = ProbeOptions {
             program: Some(script),
             timeout: Duration::from_millis(200),
+            ..ProbeOptions::default()
         };
         let started = std::time::Instant::now();
         let error = probe(Path::new("/tmp/x.mp4"), &options).await.unwrap_err();

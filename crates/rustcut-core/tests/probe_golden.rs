@@ -13,7 +13,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use rustcut_core::media::{FrameRateMode, MediaInfo, ProbeError, ProbeOptions, StreamKind, probe, summarize, to_text};
+use rustcut_core::media::{
+    FrameRateMode, MediaInfo, ProbeError, ProbeOptions, StreamKind, probe, probe_with_timing, summarize, to_text,
+};
 use rustcut_core::time::Timestamp;
 
 fn golden_dir() -> PathBuf {
@@ -40,7 +42,7 @@ fn runtime() -> tokio::runtime::Runtime {
 }
 
 fn probe_file(path: &Path) -> Result<MediaInfo, ProbeError> {
-    runtime().block_on(probe(path, &ProbeOptions::default()))
+    runtime().block_on(probe_with_timing(path, &ProbeOptions::default()))
 }
 
 fn probe_golden(name: &str) -> MediaInfo {
@@ -186,4 +188,36 @@ fn a_variable_frame_rate_is_detected_in_mp4_and_matroska() {
         assert!(text.contains("Frame rate: Variable, 10 to "), "{name}:\n{text}");
         assert!(matches!(info.streams[0].kind, StreamKind::Video(_)));
     }
+}
+
+/// A preallocated, partly downloaded file: the header is fine, gigabytes of zeros follow. The media description comes at
+/// once; only the frame-timing sample runs into its own time limit and is left out.
+#[test]
+fn a_preallocated_download_is_described_at_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("partial download.mkv");
+    std::fs::copy(golden_dir().join("av1_svt.mkv"), &path).unwrap();
+    // Sparse: no disk space is used.
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_len(2 * 1024 * 1024 * 1024)
+        .unwrap();
+    let options = ProbeOptions {
+        timing_timeout: std::time::Duration::from_secs(1),
+        ..ProbeOptions::default()
+    };
+    let rt = runtime();
+    let started = std::time::Instant::now();
+    let info = rt.block_on(probe(&path, &options)).unwrap();
+    assert!(
+        started.elapsed().as_secs_f64() < 3.0,
+        "the header probe took {:?}",
+        started.elapsed()
+    );
+    assert_eq!(info.streams.len(), 2);
+    let info = rt.block_on(probe_with_timing(&path, &options)).unwrap();
+    assert_eq!(info.frame_timing, None, "the sample gave up");
+    assert_eq!(info.frame_rate_mode(), FrameRateMode::Constant, "the rates still tell");
 }

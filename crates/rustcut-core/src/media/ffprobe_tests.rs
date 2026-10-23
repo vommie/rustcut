@@ -253,3 +253,15 @@ fn ratios_and_field_orders() {
     assert!(video.is_interlaced() && video.is_anamorphic());
     assert_eq!(FieldOrder::from_ffprobe("unknown"), None);
 }
+
+#[test]
+fn the_timing_sample_is_decoded() {
+    let packets: Vec<serde_json::Value> = (0..50)
+        .map(|i| json!({"pts_time": format!("{:.6}", f64::from(i) * 0.04)}))
+        .collect();
+    let timing = decode_timing(json!({"packets": packets}).to_string().as_bytes()).unwrap();
+    assert_eq!(timing.frames, 50);
+    assert!(!timing.variable);
+    assert_eq!(decode_timing(b"{}"), None);
+    assert_eq!(decode_timing(b"garbage"), None);
+}

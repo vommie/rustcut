@@ -1,7 +1,7 @@
 //! Opening files: File > Open (the desktop's file dialog through the XDG portal), drag & drop onto the window (winit's file
 //! events, with a drop hint over the video), the command line and a second start. Every way ends in [`FileOpener::open`]:
-//! the path is checked on the runtime (never a file system call on the UI thread), then the player loads it, and the window
-//! title and the dialog's start folder follow.
+//! the path is checked on the runtime (never a file system call on the UI thread), then the player loads it, the Media
+//! Info panel probes it, and the window title and the dialog's start folder follow.
 
 mod drop;
 
@@ -16,6 +16,7 @@ use slint::winit_030::{EventResult, WinitWindowAccessor as _};
 
 use self::drop::{DropAction, DropTracker};
 use crate::app::window::title;
+use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::player::PlayerBridge;
 use crate::ui::status::{self, Level};
 use crate::{MainWindow, Playback};
@@ -28,6 +29,7 @@ const VIDEO_EXTENSIONS: &[&str] = &[
 pub struct FileOpener {
     window: slint::Weak<MainWindow>,
     player: Weak<PlayerBridge>,
+    media: Weak<MediaInfoBridge>,
     runtime: tokio::runtime::Handle,
     last_open_dir: RefCell<Option<PathBuf>>,
     drops: RefCell<DropTracker>,
@@ -38,12 +40,14 @@ impl FileOpener {
     pub fn install(
         window: &MainWindow,
         player: &Rc<PlayerBridge>,
+        media: &Rc<MediaInfoBridge>,
         runtime: tokio::runtime::Handle,
         last_open_dir: Option<PathBuf>,
     ) -> Rc<Self> {
         let opener = Rc::new(Self {
             window: window.as_weak(),
             player: Rc::downgrade(player),
+            media: Rc::downgrade(media),
             runtime,
             last_open_dir: RefCell::new(last_open_dir),
             drops: RefCell::new(DropTracker::default()),
@@ -103,6 +107,9 @@ impl FileOpener {
             return;
         }
         tracing::info!(path = %path.display(), "[Open] Opened");
+        if let Some(media) = self.media.upgrade() {
+            media.file_opened(path);
+        }
         if let Some(folder) = path.parent() {
             *self.last_open_dir.borrow_mut() = Some(folder.to_path_buf());
         }

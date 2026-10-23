@@ -8,12 +8,15 @@ mod probe;
 mod summary;
 mod timing;
 
-pub use ffprobe::{DecodeError, decode};
+pub use ffprobe::{DecodeError, decode, decode_timing};
 pub use model::{
     AudioStream, ColorInfo, Container, FieldOrder, FrameRateMode, FrameTiming, MediaInfo, Ratio, Stream, StreamKind,
     VideoStream,
 };
-pub use probe::{PROBE_TIMEOUT, ProbeError, ProbeOptions, TIMING_SAMPLE_SECS, probe, probe_args};
+pub use probe::{
+    PROBE_TIMEOUT, ProbeError, ProbeOptions, TIMING_SAMPLE_SECS, TIMING_TIMEOUT, probe, probe_args, probe_frame_timing,
+    probe_with_timing, timing_args,
+};
 pub use summary::{
     InfoRow, InfoSection, format_bit_rate, format_fps, format_frame_rate, format_sample_rate, format_size, summarize,
     to_text,
