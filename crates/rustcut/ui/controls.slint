@@ -114,6 +114,8 @@ export component NumberField inherits Rectangle {
     in property <string> placeholder;
     in property <string> tooltip;
     in property <bool> enabled: true;
+    // Numbers sit on the right; free text (codec parameters) on the left.
+    in property <TextHorizontalAlignment> alignment: right;
     callback committed(string) -> bool;
     callback stepped(/* steps */ int);
 
@@ -156,7 +158,7 @@ export component NumberField inherits Rectangle {
         text: root.text == "" ? root.placeholder : root.text;
         color: !root.enabled || root.text == "" ? Theme.status-deleted : Theme.text;
         font-size: 12px;
-        horizontal-alignment: right;
+        horizontal-alignment: root.alignment;
         vertical-alignment: center;
         overflow: elide;
     }
@@ -193,7 +195,7 @@ export component NumberField inherits Rectangle {
         single-line: true;
         color: Theme.text;
         font-size: 12px;
-        horizontal-alignment: right;
+        horizontal-alignment: root.alignment;
         vertical-alignment: center;
         selection-background-color: Theme.primary.with-alpha(0.4);
 

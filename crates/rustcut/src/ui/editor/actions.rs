@@ -85,6 +85,12 @@ impl Editor {
                 return true;
             }
         }
+        if self.probe_playing.get() && is_key(press.text, Key::Escape) {
+            if let Some(probe) = self.probe.borrow().upgrade() {
+                probe.back();
+            }
+            return true;
+        }
         let Some(action) = self.keymap.lookup(press) else {
             return false;
         };
@@ -99,6 +105,9 @@ impl Editor {
     /// Runs one keymap action.
     pub(super) fn run(self: &Rc<Self>, action: Action) {
         let Some(window) = self.window.upgrade() else { return };
+        if action.edits_the_source() && self.probe_blocks() {
+            return;
+        }
         let playback = window.global::<Playback<'_>>();
         match action {
             Action::Open => window.invoke_open_file(),
@@ -142,6 +151,12 @@ impl Editor {
             Action::MirrorHorizontal => self.with_filters(|f| f.mirror(true)),
             Action::MirrorVertical => self.with_filters(|f| f.mirror(false)),
             Action::ResetFilters => self.with_filters(FiltersBridge::reset),
+            Action::ProbeRender => {
+                let probe = self.probe.borrow().upgrade();
+                if let Some(probe) = probe {
+                    probe.render();
+                }
+            }
         }
     }
 
@@ -154,6 +169,9 @@ impl Editor {
 
     /// Sets the start or end mark at the playhead.
     pub(super) fn set_mark_here(&self, bound: Bound) {
+        if self.probe_blocks() {
+            return;
+        }
         let Some(player) = self.player.upgrade().filter(|p| p.is_loaded()) else {
             return;
         };
@@ -170,6 +188,9 @@ impl Editor {
     }
 
     pub(super) fn add_section(&self) {
+        if self.probe_blocks() {
+            return;
+        }
         let result = {
             let mut st = self.state.borrow_mut();
             st.sections
@@ -186,6 +207,9 @@ impl Editor {
     }
 
     pub(super) fn delete_section(&self) {
+        if self.probe_blocks() {
+            return;
+        }
         if self.state.borrow_mut().sections.delete_selected() {
             self.publish();
         }

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use az::CheckedAs as _;
 use parking_lot::Mutex;
 use rustcut_core::settings::{ExportPanelState, PlayerSettings};
+use rustcut_core::time::Timestamp;
 use rustcut_player::{
     AudioOptions, OpenOptions, Player, PlayerError, PlayerEvent, PlayerOptions, SurfaceError, SurfaceHooks,
     VideoFilter, attach_surface,
@@ -161,6 +162,46 @@ impl PlayerBridge {
                 play: Some(self.auto_play),
             },
         )
+    }
+
+    /// Shows the probe render `path` instead of the source: from its start, playing, in a loop.
+    pub fn open_probe(&self, path: &Path) -> Result<(), PlayerError> {
+        self.end_reverse();
+        self.state.lock().opening(path);
+        self.refresh();
+        self.command(|p| p.set_loop(true));
+        self.player.open(
+            path,
+            OpenOptions {
+                start: None,
+                play: Some(true),
+            },
+        )
+    }
+
+    /// Back from the probe render: `path` at `position`, paused or playing as before, no loop.
+    pub fn return_to(&self, path: &Path, position: Timestamp, paused: bool) -> Result<(), PlayerError> {
+        self.end_reverse();
+        self.state.lock().opening(path);
+        self.refresh();
+        self.command(|p| p.set_loop(false));
+        self.player.open(
+            path,
+            OpenOptions {
+                start: Some(position.as_secs_f64()),
+                play: Some(!paused),
+            },
+        )
+    }
+
+    /// Ends the loop of a probe render without opening anything (another file is about to open).
+    pub fn stop_loop(&self) {
+        self.command(|p| p.set_loop(false));
+    }
+
+    /// Whether the player is paused (or has nothing to play).
+    pub fn is_paused(&self) -> bool {
+        !self.state.lock().playing()
     }
 
     /// The preview's video filters (sent to the player's command thread).

@@ -67,6 +67,8 @@ pub struct FiltersBridge {
     /// The video filters last sent to the player.
     sent: RefCell<VideoFilter>,
     rows: Rc<VecModel<FilterRowView>>,
+    /// The player shows a probe render (the filters are in its pixels already): no preview filters, no crop on it.
+    suspended: Cell<bool>,
     /// Ctrl is held, and where the pointer is over the video.
     ctrl: Cell<bool>,
     hover: Cell<Option<(f32, f32)>>,
@@ -105,6 +107,7 @@ impl FiltersBridge {
             crop_task: RefCell::new(None),
             sent: RefCell::new(VideoFilter::default()),
             rows: Rc::new(VecModel::default()),
+            suspended: Cell::new(false),
             ctrl: Cell::new(false),
             hover: Cell::new(None),
             quick_timer: slint::Timer::default(),
@@ -224,6 +227,10 @@ impl FiltersBridge {
 
     /// Starts or finishes editing the crop on the video (the button, the key).
     pub fn toggle_crop_edit(&self) {
+        if self.suspended.get() {
+            self.status(Level::Info, "The probe render is playing: Esc returns to the source.");
+            return;
+        }
         let session = self.state.borrow().crop_session().map(|s| s.mode);
         match session {
             Some(CropMode::Edit) => self.end_crop(true),
@@ -273,8 +280,28 @@ impl FiltersBridge {
         self.send_preview();
     }
 
+    /// The chain a job (and the probe render) renders.
+    pub fn chain(&self) -> rustcut_core::edit::FilterChain {
+        self.state.borrow().chain().clone()
+    }
+
+    /// The player shows a probe render (`true`) or the source again: the preview filters are taken off meanwhile and a
+    /// crop being edited is kept as it is.
+    pub fn suspend_preview(&self, suspended: bool) {
+        self.suspended.set(suspended);
+        if suspended && self.state.borrow().crop_session().is_some() {
+            self.end_crop(true);
+            return;
+        }
+        self.publish();
+    }
+
     fn send_preview(&self) {
-        let filter = self.state.borrow().preview_filter();
+        let filter = if self.suspended.get() {
+            VideoFilter::default()
+        } else {
+            self.state.borrow().preview_filter()
+        };
         if *self.sent.borrow() == filter {
             return;
         }

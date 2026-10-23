@@ -1,0 +1,458 @@
+// The cards of the Render Settings panel: the profile (quick selection, save, rename, delete, the issues of the working
+// copy), the simple view (video, audio and container rows), the expert view (rows per codec) and the probe render.
+// Rows come from Rust with their label, tooltip (what the option does and what it costs) and value; buttons are icons
+// with tooltips (user rule 2026-10-23).
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { ChoiceButton, IconButton, NumberField, Switch } from "controls.slint";
+import { TooltipArea } from "tooltip.slint";
+import { PlayerSeekBar } from "player_seek_bar.slint";
+import { Shortcuts } from "shortcuts.slint";
+import { OptionRowView, Probe, RenderIssueView, RenderSettings } from "render_types.slint";
+import { Playback } from "player_types.slint";
+
+/// The name of an option, explained by its tooltip; colored when the option has an issue.
+component RowLabel inherits TooltipArea {
+    in property <string> label;
+    in property <int> mark;
+
+    horizontal-stretch: 0;
+    min-width: 40px;
+
+    Text {
+        width: parent.width;
+        height: parent.height;
+        text: root.label;
+        color: root.mark == 2 ? Theme.status-corrupt : root.mark == 1 ? Theme.accent : Theme.text-muted;
+        font-size: 11px;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+}
+
+/// One option: its label on the left, the control on the right.
+component OptionRow inherits HorizontalLayout {
+    in property <OptionRowView> option;
+
+    spacing: 6px;
+    min-height: root.option.kind == 4 ? 38px : 24px;
+
+    // The labels take a fixed share, so every control starts at the same place.
+    RowLabel {
+        width: 36%;
+        label: root.option.label;
+        mark: root.option.mark;
+        text: root.option.tooltip;
+    }
+
+    HorizontalLayout {
+        horizontal-stretch: 1;
+        min-width: 60px;
+
+        if root.option.kind == 0: ChoiceButton {
+            items: root.option.items;
+            current: root.option.index;
+            tooltip: root.option.tooltip;
+            enabled: root.option.enabled;
+            selected(index) => { RenderSettings.choose(root.option.key, index); }
+        }
+
+        // Keeps a choice or a switch at its own width on the left.
+        if root.option.kind == 0 || root.option.kind == 2: Rectangle {
+            horizontal-stretch: 1;
+            min-width: 0;
+        }
+
+        if root.option.kind == 1: NumberField {
+            text: root.option.text;
+            placeholder: root.option.placeholder;
+            tooltip: root.option.tooltip;
+            enabled: root.option.enabled;
+            committed(text) => { return RenderSettings.type-text(root.option.key, text); }
+            stepped(steps) => { RenderSettings.step(root.option.key, steps); }
+        }
+
+        if root.option.kind == 2: VerticalLayout {
+            alignment: center;
+
+            Switch {
+                checked: root.option.checked;
+                enabled: root.option.enabled;
+                tooltip: root.option.tooltip;
+                toggled => { RenderSettings.toggle(root.option.key); }
+            }
+        }
+
+        if root.option.kind == 3: NumberField {
+            text: root.option.text;
+            placeholder: root.option.placeholder;
+            tooltip: root.option.tooltip;
+            enabled: root.option.enabled;
+            alignment: left;
+            committed(text) => { return RenderSettings.type-text(root.option.key, text); }
+        }
+
+        if root.option.kind == 4: VerticalLayout {
+            spacing: 0px;
+
+            slider := PlayerSeekBar {
+                height: 20px;
+                enabled: root.option.enabled;
+                value: root.option.steps > 0 ? root.option.position / root.option.steps : 0;
+                changed(value, final) => {
+                    RenderSettings.slide(root.option.key, Math.round(value * root.option.steps));
+                }
+            }
+
+            TooltipArea {
+                text: root.option.tooltip;
+                height: 16px;
+
+                Text {
+                    width: parent.width;
+                    height: parent.height;
+                    text: root.option.text;
+                    color: root.option.enabled ? Theme.text : Theme.text-muted;
+                    font-size: 11px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+        }
+    }
+}
+
+/// A stack of option rows.
+component OptionRows inherits VerticalLayout {
+    in property <[OptionRowView]> rows;
+
+    padding: 8px;
+    padding-top: 0px;
+    spacing: 4px;
+
+    for item in root.rows: OptionRow {
+        option: item;
+    }
+}
+
+export component RenderVideoBody inherits OptionRows {
+    rows: RenderSettings.video-rows;
+}
+
+export component RenderAudioBody inherits OptionRows {
+    rows: RenderSettings.audio-rows;
+}
+
+export component RenderExpertBody inherits OptionRows {
+    rows: RenderSettings.expert-rows;
+}
+
+/// A one-line name field: Enter keeps (when `accepted` agrees), Escape cancels.
+component NameField inherits Rectangle {
+    in-out property <string> text;
+    callback accepted(string) -> bool;
+    callback canceled();
+
+    property <bool> invalid;
+
+    height: 22px;
+    horizontal-stretch: 1;
+    border-radius: 3px;
+    background: Theme.background;
+    border-width: 1px;
+    border-color: root.invalid ? Theme.status-corrupt : Theme.primary;
+
+    public function start(initial: string) {
+        input.text = initial;
+        root.invalid = false;
+        input.focus();
+        input.select-all();
+    }
+
+    public function confirm() {
+        if root.accepted(input.text) {
+            Shortcuts.release-focus();
+        } else {
+            root.invalid = true;
+        }
+    }
+
+    input := TextInput {
+        x: 5px;
+        width: parent.width - 10px;
+        height: parent.height;
+        single-line: true;
+        color: Theme.text;
+        font-size: 12px;
+        vertical-alignment: center;
+        selection-background-color: Theme.primary.with-alpha(0.4);
+
+        accepted => { root.confirm(); }
+        edited => { root.invalid = false; }
+
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.canceled();
+                Shortcuts.release-focus();
+                return accept;
+            }
+            reject
+        }
+
+        changed has-focus => {
+            Shortcuts.editing-changed(self.has-focus);
+        }
+    }
+
+    if input.text == "": Text {
+        x: 5px;
+        text: "Profile name";
+        color: Theme.status-deleted;
+        font-size: 12px;
+        vertical-alignment: center;
+        height: parent.height;
+    }
+}
+
+/// The Profile card: quick selection, reset, save, save as, rename, delete; the issues of the working copy.
+export component RenderProfileBody inherits VerticalLayout {
+    // 0 no name field, 1 saving as a new profile, 2 renaming.
+    property <int> naming;
+
+    padding: 8px;
+    padding-top: 0px;
+    spacing: 4px;
+
+    HorizontalLayout {
+        spacing: 4px;
+
+        ChoiceButton {
+            items: RenderSettings.profiles;
+            current: RenderSettings.profile-index;
+            tooltip: RenderSettings.profile-tooltip;
+            selected(index) => {
+                root.naming = 0;
+                RenderSettings.select-profile(index);
+            }
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+        }
+
+        IconButton {
+            icon: IconId.profile-reset;
+            enabled: RenderSettings.modified;
+            tooltip: "Drop the changes: back to the saved profile";
+            clicked => { RenderSettings.reset-profile(); }
+        }
+
+        if RenderSettings.user-profile: IconButton {
+            icon: IconId.profile-save;
+            enabled: RenderSettings.modified;
+            tooltip: "Save the changes into this profile";
+            clicked => { RenderSettings.save-profile(); }
+        }
+
+        IconButton {
+            icon: IconId.profile-save-as;
+            checked: root.naming == 1;
+            tooltip: "Save these settings as a new profile";
+            clicked => {
+                root.naming = root.naming == 1 ? 0 : 1;
+            }
+        }
+
+        if RenderSettings.user-profile: IconButton {
+            icon: IconId.profile-rename;
+            checked: root.naming == 2;
+            tooltip: "Rename this profile";
+            clicked => {
+                root.naming = root.naming == 2 ? 0 : 2;
+            }
+        }
+
+        if RenderSettings.user-profile: IconButton {
+            icon: IconId.profile-delete;
+            tooltip: "Delete this profile (the settings stay as a modified copy until another profile is chosen)";
+            clicked => {
+                root.naming = 0;
+                RenderSettings.delete-profile();
+            }
+        }
+    }
+
+    if root.naming != 0: HorizontalLayout {
+        spacing: 4px;
+
+        name := NameField {
+            init => {
+                self.start(root.naming == 2 ? RenderSettings.profile-name : "");
+            }
+            accepted(text) => {
+                if (root.naming == 1 ? RenderSettings.save-profile-as(text) : RenderSettings.rename-profile(text)) {
+                    root.naming = 0;
+                    return true;
+                }
+                false
+            }
+            canceled => {
+                root.naming = 0;
+            }
+        }
+
+        IconButton {
+            icon: IconId.confirm;
+            tooltip: root.naming == 1 ? "Save as a new profile (Enter)" : "Rename (Enter)";
+            clicked => { name.confirm(); }
+        }
+
+        IconButton {
+            icon: IconId.close;
+            tooltip: "Cancel (Escape)";
+            clicked => {
+                root.naming = 0;
+                Shortcuts.release-focus();
+            }
+        }
+    }
+
+    for issue in RenderSettings.issues: HorizontalLayout {
+        spacing: 6px;
+
+        VerticalLayout {
+            alignment: start;
+            padding-top: 1px;
+
+            AppIcon {
+                icon: issue.error ? IconId.status-error : IconId.status-warning;
+                size: IconSize.sm;
+                color: issue.error ? Theme.status-corrupt : Theme.accent;
+            }
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: issue.text;
+            color: Theme.text;
+            font-size: 11px;
+            wrap: word-wrap;
+        }
+    }
+
+    if RenderSettings.check-text != "": HorizontalLayout {
+        spacing: 6px;
+
+        if !RenderSettings.check-running: AppIcon {
+            icon: IconId.status-ok;
+            size: IconSize.sm;
+            color: Theme.status-ok;
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: RenderSettings.check-text;
+            color: Theme.text-muted;
+            font-size: 11px;
+            wrap: word-wrap;
+        }
+    }
+
+    if RenderSettings.encoders-note != "": Text {
+        text: RenderSettings.encoders-note;
+        color: Theme.text-muted;
+        font-size: 11px;
+        wrap: word-wrap;
+    }
+}
+
+/// The Probe render card: render around the playhead, cancel, play again, exact settings, length; progress and result.
+export component RenderProbeBody inherits VerticalLayout {
+    padding: 8px;
+    padding-top: 0px;
+    spacing: 4px;
+
+    HorizontalLayout {
+        spacing: 4px;
+
+        // One button that turns into "stop" while the probe renders (swapping two buttons under the pointer would
+        // leave the first one's tooltip behind).
+        IconButton {
+            icon: Probe.running ? IconId.probe-cancel : IconId.probe-render;
+            enabled: Probe.running || Playback.has-video || Probe.playing;
+            tooltip: Probe.running ? "Stop the probe render" : Probe.tip-render;
+            shortcut: Probe.running ? "" : Probe.key-render;
+            clicked => {
+                if Probe.running {
+                    Probe.cancel();
+                } else {
+                    Probe.render();
+                }
+            }
+        }
+
+        IconButton {
+            icon: IconId.probe-play;
+            enabled: Probe.ready && !Probe.running && !Probe.playing;
+            tooltip: "Play the last probe render again";
+            clicked => { Probe.play(); }
+        }
+
+        IconButton {
+            icon: IconId.probe-exact;
+            checked: Probe.exact;
+            tooltip: Probe.tip-exact;
+            clicked => { Probe.toggle-exact(); }
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+        }
+
+        NumberField {
+            width: 40px;
+            horizontal-stretch: 0;
+            text: Probe.seconds;
+            tooltip: Probe.tip-seconds;
+            committed(text) => { return Probe.seconds-typed(text); }
+            stepped(steps) => { Probe.seconds-stepped(steps); }
+        }
+
+        TooltipArea {
+            text: Probe.tip-seconds;
+            width: 10px;
+
+            Text {
+                width: parent.width;
+                height: parent.height;
+                text: "s";
+                color: Theme.text-muted;
+                font-size: 11px;
+                vertical-alignment: center;
+            }
+        }
+    }
+
+    if Probe.running: Rectangle {
+        height: 4px;
+        border-radius: 2px;
+        background: Theme.surface-hover;
+
+        Rectangle {
+            x: 0;
+            width: parent.width * Math.clamp(Probe.progress, 0, 1);
+            height: parent.height;
+            border-radius: parent.border-radius;
+            background: Theme.primary;
+        }
+    }
+
+    if Probe.status != "": Text {
+        text: Probe.status;
+        color: Probe.failed ? Theme.status-corrupt : Theme.text-muted;
+        font-size: 11px;
+        wrap: word-wrap;
+    }
+}

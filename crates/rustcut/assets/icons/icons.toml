@@ -84,3 +84,16 @@ mark_set = { tabler = "current-location", doc = "Set to the playhead" }
 status_ok = { tabler = "circle-check", doc = "Success message" }
 status_warning = { tabler = "alert-triangle", doc = "Warning message" }
 status_error = { tabler = "alert-circle", doc = "Error message" }
+
+# Render Settings panel (M2.5)
+profile_reset = { tabler = "arrow-back-up", doc = "Drop the changes: back to the saved profile" }
+profile_save = { tabler = "device-floppy", doc = "Save the changes into this profile" }
+profile_save_as = { tabler = "copy-plus", doc = "Save the settings as a new profile" }
+profile_rename = { tabler = "pencil", doc = "Rename this profile" }
+profile_delete = { tabler = "trash", doc = "Delete this profile" }
+confirm = { tabler = "check", doc = "Confirm the input" }
+probe_render = { tabler = "flask", doc = "Probe render around the playhead" }
+probe_cancel = { tabler = "player-stop", doc = "Stop the probe render" }
+probe_play = { tabler = "player-play", doc = "Play the probe render again" }
+probe_exact = { tabler = "target-arrow", doc = "Probe with the exact settings" }
+probe_back = { tabler = "arrow-back", doc = "Back from the probe render to the source" }

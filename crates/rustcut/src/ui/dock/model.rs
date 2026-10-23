@@ -14,6 +14,8 @@ pub const MIN_SIDEBAR_WIDTH: f32 = 220.0;
 pub const MAX_SIDEBAR_WIDTH: f32 = 720.0;
 const DEFAULT_LEFT_WIDTH: f32 = 330.0;
 const DEFAULT_RIGHT_WIDTH: f32 = 330.0;
+/// The Render Settings card with the expert options (folded in a fresh layout).
+pub const EXPERT_CARD: &str = "render-expert";
 
 /// A dock panel. Each one exists exactly once in the layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -169,7 +171,8 @@ pub enum DropTarget {
 pub struct DockLayout {
     pub left: Sidebar,
     pub right: Sidebar,
-    /// Cards inside panels (Export: Job Finalization, Filters, Sections) that show only their header.
+    /// Cards inside panels (Export: Job Finalization, Filters, Sections; Render Settings: Profile, Encoding, Audio,
+    /// Expert, Probe Render) that show only their header.
     pub collapsed_cards: BTreeSet<String>,
 }
 
@@ -194,7 +197,8 @@ impl Default for DockLayout {
                 vec![group(vec![PanelId::TagRate, PanelId::MediaInfo, PanelId::Logs], 1.0)],
                 DEFAULT_RIGHT_WIDTH,
             ),
-            collapsed_cards: BTreeSet::new(),
+            // The expert options start folded away (the simple view is enough for most renders).
+            collapsed_cards: BTreeSet::from([EXPERT_CARD.to_owned()]),
         }
     }
 }

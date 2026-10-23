@@ -1,5 +1,5 @@
 //! The actions a key can trigger, with their ids in `config.toml`, their titles and their default keys (PyCutRv's keys plus
-//! NLE-style keys and the filter keys C, Shift+C, P, R, Shift+R; user decisions 2026-10-23).
+//! NLE-style keys and the filter keys C, Shift+C, P, R, Shift+R; user decisions 2026-10-23), plus T for the probe render.
 
 /// Everything the keymap can bind. The order is the order of the Settings window's list and decides which binding wins
 /// when two defaults would collide.
@@ -40,10 +40,11 @@ pub enum Action {
     MirrorHorizontal,
     MirrorVertical,
     ResetFilters,
+    ProbeRender,
 }
 
 impl Action {
-    pub const ALL: [Self; 35] = [
+    pub const ALL: [Self; 36] = [
         Self::Open,
         Self::Save,
         Self::Quit,
@@ -79,6 +80,7 @@ impl Action {
         Self::MirrorHorizontal,
         Self::MirrorVertical,
         Self::ResetFilters,
+        Self::ProbeRender,
     ];
 
     /// The key in `config.toml`'s `[keymap]` table.
@@ -119,6 +121,7 @@ impl Action {
             Self::MirrorHorizontal => "mirror_horizontal",
             Self::MirrorVertical => "mirror_vertical",
             Self::ResetFilters => "reset_filters",
+            Self::ProbeRender => "probe_render",
         }
     }
 
@@ -164,6 +167,7 @@ impl Action {
             Self::MirrorHorizontal => "Mirror left and right",
             Self::MirrorVertical => "Mirror top and bottom",
             Self::ResetFilters => "Reset all filters",
+            Self::ProbeRender => "Probe render around the playhead",
         }
     }
 
@@ -202,8 +206,30 @@ impl Action {
             Self::ToggleFilterPreview => &["P"],
             Self::RotateLeft => &["Shift+R"],
             Self::RotateRight => &["R"],
+            // A test render (M2.5); T is free in PyCutRv's and the NLE keys.
+            Self::ProbeRender => &["T"],
             Self::ToggleKeepFilters | Self::MirrorHorizontal | Self::MirrorVertical | Self::ResetFilters => &[],
         }
+    }
+
+    /// Whether the action works on the source's timeline, marks or sections (refused while the probe render plays).
+    pub const fn edits_the_source(self) -> bool {
+        matches!(
+            self,
+            Self::PreviousCut
+                | Self::NextCut
+                | Self::SetStart
+                | Self::SetEnd
+                | Self::GoToStart
+                | Self::GoToEnd
+                | Self::AddSection
+                | Self::DeleteSection
+                | Self::ZoomIn
+                | Self::ZoomOut
+                | Self::ZoomFit
+                | Self::CropEdit
+                | Self::AutoCrop
+        )
     }
 
     /// Whether a held key repeats the action (steps and seeks do; toggles and edits would flip or duplicate).

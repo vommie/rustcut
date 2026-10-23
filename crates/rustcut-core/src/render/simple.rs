@@ -3,7 +3,7 @@
 //! position and the speed, so the result looks and takes about the same; options the new encoder does not have are
 //! dropped.
 
-use super::{BitDepth, EncoderSpec, RateControl, RenderProfile, VideoEncoder, VideoSettings};
+use super::{BitDepth, CodecFamily, EncoderSpec, RateControl, RenderProfile, VideoEncoder, VideoSettings};
 
 /// The five speeds of the simple view, fastest first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -168,7 +168,7 @@ impl RenderProfile {
     /// Switches to `encoder` keeping what carries over: the slider position, the speed, a bit rate or target size, the
     /// bit depth, GOP and color tags. Options only the old encoder had (tune, profile, level, film grain, variance
     /// boost, AQ mode, scene cuts, codec parameters) are dropped; a 10-bit choice falls back to 8-bit when the new
-    /// encoder has none.
+    /// encoder has none, and for H.264 (10-bit H.264 plays on few devices; it stays available in the expert view).
     pub fn set_encoder(&mut self, encoder: VideoEncoder) {
         let old = &self.video;
         if old.encoder == encoder {
@@ -201,7 +201,7 @@ impl RenderProfile {
             | RateControl::TargetSize { .. }) => other,
         };
         let speed = old.speed();
-        let bit_depth = if spec.pix_fmt_10.is_some() {
+        let bit_depth = if spec.pix_fmt_10.is_some() && spec.family != CodecFamily::H264 {
             old.bit_depth
         } else {
             BitDepth::Eight
@@ -291,7 +291,7 @@ mod tests {
             "{before:?} {after:?}"
         );
         assert_eq!(v.speed(), Some(Speed::Balanced));
-        assert_eq!(v.bit_depth, BitDepth::Ten, "x264 has 10-bit");
+        assert_eq!(v.bit_depth, BitDepth::Eight, "10-bit H.264 plays on few devices");
         assert_eq!(v.keyint, Some(240));
         assert!(v.codec_params.is_empty() && v.aq_mode.is_none() && v.tune.is_none() && v.film_grain.is_none());
         assert!(p.is_usable(), "{:?}", p.validate());
@@ -300,8 +300,10 @@ mod tests {
         p.set_encoder(VideoEncoder::SvtAv1);
         assert_eq!(p.video.rate_control, RateControl::AverageBitrate { kbps: 3000 });
         p.video.rate_control = RateControl::ConstantQp { qp: 63 };
+        p.video.bit_depth = BitDepth::Ten;
         p.set_encoder(VideoEncoder::X265);
         assert_eq!(p.video.rate_control, RateControl::ConstantQp { qp: 51 });
+        assert_eq!(p.video.bit_depth, BitDepth::Ten, "x265 keeps 10-bit");
         p.set_encoder(VideoEncoder::H264Vaapi);
         assert_eq!(p.video.bit_depth, BitDepth::Eight, "no 10-bit H.264 in VAAPI");
         assert_eq!(p.video.preset, None);

@@ -1,5 +1,4 @@
-// Contents of the dock panels. The real panels arrive with their milestones (HANDOFF.md section 7); until then each panel
-// says what it will hold. Panels read their data from globals, so the dock can place them in any group.
+// Contents of the dock panels. Panels that are not built yet say what they will hold (HANDOFF.md section 7). Panels read their data from globals, so the dock can place them in any group.
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
@@ -7,6 +6,7 @@ import { Dock, DockCardView } from "dock_types.slint";
 import { MediaInfoPanelView } from "media_info_panel.slint";
 import { SectionsCardBody } from "sections_card.slint";
 import { FiltersCardBody } from "filters_card.slint";
+import { RenderAudioBody, RenderExpertBody, RenderProbeBody, RenderProfileBody, RenderVideoBody } from "render_cards.slint";
 
 /// A collapsible card inside a panel (its state is part of the dock layout).
 component DockCard inherits Rectangle {
@@ -54,7 +54,17 @@ component DockCard inherits Rectangle {
 
         if !root.card.collapsed && root.card.id == "filters": FiltersCardBody { }
 
-        if !root.card.collapsed && root.card.id != "sections" && root.card.id != "filters": Rectangle {
+        if !root.card.collapsed && root.card.id == "render-profile": RenderProfileBody { }
+
+        if !root.card.collapsed && root.card.id == "render-video": RenderVideoBody { }
+
+        if !root.card.collapsed && root.card.id == "render-audio": RenderAudioBody { }
+
+        if !root.card.collapsed && root.card.id == "render-expert": RenderExpertBody { }
+
+        if !root.card.collapsed && root.card.id == "render-probe": RenderProbeBody { }
+
+        if !root.card.collapsed && root.card.id == "finalize": Rectangle {
             height: 56px;
 
             Text {
@@ -125,9 +135,8 @@ export component DockPanelContent inherits Rectangle {
     if root.key == "export": CardStack {
         cards: Dock.export-cards;
     }
-    if root.key == "render-settings": PanelPlaceholder {
-        title: "Render Settings";
-        note: "Render profiles and encoder options arrive with milestone M2.5.";
+    if root.key == "render-settings": CardStack {
+        cards: Dock.render-cards;
     }
     if root.key == "queue": PanelPlaceholder {
         title: "Queue";

@@ -39,6 +39,8 @@ pub(crate) enum Command {
     SetVolume(f64),
     /// Playback speed (1 = normal).
     SetSpeed(f64),
+    /// Play the file in a loop (the probe render) or once.
+    SetLoop(bool),
     SetAudio(AudioOptions),
     /// The preview's video filters.
     SetVideoFilter(VideoFilter),
@@ -159,6 +161,7 @@ impl Session {
             Command::SetMuted(muted) => vec![Op::Flag("mute", muted)],
             Command::SetVolume(volume) => vec![Op::Double("volume", volume.clamp(0.0, 150.0))],
             Command::SetSpeed(speed) => vec![Op::Double("speed", speed.clamp(MIN_SPEED, MAX_SPEED))],
+            Command::SetLoop(on) => vec![Op::Text("loop-file", if on { "inf" } else { "no" }.to_owned())],
             Command::Quit => vec![Op::Command("quit", Vec::new())],
         }
     }
@@ -388,6 +391,14 @@ mod tests {
         assert_eq!(s.handle(Command::SetVolume(400.0)), vec![Op::Double("volume", 150.0)]);
         assert_eq!(s.handle(Command::SetSpeed(4.0)), vec![Op::Double("speed", 4.0)]);
         assert_eq!(s.handle(Command::SetSpeed(0.0)), vec![Op::Double("speed", 0.01)]);
+        assert_eq!(
+            s.handle(Command::SetLoop(true)),
+            vec![Op::Text("loop-file", "inf".to_owned())]
+        );
+        assert_eq!(
+            s.handle(Command::SetLoop(false)),
+            vec![Op::Text("loop-file", "no".to_owned())]
+        );
     }
 
     #[test]

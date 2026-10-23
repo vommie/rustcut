@@ -1,0 +1,89 @@
+// The data of the Render Settings panel (src/ui/render_settings/ fills `RenderSettings`) and of the probe render
+// (src/ui/probe/ fills `Probe`): the profile with its working copy, the option rows of the simple and the expert view,
+// the issues, and the probe's progress and playback.
+
+// One option row. kind: 0 choice, 1 number field, 2 switch, 3 text field, 4 slider; mark: 0 none, 1 warning, 2 error.
+export struct OptionRowView {
+    key: string,
+    kind: int,
+    label: string,
+    tooltip: string,
+    items: [string],
+    index: int,
+    text: string,
+    placeholder: string,
+    checked: bool,
+    steps: int,
+    position: int,
+    enabled: bool,
+    mark: int,
+}
+
+export struct RenderIssueView {
+    error: bool,
+    text: string,
+}
+
+export global RenderSettings {
+    in property <[string]> profiles;
+    in property <int> profile-index;
+    // The selected profile's own name (without "(modified)").
+    in property <string> profile-name;
+    in property <bool> modified;
+    // The selected profile is the user's own (it can be saved into, renamed and deleted).
+    in property <bool> user-profile;
+    in property <[RenderIssueView]> issues;
+    // The real encoder's check in a few words, and whether it is running.
+    in property <string> check-text;
+    in property <bool> check-running;
+    // Which encoders work: still checking, or not known.
+    in property <string> encoders-note;
+    in property <string> profile-tooltip;
+
+    in property <[OptionRowView]> video-rows;
+    in property <[OptionRowView]> audio-rows;
+    in property <[OptionRowView]> expert-rows;
+
+    callback select-profile(int);
+    callback reset-profile();
+    callback save-profile();
+    // Save as a new profile / rename the selected one: false keeps the name field open (no name).
+    callback save-profile-as(string) -> bool;
+    callback rename-profile(string) -> bool;
+    callback delete-profile();
+
+    callback choose(/* key */ string, /* index */ int);
+    callback slide(/* key */ string, /* position */ int);
+    callback toggle(/* key */ string);
+    // A typed value; false keeps the field open and marked.
+    callback type-text(/* key */ string, /* text */ string) -> bool;
+    callback step(/* key */ string, /* steps */ int);
+}
+
+export global Probe {
+    in property <bool> running;
+    in property <float> progress;
+    // What the probe does or did: the pass, the size, the estimate for the job, or why it failed.
+    in property <string> status;
+    in property <bool> failed;
+    // A finished probe can be played (again).
+    in property <bool> ready;
+    // The player shows the probe instead of the source.
+    in property <bool> playing;
+    // "Probe render · 0:12.0-0:22.0 · x264, veryfast" (the banner over the video while it plays).
+    in property <string> banner;
+    in property <string> seconds;
+    in property <bool> exact;
+    in property <string> key-render;
+    in property <string> tip-render;
+    in property <string> tip-seconds;
+    in property <string> tip-exact;
+
+    callback render();
+    callback cancel();
+    callback play();
+    callback back();
+    callback seconds-typed(string) -> bool;
+    callback seconds-stepped(int);
+    callback toggle-exact();
+}

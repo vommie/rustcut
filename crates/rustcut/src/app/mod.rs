@@ -14,11 +14,12 @@ use std::time::{Duration, Instant};
 use clap::Parser as _;
 use rustcut_core::app_identity::{APP_NAME, VERSION};
 use rustcut_core::hashing::{HashCommand, HashService, spawn_hash_service};
-use rustcut_core::render::spawn_capability_check;
+use rustcut_core::render::{HardwareContext, RenderEnv, probe_dir, spawn_capability_check};
 use rustcut_core::settings::AppPaths;
 use slint::ComponentHandle as _;
 
 pub use cli::Cli;
+pub use persistence::SettingsWriter;
 
 use crate::MainWindow;
 use crate::desktop::instance::{self, Request};
@@ -26,9 +27,12 @@ use crate::ui::dispatcher::{SlintSink, UiDispatcher};
 use crate::ui::dock::{DockBridge, persist as dock_persist};
 use crate::ui::editor::Editor;
 use crate::ui::filters::FiltersBridge;
+use crate::ui::keymap::Action;
 use crate::ui::media_info::MediaInfoBridge;
-use crate::ui::open::{self, FileOpener};
+use crate::ui::open::{self, FileOpener, OpenerParts};
 use crate::ui::player::{PlayerBridge, PlayerBridgeError};
+use crate::ui::probe::{self, ProbeBridge};
+use crate::ui::render_settings::RenderSettingsBridge;
 
 /// How long the runtime may take to finish its tasks at quit.
 const RUNTIME_SHUTDOWN: Duration = Duration::from_secs(2);
@@ -104,8 +108,22 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     let dock = DockBridge::install(&main, dock_persist::from_table(loaded.ui_state.dock.as_ref()));
     let player = PlayerBridge::start(&main, &ui, &loaded.settings.player, &loaded.ui_state.export)?;
     let (hashing, _hash_task) = spawn_hash_service(runtime.handle());
-    // Which encoders work here (ADR-14); the Render Settings panel offers only those (M2.5).
-    let _encoders = spawn_capability_check(runtime.handle(), loaded.settings.advanced.ffmpeg.clone());
+    // Which encoders work here (ADR-14); the Render Settings panel offers only those.
+    let encoders = spawn_capability_check(runtime.handle(), loaded.settings.advanced.ffmpeg.clone());
+    let writer = SettingsWriter::start(
+        runtime.handle(),
+        loaded.paths.config_dir.clone(),
+        loaded.settings_read_only,
+    );
+    let render = RenderSettingsBridge::install(
+        &main,
+        runtime.handle().clone(),
+        &loaded.settings,
+        &loaded.ui_state.export,
+        writer,
+        &loaded.paths.cache_dir,
+        encoders,
+    );
     let media = MediaInfoBridge::install(&main, &ui, runtime.handle().clone(), hashing.clone(), &loaded.settings);
     let filters = FiltersBridge::install(
         &main,
@@ -122,12 +140,30 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &loaded.settings,
         &loaded.ui_state.timeline,
     );
+    let probe = ProbeBridge::install(
+        &main,
+        runtime.handle().clone(),
+        &probe::Parts {
+            player: &player,
+            editor: &editor,
+            filters: &filters,
+            render: &render,
+        },
+        RenderEnv::new(&loaded.settings, &loaded.paths, HardwareContext::default()),
+        probe_dir(&loaded.paths.cache_dir),
+        loaded.ui_state.export.probe,
+        &editor.key_label(Action::ProbeRender),
+    );
+    editor.set_probe(&probe);
     let opener = FileOpener::install(
         &main,
-        &player,
-        &media,
-        &editor,
-        &filters,
+        &OpenerParts {
+            player: &player,
+            media: &media,
+            editor: &editor,
+            filters: &filters,
+            probe: &probe,
+        },
         runtime.handle().clone(),
         loaded.ui_state.last_open_dir.clone(),
     );
@@ -153,9 +189,13 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     ui_state.last_open_dir = opener.last_open_dir();
     ui_state.timeline = editor.timeline_state();
     filters.save_into(&mut ui_state.export);
+    render.save_into(&mut ui_state.export);
+    probe.save_into(&mut ui_state.export);
     persistence::save_ui_state(&loaded, &ui_state);
     drop(server);
     drop(opener);
+    drop(probe);
+    drop(render);
     drop(editor);
     drop(filters);
     drop(media);

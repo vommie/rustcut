@@ -25,6 +25,7 @@ pub struct DockBridge {
     left: SideModels,
     right: SideModels,
     export_cards: Rc<VecModel<DockCardView>>,
+    render_cards: Rc<VecModel<DockCardView>>,
 }
 
 struct State {
@@ -74,6 +75,7 @@ impl DockBridge {
             left: SideModels::new(),
             right: SideModels::new(),
             export_cards: Rc::new(VecModel::default()),
+            render_cards: Rc::new(VecModel::default()),
         });
         let dock = window.global::<Dock<'_>>();
         dock.set_left_groups(ModelRc::from(Rc::clone(&bridge.left.groups)));
@@ -81,6 +83,7 @@ impl DockBridge {
         dock.set_left_rail(ModelRc::from(Rc::clone(&bridge.left.rail)));
         dock.set_right_rail(ModelRc::from(Rc::clone(&bridge.right.rail)));
         dock.set_export_cards(ModelRc::from(Rc::clone(&bridge.export_cards)));
+        dock.set_render_cards(ModelRc::from(Rc::clone(&bridge.render_cards)));
         connect(&dock, &bridge);
         bridge.publish();
         bridge
@@ -113,6 +116,7 @@ impl DockBridge {
             sync(&models.rail, view::rail_rows(layout, side));
         }
         sync(&self.export_cards, view::export_cards(layout));
+        sync(&self.render_cards, view::render_cards(layout));
 
         let dock = window.global::<Dock<'_>>();
         let left = super::plan::plan_sidebar(&layout.left);

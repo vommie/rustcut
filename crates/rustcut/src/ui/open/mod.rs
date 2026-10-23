@@ -20,6 +20,7 @@ use crate::ui::editor::Editor;
 use crate::ui::filters::FiltersBridge;
 use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::player::PlayerBridge;
+use crate::ui::probe::ProbeBridge;
 use crate::ui::status::{self, Level};
 use crate::{MainWindow, Playback};
 
@@ -34,28 +35,36 @@ pub struct FileOpener {
     media: Weak<MediaInfoBridge>,
     editor: Weak<Editor>,
     filters: Weak<FiltersBridge>,
+    probe: Weak<ProbeBridge>,
     runtime: tokio::runtime::Handle,
     last_open_dir: RefCell<Option<PathBuf>>,
     drops: RefCell<DropTracker>,
+}
+
+/// The bridges an opened file reaches.
+pub struct OpenerParts<'a> {
+    pub player: &'a Rc<PlayerBridge>,
+    pub media: &'a Rc<MediaInfoBridge>,
+    pub editor: &'a Rc<Editor>,
+    pub filters: &'a Rc<FiltersBridge>,
+    pub probe: &'a Rc<ProbeBridge>,
 }
 
 impl FileOpener {
     /// Handles File > Open, `open-path` and the window's file drops from now on. The app owns the only strong reference.
     pub fn install(
         window: &MainWindow,
-        player: &Rc<PlayerBridge>,
-        media: &Rc<MediaInfoBridge>,
-        editor: &Rc<Editor>,
-        filters: &Rc<FiltersBridge>,
+        parts: &OpenerParts<'_>,
         runtime: tokio::runtime::Handle,
         last_open_dir: Option<PathBuf>,
     ) -> Rc<Self> {
         let opener = Rc::new(Self {
             window: window.as_weak(),
-            player: Rc::downgrade(player),
-            media: Rc::downgrade(media),
-            editor: Rc::downgrade(editor),
-            filters: Rc::downgrade(filters),
+            player: Rc::downgrade(parts.player),
+            media: Rc::downgrade(parts.media),
+            editor: Rc::downgrade(parts.editor),
+            filters: Rc::downgrade(parts.filters),
+            probe: Rc::downgrade(parts.probe),
             runtime,
             last_open_dir: RefCell::new(last_open_dir),
             drops: RefCell::new(DropTracker::default()),
@@ -110,6 +119,10 @@ impl FileOpener {
 
     fn open_checked(&self, path: &Path) {
         let Some(player) = self.player.upgrade() else { return };
+        // The probe render of the previous file stops, and the player leaves it.
+        if let Some(probe) = self.probe.upgrade() {
+            probe.file_opening();
+        }
         // Before the player loads the file: the previous file's filters must not show on the new one.
         if let Some(filters) = self.filters.upgrade() {
             filters.file_opening(path);

@@ -152,6 +152,11 @@ impl Player {
         self.command(Command::SetSpeed(speed))
     }
 
+    /// Plays the file in a loop (`true`) or once; applies to the files opened after it as well.
+    pub fn set_loop(&self, on: bool) -> Result<(), PlayerError> {
+        self.command(Command::SetLoop(on))
+    }
+
     /// Shows the next (or, with `back`, the previous) frame and pauses.
     pub fn frame_step(&self, back: bool) -> Result<(), PlayerError> {
         self.command(Command::FrameStep { back })
