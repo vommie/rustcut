@@ -287,6 +287,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Quitting RustCut while a video without audio is open no longer logs "The file cannot be played: The video output
+  could not be started." (0.0.14). Closing the window takes the video output away from the player, which is a normal
+  end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
 [Unreleased]: https://github.com/vommie/rustcut/commits/master

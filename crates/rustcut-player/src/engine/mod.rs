@@ -4,7 +4,9 @@
 //! mpv handle for the render context and a way to report the surface's state). Every command goes to the player's command
 //! thread (`commands.rs`), because the UI thread renders the video and must not call libmpv's synchronous API. A file
 //! opened before the surface exists is loaded as soon as the render context is there: with `vo=libmpv` mpv can only show
-//! video while a render context exists.
+//! video while a render context exists. When the surface goes away (the window closes), mpv stops the video and ends a
+//! file without audio with "video output initialization failed"; the event thread knows from [`PlayerHandle`] that the
+//! surface is gone and reports that end as [`EndReason::SurfaceLost`], not as a failure.
 
 mod audio;
 mod commands;
@@ -15,6 +17,7 @@ mod video;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::thread::JoinHandle;
 
@@ -53,6 +56,8 @@ pub struct OpenOptions {
 pub struct PlayerHandle {
     mpv: Arc<Mpv>,
     commands: Sender<Command>,
+    /// A render context exists: set once it was created, cleared before it is freed; read by the event thread.
+    surface: Arc<AtomicBool>,
 }
 
 impl PlayerHandle {
@@ -64,12 +69,15 @@ impl PlayerHandle {
     /// A render context exists now on a renderer called `gl_renderer`: the preview quality is settled and a file opened
     /// before is loaded (on the command thread).
     pub(crate) fn surface_ready(&self, gl_renderer: &str) {
+        self.surface.store(true, Ordering::Release);
         let software = options::is_software_renderer(gl_renderer);
         self.send(Command::SurfaceReady { software });
     }
 
-    /// The render context is gone (window hidden or closed); later files wait for the next one.
+    /// The render context goes away (window hidden or closed); later files wait for the next one. Called before the
+    /// context is freed, so the end of file that freeing it causes is known to come from here.
     pub(crate) fn surface_lost(&self) {
+        self.surface.store(false, Ordering::Release);
         self.send(Command::SurfaceLost);
     }
 
@@ -98,18 +106,24 @@ impl Player {
         events::observe(&client);
 
         let (tx, rx) = mpsc::channel();
+        let surface = Arc::new(AtomicBool::new(false));
         let session = Session::new(options.preview_quality, options.audio);
         let command_mpv = Arc::clone(&mpv);
         let commands = std::thread::Builder::new()
             .name("rustcut-mpv-commands".into())
             .spawn(move || commands::run(&command_mpv, &rx, session))?;
         let event_tx = tx.clone();
+        let event_surface = Arc::clone(&surface);
         let events = std::thread::Builder::new()
             .name("rustcut-mpv-events".into())
-            .spawn(move || events::run(&client, &on_event, &event_tx))?;
+            .spawn(move || events::run(&client, &on_event, &event_tx, &event_surface))?;
         tracing::info!(options = ?options, "[Player] mpv core started");
         Ok(Self {
-            handle: PlayerHandle { mpv, commands: tx },
+            handle: PlayerHandle {
+                mpv,
+                commands: tx,
+                surface,
+            },
             events: Some(events),
             commands: Some(commands),
         })

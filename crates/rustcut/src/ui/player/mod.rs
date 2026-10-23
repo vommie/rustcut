@@ -20,7 +20,7 @@ use parking_lot::Mutex;
 use rustcut_core::settings::{ExportPanelState, PlayerSettings};
 use rustcut_core::time::Timestamp;
 use rustcut_player::{
-    AudioOptions, OpenOptions, Player, PlayerError, PlayerEvent, PlayerOptions, SurfaceError, SurfaceHooks,
+    AudioOptions, EndReason, OpenOptions, Player, PlayerError, PlayerEvent, PlayerOptions, SurfaceError, SurfaceHooks,
     VideoFilter, attach_surface,
 };
 use slint::ComponentHandle as _;
@@ -355,13 +355,17 @@ fn video_size(window: &MainWindow) -> slint::PhysicalSize {
     slint::PhysicalSize::new(px(window.get_video_width()), px(window.get_video_height()))
 }
 
-/// Logs a player event (on mpv's event thread); property changes only at trace level (the position changes every frame).
+/// Logs a player event (on mpv's event thread); property changes only at trace level (the position changes every frame),
+/// the end of a file because the window closed (the video surface went away) at debug level.
 fn log_event(event: &PlayerEvent) {
     match event {
         PlayerEvent::PlaybackFailed { reason, detail } => {
             tracing::warn!(reason = %reason, detail = ?detail, "[Player] The file cannot be played");
         }
         PlayerEvent::Error(message) => tracing::warn!(message = %message, "[Player] Playback error"),
+        PlayerEvent::Ended(EndReason::SurfaceLost) => {
+            tracing::debug!("[Player] Playback ended with the video surface (window closed)");
+        }
         PlayerEvent::Ended(reason) => tracing::info!(reason = ?reason, "[Player] Playback ended"),
         PlayerEvent::Property(property) => tracing::trace!(property = ?property, "[Player] Property"),
         other => tracing::debug!(event = ?other, "[Player] Event"),
