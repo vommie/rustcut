@@ -13,4 +13,4 @@ pub use schema::{
     NotificationSettings, PlayerSettings, QueueSettings, RenderSettings, RustViewSettings, Settings, TargetFolder,
     TraySettings, WarningSettings, WhenDone, WriteTiming,
 };
-pub use ui_state::{ExportPanelState, QueuePanelState, UiState, WindowState};
+pub use ui_state::{ExportPanelState, QueuePanelState, TimelineState, UiState, WindowState};

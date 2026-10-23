@@ -5,6 +5,7 @@
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Playback } from "player_types.slint";
+import { Shortcuts } from "shortcuts.slint";
 
 export component PlayerView inherits Rectangle {
     in property <image> frame;
@@ -25,6 +26,12 @@ export component PlayerView inherits Rectangle {
     }
 
     TouchArea {
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                Shortcuts.release-focus();
+            }
+        }
+
         scroll-event(event) => {
             if event.delta-y == 0 {
                 return reject;

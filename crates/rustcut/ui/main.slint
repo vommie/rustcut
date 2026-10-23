@@ -1,5 +1,6 @@
-// Main window of RustCut: the dock (ADR-12) with its two sidebars around the video and its transport bar, a slim status
-// line, the menus (File, Playback, View) with their shortcuts.
+// Main window of RustCut: the dock (ADR-12) with its two sidebars around the video, the timeline and the transport bar, a
+// slim status line, the menus (File, Playback, Sections, View) with the keymap's shortcuts, and the key scope that hands
+// every other key press to the keymap (src/ui/editor/).
 
 import { Theme } from "styles.slint";
 import { PlayerView } from "player_view.slint";
@@ -13,10 +14,14 @@ import { PlayerTransport } from "player_transport.slint";
 import { Status, StatusLine } from "status_line.slint";
 import { MediaInfoPanel, MediaInfoRow, MediaInfoSection } from "media_info_panel.slint";
 import { KnownSource, KnownSourceBanner } from "source_banner.slint";
+import { Shortcuts } from "shortcuts.slint";
+import { Timeline, TimelineBlock, TimelineStrip, TimelineTick } from "timeline_view.slint";
+import { SectionRowView, Sections } from "sections_card.slint";
 
 export {
     Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
-    MediaInfoRow, MediaInfoSection, KnownSource
+    MediaInfoRow, MediaInfoSection, KnownSource, Shortcuts, Timeline, TimelineBlock, TimelineTick, Sections,
+    SectionRowView
 }
 
 export component MainWindow inherits Window {
@@ -53,6 +58,15 @@ export component MainWindow inherits Window {
     in property <string> window-title: root.app-name;
 
     title: root.window-title;
+
+    // Gives the keyboard to the key scope (after a text field is done, or a click on the video or the timeline).
+    public function focus-keys() {
+        key-scope.focus();
+    }
+
+    init => {
+        key-scope.focus();
+    }
     preferred-width: 1280px;
     preferred-height: 800px;
     min-width: 900px;
@@ -66,7 +80,7 @@ export component MainWindow inherits Window {
 
             MenuItem {
                 title: "Open...";
-                shortcut: @keys(Control + O);
+                shortcut: Shortcuts.open;
                 activated => { root.open-file(); }
             }
 
@@ -74,7 +88,7 @@ export component MainWindow inherits Window {
 
             MenuItem {
                 title: "Quit";
-                shortcut: @keys(Control + Q);
+                shortcut: Shortcuts.quit;
                 activated => { root.quit(); }
             }
         }
@@ -84,21 +98,21 @@ export component MainWindow inherits Window {
 
             MenuItem {
                 title: Playback.paused ? "Play" : "Pause";
-                shortcut: @keys(Space);
+                shortcut: Shortcuts.toggle-pause;
                 enabled: Playback.has-file;
                 activated => { Playback.toggle-pause(); }
             }
 
             MenuItem {
                 title: "Previous Frame";
-                shortcut: @keys(",");
+                shortcut: Shortcuts.frame-back;
                 enabled: Playback.has-video;
                 activated => { Playback.frame-step(true); }
             }
 
             MenuItem {
                 title: "Next Frame";
-                shortcut: @keys(".");
+                shortcut: Shortcuts.frame-forward;
                 enabled: Playback.has-video;
                 activated => { Playback.frame-step(false); }
             }
@@ -107,15 +121,70 @@ export component MainWindow inherits Window {
 
             MenuItem {
                 title: Playback.muted ? "Unmute" : "Mute";
-                shortcut: @keys(M);
+                shortcut: Shortcuts.toggle-mute;
                 activated => { Playback.toggle-mute(); }
             }
 
             MenuItem {
                 title: "Reload";
-                shortcut: @keys(F5);
+                shortcut: Shortcuts.reload;
                 enabled: Playback.has-file;
                 activated => { Playback.reload(); }
+            }
+        }
+
+        Menu {
+            title: "Sections";
+
+            MenuItem {
+                title: "Set Start";
+                shortcut: Shortcuts.set-start;
+                enabled: Playback.has-video;
+                activated => { Shortcuts.run("set_start"); }
+            }
+
+            MenuItem {
+                title: "Set End";
+                shortcut: Shortcuts.set-end;
+                enabled: Playback.has-video;
+                activated => { Shortcuts.run("set_end"); }
+            }
+
+            MenuItem {
+                title: "Add Section";
+                shortcut: Shortcuts.add-section;
+                enabled: Sections.can-add;
+                activated => { Shortcuts.run("add_section"); }
+            }
+
+            MenuSeparator { }
+
+            MenuItem {
+                title: "Go to Start";
+                shortcut: Shortcuts.go-to-start;
+                enabled: Playback.has-video && Sections.mark-start != "";
+                activated => { Shortcuts.run("go_to_start"); }
+            }
+
+            MenuItem {
+                title: "Go to End";
+                shortcut: Shortcuts.go-to-end;
+                enabled: Playback.has-video && Sections.mark-end != "";
+                activated => { Shortcuts.run("go_to_end"); }
+            }
+
+            MenuItem {
+                title: "Previous Cut Point";
+                shortcut: Shortcuts.previous-cut;
+                enabled: Playback.has-video;
+                activated => { Shortcuts.run("previous_cut"); }
+            }
+
+            MenuItem {
+                title: "Next Cut Point";
+                shortcut: Shortcuts.next-cut;
+                enabled: Playback.has-video;
+                activated => { Shortcuts.run("next_cut"); }
             }
         }
 
@@ -137,66 +206,106 @@ export component MainWindow inherits Window {
             MenuSeparator { }
 
             MenuItem {
+                title: "Zoom Timeline In";
+                shortcut: Shortcuts.zoom-in;
+                enabled: Timeline.active;
+                activated => { Shortcuts.run("zoom_in"); }
+            }
+
+            MenuItem {
+                title: "Zoom Timeline Out";
+                shortcut: Shortcuts.zoom-out;
+                enabled: Timeline.active && Timeline.zoomed;
+                activated => { Shortcuts.run("zoom_out"); }
+            }
+
+            MenuItem {
+                title: "Fit Timeline";
+                shortcut: Shortcuts.zoom-fit;
+                enabled: Timeline.active && Timeline.zoomed;
+                activated => { Shortcuts.run("zoom_fit"); }
+            }
+
+            MenuSeparator { }
+
+            MenuItem {
                 title: "Reset Layout";
                 activated => { Dock.reset-layout(); }
             }
         }
     }
 
-    VerticalLayout {
-        HorizontalLayout {
-            vertical-stretch: 1;
+    key-scope := FocusScope {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
 
-            left-sidebar := DockSidebar {
-                width: !Dock.left-shown ? 0px : (Dock.left-collapsed ? DockMetrics.rail-width : Dock.left-width);
-                side: 0;
-                groups: Dock.left-groups;
-                rail: Dock.left-rail;
-                total-fixed: Dock.left-total-fixed;
-                collapsed: Dock.left-collapsed;
+        key-pressed(event) => {
+            if Shortcuts.key-pressed(event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift,
+                event.modifiers.meta, event.repeat) {
+                return accept;
             }
-
-            if Dock.left-shown && !Dock.left-collapsed: ResizerBar {
-                is-horizontal: true;
-                thickness: 5px;
-                drag-started => { Dock.sidebar-resize-started(0); }
-                dragged(delta) => { Dock.sidebar-resized(0, delta); }
-            }
-
-            center-area := VerticalLayout {
-                horizontal-stretch: 1;
-                min-width: 240px;
-
-                KnownSourceBanner { }
-
-                player := PlayerView {
-                    vertical-stretch: 1;
-                    frame: root.video-frame;
-                    app-name: root.app-name;
-                    app-version: root.app-version;
-                }
-
-                PlayerTransport { }
-            }
-
-            if Dock.right-shown && !Dock.right-collapsed: ResizerBar {
-                is-horizontal: true;
-                thickness: 5px;
-                drag-started => { Dock.sidebar-resize-started(1); }
-                dragged(delta) => { Dock.sidebar-resized(1, delta); }
-            }
-
-            right-sidebar := DockSidebar {
-                width: !Dock.right-shown ? 0px : (Dock.right-collapsed ? DockMetrics.rail-width : Dock.right-width);
-                side: 1;
-                groups: Dock.right-groups;
-                rail: Dock.right-rail;
-                total-fixed: Dock.right-total-fixed;
-                collapsed: Dock.right-collapsed;
-            }
+            reject
         }
 
-        StatusLine { }
+        VerticalLayout {
+            HorizontalLayout {
+                vertical-stretch: 1;
+
+                left-sidebar := DockSidebar {
+                    width: !Dock.left-shown ? 0px : (Dock.left-collapsed ? DockMetrics.rail-width : Dock.left-width);
+                    side: 0;
+                    groups: Dock.left-groups;
+                    rail: Dock.left-rail;
+                    total-fixed: Dock.left-total-fixed;
+                    collapsed: Dock.left-collapsed;
+                }
+
+                if Dock.left-shown && !Dock.left-collapsed: ResizerBar {
+                    is-horizontal: true;
+                    thickness: 5px;
+                    drag-started => { Dock.sidebar-resize-started(0); }
+                    dragged(delta) => { Dock.sidebar-resized(0, delta); }
+                }
+
+                center-area := VerticalLayout {
+                    horizontal-stretch: 1;
+                    min-width: 240px;
+
+                    KnownSourceBanner { }
+
+                    player := PlayerView {
+                        vertical-stretch: 1;
+                        frame: root.video-frame;
+                        app-name: root.app-name;
+                        app-version: root.app-version;
+                    }
+
+                    TimelineStrip { }
+
+                    PlayerTransport { }
+                }
+
+                if Dock.right-shown && !Dock.right-collapsed: ResizerBar {
+                    is-horizontal: true;
+                    thickness: 5px;
+                    drag-started => { Dock.sidebar-resize-started(1); }
+                    dragged(delta) => { Dock.sidebar-resized(1, delta); }
+                }
+
+                right-sidebar := DockSidebar {
+                    width: !Dock.right-shown ? 0px : (Dock.right-collapsed ? DockMetrics.rail-width : Dock.right-width);
+                    side: 1;
+                    groups: Dock.right-groups;
+                    rail: Dock.right-rail;
+                    total-fixed: Dock.right-total-fixed;
+                    collapsed: Dock.right-collapsed;
+                }
+            }
+
+            StatusLine { }
+        }
     }
 
     DockOverlay {

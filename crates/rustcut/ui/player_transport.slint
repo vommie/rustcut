@@ -1,5 +1,5 @@
-// The transport bar under the video: play/pause, frame steps, the seek bar between the current and the total time, mute
-// and volume. Everything reads and calls the `Playback` global.
+// The transport bar under the timeline: play/pause, frame steps, the current and the total time with the shuttle speed,
+// mute and volume (the timeline above it is the seek bar). Everything reads and calls the `Playback` global.
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
@@ -91,20 +91,36 @@ export component PlayerTransport inherits Rectangle {
             text: Playback.position-text;
         }
 
-        VerticalLayout {
-            alignment: center;
-            horizontal-stretch: 1;
-            PlayerSeekBar {
-                value: Playback.progress;
-                enabled: Playback.has-video;
-                changed(value, final) => { Playback.seek(value, final); }
-            }
+        TimeLabel {
+            text: "/";
+            color: Theme.status-deleted;
         }
 
         TimeLabel {
             text: Playback.duration-text;
             color: Theme.text-muted;
         }
+
+        if Playback.speed-text != "": VerticalLayout {
+            alignment: center;
+            Rectangle {
+                height: 18px;
+                width: speed-label.preferred-width + 12px;
+                border-radius: 9px;
+                background: Theme.accent.with-alpha(0.18);
+
+                speed-label := Text {
+                    text: Playback.speed-text;
+                    color: Theme.accent;
+                    font-size: 11px;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        Rectangle { horizontal-stretch: 1; }
 
         Rectangle { width: 10px; }
 

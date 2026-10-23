@@ -1,0 +1,33 @@
+// The keymap's side in Slint (src/ui/keymap/, src/ui/editor/): the shortcuts of the menu items (set from the keymap; plain
+// keys are left off while a text field has the keyboard, because the menu bar sees keys before any element), and the entry
+// for every key press no focused element took.
+
+export global Shortcuts {
+    in property <keys> open;
+    in property <keys> quit;
+    in property <keys> toggle-pause;
+    in property <keys> frame-back;
+    in property <keys> frame-forward;
+    in property <keys> toggle-mute;
+    in property <keys> reload;
+    in property <keys> set-start;
+    in property <keys> set-end;
+    in property <keys> go-to-start;
+    in property <keys> go-to-end;
+    in property <keys> add-section;
+    in property <keys> previous-cut;
+    in property <keys> next-cut;
+    in property <keys> zoom-in;
+    in property <keys> zoom-out;
+    in property <keys> zoom-fit;
+
+    // A key press that no focused element took; true when it ran (or deliberately ignored) a keymap action.
+    callback key-pressed(/* text */ string, /* control */ bool, /* alt */ bool, /* shift */ bool, /* meta */ bool,
+        /* repeat */ bool) -> bool;
+    // A text field got or lost the keyboard.
+    callback editing-changed(bool);
+    // Gives the keyboard back to the shortcuts (Enter or Escape in a field, a click on the video or the timeline).
+    callback release-focus();
+    // A menu item without a shortcut of its own: the keymap action with this id.
+    callback run(string);
+}

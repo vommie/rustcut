@@ -5,11 +5,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use slint::{ComponentHandle as _, Model as _, ModelRc, VecModel};
+use slint::{ComponentHandle as _, ModelRc, VecModel};
 
 use super::model::{DockLayout, GroupRef, PanelId, Side};
 use super::plan::{DockFrame, Hit, Rect, Resize, hit_test, metrics};
 use super::view::{self, DraggedTab};
+use crate::util::model::sync;
 use crate::{Dock, DockCardView, DockGroupView, DockMetrics, DockRailItem, DockTabView, MainWindow};
 
 /// The center keeps at least this width when a sidebar is widened (logical pixels, matches `min-width` in main.slint).
@@ -379,19 +380,4 @@ fn publish_groups(models: &SideModels, rows: Vec<view::GroupRows>) {
         })
         .collect();
     sync(&models.groups, groups);
-}
-
-/// Makes `model` hold `rows`, touching only the rows that changed.
-fn sync<T: Clone + PartialEq + 'static>(model: &VecModel<T>, rows: Vec<T>) {
-    let count = rows.len();
-    for (index, row) in rows.into_iter().enumerate() {
-        match model.row_data(index) {
-            Some(current) if current == row => {}
-            Some(_) => model.set_row_data(index, row),
-            None => model.push(row),
-        }
-    }
-    while model.row_count() > count {
-        model.remove(model.row_count() - 1);
-    }
 }

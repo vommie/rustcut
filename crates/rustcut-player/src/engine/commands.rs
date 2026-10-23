@@ -36,6 +36,8 @@ pub(crate) enum Command {
     SetMuted(bool),
     /// Volume in percent (100 = unchanged).
     SetVolume(f64),
+    /// Playback speed (1 = normal).
+    SetSpeed(f64),
     SetAudio(AudioOptions),
     /// The loaded file's duration in seconds (from the event thread; the end mute needs it).
     Duration(f64),
@@ -149,6 +151,7 @@ impl Session {
             }
             Command::SetMuted(muted) => vec![Op::Flag("mute", muted)],
             Command::SetVolume(volume) => vec![Op::Double("volume", volume.clamp(0.0, 150.0))],
+            Command::SetSpeed(speed) => vec![Op::Double("speed", speed.clamp(MIN_SPEED, MAX_SPEED))],
             Command::Quit => vec![Op::Command("quit", Vec::new())],
         }
     }
@@ -181,14 +184,20 @@ impl Session {
     }
 }
 
+/// mpv's limits of the `speed` property.
+const MIN_SPEED: f64 = 0.01;
+const MAX_SPEED: f64 = 100.0;
+
 /// Drops commands that a later one in the same burst makes pointless: of consecutive seeks only the last runs (a drag on the
-/// seek bar), likewise for volume changes (the mouse wheel).
+/// timeline, held arrow keys), likewise for volume changes (the mouse wheel) and speed changes.
 pub(crate) fn coalesce(batch: Vec<Command>) -> Vec<Command> {
     let mut out: Vec<Command> = Vec::with_capacity(batch.len());
     for command in batch {
         let replaces_last = matches!(
             (out.last(), &command),
-            (Some(Command::Seek { .. }), Command::Seek { .. }) | (Some(Command::SetVolume(_)), Command::SetVolume(_))
+            (Some(Command::Seek { .. }), Command::Seek { .. })
+                | (Some(Command::SetVolume(_)), Command::SetVolume(_))
+                | (Some(Command::SetSpeed(_)), Command::SetSpeed(_))
         );
         if replaces_last {
             out.pop();
@@ -352,6 +361,8 @@ mod tests {
             vec![Op::Command("frame-back-step", vec![])]
         );
         assert_eq!(s.handle(Command::SetVolume(400.0)), vec![Op::Double("volume", 150.0)]);
+        assert_eq!(s.handle(Command::SetSpeed(4.0)), vec![Op::Double("speed", 4.0)]);
+        assert_eq!(s.handle(Command::SetSpeed(0.0)), vec![Op::Double("speed", 0.01)]);
     }
 
     #[test]
@@ -370,5 +381,15 @@ mod tests {
             coalesce(batch),
             vec![seek(3.0), Command::SetPaused(true), seek(4.0), Command::SetVolume(20.0)]
         );
+    }
+
+    #[test]
+    fn bursts_keep_only_the_last_speed() {
+        let batch = vec![
+            Command::SetSpeed(2.0),
+            Command::SetSpeed(4.0),
+            Command::SetPaused(false),
+        ];
+        assert_eq!(coalesce(batch), vec![Command::SetSpeed(4.0), Command::SetPaused(false)]);
     }
 }

@@ -5,6 +5,7 @@ import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Dock, DockCardView } from "dock_types.slint";
 import { MediaInfoPanelView } from "media_info_panel.slint";
+import { SectionsCardBody } from "sections_card.slint";
 
 /// A collapsible card inside a panel (its state is part of the dock layout).
 component DockCard inherits Rectangle {
@@ -48,7 +49,9 @@ component DockCard inherits Rectangle {
             }
         }
 
-        if !root.card.collapsed: Rectangle {
+        if !root.card.collapsed && root.card.id == "sections": SectionsCardBody { }
+
+        if !root.card.collapsed && root.card.id != "sections": Rectangle {
             height: 56px;
 
             Text {
