@@ -38,7 +38,7 @@ az = "1"
 # File-name templates (Jinja2 syntax) with a fuel limit; RustStart uses the same engine.
 minijinja = { version = "3", features = ["builtins", "serde", "fuel"] }
 # Async runtime of the services (actors, processes, timers); the UI thread never runs on it (ADR-4).
-tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "signal", "io-util", "net"] }
 parking_lot = "0.12"
 # Queue, job history and job logs (ADR-5). `backup` copies the database before a migration.
 rusqlite = { version = "0.40", features = ["bundled", "backup"] }
@@ -62,6 +62,14 @@ glow = "0.18"
 self_cell = "1"
 # Latency histograms for the player's frame-time statistics (mean, percentiles, maximum).
 hdrhistogram = { version = "7", default-features = false }
+# Daily rotating log files in the state folder, written by a background thread (never blocks the UI thread).
+tracing-appender = "0.2"
+# File > Open: the desktop's file dialog through the XDG portal (KDE's dialog on Plasma), Wayland-ready.
+rfd = "0.17"
+# Single instance: a local socket in $XDG_RUNTIME_DIR that a second start forwards its files through (RustStart uses it too).
+interprocess = { version = "2", features = ["tokio"] }
+# A stable hash (FNV-1a) of the profile folder in the socket name, so separate profiles never reach each other.
+fnv = "1"
 
 # Tests only.
 proptest = "1"

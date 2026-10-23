@@ -1,0 +1,65 @@
+// The one slim status line (CLAUDE.md rule 8): on the left the latest message with its severity, on the right facts that no
+// other place shows (how the video is decoded). Set from src/ui/status/.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+
+export global Status {
+    in property <string> message: "Ready";
+    // 0 = info, 1 = success, 2 = warning, 3 = error.
+    in property <int> level;
+    in property <string> decoder;
+}
+
+export component StatusLine inherits Rectangle {
+    height: Theme.status-bar-height;
+    background: Theme.surface;
+
+    Rectangle {
+        y: 0;
+        height: 1px;
+        background: Theme.border;
+    }
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 12px;
+        spacing: 6px;
+
+        Rectangle {
+            width: IconSize.md;
+
+            if Status.level == 0: Rectangle {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 6px;
+                height: 6px;
+                border-radius: 3px;
+                background: Theme.primary.with-alpha(0.6);
+            }
+
+            if Status.level != 0: AppIcon {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                icon: Status.level == 1 ? IconId.status-ok : Status.level == 2 ? IconId.status-warning : IconId.status-error;
+                size: IconSize.md;
+                color: Status.level == 1 ? Theme.status-ok : Status.level == 2 ? Theme.accent : Theme.status-corrupt;
+            }
+        }
+
+        Text {
+            text: Status.message;
+            color: Status.level == 3 ? Theme.status-corrupt : Theme.text-muted;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+        }
+
+        Text {
+            text: Status.decoder;
+            color: Theme.text-muted;
+            vertical-alignment: center;
+            horizontal-stretch: 0;
+        }
+    }
+}

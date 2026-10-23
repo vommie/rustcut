@@ -38,3 +38,19 @@ panel_queue = { tabler = "list-details", doc = "Queue panel" }
 panel_tag_rate = { tabler = "tags", doc = "Tag & Rate panel" }
 panel_media_info = { tabler = "info-circle", doc = "Media info panel" }
 panel_logs = { tabler = "file-text", doc = "Logs panel" }
+
+# --- Player and transport ------------------------------------------------------------------------------------------
+play = { tabler = "player-play", style = "filled", doc = "Start playback" }
+pause = { tabler = "player-pause", style = "filled", doc = "Pause playback" }
+frame_back = { tabler = "player-skip-back", doc = "Step one frame back" }
+frame_forward = { tabler = "player-skip-forward", doc = "Step one frame forward" }
+volume = { tabler = "volume", doc = "Sound on (click to mute)" }
+volume_muted = { tabler = "volume-3", doc = "Sound muted (click to unmute)" }
+reload = { tabler = "refresh", doc = "Reload the video" }
+drop_file = { tabler = "drag-drop", doc = "Drop a video to open it" }
+open_file = { tabler = "folder-open", doc = "Open a video" }
+
+# --- Status --------------------------------------------------------------------------------------------------------
+status_ok = { tabler = "circle-check", doc = "Success message" }
+status_warning = { tabler = "alert-triangle", doc = "Warning message" }
+status_error = { tabler = "alert-circle", doc = "Error message" }

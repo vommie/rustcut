@@ -1,0 +1,372 @@
+//! The command thread: every libmpv call except the render calls runs here, never on the UI thread. Slint's UI thread is
+//! mpv's render thread, and mpv's `render.h` forbids it the synchronous client API (`mpv_command`, `mpv_set_property`, ...):
+//! the core may wait for the renderer while the renderer waits for the core.
+//!
+//! [`Session`] is the pure part (which mpv operations a command means, given what happened before); [`run`] executes them.
+
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::mpsc::Receiver;
+
+use libmpv2::Mpv;
+
+use super::audio::{self, AudioOptions};
+use super::options::{self, PreviewQuality};
+
+/// What the app (and the player's own threads) ask mpv to do.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Command {
+    /// Load a file; `start` in seconds, `play` sets the pause state first (`None` keeps it, e.g. for a reload).
+    Open {
+        path: PathBuf,
+        start: Option<f64>,
+        play: Option<bool>,
+    },
+    SetPaused(bool),
+    /// Toggle pause; at the end of the file, playing starts over from the beginning.
+    TogglePause,
+    /// Jump to `seconds`; `exact` decodes up to the precise frame, otherwise the nearest keyframe is enough (dragging).
+    Seek {
+        seconds: f64,
+        exact: bool,
+    },
+    FrameStep {
+        back: bool,
+    },
+    SetMuted(bool),
+    /// Volume in percent (100 = unchanged).
+    SetVolume(f64),
+    SetAudio(AudioOptions),
+    /// The loaded file's duration in seconds (from the event thread; the end mute needs it).
+    Duration(f64),
+    /// A render context exists now; `software` = the OpenGL renderer is a software rasterizer.
+    SurfaceReady {
+        software: bool,
+    },
+    SurfaceLost,
+    /// Shut the core down; the thread ends after it.
+    Quit,
+}
+
+/// One libmpv call.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Op {
+    Command(&'static str, Vec<String>),
+    Flag(&'static str, bool),
+    Double(&'static str, f64),
+    Text(&'static str, String),
+    /// Toggle pause; reads `eof-reached` and `pause` first (only possible while executing).
+    TogglePause,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct Load {
+    path: PathBuf,
+    start: Option<f64>,
+    play: Option<bool>,
+}
+
+/// What the command thread remembers between commands.
+#[derive(Debug)]
+pub(crate) struct Session {
+    surface: bool,
+    waiting: Option<Load>,
+    quality: PreviewQuality,
+    fast_applied: bool,
+    audio: AudioOptions,
+    duration: Option<f64>,
+    /// The `af` value last set, so an unchanged chain does not restart the audio output.
+    af: String,
+}
+
+impl Session {
+    pub(crate) fn new(quality: PreviewQuality, audio: AudioOptions) -> Self {
+        Self {
+            surface: false,
+            waiting: None,
+            quality,
+            fast_applied: false,
+            audio,
+            duration: None,
+            af: String::new(),
+        }
+    }
+
+    /// The mpv operations for `command`, in order.
+    pub(crate) fn handle(&mut self, command: Command) -> Vec<Op> {
+        match command {
+            Command::Open { path, start, play } => {
+                let load = Load { path, start, play };
+                if self.surface {
+                    self.load(load)
+                } else {
+                    tracing::info!(path = %load.path.display(), "[Player] Waiting for the video surface before loading");
+                    self.waiting = Some(load);
+                    Vec::new()
+                }
+            }
+            Command::SurfaceReady { software } => {
+                self.surface = true;
+                let mut ops = Vec::new();
+                if self.quality == PreviewQuality::Auto && software && !self.fast_applied {
+                    tracing::info!("[Player] Software OpenGL: fast preview scaling");
+                    self.fast_applied = true;
+                    ops.push(Op::Command("apply-profile", vec![options::FAST_PROFILE.into()]));
+                }
+                if let Some(load) = self.waiting.take() {
+                    tracing::info!(path = %load.path.display(), "[Player] Video surface ready, loading the waiting file");
+                    ops.extend(self.load(load));
+                }
+                ops
+            }
+            Command::SurfaceLost => {
+                self.surface = false;
+                Vec::new()
+            }
+            Command::Duration(seconds) => {
+                self.duration = Some(seconds);
+                self.audio_ops()
+            }
+            Command::SetAudio(audio) => {
+                self.audio = audio;
+                self.audio_ops()
+            }
+            Command::SetPaused(paused) => vec![Op::Flag("pause", paused)],
+            Command::TogglePause => vec![Op::TogglePause],
+            Command::Seek { seconds, exact } => {
+                let mode = if exact { "absolute+exact" } else { "absolute+keyframes" };
+                vec![Op::Command(
+                    "seek",
+                    vec![format!("{:.6}", seconds.max(0.0)), mode.into()],
+                )]
+            }
+            Command::FrameStep { back } => {
+                vec![Op::Command(
+                    if back { "frame-back-step" } else { "frame-step" },
+                    Vec::new(),
+                )]
+            }
+            Command::SetMuted(muted) => vec![Op::Flag("mute", muted)],
+            Command::SetVolume(volume) => vec![Op::Double("volume", volume.clamp(0.0, 150.0))],
+            Command::Quit => vec![Op::Command("quit", Vec::new())],
+        }
+    }
+
+    fn load(&mut self, load: Load) -> Vec<Op> {
+        self.duration = None;
+        let mut ops = Vec::new();
+        if let Some(play) = load.play {
+            ops.push(Op::Flag("pause", !play));
+        }
+        // The duration of the new file is not known yet: the end mute waits for it.
+        ops.extend(self.audio_ops());
+        let mut args = vec![load.path.to_string_lossy().into_owned(), "replace".into()];
+        if let Some(start) = load.start.filter(|s| s.is_finite() && *s > 0.0) {
+            args.push("-1".into());
+            args.push(format!("start={start:.6}"));
+        }
+        tracing::info!(path = %load.path.display(), start = ?load.start, "[Player] Loading");
+        ops.push(Op::Command("loadfile", args));
+        ops
+    }
+
+    fn audio_ops(&mut self) -> Vec<Op> {
+        let chain = audio::filter_chain(self.audio, self.duration);
+        if chain == self.af {
+            return Vec::new();
+        }
+        self.af.clone_from(&chain);
+        vec![Op::Text("af", chain)]
+    }
+}
+
+/// Drops commands that a later one in the same burst makes pointless: of consecutive seeks only the last runs (a drag on the
+/// seek bar), likewise for volume changes (the mouse wheel).
+pub(crate) fn coalesce(batch: Vec<Command>) -> Vec<Command> {
+    let mut out: Vec<Command> = Vec::with_capacity(batch.len());
+    for command in batch {
+        let replaces_last = matches!(
+            (out.last(), &command),
+            (Some(Command::Seek { .. }), Command::Seek { .. }) | (Some(Command::SetVolume(_)), Command::SetVolume(_))
+        );
+        if replaces_last {
+            out.pop();
+        }
+        out.push(command);
+    }
+    out
+}
+
+/// Runs until [`Command::Quit`] or until every sender is gone.
+pub(crate) fn run(mpv: &Arc<Mpv>, commands: &Receiver<Command>, mut session: Session) {
+    tracing::debug!("[Player] Command thread started");
+    while let Ok(first) = commands.recv() {
+        let mut batch = vec![first];
+        batch.extend(commands.try_iter());
+        for command in coalesce(batch) {
+            let quit = command == Command::Quit;
+            for op in session.handle(command) {
+                execute(mpv, &op);
+            }
+            if quit {
+                tracing::debug!("[Player] Command thread ended");
+                return;
+            }
+        }
+    }
+    tracing::debug!("[Player] Command thread ended (no senders left)");
+}
+
+fn execute(mpv: &Mpv, op: &Op) {
+    let result = match op {
+        Op::Command(name, args) => {
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+            mpv.command(name, &args)
+        }
+        Op::Flag(name, value) => mpv.set_property(name, *value),
+        Op::Double(name, value) => mpv.set_property(name, *value),
+        Op::Text(name, value) => mpv.set_property(name, value.as_str()),
+        Op::TogglePause => toggle_pause(mpv),
+    };
+    if let Err(e) = result {
+        tracing::warn!(op = ?op, error = %e, "[Player] mpv refused a command");
+    }
+}
+
+fn toggle_pause(mpv: &Mpv) -> libmpv2::Result<()> {
+    let paused = mpv.get_property::<bool>("pause").unwrap_or(false);
+    let at_end = mpv.get_property::<bool>("eof-reached").unwrap_or(false);
+    if paused && at_end {
+        // keep-open holds the last frame at the end; playing again starts over.
+        mpv.command("seek", &["0", "absolute+exact"])?;
+    }
+    mpv.set_property("pause", !paused)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn open(path: &str) -> Command {
+        Command::Open {
+            path: PathBuf::from(path),
+            start: None,
+            play: Some(true),
+        }
+    }
+
+    fn loadfile(ops: &[Op]) -> Option<&Vec<String>> {
+        ops.iter().find_map(|op| match op {
+            Op::Command("loadfile", args) => Some(args),
+            _ => None,
+        })
+    }
+
+    #[test]
+    fn a_file_opened_before_the_surface_waits_for_it() {
+        let mut s = Session::new(PreviewQuality::Auto, AudioOptions::default());
+        assert!(s.handle(open("/v/a.mkv")).is_empty());
+        let ops = s.handle(Command::SurfaceReady { software: false });
+        assert_eq!(loadfile(&ops), Some(&vec!["/v/a.mkv".to_owned(), "replace".to_owned()]));
+        assert_eq!(ops.first(), Some(&Op::Flag("pause", false)));
+        // Once the surface exists, files load at once; a lost surface makes them wait again.
+        assert!(loadfile(&s.handle(open("/v/b.mkv"))).is_some());
+        assert!(s.handle(Command::SurfaceLost).is_empty());
+        assert!(s.handle(open("/v/c.mkv")).is_empty());
+    }
+
+    #[test]
+    fn software_gl_gets_the_fast_profile_once() {
+        let mut s = Session::new(PreviewQuality::Auto, AudioOptions::default());
+        let fast = Op::Command("apply-profile", vec!["fast".into()]);
+        assert_eq!(s.handle(Command::SurfaceReady { software: true }), vec![fast]);
+        s.handle(Command::SurfaceLost);
+        assert!(s.handle(Command::SurfaceReady { software: true }).is_empty());
+        let mut gpu = Session::new(PreviewQuality::Auto, AudioOptions::default());
+        assert!(gpu.handle(Command::SurfaceReady { software: false }).is_empty());
+        let mut high = Session::new(PreviewQuality::High, AudioOptions::default());
+        assert!(high.handle(Command::SurfaceReady { software: true }).is_empty());
+    }
+
+    #[test]
+    fn a_reload_keeps_the_pause_state_and_starts_at_the_position() {
+        let mut s = Session::new(PreviewQuality::High, AudioOptions::default());
+        s.handle(Command::SurfaceReady { software: false });
+        let ops = s.handle(Command::Open {
+            path: PathBuf::from("/v/a.mkv"),
+            start: Some(12.5),
+            play: None,
+        });
+        assert_eq!(
+            ops,
+            vec![Op::Command(
+                "loadfile",
+                vec![
+                    "/v/a.mkv".into(),
+                    "replace".into(),
+                    "-1".into(),
+                    "start=12.500000".into()
+                ]
+            )]
+        );
+    }
+
+    #[test]
+    fn the_end_mute_follows_the_duration_and_is_set_only_on_change() {
+        let audio = AudioOptions {
+            mute_last_second: true,
+            loudnorm: false,
+        };
+        let mut s = Session::new(PreviewQuality::High, audio);
+        s.handle(Command::SurfaceReady { software: false });
+        // Nothing to set before the duration is known (the chain is still empty).
+        assert!(!s.handle(open("/v/a.mkv")).iter().any(|op| matches!(op, Op::Text(..))));
+        let ops = s.handle(Command::Duration(20.0));
+        assert_eq!(
+            ops,
+            vec![Op::Text(
+                "af",
+                "@rcend:lavfi=[volume=volume=0:enable='gte(t,19.000)']".into()
+            )]
+        );
+        assert!(s.handle(Command::Duration(20.0)).is_empty());
+        // The next file clears the end mute until its own duration is known.
+        assert!(s.handle(open("/v/b.mkv")).contains(&Op::Text("af", String::new())));
+        assert_eq!(s.handle(Command::SetAudio(AudioOptions::default())), Vec::new());
+    }
+
+    #[test]
+    fn seeks_and_steps_map_to_mpv_commands() {
+        let mut s = Session::new(PreviewQuality::High, AudioOptions::default());
+        assert_eq!(
+            s.handle(Command::Seek {
+                seconds: -3.0,
+                exact: true
+            }),
+            vec![Op::Command("seek", vec!["0.000000".into(), "absolute+exact".into()])]
+        );
+        assert_eq!(
+            s.handle(Command::FrameStep { back: true }),
+            vec![Op::Command("frame-back-step", vec![])]
+        );
+        assert_eq!(s.handle(Command::SetVolume(400.0)), vec![Op::Double("volume", 150.0)]);
+    }
+
+    #[test]
+    fn bursts_keep_only_the_last_seek_and_volume() {
+        let seek = |seconds| Command::Seek { seconds, exact: false };
+        let batch = vec![
+            seek(1.0),
+            seek(2.0),
+            seek(3.0),
+            Command::SetPaused(true),
+            seek(4.0),
+            Command::SetVolume(10.0),
+            Command::SetVolume(20.0),
+        ];
+        assert_eq!(
+            coalesce(batch),
+            vec![seek(3.0), Command::SetPaused(true), seek(4.0), Command::SetVolume(20.0)]
+        );
+    }
+}
