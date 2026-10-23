@@ -7,6 +7,9 @@
 //! deletes what their renders left behind. At shutdown it stops the running renders; they wait again at the next start.
 
 mod commands;
+mod sync;
+#[cfg(test)]
+mod sync_tests;
 #[cfg(test)]
 mod tests;
 mod work;
@@ -25,9 +28,11 @@ use super::{QueueCommand, QueueError, QueueEvent};
 use crate::actor::{EventBus, Handle, Mailbox, Reply, mailbox};
 use crate::job::{JobId, JobState};
 use crate::render::RenderEnv;
+use crate::rustview::{SyncHandle, SyncRecords};
 use crate::settings::WhenDone;
 use crate::store::{StoreCommand, StoreError, StoreHandle};
 
+pub use self::sync::SyncLink;
 pub use self::work::validate;
 
 /// The note of a job that a crash or a kill left rendering.
@@ -65,9 +70,21 @@ pub fn spawn_queue(
     env: RenderEnv,
     options: QueueOptions,
 ) -> (QueueService, JoinHandle<()>) {
+    spawn_queue_linked(runtime, store, env, options, None)
+}
+
+/// [`spawn_queue`] with the RustView sync actor (ADR-6): the queue tells it what each job wants and stores the records
+/// it reports with the jobs.
+pub fn spawn_queue_linked(
+    runtime: &tokio::runtime::Handle,
+    store: StoreHandle,
+    env: RenderEnv,
+    options: QueueOptions,
+    link: Option<SyncLink>,
+) -> (QueueService, JoinHandle<()>) {
     let (handle, commands) = mailbox();
     let events = EventBus::new();
-    let task = runtime.spawn(run(commands, store, env, options, events.clone()));
+    let task = runtime.spawn(run(commands, store, env, options, events.clone(), link));
     (QueueService { handle, events }, task)
 }
 
@@ -77,24 +94,30 @@ async fn run(
     env: RenderEnv,
     options: QueueOptions,
     events: EventBus<QueueEvent>,
+    link: Option<SyncLink>,
 ) {
     let (reports_tx, mut reports) = mpsc::unbounded_channel();
-    let mut actor = Actor::start(store, env, options, events, reports_tx).await;
+    let (sync, mut records) = link.map_or((None, None), |l| (Some(l.handle), Some(l.records)));
+    let mut actor = Actor::start(store, env, options, events, reports_tx, sync).await;
     loop {
         tokio::select! {
             command = commands.recv() => match command {
                 Some(QueueCommand::Shutdown { reply }) => {
-                    actor.shutdown(&mut reports).await;
+                    actor.shutdown(&mut reports, &mut records).await;
                     let _ = reply.send(());
                     return;
                 }
                 Some(command) => actor.handle(command).await,
                 None => {
-                    actor.shutdown(&mut reports).await;
+                    actor.shutdown(&mut reports, &mut records).await;
                     return;
                 }
             },
             Some(report) = reports.recv() => actor.report(report).await,
+            record = sync::next_record(&mut records) => match record {
+                Some((id, record)) => actor.sync_reported(id, record).await,
+                None => records = None,
+            },
         }
     }
 }
@@ -108,6 +131,8 @@ struct Actor {
     reports: mpsc::UnboundedSender<Report>,
     /// Shutting down: nothing starts any more.
     stopping: bool,
+    /// The RustView sync actor, when linked.
+    sync: Option<SyncHandle>,
 }
 
 impl Actor {
@@ -117,6 +142,7 @@ impl Actor {
         options: QueueOptions,
         events: EventBus<QueueEvent>,
         reports: mpsc::UnboundedSender<Report>,
+        sync: Option<SyncHandle>,
     ) -> Self {
         let mut actor = Self {
             model: Model::new(Vec::new(), options.workers, options.paused, options.when_done),
@@ -126,6 +152,7 @@ impl Actor {
             workers: HashMap::new(),
             reports,
             stopping: false,
+            sync,
         };
         let recovered = actor
             .store_request(|reply| StoreCommand::RecoverInterrupted {
@@ -159,6 +186,7 @@ impl Actor {
             workers = options.workers,
             "[Queue] Started"
         );
+        actor.sync_resume();
         actor.kick().await;
         actor
     }
@@ -177,6 +205,9 @@ impl Actor {
 
     /// Moves a job to `next` (checked by the state machine), stores it and publishes the row. `false` when refused.
     async fn set_state(&mut self, id: JobId, next: JobState, note: Option<String>) -> bool {
+        let Some(from) = self.model.get(id).map(|r| r.state.kind()) else {
+            return false;
+        };
         if let Err(e) = self.model.transition(id, next.clone(), note.clone()) {
             tracing::warn!(error = %e, "[Queue] State change refused");
             return false;
@@ -184,7 +215,7 @@ impl Actor {
         let stored = self
             .store_request(|reply| StoreCommand::SetState {
                 id,
-                state: next,
+                state: next.clone(),
                 note,
                 reply,
             })
@@ -193,6 +224,7 @@ impl Actor {
             tracing::warn!(job = id.0, error = %e, "[Queue] State not saved");
         }
         self.refresh(id).await;
+        self.sync_state_changed(id, from, &next);
         true
     }
 
@@ -251,9 +283,14 @@ impl Actor {
         }
     }
 
-    /// Stops every render; the jobs wait again at the next start.
-    async fn shutdown(&mut self, reports: &mut mpsc::UnboundedReceiver<Report>) {
+    /// Stops every render; the jobs wait again at the next start. Records the sync actor reported before are stored.
+    async fn shutdown(&mut self, reports: &mut mpsc::UnboundedReceiver<Report>, records: &mut Option<SyncRecords>) {
         self.stopping = true;
+        if let Some(records) = records {
+            while let Ok((id, record)) = records.try_recv() {
+                self.sync_reported(id, record).await;
+            }
+        }
         if self.workers.is_empty() {
             tracing::info!("[Queue] Stopped");
             return;

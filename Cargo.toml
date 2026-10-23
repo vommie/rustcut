@@ -91,6 +91,9 @@ rustix = { version = "1", features = ["process", "fs"] }
 ioprio = "0.2"
 # Shell quoting of the ffmpeg command line in the job log (copy and paste it into a terminal to reproduce a render).
 shlex = "2"
+# The growing pause between attempts while RustView cannot be reached (exponential, capped), used as a plain iterator of
+# delays by the sync actor.
+backon = { version = "1", default-features = false, features = ["std"] }
 
 # Tests only.
 proptest = "1"

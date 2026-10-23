@@ -7,6 +7,7 @@ use super::{Actor, StaleFiles, summarize, summary_rows};
 use crate::job::{JobId, JobSpec, JobState, JobStateKind};
 use crate::queue::{QueueCommand, QueueError, QueueEvent, QueueSnapshot};
 use crate::render::{Control, RenderProfile};
+use crate::rustview::SyncPhase;
 use crate::store::{SpecSlot, StoreCommand};
 
 impl Actor {
@@ -104,6 +105,7 @@ impl Actor {
         tracing::info!(job = id.0, target = %record.target_path.display(), hold, "[Queue] Job added");
         self.events.publish(QueueEvent::Added(Box::new(summarize(&record))));
         self.model.push(record);
+        self.sync_job(id, SyncPhase::Enqueued);
         self.kick().await;
         Ok(id)
     }
@@ -116,6 +118,7 @@ impl Actor {
         }
         validate(&spec)?;
         self.store_spec(id, spec).await?;
+        self.sync_job(id, SyncPhase::Edited);
         self.kick().await;
         Ok(())
     }
@@ -185,9 +188,11 @@ impl Actor {
                     reply,
                 })
                 .await?;
-            copies.push(record.id);
+            let id = record.id;
+            copies.push(id);
             self.events.publish(QueueEvent::Added(Box::new(summarize(&record))));
             self.model.insert_after(original, record);
+            self.sync_job(id, SyncPhase::Enqueued);
         }
         if !copies.is_empty() {
             let order = self.model.order();
@@ -210,6 +215,14 @@ impl Actor {
             .filter(|j| ids.contains(&j.id) && !j.state.kind().is_active())
             .map(|j| StaleFiles::of(j, &self.env.dirs))
             .collect();
+        // A finished job's record describes its file and stays; any other job's record is cleaned up.
+        let unfinished: Vec<_> = self
+            .model
+            .jobs()
+            .iter()
+            .filter(|j| ids.contains(&j.id) && !j.state.kind().is_active() && j.state != JobState::Finished)
+            .cloned()
+            .collect();
         let removed = self.model.remove(ids);
         if removed.is_empty() {
             return Ok(0);
@@ -223,6 +236,9 @@ impl Actor {
                 files.temp = None;
             }
             files.remove().await;
+        }
+        for job in unfinished.iter().filter(|j| removed.contains(&j.id)) {
+            self.sync_cleanup(job);
         }
         tracing::info!(jobs = removed.len(), "[Queue] Jobs removed");
         self.events.publish(QueueEvent::Removed(removed.clone()));

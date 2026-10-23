@@ -20,7 +20,8 @@ use crate::store::LogLine;
 use crate::time::Timestamp;
 
 pub use actor::{
-    QueueHandle, QueueOptions, QueueService, RECOVERED_NOTE, STOPPED_NOTE, spawn_queue, validate as validate_spec,
+    QueueHandle, QueueOptions, QueueService, RECOVERED_NOTE, STOPPED_NOTE, SyncLink, spawn_queue, spawn_queue_linked,
+    validate as validate_spec,
 };
 pub use model::{MAX_WORKERS, Model, Refused, Tally, moved};
 pub use summary::{StaleFiles, summarize};

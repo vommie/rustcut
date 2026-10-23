@@ -1,0 +1,56 @@
+{
+  "success": true,
+  "total_tags": 10,
+  "tags": [
+    {
+      "id": 1,
+      "parent_id": null,
+      "name": "Nature"
+    },
+    {
+      "id": 2,
+      "parent_id": null,
+      "name": "Travel"
+    },
+    {
+      "id": 3,
+      "parent_id": null,
+      "name": "People"
+    },
+    {
+      "id": 4,
+      "parent_id": 2,
+      "name": "Japan"
+    },
+    {
+      "id": 5,
+      "parent_id": 2,
+      "name": "Iceland"
+    },
+    {
+      "id": 6,
+      "parent_id": 3,
+      "name": "Family"
+    },
+    {
+      "id": 7,
+      "parent_id": 3,
+      "name": "Friends"
+    },
+    {
+      "id": 8,
+      "parent_id": 1,
+      "name": "Mountains"
+    },
+    {
+      "id": 9,
+      "parent_id": 1,
+      "name": "Water"
+    },
+    {
+      "id": 10,
+      "parent_id": 1,
+      "name": "Forest"
+    }
+  ]
+}

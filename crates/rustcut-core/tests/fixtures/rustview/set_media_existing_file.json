@@ -1,0 +1,14 @@
+{
+  "success": true,
+  "action": "created",
+  "media_id": 658,
+  "folder_id": 36,
+  "filename": "clip - 02.mp4",
+  "rating": 5,
+  "tags": [
+    1
+  ],
+  "file_hash": "ccec6b36fb7daf1f41d7eb2437de81a0",
+  "source": "RustCut",
+  "message": "Media record successfully created in LMDB."
+}

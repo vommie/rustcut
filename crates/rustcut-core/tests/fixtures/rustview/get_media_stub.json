@@ -1,0 +1,26 @@
+{
+  "success": true,
+  "found": true,
+  "media": {
+    "id": 657,
+    "folder_id": 36,
+    "folder_path": "/videos/out",
+    "filename": "clip - 01.mkv",
+    "full_path": "/videos/out/clip - 01.mkv",
+    "file_size": 0,
+    "modification_time": 1792780309,
+    "rating": 4,
+    "tags": [
+      5,
+      4
+    ],
+    "file_hash": "8f618d1ebd606025257057ee18536e64",
+    "width": 0,
+    "height": 0,
+    "media_type": "Video",
+    "format": "Mkv",
+    "is_deleted": false,
+    "is_corrupted": false,
+    "source": "RustCut"
+  }
+}
