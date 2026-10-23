@@ -1,0 +1,52 @@
+# cargo-deny configuration: advisories, licenses, banned crates and sources.
+# Run with `cargo deny check` (also part of scripts/check-all.sh). cargo-audit reads .cargo/audit.toml with the same ignores.
+
+[graph]
+targets = [{ triple = "x86_64-unknown-linux-gnu" }]
+
+[advisories]
+version = 2
+yanked = "deny"
+# Every ignored advisory is an "unmaintained" notice deep inside the Slint stack (accessibility, window decorations, compiler),
+# not a vulnerability, with no patched release available to this project yet. Re-check them on every dependency update.
+ignore = [
+    { id = "RUSTSEC-2025-0141", reason = "bincode is used by the Slint compiler at build time only" },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser comes from the Wayland window decorations (sctk-adwaita via winit); it only reads local system fonts" },
+    { id = "RUSTSEC-2026-0370", reason = "zvariant: unmaintained notice for the zbus stack that Slint's accessibility (accesskit/atspi) uses" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names: same zbus stack notice" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: same zbus stack notice" },
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "CC0-1.0",
+    # File-level copyleft, fine for an unmodified dependency (option-ext, pulled in by directories).
+    "MPL-2.0",
+    "0BSD",
+    "Unlicense",
+    # Slint is used under its royalty-free desktop license (attribution required, see README and the About page).
+    "LicenseRef-Slint-Royalty-free-2.0",
+]
+# Narrow exceptions: only these crates may use these licenses.
+exceptions = []
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

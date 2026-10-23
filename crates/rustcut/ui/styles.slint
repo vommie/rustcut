@@ -1,0 +1,53 @@
+// Colors of RustView's Theme, copied from RustView crates/rustview/ui/styles.slint (RustCut shares RustView's palette and base
+// design, HANDOFF.md ADR-10). The ported tag tree and rating bar import this global under the same name. RustView-only tokens
+// (thumbnail badges, thumbnail aspect helper) are left out; RustCut-only tokens go below the copied block.
+
+export global Theme {
+    // Dark Palette (KDE Breeze / Catppuccin inspired)
+    out property <color> background: #181825;
+    // Background of the fullscreen when the theme decides (a light palette defines its own value here).
+    out property <color> fullscreen-background: #11111b;
+    out property <color> surface: #1e1e2e;
+    out property <color> surface-variant: #252538;
+    out property <color> surface-hover: #313244;
+    out property <color> surface-selected: #45475a;
+    out property <color> surface-selected-hover: #52556d;
+    out property <color> border: #313244;
+    out property <color> text: #cdd6f4;
+    out property <color> text-muted: #a6adc8;
+    out property <color> primary: #89b4fa;
+    out property <color> accent: #f9e2af;
+
+    // Status / Flags Colors (Catppuccin Palette)
+    out property <color> status-ok: #a6e3a1;         // Green
+    out property <color> status-corrupt: #f38ba8;    // Red
+    out property <color> status-deleted: #6c7086;    // Overlay Gray
+    out property <color> corrupt-border: #f38ba8;
+    out property <color> corrupt-bg: #f38ba818;
+    out property <color> deleted-border: #6c7086;
+    out property <color> deleted-bg: #31324460;
+
+    // Rating Color Scales (Matching PyView)
+    out property <color> rating-0: #dddddd;
+    out property <color> rating-1: #eeaaaa;
+    out property <color> rating-2: #ffcc88;
+    out property <color> rating-3: #88ee88;
+    out property <color> rating-4: #6688ee;
+    out property <color> rating-5: #cc88ee;
+
+    /// Returns the semantic theme color for a rating value (0..5).
+    pure public function rating-color(rating: int) -> color {
+        if rating == 1 { return rating-1; }
+        if rating == 2 { return rating-2; }
+        if rating == 3 { return rating-3; }
+        if rating == 4 { return rating-4; }
+        if rating == 5 { return rating-5; }
+        return rating-0;
+    }
+
+    // RustCut-only tokens.
+    // Base font size of panels and lists (RustView uses the platform default of 13 px on Plasma).
+    out property <length> font-size: 13px;
+    // Height of the one-line status bar at the bottom of the main window.
+    out property <length> status-bar-height: 26px;
+}

@@ -1,0 +1,62 @@
+// Main window of RustCut. Until the dock layout (M1.2) and the player (M1.1) exist it shows an empty themed workspace.
+
+import { Theme } from "styles.slint";
+
+export { Theme }
+
+export component MainWindow inherits Window {
+    in property <string> app-name: "RustCut";
+    in property <string> app-version;
+
+    title: root.app-name;
+    preferred-width: 1280px;
+    preferred-height: 800px;
+    min-width: 900px;
+    min-height: 600px;
+    background: Theme.background;
+    default-font-size: Theme.font-size;
+
+    VerticalLayout {
+        Rectangle {
+            vertical-stretch: 1;
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 6px;
+
+                Text {
+                    text: root.app-name;
+                    color: Theme.text;
+                    font-size: 22px;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                }
+
+                Text {
+                    text: "Version " + root.app-version;
+                    color: Theme.text-muted;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+
+        // One slim status line (HANDOFF.md section 6: one place per piece of information).
+        Rectangle {
+            height: Theme.status-bar-height;
+            background: Theme.surface;
+
+            Rectangle {
+                y: 0;
+                height: 1px;
+                background: Theme.border;
+            }
+
+            Text {
+                x: 10px;
+                text: "Ready";
+                color: Theme.text-muted;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
