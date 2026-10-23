@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 use clap::Parser as _;
 use rustcut_core::app_identity::{APP_NAME, VERSION};
 use rustcut_core::hashing::{HashCommand, HashService, spawn_hash_service};
+use rustcut_core::render::spawn_capability_check;
 use rustcut_core::settings::AppPaths;
 use slint::ComponentHandle as _;
 
@@ -103,6 +104,8 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     let dock = DockBridge::install(&main, dock_persist::from_table(loaded.ui_state.dock.as_ref()));
     let player = PlayerBridge::start(&main, &ui, &loaded.settings.player, &loaded.ui_state.export)?;
     let (hashing, _hash_task) = spawn_hash_service(runtime.handle());
+    // Which encoders work here (ADR-14); the Render Settings panel offers only those (M2.5).
+    let _encoders = spawn_capability_check(runtime.handle(), loaded.settings.advanced.ffmpeg.clone());
     let media = MediaInfoBridge::install(&main, &ui, runtime.handle().clone(), hashing.clone(), &loaded.settings);
     let filters = FiltersBridge::install(
         &main,
