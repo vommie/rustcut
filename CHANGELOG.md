@@ -9,6 +9,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Queue panel (0.0.13): in a narrow sidebar the jobs show as two-line rows; as the panel gets wider (or its group is
+  maximized) it becomes a table whose columns join as there is room: number, name, state with the render's
+  progress, ETA, length (and the number of sections), size (estimated while rendering, measured when finished),
+  profile and folder. Drag a column's edge to make it wider or narrower. Select several jobs with Ctrl+click and
+  Shift+click (Ctrl+A selects every job shown); drag the selected jobs to another place, or move them with
+  Ctrl+Up/Down and Ctrl+Home/End (configurable keys `queue_move_up`, `queue_move_down`, `queue_move_top`,
+  `queue_move_bottom`, `queue_select_all`). State chips with counts (waiting, running, held, finished, failed,
+  canceled) and a search over names, paths, profile, note and failure narrow the list. The header shows the overall
+  progress of the current run with the time left, and a second switch pauses after the running jobs. A double click
+  plays a finished job's output, shows a failed or canceled job's log, and shows any other job in the Job panel.
+  The filter, the search, the column widths and the selection are kept in `ui-state.toml`.
+- A context menu for the selected jobs (right click), with the number of jobs each entry reaches: edit in the editor
+  or load a done job as a new one, show in the Job panel, show the log, edit tags and rating, play the output, show
+  it in its folder, hold or release, render again, **render again with another profile** (any profile, or the Codecs
+  panel's current settings), duplicate, move to the top or bottom, cancel, remove, and remove every finished job.
+- Job panel: a new dock panel (next to Codecs by default, movable like every panel) shows the queue's current job:
+  its state, times, attempt and RustView state, the source, the output, every section, the filters in their order,
+  the codec settings, and the tags (by name) and rating, in sections you can fold. Its buttons edit, play, reveal,
+  show the log, edit the tags, render again and duplicate the job.
+- Logs panel: the log of the queue's current job (RustCut's notes and ffmpeg's lines; errors red, warnings yellow),
+  with a search, "errors and warnings only", following the newest line and Copy to the clipboard. The log of a
+  running render is stored when it ends.
+- Editing queued jobs: "Edit in the editor" loads a waiting job's video, sections, filters, codec settings, target
+  and tags into the editor; the job is held meanwhile and waits again afterwards. A banner over the Job Finalization
+  card says which job is edited. Save updates the job while it writes the same file; another name, counter number,
+  folder or container makes a new job instead, and "Save as new" always does. A finished, failed or canceled job can
+  be loaded as the start of a new job. The new setting `editor.draft_on_load` decides what happens to the editor's
+  draft: `replace` (default, like PyCutRv), `ask`, or `set_aside` (it comes back when the editing ends). Jobs now
+  remember the name and counter they were saved with, so they show the same in the editor (jobs saved by older
+  versions show their file name).
+- Hold to confirm: buttons and menu entries that delete or discard something (remove or cancel jobs, remove the
+  finished jobs, remove a target folder, delete or reset a render profile, delete a section, reset the filters,
+  clear the tags) act only while held, instead of asking in a dialog: a red line runs around the button and its
+  background fills up; let go early and nothing happens (a short click wiggles it and shows what holding does). The
+  time is the new setting `general.hold_to_confirm_ms` (default 2000; 0 = a click is enough). Their keys still act
+  at once.
+
 - Tag & Rate panel (0.0.12): RustView's tag tree (in columns, with the same look as in RustView), its rating bar, the
   tag filter (plain text or, with the `.*` switch, a regular expression; an invalid expression is matched as text and
   says so) and the tag history (recently used tags, a click assigns or removes one). The tags and the rating you
@@ -244,6 +281,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The Render Settings panel's tab is called "Codecs" (shorter; your layout keeps its place).
+- The queue panel's actions apply to every selected job; its buttons sit below the list.
 - The Sections card's buttons are icons with tooltips (set start/end to the playhead, add, move, delete).
 
 ### Fixed

@@ -5,7 +5,7 @@ mod state;
 
 use serde::{Deserialize, Serialize};
 
-pub use spec::{JOB_SPEC_VERSION, JobMetadata, JobSpec, SourceSummary, TargetSpec};
+pub use spec::{JOB_SPEC_VERSION, JobMetadata, JobSpec, SourceSummary, TargetNaming, TargetSpec};
 pub use state::{JobState, JobStateKind, ParseStateError};
 
 #[cfg(test)]

@@ -2,8 +2,8 @@
 // probe render), the timeline and the transport bar, a
 // slim status line, the menus (File, Playback, Sections, Filters, View) with the keymap's shortcuts, the key scope that
 // hands every other key press to the keymap (src/ui/editor/), the modal dialogs of saving a job (conflict, missing
-// tags or rating; src/ui/export/)
-// and the tooltip layer on top.
+// tags or rating; src/ui/export/), the question before a job replaces the editor's draft (src/ui/editing/), the context
+// menu (src/ui/menu/) and the tooltip layer on top.
 
 import { Theme } from "styles.slint";
 import { PlayerView } from "player_view.slint";
@@ -25,7 +25,12 @@ import { CropOverlay } from "crop_overlay.slint";
 import { TooltipLayer } from "tooltip.slint";
 import { OptionRowView, Probe, RenderIssueView, RenderSettings } from "render_types.slint";
 import { ProbeBanner } from "probe_banner.slint";
-import { ConflictJobView, ConflictOptionView, Export, Queue, QueueRowView } from "export_types.slint";
+import { ConflictJobView, ConflictOptionView, Export } from "export_types.slint";
+import { Queue, QueueChipView, QueueColumnView, QueueRowView } from "queue_types.slint";
+import { Job, JobLoad, JobRowView, JobSectionView, LogLineView, Logs } from "job_types.slint";
+import { ContextMenu, ContextMenuLayer, MenuItemView, MenuLevelView } from "context_menu.slint";
+import { HoldConfirm } from "hold.slint";
+import { JobLoadDialog } from "job_load_dialog.slint";
 import { ConflictDialog } from "export_dialog.slint";
 import { MetadataDialog } from "export_metadata_dialog.slint";
 import { TagColumnView, TagHistoryItemModel, TagHistoryRowModel, TagNodeView, TagRate } from "tag_types.slint";
@@ -34,8 +39,9 @@ export {
     Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
     MediaInfoRow, MediaInfoSection, KnownSource, Shortcuts, Timeline, TimelineBlock, TimelineTick, Sections,
     SectionRowView, Filters, FilterRowView, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe, Export,
-    ConflictJobView, ConflictOptionView, Queue, QueueRowView, TagRate, TagNodeView, TagColumnView, TagHistoryItemModel,
-    TagHistoryRowModel
+    ConflictJobView, ConflictOptionView, Queue, QueueRowView, QueueColumnView, QueueChipView, TagRate, TagNodeView,
+    TagColumnView, TagHistoryItemModel, TagHistoryRowModel, Job, JobRowView, JobSectionView, Logs, LogLineView, JobLoad,
+    ContextMenu, MenuItemView, MenuLevelView, HoldConfirm
 }
 
 export component MainWindow inherits Window {
@@ -432,6 +438,20 @@ export component MainWindow inherits Window {
     }
 
     if Export.meta-open: MetadataDialog {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+    }
+
+    if JobLoad.open: JobLoadDialog {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+    }
+
+    ContextMenuLayer {
         x: 0;
         y: 0;
         width: parent.width;

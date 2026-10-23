@@ -99,6 +99,14 @@ impl Actor {
             QueueCommand::UpdateMetadata { id, metadata, reply } => {
                 let _ = reply.send(self.update_metadata(id, metadata).await);
             }
+            QueueCommand::Spec { id, reply } => {
+                let answer = match self.model.get(id).map(|r| &r.spec) {
+                    Some(SpecSlot::Decoded(spec)) => Ok(spec.clone()),
+                    Some(SpecSlot::Unreadable { .. }) => Err(QueueError::Unreadable(id)),
+                    None => Err(QueueError::NoSuchJob(id)),
+                };
+                let _ = reply.send(answer);
+            }
             // Handled by the loop before it gets here.
             QueueCommand::Shutdown { reply } => {
                 let _ = reply.send(());

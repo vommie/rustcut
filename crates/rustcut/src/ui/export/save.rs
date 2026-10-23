@@ -31,9 +31,11 @@ const SIMILAR_SHOWN: usize = 4;
 pub(super) struct Draft {
     pub(super) spec: JobSpec,
     folder: PathBuf,
-    facts: JobFacts,
+    pub(super) facts: JobFacts,
     /// The stem the card shows.
     stem: String,
+    /// "Save as new" while a job is edited: never an update.
+    force_new: bool,
 }
 
 /// The open conflict dialog with its job.
@@ -43,12 +45,17 @@ pub(super) struct Pending {
 }
 
 impl ExportBridge {
-    /// Builds the job and checks its target; see the module documentation.
+    /// Builds the job and checks its target; see the module documentation. While a queued job is edited, a save that
+    /// writes the job's file updates it (`editing.rs`).
     pub fn save(self: &Rc<Self>) {
+        self.save_with(false);
+    }
+
+    pub(super) fn save_with(self: &Rc<Self>, force_new: bool) {
         if self.saving.get() || self.pending.borrow().is_some() || self.meta.borrow().is_some() {
             return;
         }
-        let draft = match self.draft() {
+        let draft = match self.draft(force_new) {
             Ok(draft) => draft,
             Err(message) => {
                 self.status(Level::Warning, &message);
@@ -87,7 +94,7 @@ impl ExportBridge {
     }
 
     /// The job as the panels describe it now, or why it cannot be saved.
-    fn draft(&self) -> Result<Draft, String> {
+    pub(super) fn draft(&self, force_new: bool) -> Result<Draft, String> {
         let gone = || "RustCut is shutting down.".to_owned();
         let player = self.player.upgrade().ok_or_else(gone)?;
         let source = player.current_file().ok_or("Open a video first.")?;
@@ -101,8 +108,22 @@ impl ExportBridge {
         let filters = self.filters.upgrade().ok_or_else(gone)?.chain();
         let media = self.media.upgrade();
         let info = media.as_ref().and_then(|m| m.current());
-        // The Tag & Rate panel's tags and rating; the source hash goes to RustView's hash list.
-        let source_hash = media.as_ref().and_then(|m| m.source_hash(&source));
+        // The Tag & Rate panel's tags and rating; the source hash goes to RustView's hash list. An edited job keeps
+        // what the panels have not learned yet (the probe may still run).
+        let edited = self
+            .editing
+            .borrow()
+            .upgrade()
+            .and_then(|e| e.info())
+            .filter(|e| e.spec.source == source);
+        let source_hash = media
+            .as_ref()
+            .and_then(|m| m.source_hash(&source))
+            .or_else(|| edited.as_ref().and_then(|e| e.spec.metadata.source_hash.clone()));
+        let source_info = info
+            .as_deref()
+            .and_then(source_summary)
+            .or_else(|| edited.as_ref().and_then(|e| e.spec.source_info));
         let (tags, rating) = self.tags.upgrade().map(|t| t.draft_metadata()).unwrap_or_default();
         let facts = JobFacts::new(&profile, sections.len(), sections.total_duration());
         let st = self.state.borrow();
@@ -115,7 +136,7 @@ impl ExportBridge {
         }
         let spec = JobSpec {
             version: JOB_SPEC_VERSION,
-            source_info: info.as_deref().and_then(source_summary),
+            source_info,
             source,
             sections,
             filters,
@@ -124,6 +145,7 @@ impl ExportBridge {
                 folder: folder.clone(),
                 stem: stem.clone(),
                 overwrite: false,
+                naming: st.naming(st.active_counter()),
             },
             metadata: JobMetadata {
                 tags,
@@ -136,14 +158,26 @@ impl ExportBridge {
             folder,
             facts,
             stem,
+            force_new,
         })
     }
 
     /// The folder was read: queue the job, or ask how to get around the conflict.
     fn decide(self: &Rc<Self>, draft: Draft, scan: rustcut_core::naming::FolderScan, exists: Option<ExistingFile>) {
-        let queue = self.queue.upgrade().map(|q| q.targets()).unwrap_or_default();
         let warnings = self.warnings.borrow().clone();
         let target = draft.folder.join(file_name(&draft.stem, draft.facts.container));
+        // An update of the edited job: the job itself is no conflict, and its own choice about an existing file stays.
+        let edit = self.editing.borrow().upgrade().and_then(|e| e.info());
+        let update = self.updates(&target, draft.force_new);
+        if update && (exists.is_none() || edit.as_ref().is_some_and(|e| e.overwrite)) {
+            self.saving.set(false);
+            self.update_job(draft);
+            return;
+        }
+        let mut queue = self.queue.upgrade().map(|q| q.targets()).unwrap_or_default();
+        if update && let Some(edit) = &edit {
+            queue.retain(|q| q.id != edit.id);
+        }
         let base = self.state.borrow().name.clone();
         let conflicts = check(&CheckInput {
             target: &target,
@@ -163,6 +197,9 @@ impl ExportBridge {
             };
             self.enqueue(draft, outcome);
             return;
+        }
+        if update {
+            tracing::info!("[Export] The edited job's file exists: asking");
         }
         // The dialog shows the existing file even when its warning is off (the silent way needs its choices).
         let mut shown = conflicts;
@@ -200,14 +237,28 @@ impl ExportBridge {
         self.publish();
     }
 
-    /// Hands the job to the queue (after removing the jobs the dialog chose to remove).
+    /// Hands the job to the queue (after removing the jobs the dialog chose to remove); an edited job writing its own
+    /// file is updated instead.
     fn enqueue(self: &Rc<Self>, draft: Draft, outcome: Outcome) {
+        let target = draft.folder.join(file_name(&outcome.stem, draft.facts.container));
+        if outcome.remove.is_empty() && self.updates(&target, draft.force_new) {
+            let mut draft = draft;
+            draft.spec.target.stem.clone_from(&outcome.stem);
+            if outcome.overwrite {
+                draft.spec.target.overwrite = true;
+            }
+            self.update_job(draft);
+            return;
+        }
         let Some(queue) = self.queue.upgrade() else { return };
         self.saving.set(true);
         self.publish();
         let mut spec = draft.spec;
         spec.target.stem.clone_from(&outcome.stem);
         spec.target.overwrite = outcome.overwrite;
+        if let (Some(n), Some(naming)) = (outcome.counter, spec.target.naming.as_mut()) {
+            naming.counter = Some(n);
+        }
         let file = file_name(&outcome.stem, draft.facts.container);
         let counter = outcome.counter;
         let source = spec.source.clone();
@@ -246,6 +297,11 @@ impl ExportBridge {
                         panel.job_saved(&tags, rating);
                     }
                     bridge.saved(id, &file, counter);
+                    // A new job made while another one was edited ends the editing (that job stays as it was).
+                    let editing = bridge.editing.borrow().upgrade();
+                    if let Some(editing) = editing.filter(|e| e.info().is_some()) {
+                        editing.job_saved();
+                    }
                 }
                 Err(e) => bridge.status(Level::Error, &format!("The job was not saved: {e}")),
             }

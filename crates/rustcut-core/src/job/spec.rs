@@ -64,6 +64,20 @@ pub struct TargetSpec {
     /// the RustView record of that file is updated, never deleted (ADR-6).
     #[serde(default)]
     pub overwrite: bool,
+    /// What the Export card had when the job was saved, so the editor shows the same name and counter again when the
+    /// job is loaded into it. `None` for jobs of 0.0.12 and older (the editor then shows the stem).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub naming: Option<TargetNaming>,
+}
+
+/// The parts the target's stem was made of (the naming template is a setting and may have changed since).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TargetNaming {
+    /// The name typed in the card (the template's `name`).
+    pub name: String,
+    /// The counter, when it was on.
+    #[serde(default)]
+    pub counter: Option<u32>,
 }
 
 /// The metadata the job wants in RustView (ADR-6).
@@ -113,6 +127,10 @@ pub(crate) mod tests {
                 folder: PathBuf::from("/videos/out"),
                 stem: "Clip - 01".into(),
                 overwrite: false,
+                naming: Some(TargetNaming {
+                    name: "Clip".into(),
+                    counter: Some(1),
+                }),
             },
             metadata: JobMetadata {
                 tags: vec![3, 9],
@@ -143,6 +161,7 @@ pub(crate) mod tests {
         assert_eq!(read.filters, FilterChain::default());
         assert_eq!(read.metadata, JobMetadata::default());
         assert!(!read.target.overwrite);
+        assert_eq!(read.target.naming, None, "rows of 0.0.12 have no naming");
     }
 
     #[test]

@@ -135,6 +135,23 @@ async fn refused_jobs_and_editing_while_paused() {
         .unwrap()
         .unwrap();
     queue.handle.send(QueueCommand::Cancel { ids: vec![c] }).unwrap();
+    let spec = queue
+        .handle
+        .request(|reply| QueueCommand::Spec { id: a, reply })
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        (spec.target.stem.as_str(), spec.target.overwrite),
+        ("a2", true),
+        "the whole updated spec comes back"
+    );
+    let missing = queue
+        .handle
+        .request(|reply| QueueCommand::Spec { id: JobId(999), reply })
+        .await
+        .unwrap();
+    assert_eq!(missing, Err(QueueError::NoSuchJob(JobId(999))));
     let snap = snapshot(&queue).await;
     let rows: Vec<(JobId, JobState, &str)> = snap
         .jobs

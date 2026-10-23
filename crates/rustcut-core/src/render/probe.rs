@@ -120,6 +120,7 @@ pub fn probe_job(input: &ProbeInput<'_>) -> Option<ProbeJob> {
             folder: input.folder.to_path_buf(),
             stem: PROBE_STEM.to_owned(),
             overwrite: true,
+            naming: None,
         },
         metadata: JobMetadata::default(),
     };

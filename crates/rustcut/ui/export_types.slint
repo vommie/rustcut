@@ -1,5 +1,5 @@
 // The data of the Job Finalization card and of the conflict dialog (src/ui/export/ fills `Export` and handles its
-// callbacks), and of the queue panel (src/ui/queue/ fills `Queue`).
+// callbacks). The queue panel's global is in queue_types.slint.
 
 // One way out of a target conflict. `file` is the name it leads to; `destructive` replaces or removes something.
 export struct ConflictOptionView {
@@ -52,6 +52,16 @@ export global Export {
     callback toggle-clear-sections();
     callback save();
 
+    // A queued job loaded into the editor (M4.1, user decisions Q-Q2, Q-Q3): the banner over the card, whether Save
+    // updates the job (same target) or makes a new one, and whether stopping would drop edits (then it is held).
+    in property <bool> editing;
+    in property <string> editing-text;
+    in property <string> editing-tooltip;
+    in property <bool> editing-updates;
+    in property <bool> editing-changed;
+    callback save-as-new();
+    callback stop-editing();
+
     // The conflict dialog (modal; user decision Q-X1).
     in property <bool> dialog-open;
     in property <string> dialog-title;
@@ -89,43 +99,4 @@ export global Export {
     callback dialog-cancel();
     callback dialog-play-existing();
     callback dialog-reveal();
-}
-
-// One row of the queue panel.
-export struct QueueRowView {
-    id: int,
-    name: string,
-    state: string,
-    // JobStateKind order: 0 waiting, 1 held, 2 rendering, 3 paused, 4 finished, 5 failed, 6 canceled.
-    kind: int,
-    // 0 to 1 while rendering or when finished, negative otherwise.
-    progress: float,
-    detail: string,
-    tooltip: string,
-    selected: bool,
-}
-
-export global Queue {
-    in property <[QueueRowView]> rows;
-    in property <string> summary;
-    in property <bool> paused;
-    in property <bool> has-selection;
-    in property <bool> can-cancel;
-    in property <bool> can-remove;
-    in property <bool> can-retry;
-    in property <bool> can-hold;
-    in property <bool> held;
-    in property <bool> can-move-up;
-    in property <bool> can-move-down;
-
-    callback select(/* job id */ int);
-    callback toggle-paused();
-    callback cancel();
-    callback remove();
-    callback retry();
-    callback toggle-hold();
-    callback move-up();
-    callback move-down();
-    // The Tag & Rate panel edits the selected job's RustView entry (user decision Q-G3).
-    callback edit-tags();
 }

@@ -1,4 +1,4 @@
-// Contents of the dock panels. Panels that are not built yet say what they will hold (HANDOFF.md section 7). Panels read their data from globals, so the dock can place them in any group.
+// Contents of the dock panels. Panels read their data from globals, so the dock can place them in any group.
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
@@ -8,6 +8,8 @@ import { SectionsCardBody } from "sections_card.slint";
 import { FiltersCardBody } from "filters_card.slint";
 import { FinalizeCardBody } from "export_card.slint";
 import { QueuePanel } from "queue_panel.slint";
+import { JobPanel } from "job_panel.slint";
+import { LogsPanel } from "logs_panel.slint";
 import { TagRatePanel } from "tag_rate_panel.slint";
 import { RenderAudioBody, RenderExpertBody, RenderProbeBody, RenderProfileBody, RenderVideoBody } from "render_cards.slint";
 
@@ -71,35 +73,6 @@ component DockCard inherits Rectangle {
     }
 }
 
-/// A panel that is not built yet.
-component PanelPlaceholder inherits Rectangle {
-    in property <string> title;
-    in property <string> note;
-
-    VerticalLayout {
-        alignment: center;
-        padding: 12px;
-        spacing: 4px;
-
-        Text {
-            text: root.title;
-            color: Theme.text;
-            font-size: 13px;
-            font-weight: 600;
-            horizontal-alignment: center;
-            wrap: word-wrap;
-        }
-
-        Text {
-            text: root.note;
-            color: Theme.text-muted;
-            font-size: 11px;
-            horizontal-alignment: center;
-            wrap: word-wrap;
-        }
-    }
-}
-
 /// Cards stacked from the top.
 component CardStack inherits Rectangle {
     in property <[DockCardView]> cards;
@@ -132,8 +105,6 @@ export component DockPanelContent inherits Rectangle {
     if root.key == "queue": QueuePanel { }
     if root.key == "tag-rate": TagRatePanel { }
     if root.key == "media-info": MediaInfoPanelView { }
-    if root.key == "logs": PanelPlaceholder {
-        title: "Logs";
-        note: "App, render and RustView logs arrive with a later milestone.";
-    }
+    if root.key == "job": JobPanel { }
+    if root.key == "logs": LogsPanel { }
 }

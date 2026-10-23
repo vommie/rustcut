@@ -2,11 +2,15 @@
 
 pub mod dispatcher;
 pub mod dock;
+pub mod editing;
 pub mod editor;
 pub mod export;
 pub mod filters;
+pub mod inspector;
 pub mod keymap;
+pub mod logs;
 pub mod media_info;
+pub mod menu;
 pub mod open;
 pub mod player;
 pub mod probe;

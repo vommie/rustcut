@@ -343,6 +343,13 @@ impl TagPanel {
         };
     }
 
+    /// A job loaded into the editor (or a draft put back): its tags and rating become the draft. Locked tags stay
+    /// locked; an entry being edited is left.
+    pub fn load_draft(&mut self, choice: Choice) {
+        self.editing = None;
+        self.draft = choice;
+    }
+
     /// Starts editing a queued job's entry; the draft waits meanwhile.
     pub fn begin_edit(&mut self, id: JobId, name: String, metadata: JobMetadata) {
         let choice = Choice {

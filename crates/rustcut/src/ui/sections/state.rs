@@ -54,6 +54,16 @@ pub struct SectionRow {
     pub overlapping: bool,
 }
 
+/// The list, the marks and the selection without the duration: the sections of a draft that waits while a job is
+/// edited (user decision Q-Q3).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SectionsDraft {
+    pub list: SectionList,
+    pub start: Option<Timestamp>,
+    pub end: Option<Timestamp>,
+    pub selected: Option<SectionId>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SectionsState {
     list: SectionList,
@@ -71,6 +81,40 @@ impl SectionsState {
         self.end = None;
         self.selected = None;
         self.duration = None;
+    }
+
+    /// The sections of the draft as they are.
+    pub fn draft(&self) -> SectionsDraft {
+        SectionsDraft {
+            list: self.list.clone(),
+            start: self.start,
+            end: self.end,
+            selected: self.selected,
+        }
+    }
+
+    /// Puts a draft back after its video opened again (the duration follows and limits it).
+    pub fn put_draft(&mut self, draft: SectionsDraft) {
+        self.list = draft.list;
+        self.start = draft.start;
+        self.end = draft.end;
+        self.selected = draft.selected.filter(|id| self.list.get(*id).is_some());
+        if let Some(d) = self.duration {
+            self.set_duration(Some(d));
+        }
+    }
+
+    /// The sections of a job loaded into the editor: no marks, nothing selected.
+    pub fn load(&mut self, list: SectionList) {
+        self.put_draft(SectionsDraft {
+            list,
+            ..SectionsDraft::default()
+        });
+    }
+
+    /// Whether the draft holds work that a replacement would lose (sections or marks).
+    pub fn has_work(&self) -> bool {
+        !self.list.is_empty() || self.start.is_some() || self.end.is_some()
     }
 
     /// After a save with "clear sections": the list goes, the marks stay (PyCutRv).

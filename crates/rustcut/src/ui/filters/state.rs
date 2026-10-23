@@ -158,6 +158,12 @@ impl FiltersState {
         }
     }
 
+    /// The chain of a job loaded into the editor, or of a draft put back (a crop being edited ends first).
+    pub fn load_chain(&mut self, chain: FilterChain) {
+        self.crop = None;
+        self.chain = chain;
+    }
+
     pub const fn source_known(&mut self, source: Source) {
         self.source = Some(source);
     }

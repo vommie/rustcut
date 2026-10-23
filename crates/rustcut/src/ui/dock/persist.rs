@@ -194,6 +194,39 @@ mod tests {
     }
 
     #[test]
+    fn a_layout_of_0_0_12_gets_the_job_panel_next_to_the_codecs_panel() {
+        // 0.0.12 had no Job panel; the user had moved the Codecs panel (render-settings) to the right.
+        let text = r#"
+            version = 1
+            [[left.groups]]
+            tabs = ["export"]
+            [[left.groups]]
+            tabs = ["queue"]
+            [[right.groups]]
+            tabs = ["tag-rate", "render-settings", "media-info", "logs"]
+            active = "media-info"
+        "#;
+        let table: toml::Table = toml::from_str(text).unwrap();
+        let layout = from_table(Some(&table));
+        assert!(layout.is_valid(), "{layout:?}");
+        assert_eq!(
+            layout.right.groups[0].tabs,
+            [
+                PanelId::TagRate,
+                PanelId::RenderSettings,
+                PanelId::Job,
+                PanelId::MediaInfo,
+                PanelId::Logs
+            ]
+        );
+        assert_eq!(
+            layout.right.groups[0].active,
+            PanelId::MediaInfo,
+            "the active tab stays"
+        );
+    }
+
+    #[test]
     fn a_table_of_the_wrong_shape_gives_the_default_layout() {
         let table: toml::Table = toml::from_str("left = 5").unwrap();
         assert_eq!(from_table(Some(&table)), DockLayout::default());

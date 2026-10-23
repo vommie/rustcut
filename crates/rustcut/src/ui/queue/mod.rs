@@ -1,29 +1,54 @@
-//! The queue panel's bridge: it follows the queue engine's events on the runtime into a shared [`QueueView`] and asks
-//! the UI thread to show it at most ten times a second (the latest view wins, `UiDispatcher::post_latest`); the
-//! panel's buttons send commands to the engine without waiting.
+//! The queue panel's bridge (M4.1): it follows the queue engine's events on the runtime into a shared [`QueueView`] and
+//! asks the UI thread to show it at most ten times a second (the latest view wins, `UiDispatcher::post_latest`). The
+//! panel's own state lives on the UI thread: the selection, the filter, the column widths and the panel's width. The
+//! actions (`actions.rs`) send commands to the engine without waiting; the Job and Logs panels and the editor follow
+//! the current job through hooks.
 
+mod actions;
+mod columns;
+mod filter;
+mod menu;
+mod selection;
+mod text;
+mod totals;
 mod view;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
+use az::CheckedAs as _;
 use parking_lot::Mutex;
 use rustcut_core::job::{JobId, JobStateKind};
 use rustcut_core::naming::QueuedTarget;
-use rustcut_core::queue::{MoveTarget, QueueCommand, QueueHandle, QueueService};
+use rustcut_core::queue::{JobProgress, JobSummary, QueueCommand, QueueHandle, QueueService};
+use rustcut_core::render::RenderProfile;
+use rustcut_core::settings::QueuePanelState;
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 use tokio::sync::broadcast::error::RecvError;
 
-pub use view::{QueueView, RowText, clock, title};
+pub use self::columns::{Column, Layout, layout};
+pub use self::filter::{CHIPS, Chip, Filter};
+pub use self::menu::{MenuKeys, QueueAction, queue_menu, targets};
+pub use self::selection::Selection;
+pub use self::text::{RowText, clock, file_label, kind_number, row_text, short_clock, title};
+pub use self::totals::Overall;
+pub use self::view::QueueView;
 
 use crate::ui::dispatcher::{CoalesceKey, UiDispatcher, rate};
+use crate::ui::dock::PanelId;
+use crate::ui::menu::ContextMenuBridge;
 use crate::util::model::sync;
-use crate::{MainWindow, Queue, QueueRowView};
-
-type EditTagsHook = Box<dyn Fn(JobId, String)>;
+use crate::{MainWindow, Queue, QueueChipView, QueueColumnView, QueueRowView};
 
 const REFRESH: CoalesceKey = CoalesceKey::new("queue", 0);
+/// Row heights of the two forms.
+const COMPACT_ROW: f32 = 44.0;
+const TABLE_ROW: f32 = 26.0;
+/// The rows' padding left and right (`queue_row.slint`).
+const ROW_PADDING: f32 = 16.0;
 
 thread_local! {
     /// The bridge, for the refreshes the dispatcher runs on the UI thread.
@@ -37,39 +62,114 @@ struct Shared {
     ended: bool,
 }
 
+/// What the panel arranged (UI thread).
+#[derive(Debug, Default)]
+struct PanelUi {
+    selection: Selection,
+    filter: Filter,
+    widths: BTreeMap<String, u32>,
+    /// The list's inner width in logical pixels.
+    width: f32,
+    /// A column whose edge is dragged, and its width when the drag started.
+    resizing: Option<(Column, u32)>,
+    /// The rows as shown (the filter's result), in queue order.
+    visible: Vec<JobId>,
+}
+
+/// The render profiles (id, name) for "Render again with".
+pub type ProfilesHook = Box<dyn Fn() -> Vec<(String, String)>>;
+/// The profile of an id ("" = the Codecs panel's current settings).
+pub type ProfileHook = Box<dyn Fn(&str) -> Option<RenderProfile>>;
+
+/// What other parts of the app do for the queue panel.
+#[derive(Default)]
+pub struct QueueHooks {
+    /// A job ended (the export panel looks at the target folder again).
+    pub job_ended: Option<Box<dyn Fn()>>,
+    /// "Edit tags and rating" (id, name): the Tag & Rate panel takes it.
+    pub edit_tags: Option<Box<dyn Fn(JobId, String)>>,
+    /// "Edit in the editor" / "Load as a new job".
+    pub edit: Option<Box<dyn Fn(JobId)>>,
+    /// Shows a dock panel (the Job or the Logs panel).
+    pub reveal: Option<Box<dyn Fn(PanelId)>>,
+    /// After every refresh (the Job and Logs panels follow the current job).
+    pub refreshed: Option<Box<dyn Fn()>>,
+    pub profiles: Option<ProfilesHook>,
+    pub profile: Option<ProfileHook>,
+}
+
 pub struct QueueBridge {
     window: slint::Weak<MainWindow>,
     handle: QueueHandle,
+    runtime: tokio::runtime::Handle,
     shared: Arc<Mutex<Shared>>,
+    ui: RefCell<PanelUi>,
     rows: Rc<VecModel<QueueRowView>>,
-    /// Called on the UI thread after a job ended (the export panel looks at the target folder again).
-    on_job_ended: RefCell<Option<Box<dyn Fn()>>>,
-    /// "Edit tags and rating" of the selected job (id, name): the Tag & Rate panel takes it.
-    on_edit_tags: RefCell<Option<EditTagsHook>>,
+    columns: Rc<VecModel<QueueColumnView>>,
+    chips: Rc<VecModel<QueueChipView>>,
+    menu: Weak<ContextMenuBridge>,
+    hooks: RefCell<QueueHooks>,
+    /// The job loaded into the editor (its row is marked).
+    editing: Cell<Option<JobId>>,
+    keys: MenuKeys,
+    empty_text: String,
 }
 
 impl QueueBridge {
-    /// Follows `service` and handles the panel's buttons. The app owns the only strong reference.
+    /// Follows `service` and handles the panel. The app owns the only strong reference.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the parts the panel connects; called once at startup"
+    )]
     pub fn install(
         window: &MainWindow,
         ui: &UiDispatcher,
         runtime: &tokio::runtime::Handle,
         service: &QueueService,
+        saved: &QueuePanelState,
+        menu: &Rc<ContextMenuBridge>,
+        keys: MenuKeys,
+        save_key: &str,
     ) -> Rc<Self> {
         let bridge = Rc::new(Self {
             window: window.as_weak(),
             handle: service.handle.clone(),
+            runtime: runtime.clone(),
             shared: Arc::new(Mutex::new(Shared::default())),
+            ui: RefCell::new(PanelUi {
+                selection: Selection::restore(&saved.selected, saved.current),
+                filter: Filter::new(&saved.state_filter, &saved.search),
+                widths: saved.columns.clone(),
+                ..PanelUi::default()
+            }),
             rows: Rc::new(VecModel::default()),
-            on_job_ended: RefCell::new(None),
-            on_edit_tags: RefCell::new(None),
+            columns: Rc::new(VecModel::default()),
+            chips: Rc::new(VecModel::default()),
+            menu: Rc::downgrade(menu),
+            hooks: RefCell::new(QueueHooks::default()),
+            editing: Cell::new(None),
+            keys,
+            empty_text: if save_key.is_empty() {
+                "Saved jobs appear here.".to_owned()
+            } else {
+                format!("Saved jobs appear here ({save_key}).")
+            },
         });
         BRIDGE.with(|b| *b.borrow_mut() = Rc::downgrade(&bridge));
-        window
-            .global::<Queue<'_>>()
-            .set_rows(ModelRc::from(Rc::clone(&bridge.rows)));
-        connect(&bridge, window);
-        runtime.spawn(follow(service.clone(), Arc::clone(&bridge.shared), ui.clone()));
+        let q = window.global::<Queue<'_>>();
+        q.set_rows(ModelRc::from(Rc::clone(&bridge.rows)));
+        q.set_columns(ModelRc::from(Rc::clone(&bridge.columns)));
+        q.set_chips(ModelRc::from(Rc::clone(&bridge.chips)));
+        q.set_search(saved.search.as_str().into());
+        q.set_key_move_up(bridge.keys.move_up.as_str().into());
+        q.set_key_move_down(bridge.keys.move_down.as_str().into());
+        actions::connect(&bridge, window);
+        runtime.spawn(follow(
+            service.clone(),
+            Arc::clone(&bridge.shared),
+            ui.clone(),
+            runtime.clone(),
+        ));
         bridge
     }
 
@@ -87,74 +187,175 @@ impl QueueBridge {
         self.shared.lock().view.paused()
     }
 
-    pub fn set_on_job_ended(&self, hook: impl Fn() + 'static) {
-        *self.on_job_ended.borrow_mut() = Some(Box::new(hook));
+    /// The other parts' hooks (set once after they are installed).
+    pub fn hooks(&self) -> std::cell::RefMut<'_, QueueHooks> {
+        self.hooks.borrow_mut()
     }
 
-    pub fn set_on_edit_tags(&self, hook: impl Fn(JobId, String) + 'static) {
-        *self.on_edit_tags.borrow_mut() = Some(Box::new(hook));
+    /// What `ui-state.toml` keeps of the panel.
+    pub fn save_into(&self, state: &mut QueuePanelState) {
+        state.paused = self.paused();
+        let ui = self.ui.borrow();
+        state.state_filter.clone_from(&ui.filter.states);
+        state.search.clone_from(&ui.filter.search);
+        state.columns.clone_from(&ui.widths);
+        state.selected = ui.selection.ids().to_vec();
+        state.current = ui.selection.current();
+    }
+
+    /// The job the Job and Logs panels show, with its progress and measured size.
+    pub fn current(&self) -> Option<(JobSummary, Option<JobProgress>, Option<u64>)> {
+        let id = self.ui.borrow().selection.current()?;
+        let shared = self.shared.lock();
+        let row = shared.view.row(id)?.clone();
+        Some((row, shared.view.progress.get(&id).copied(), shared.view.size(id)))
+    }
+
+    /// Makes `id` the current job (the Job and Logs panels show it).
+    pub fn set_current(&self, id: JobId) {
+        self.ui.borrow_mut().selection.set_current(Some(id));
+        self.refresh();
+    }
+
+    /// The job loaded into the editor (its row is marked), or none.
+    pub fn set_editing(&self, id: Option<JobId>) {
+        self.editing.set(id);
+        self.refresh();
+    }
+
+    /// One row of the queue as it is known now.
+    pub fn row(&self, id: JobId) -> Option<JobSummary> {
+        self.shared.lock().view.row(id).cloned()
     }
 
     /// Shows the current view (UI thread).
     fn refresh(&self) {
-        let (texts, summary, selected, paused, ended) = {
+        let Some(window) = self.window.upgrade() else { return };
+        let mut ui = self.ui.borrow_mut();
+        let layout = layout(
+            (ui.width - ROW_PADDING)
+                .max(0.0)
+                .round()
+                .checked_as::<u32>()
+                .unwrap_or_default(),
+            &ui.widths,
+        );
+        let shown: Vec<Column> = layout.slots.iter().map(|s| s.column).collect();
+        let (texts, visible, counts, summary, overall, paused, pause_after, finished, selected, ended) = {
             let mut shared = self.shared.lock();
             let ended = std::mem::take(&mut shared.ended);
             let view = &shared.view;
+            let rows: Vec<&JobSummary> = view.rows.iter().filter(|r| ui.filter.matches(r)).collect();
+            let visible: Vec<JobId> = rows.iter().map(|r| r.id).collect();
+            ui.selection
+                .retain(|id| visible.contains(&id), |id| view.row(id).is_some());
+            let texts: Vec<RowText> = rows
+                .iter()
+                .map(|r| row_text(r, view.progress.get(&r.id), view.size(r.id), &shown))
+                .collect();
+            let selected: Vec<JobSummary> = ui
+                .selection
+                .in_order(&visible)
+                .iter()
+                .filter_map(|id| view.row(*id).cloned())
+                .collect();
             (
-                view.row_texts(),
+                texts,
+                visible,
+                Filter::counts(&view.rows),
                 view.summary(),
-                view.selected_row().map(|r| (r.id, r.state.kind())),
+                view.overall(),
                 view.paused(),
+                view.pause_after_current(),
+                view.rows
+                    .iter()
+                    .filter(|r| r.state.kind() == JobStateKind::Finished)
+                    .count(),
+                selected,
                 ended,
             )
         };
-        let Some(window) = self.window.upgrade() else { return };
-        let position = selected.and_then(|(id, _)| texts.iter().position(|t| t.id == id));
-        let rows = texts
+        ui.visible.clone_from(&visible);
+        let current = ui.selection.current();
+        let editing = self.editing.get();
+        let rows: Vec<QueueRowView> = texts
             .into_iter()
             .map(|t| QueueRowView {
                 id: i32::try_from(t.id.0).unwrap_or(i32::MAX),
+                selected: ui.selection.contains(t.id),
+                current: current == Some(t.id),
+                editing: editing == Some(t.id),
                 name: t.name.into(),
                 state: t.state.into(),
                 kind: t.kind,
                 progress: t.progress,
                 detail: t.detail.into(),
                 tooltip: t.tooltip.into(),
-                selected: Some(t.id) == selected.map(|(id, _)| id),
+                cells: ModelRc::new(VecModel::from(
+                    t.cells
+                        .into_iter()
+                        .map(Into::into)
+                        .collect::<Vec<slint::SharedString>>(),
+                )),
             })
-            .collect::<Vec<_>>();
-        let count = rows.len();
+            .collect();
+        let row_count = rows.len();
         sync(&self.rows, rows);
+        let column_views = layout
+            .slots
+            .iter()
+            .map(|s| QueueColumnView {
+                id: s.column.id().into(),
+                title: s.column.title().into(),
+                tooltip: s.column.tooltip().into(),
+                x: az::Az::az::<f32>(s.x),
+                width: az::Az::az::<f32>(s.width),
+                right: s.column.right_aligned(),
+                resizable: s.column != Column::Name,
+            })
+            .collect();
+        sync(&self.columns, column_views);
+        let chips = CHIPS
+            .iter()
+            .zip(counts)
+            .map(|(chip, count)| QueueChipView {
+                id: chip.id.into(),
+                title: chip.title.into(),
+                count: i32::try_from(count).unwrap_or(i32::MAX),
+                on: ui.filter.is_on(chip),
+            })
+            .collect();
+        sync(&self.chips, chips);
         let q = window.global::<Queue<'_>>();
-        q.set_summary(summary.into());
+        q.set_compact(layout.compact);
+        q.set_row_height(if layout.compact { COMPACT_ROW } else { TABLE_ROW });
+        q.set_filtered(ui.filter.is_active());
+        let total: usize = counts.iter().sum();
+        q.set_filter_note(format!("{row_count} of {total} jobs shown").into());
+        q.set_empty_text(
+            if total > 0 && ui.filter.is_active() {
+                "No job matches the filter."
+            } else {
+                self.empty_text.as_str()
+            }
+            .into(),
+        );
+        q.set_summary(summary.as_str().into());
+        q.set_has_overall(overall.is_some());
+        if let Some(o) = overall {
+            q.set_overall(az::Az::az::<f32>(o.fraction));
+            q.set_overall_text(overall_text(&summary, &o, paused).into());
+        }
         q.set_paused(paused);
-        let kind = selected.map(|(_, k)| k);
-        q.set_has_selection(kind.is_some());
-        q.set_can_cancel(kind.is_some_and(|k| !k.is_done()));
-        q.set_can_remove(kind.is_some_and(|k| !k.is_active()));
-        q.set_can_retry(kind.is_some_and(JobStateKind::is_done));
-        q.set_can_hold(matches!(kind, Some(JobStateKind::Waiting | JobStateKind::Held)));
-        q.set_held(kind == Some(JobStateKind::Held));
-        q.set_can_move_up(position.is_some_and(|p| p > 0));
-        q.set_can_move_down(position.is_some_and(|p| p + 1 < count));
-        if ended && let Some(hook) = self.on_job_ended.borrow().as_ref() {
+        q.set_pause_after(pause_after);
+        drop(ui);
+        actions::publish_toolbar(&q, &selected, &visible, finished);
+        if ended && let Some(hook) = self.hooks.borrow().job_ended.as_ref() {
             hook();
         }
-    }
-
-    fn selected(&self) -> Option<(JobId, JobStateKind)> {
-        let shared = self.shared.lock();
-        shared.view.selected_row().map(|r| (r.id, r.state.kind()))
-    }
-
-    fn select(&self, id: i32) {
-        {
-            let mut shared = self.shared.lock();
-            let id = JobId(i64::from(id));
-            shared.view.selected = (shared.view.selected != Some(id)).then_some(id);
+        if let Some(hook) = self.hooks.borrow().refreshed.as_ref() {
+            hook();
         }
-        self.refresh();
     }
 
     fn send(&self, command: QueueCommand) {
@@ -162,86 +363,31 @@ impl QueueBridge {
             tracing::warn!("[Queue] The queue engine has stopped; the command was dropped");
         }
     }
+}
 
-    fn act(&self, action: Act) {
-        let Some((id, kind)) = self.selected() else { return };
-        let ids = vec![id];
-        match action {
-            Act::Cancel => self.send(QueueCommand::Cancel { ids }),
-            Act::Retry => self.send(QueueCommand::Restart { ids, profile: None }),
-            Act::Hold if kind == JobStateKind::Held => self.send(QueueCommand::Release { ids }),
-            Act::Hold => self.send(QueueCommand::Hold { ids }),
-            Act::Up => self.send(QueueCommand::Move {
-                ids,
-                to: MoveTarget::Up,
-            }),
-            Act::Down => self.send(QueueCommand::Move {
-                ids,
-                to: MoveTarget::Down,
-            }),
-            Act::EditTags => {
-                let name = self.shared.lock().view.selected_row().map(|r| r.name.clone());
-                if let (Some(name), Some(hook)) = (name, self.on_edit_tags.borrow().as_ref()) {
-                    hook(id, name);
-                }
-            }
-            Act::Remove => {
-                let (reply, _answer) = tokio::sync::oneshot::channel();
-                self.send(QueueCommand::Remove { ids, reply });
-            }
+/// "1 running · 2 waiting — 2 of 5 done · about 0:12:30 left".
+fn overall_text(summary: &str, o: &Overall, paused: bool) -> String {
+    let mut text = format!("{summary} — {} of {} done", o.done, o.total);
+    match (o.eta_secs, paused) {
+        (_, true) if o.done < o.total => text.push_str(" · paused"),
+        (Some(eta), _) => {
+            let eta = short_clock(rustcut_core::time::Timestamp::from_secs(
+                i64::try_from(eta).unwrap_or(i64::MAX),
+            ));
+            let _ = if o.partial {
+                write!(text, " · at least {eta} left")
+            } else {
+                write!(text, " · about {eta} left")
+            };
         }
+        _ => {}
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Act {
-    Cancel,
-    Retry,
-    Hold,
-    Up,
-    Down,
-    Remove,
-    EditTags,
-}
-
-fn connect(bridge: &Rc<QueueBridge>, window: &MainWindow) {
-    let q = window.global::<Queue<'_>>();
-    let weak = Rc::downgrade(bridge);
-    q.on_select(move |id| {
-        if let Some(b) = weak.upgrade() {
-            b.select(id);
-        }
-    });
-    let weak = Rc::downgrade(bridge);
-    q.on_toggle_paused(move || {
-        if let Some(b) = weak.upgrade() {
-            let paused = b.paused();
-            tracing::info!(paused = !paused, "[Queue] Processing switched in the panel");
-            b.send(QueueCommand::SetPaused(!paused));
-        }
-    });
-    q.on_cancel(bind(bridge, Act::Cancel));
-    q.on_retry(bind(bridge, Act::Retry));
-    q.on_toggle_hold(bind(bridge, Act::Hold));
-    q.on_move_up(bind(bridge, Act::Up));
-    q.on_move_down(bind(bridge, Act::Down));
-    q.on_remove(bind(bridge, Act::Remove));
-    q.on_edit_tags(bind(bridge, Act::EditTags));
-}
-
-/// A button's handler: `action` on the selected job.
-fn bind(bridge: &Rc<QueueBridge>, action: Act) -> impl FnMut() + 'static {
-    let weak = Rc::downgrade(bridge);
-    move || {
-        if let Some(b) = weak.upgrade() {
-            b.act(action);
-        }
-    }
+    text
 }
 
 /// Follows the engine's events into the shared view; the UI shows it through coalesced refreshes. A subscriber that
-/// fell behind takes a fresh snapshot.
-async fn follow(service: QueueService, shared: Arc<Mutex<Shared>>, ui: UiDispatcher) {
+/// fell behind takes a fresh snapshot. Finished outputs are measured on the runtime.
+async fn follow(service: QueueService, shared: Arc<Mutex<Shared>>, ui: UiDispatcher, runtime: tokio::runtime::Handle) {
     let mut events = service.events.subscribe();
     let refresh = |ui: &UiDispatcher| {
         ui.post_latest(REFRESH, rate::PROGRESS, || {
@@ -252,30 +398,45 @@ async fn follow(service: QueueService, shared: Arc<Mutex<Shared>>, ui: UiDispatc
             });
         });
     };
+    let now = || chrono::Utc::now().timestamp_millis();
     let mut resync = true;
     loop {
         if resync {
             match service.handle.request(|reply| QueueCommand::Snapshot { reply }).await {
-                Ok(snapshot) => shared.lock().view.replace(snapshot),
+                Ok(snapshot) => shared.lock().view.replace(snapshot, now()),
                 Err(_gone) => return,
             }
             refresh(&ui);
             resync = false;
-        }
-        match events.recv().await {
-            Ok(event) => {
-                let mut s = shared.lock();
-                if s.view.apply(event) {
-                    s.ended = true;
+        } else {
+            match events.recv().await {
+                Ok(event) => {
+                    let mut s = shared.lock();
+                    if s.view.apply(event, now()) {
+                        s.ended = true;
+                    }
+                    drop(s);
+                    refresh(&ui);
                 }
-                drop(s);
+                Err(RecvError::Lagged(missed)) => {
+                    tracing::debug!(missed, "[Queue] The panel fell behind; taking a snapshot");
+                    resync = true;
+                    continue;
+                }
+                Err(RecvError::Closed) => return,
+            }
+        }
+        let unmeasured = shared.lock().view.take_unmeasured();
+        for (id, path) in unmeasured {
+            let shared = Arc::clone(&shared);
+            let ui = ui.clone();
+            runtime.spawn(async move {
+                let Ok(meta) = tokio::fs::metadata(&path).await else {
+                    return;
+                };
+                shared.lock().view.sizes.insert(id, (path, Some(meta.len())));
                 refresh(&ui);
-            }
-            Err(RecvError::Lagged(missed)) => {
-                tracing::debug!(missed, "[Queue] The panel fell behind; taking a snapshot");
-                resync = true;
-            }
-            Err(RecvError::Closed) => return,
+            });
         }
     }
 }

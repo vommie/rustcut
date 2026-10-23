@@ -204,8 +204,9 @@ component TagToolbar inherits HorizontalLayout {
 
     IconButton {
         icon: IconId.tags-clear;
+        hold: true;
         enabled: TagRate.can-clear;
-        tooltip: "Clear the tags and the rating (locked tags stay)";
+        tooltip: "Hold to clear the tags and the rating (locked tags stay)";
         clicked => { TagRate.clear(); }
     }
 

@@ -1,0 +1,156 @@
+// Hold to confirm (user decision Q-Q4): a button or menu entry that deletes or discards something acts only after it
+// was held for `HoldConfirm.duration` (setting `general.hold_to_confirm_ms`; 0 = a click is enough). While it is held,
+// a red line runs clockwise around the button from the top center and its background fills from left to right; the
+// icon turns red. Let go early and it drains back; at the end it flashes once and acts. A short click wiggles the icon
+// and shows the tooltip, which says what holding does.
+
+import { Theme } from "styles.slint";
+
+export global HoldConfirm {
+    in property <duration> duration: 2000ms;
+    out property <color> color: Theme.status-corrupt;
+}
+
+/// The hold logic of an element with a `TouchArea`: bind `pressed` and `enabled`, call `pressed-down()` on the pointer's
+/// down event and `released-click()` from `clicked`; `confirmed` runs once per hold (or on a click when holding is off).
+export component HoldLogic {
+    in property <bool> pressed;
+    in property <bool> enabled: true;
+    // Off: the element acts on a click as usual.
+    in property <bool> hold: true;
+    out property <bool> holding: root.hold && root.enabled && root.pressed && HoldConfirm.duration > 0ms && !root.fired;
+    // 0 to 1 while held; drains back when let go early.
+    out property <float> progress: root.holding || (root.fired && root.pressed) ? 1 : 0;
+    out property <bool> flash;
+    // Steps of the wiggle after a short click (counts down).
+    out property <int> nudge-step;
+    out property <length> nudge: root.nudge-step == 4 ? 2px : root.nudge-step == 3 ? -3px
+        : root.nudge-step == 2 ? 3px : root.nudge-step == 1 ? -1px : 0px;
+    property <bool> fired;
+    callback confirmed();
+    callback short-click();
+
+    width: 0;
+    height: 0;
+
+    animate progress {
+        duration: root.holding ? HoldConfirm.duration : 220ms;
+        easing: root.holding ? linear : ease-out;
+    }
+
+    public function pressed-down() {
+        root.fired = false;
+    }
+
+    public function released-click() {
+        if !root.enabled {
+            return;
+        }
+        if !root.hold || HoldConfirm.duration <= 0ms {
+            root.confirmed();
+            return;
+        }
+        if !root.fired {
+            root.nudge-step = 4;
+            root.short-click();
+        }
+    }
+
+    Timer {
+        interval: HoldConfirm.duration;
+        running: root.holding;
+        triggered => {
+            root.fired = true;
+            root.flash = true;
+            root.confirmed();
+        }
+    }
+
+    Timer {
+        interval: 180ms;
+        running: root.flash;
+        triggered => {
+            root.flash = false;
+        }
+    }
+
+    Timer {
+        interval: 45ms;
+        running: root.nudge-step > 0;
+        triggered => {
+            root.nudge-step -= 1;
+        }
+    }
+}
+
+/// The picture of a hold inside a rounded rectangle (the parent clips it): the filling background and the line that
+/// runs around the edge.
+export component HoldRing inherits Rectangle {
+    in property <float> progress;
+    in property <bool> flash;
+    // The line around the edge (buttons); menu rows only fill.
+    in property <bool> ring: true;
+    property <length> t: 2px;
+    property <length> w: root.width;
+    property <length> h: root.height;
+    // How much of the edge is drawn, clockwise from the top center.
+    property <length> drawn: root.progress * 2 * (root.w + root.h);
+
+    x: 0;
+    y: 0;
+    width: 100%;
+    height: 100%;
+
+    Rectangle {
+        x: 0;
+        width: parent.width * Math.clamp(root.progress, 0, 1);
+        height: parent.height;
+        background: HoldConfirm.color.with-alpha(root.flash ? 0.6 : 0.28 * root.progress + 0.06 * (root.progress > 0 ? 1 : 0));
+        animate background { duration: 120ms; }
+    }
+
+    if root.ring && root.progress > 0: Rectangle {
+        // Top, from the center to the right.
+        Rectangle {
+            x: root.w / 2;
+            y: 0;
+            width: Math.clamp(root.drawn, 0, root.w / 2);
+            height: root.t;
+            background: HoldConfirm.color;
+        }
+        // Right, downward.
+        Rectangle {
+            x: root.w - root.t;
+            y: 0;
+            width: root.t;
+            height: Math.clamp(root.drawn - root.w / 2, 0, root.h);
+            background: HoldConfirm.color;
+        }
+        // Bottom, to the left.
+        Rectangle {
+            property <length> len: Math.clamp(root.drawn - root.w / 2 - root.h, 0, root.w);
+            x: root.w - self.len;
+            y: root.h - root.t;
+            width: self.len;
+            height: root.t;
+            background: HoldConfirm.color;
+        }
+        // Left, upward.
+        Rectangle {
+            property <length> len: Math.clamp(root.drawn - 1.5 * root.w - root.h, 0, root.h);
+            x: 0;
+            y: root.h - self.len;
+            width: root.t;
+            height: self.len;
+            background: HoldConfirm.color;
+        }
+        // Top, from the left back to the center.
+        Rectangle {
+            x: 0;
+            y: 0;
+            width: Math.clamp(root.drawn - 1.5 * root.w - 2 * root.h, 0, root.w / 2);
+            height: root.t;
+            background: HoldConfirm.color;
+        }
+    }
+}

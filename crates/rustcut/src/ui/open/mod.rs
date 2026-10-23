@@ -10,12 +10,14 @@ use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak};
 use std::time::Instant;
 
+use rustcut_core::time::Timestamp;
 use slint::ComponentHandle as _;
 use slint::winit_030::winit::event::WindowEvent;
 use slint::winit_030::{EventResult, WinitWindowAccessor as _};
 
 use self::drop::{DropAction, DropTracker};
 use crate::app::window::title;
+use crate::ui::editing::JobEditor;
 use crate::ui::editor::Editor;
 use crate::ui::export::ExportBridge;
 use crate::ui::filters::FiltersBridge;
@@ -38,10 +40,22 @@ pub struct FileOpener {
     filters: Weak<FiltersBridge>,
     probe: Weak<ProbeBridge>,
     export: Weak<ExportBridge>,
+    /// The editing of a queued job (set after it is installed; it needs the opener first).
+    editing: RefCell<Weak<JobEditor>>,
     runtime: tokio::runtime::Handle,
     last_open_dir: RefCell<Option<PathBuf>>,
     drops: RefCell<DropTracker>,
 }
+
+/// Where a file opened by RustCut itself starts (a job loaded into the editor, a draft put back).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StartAt {
+    pub position: Timestamp,
+    pub paused: bool,
+}
+
+/// What runs after a file opened by RustCut itself was opened (`true`) or could not be (`false`).
+pub type Opened = Box<dyn FnOnce(bool)>;
 
 /// The bridges an opened file reaches.
 pub struct OpenerParts<'a> {
@@ -69,6 +83,7 @@ impl FileOpener {
             filters: Rc::downgrade(parts.filters),
             probe: Rc::downgrade(parts.probe),
             export: Rc::downgrade(parts.export),
+            editing: RefCell::new(Weak::new()),
             runtime,
             last_open_dir: RefCell::new(last_open_dir),
             drops: RefCell::new(DropTracker::default()),
@@ -95,6 +110,11 @@ impl FileOpener {
         opener
     }
 
+    /// Connects the editing of queued jobs (a file the user opens ends it).
+    pub fn set_editing(&self, editing: &Rc<JobEditor>) {
+        *self.editing.borrow_mut() = Rc::downgrade(editing);
+    }
+
     /// The folder of the last opened file (the dialog starts there; saved in the UI state).
     pub fn last_open_dir(&self) -> Option<PathBuf> {
         self.last_open_dir.borrow().clone()
@@ -102,6 +122,12 @@ impl FileOpener {
 
     /// Checks `path` on the runtime, then opens it (UI thread).
     pub fn open(self: &Rc<Self>, path: PathBuf) {
+        self.open_with(path, None, None);
+    }
+
+    /// [`FileOpener::open`] for RustCut itself: the file starts at `start`, and `then` learns whether it opened (the
+    /// editing of a queued job continues there).
+    pub fn open_with(self: &Rc<Self>, path: PathBuf, start: Option<StartAt>, then: Option<Opened>) {
         let check = self.runtime.spawn_blocking(move || {
             let kind = std::fs::metadata(&path).map(|m| m.is_file());
             (path, kind)
@@ -110,10 +136,19 @@ impl FileOpener {
         let spawned = slint::spawn_local(async move {
             let Ok((path, kind)) = check.await else { return };
             let Some(opener) = this.upgrade() else { return };
-            match kind {
-                Ok(true) => opener.open_checked(&path),
-                Ok(false) => opener.report(Level::Warning, &format!("Not a file: {}", path.display())),
-                Err(e) => opener.report(Level::Error, &format!("Cannot open {}: {e}", path.display())),
+            let opened = match kind {
+                Ok(true) => opener.open_checked(&path, start, then.is_some()),
+                Ok(false) => {
+                    opener.report(Level::Warning, &format!("Not a file: {}", path.display()));
+                    false
+                }
+                Err(e) => {
+                    opener.report(Level::Error, &format!("Cannot open {}: {e}", path.display()));
+                    false
+                }
+            };
+            if let Some(then) = then {
+                then(opened);
             }
         });
         if let Err(e) = spawned {
@@ -121,8 +156,14 @@ impl FileOpener {
         }
     }
 
-    fn open_checked(&self, path: &Path) {
-        let Some(player) = self.player.upgrade() else { return };
+    /// Opens a checked file; `by_rustcut` = the editing of a job asked for it (else the user opened it).
+    fn open_checked(&self, path: &Path, start: Option<StartAt>, by_rustcut: bool) -> bool {
+        let Some(player) = self.player.upgrade() else {
+            return false;
+        };
+        if !by_rustcut && let Some(editing) = self.editing.borrow().upgrade() {
+            editing.user_opened(path);
+        }
         // The probe render of the previous file stops, and the player leaves it.
         if let Some(probe) = self.probe.upgrade() {
             probe.file_opening();
@@ -131,9 +172,13 @@ impl FileOpener {
         if let Some(filters) = self.filters.upgrade() {
             filters.file_opening(path);
         }
-        if let Err(e) = player.open(path) {
+        let result = match start {
+            Some(at) => player.return_to(path, at.position, at.paused),
+            None => player.open(path),
+        };
+        if let Err(e) = result {
             self.report(Level::Error, &format!("Cannot open {}: {e}", path.display()));
-            return;
+            return false;
         }
         tracing::info!(path = %path.display(), "[Open] Opened");
         if let Some(media) = self.media.upgrade() {
@@ -152,6 +197,7 @@ impl FileOpener {
             window.set_window_title(title(Some(path)).as_str().into());
             status::show(&window, Level::Info, "Ready");
         }
+        true
     }
 
     /// File > Open: the portal's dialog runs on its own thread; the UI thread only awaits the answer.
