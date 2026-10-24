@@ -12,7 +12,7 @@ use slint::ComponentHandle as _;
 
 use super::ExportBridge;
 use super::save::Draft;
-use super::state::{ExportDraft, JobFacts};
+use super::state::JobFacts;
 use crate::Export;
 use crate::ui::editing::{JobEditor, SaveAs};
 use crate::ui::notices::{self, Kind, Notice};
@@ -30,17 +30,6 @@ impl ExportBridge {
             .upgrade()
             .map(|w| w.global::<Export<'_>>().get_key_save().to_string())
             .unwrap_or_default()
-    }
-
-    /// The card's state as it is (a draft set aside while a job is edited).
-    pub fn draft_state(&self) -> ExportDraft {
-        self.state.borrow().draft()
-    }
-
-    /// Puts a draft's card back (after its video opened again).
-    pub fn put_draft_state(&self, draft: ExportDraft) {
-        self.state.borrow_mut().put_draft(draft);
-        self.rescan();
     }
 
     /// The target of a job loaded into the editor (after its source opened and the other panels took the job).

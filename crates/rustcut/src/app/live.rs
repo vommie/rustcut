@@ -99,10 +99,10 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
     {
         filters.set_defaults(after.filters.clone());
     }
-    if before.editor.draft_on_load != after.editor.draft_on_load
+    if before.editor.on_job_load != after.editor.on_job_load
         && let Some(editing) = p.editing.upgrade()
     {
-        editing.set_draft_on_load(after.editor.draft_on_load);
+        editing.set_on_job_load(after.editor.on_job_load);
     }
     if before.render.profiles != after.render.profiles
         && let Some(render) = p.render.upgrade()

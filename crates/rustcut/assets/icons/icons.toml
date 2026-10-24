@@ -135,6 +135,8 @@ search = { tabler = "search", doc = "Search field" }
 tag_locked = { tabler = "lock", doc = "A locked tag stays assigned for the next jobs" }
 rustview_connected = { tabler = "plug-connected", doc = "RustView is connected" }
 rustview_unavailable = { tabler = "plug-connected-x", doc = "RustView cannot be reached" }
+open_settings = { tabler = "settings", doc = "Open a page of the Settings window" }
+rustview_app = { custom = "rustview-symbolic.svg", doc = "RustView's symbol (shown gray while RustView is not connected)" }
 tags_last = { tabler = "history", doc = "Apply the last saved job's tags" }
 rating_last = { tabler = "star", doc = "Apply the last saved job's rating" }
 tags_clear = { tabler = "tags-off", doc = "Clear the tags and the rating" }

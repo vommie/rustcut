@@ -8,6 +8,7 @@ use rustcut_core::job::{JobId, JobState};
 use rustcut_core::queue::JobSummary;
 
 use super::PowerBridge;
+use crate::ui::jump::JumpTarget;
 use crate::ui::notices::{self, Kind, Notice};
 use crate::ui::queue::file_label;
 
@@ -49,9 +50,11 @@ impl PowerBridge {
             }
             JobState::Failed { reason } => {
                 let id = row.id;
+                // A click on it leads to the job in the queue (M6.5e, Q-N8 #29).
                 notices::post(
                     Notice::new(Kind::JobFailed, "Job failed")
                         .detail(failed_text(row, reason))
+                        .jump(JumpTarget::QueueJob(id))
                         .action("Show log", move || show_log(id)),
                 );
             }

@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- A failed job's toast leads to the job (0.0.29): a click shows the queue panel, selects the job, scrolls it into view
+  and lets it flash (a filter that hides it is cleared). Saving without a section shows "The job was not saved" with
+  a button "Show the sections" that scrolls to the Sections card.
+
 - Dialogs for a start that cannot go on as usual (0.0.28). **Settings from a newer RustCut**: when `config.toml` or
   `ui-state.toml` was written by a newer RustCut, a dialog (one tab per file) says so, lists the settings this version
   does not know and offers: continue without saving (the default; the Settings window says so at its top), back up the
@@ -108,6 +112,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   sidecar" (`[hashing] write_sidecar`, on).
 
 ### Changed
+
+- Cards that need a video (Job Finalization, Filters, Sections, Probe Render) are dimmed and do not react while no
+  video is open, instead of saying so in a message (0.0.29); their keys do nothing then. The message kind "Needs an
+  open video" is gone.
+- The job loaded into the editor is highlighted in the queue (an amber frame) until the editing ends (0.0.29).
+- The Tag & Rate panel shows RustView's state as a small card while RustView is switched off or unavailable: its gray
+  symbol, the reason below and a button to the RustView settings (0.0.29); connected, it stays one slim line.
+- Loading a job into the editor knows two ways only (0.0.29): replace the open video, or ask first. "Set it aside"
+  and the word "draft" are gone; the question has "Cancel" and "Replace". **Migration:** `config.toml` goes from
+  version 2 to 3 (backed up first): `[editor] draft_on_load` is now `on_job_load`, and a stored `set_aside` reads as
+  `ask`.
 
 - The line under the file name in Job Finalization, the issue list of the Codecs panel's Profile card, the red text
   under a refused Settings value and the overlap note under the section list became bubbles at their fields (0.0.27).

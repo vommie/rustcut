@@ -123,17 +123,6 @@ impl RenderSettingsBridge {
         self.state.borrow().profile().clone()
     }
 
-    /// The profile and its working copy as they are (a draft set aside while a job is edited).
-    pub fn selection(&self) -> Selection {
-        self.state.borrow().selection.clone()
-    }
-
-    /// Puts a draft's selection back.
-    pub fn put_selection(&self, selection: Selection) {
-        self.state.borrow_mut().selection = selection;
-        self.changed(false);
-    }
-
     /// The settings of a job loaded into the editor become the working copy.
     pub fn load_profile(&self, profile: &RenderProfile) {
         {

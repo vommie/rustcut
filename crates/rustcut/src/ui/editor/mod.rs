@@ -29,7 +29,7 @@ use crate::ui::notices::{self, Kind, Notice};
 use crate::ui::player::{self, PlaybackView, PlayerBridge};
 use crate::ui::probe::ProbeBridge;
 use crate::ui::queue::QueueBridge;
-use crate::ui::sections::{Bound, Edge, SectionsDraft, SectionsState};
+use crate::ui::sections::{Bound, Edge, SectionsState};
 use crate::ui::tags::TagsBridge;
 use crate::ui::timeline::{Viewport, view};
 use crate::util::model::sync;
@@ -221,15 +221,9 @@ impl Editor {
         Ok(vec![section].into())
     }
 
-    /// The sections and marks of the draft (set aside while a job is edited).
-    pub fn sections_draft(&self) -> SectionsDraft {
-        self.state.borrow().sections.draft()
-    }
-
-    /// Puts a draft's sections back (after its video opened again).
-    pub fn put_sections(&self, draft: SectionsDraft) {
-        self.state.borrow_mut().sections.put_draft(draft);
-        self.publish();
+    /// How many sections the open video has (the question before a job replaces it).
+    pub fn section_count(&self) -> usize {
+        self.state.borrow().sections.list().len()
     }
 
     /// The sections of a job loaded into the editor (after its source opened).

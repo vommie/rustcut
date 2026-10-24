@@ -8,6 +8,7 @@ import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { TooltipHost } from "tooltip.slint";
 import { Queue, QueueColumnView, QueueRowView } from "queue_types.slint";
+import { JumpFlash } from "jump.slint";
 
 // waiting, held, rendering, paused, finished, failed, canceled
 export global QueueColors {
@@ -53,8 +54,12 @@ export component QueueRow inherits Rectangle {
 
     height: Queue.row-height;
     border-radius: 4px;
-    background: root.job.selected ? Theme.surface-selected
+    // The job loaded into the editor stays highlighted until the editing ends (M6.5e, Q-N8 #33).
+    background: root.job.selected ? (root.job.editing ? Theme.accent.with-alpha(0.22) : Theme.surface-selected)
+        : root.job.editing ? Theme.accent.with-alpha(0.12)
         : touch.has-hover && !root.dragging ? Theme.surface-hover : transparent;
+    border-width: root.job.editing ? 1px : 0px;
+    border-color: Theme.accent.with-alpha(0.75);
 
     host := TooltipHost {
         text: root.job.tooltip;
@@ -207,6 +212,11 @@ export component QueueRow inherits Rectangle {
                 host.leave();
             }
         }
+    }
+
+    // A failed job's toast leads here (M6.5e): the row flashes once it is in view.
+    JumpFlash {
+        key: "queue:" + root.job.id;
     }
 }
 

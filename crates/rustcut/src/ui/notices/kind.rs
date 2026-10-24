@@ -169,9 +169,6 @@ kinds! {
         desktop false, critical false, ("Overlaps section 1", "The shared part is rendered twice.");
     SectionRefused = "section_refused", "Section not possible", Sections, Warning, Toast, EVENT, desktop false,
         critical false, ("Set a section start and end first", "");
-    /// A filter action that needs an open video (M6.5e disables them instead).
-    NoVideo = "no_video", "Needs an open video", Filters, Warning, Toast, EVENT, desktop false, critical false,
-        ("The crop can be edited once a video is open", "");
     /// The interlace check found combing (Q-N10: the card's note is quiet; a toast or banner only on request).
     Interlaced = "interlaced", "Interlaced video found", Filters, Info, Nothing, LOUD, desktop false,
         critical false, ("The video is interlaced", "Switch Deinterlace on in the Filters card.");

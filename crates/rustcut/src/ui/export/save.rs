@@ -16,6 +16,7 @@ use slint::ComponentHandle as _;
 use super::ExportBridge;
 use super::dialog::{ConflictDialog, DialogInput, Outcome, silent_outcome};
 use super::state::JobFacts;
+use crate::ui::jump::JumpTarget;
 use crate::ui::notices::{self, Kind, Notice};
 use crate::{Export, MainWindow};
 
@@ -51,7 +52,16 @@ impl ExportBridge {
         let draft = match self.draft(force_new) {
             Ok(draft) => draft,
             Err(message) => {
-                Self::tell(Notice::new(Kind::SaveRefused, "The job was not saved").detail(message));
+                let mut notice = Notice::new(Kind::SaveRefused, "The job was not saved").detail(message);
+                // No section yet (Q-N8 #16): the banner leads to the Sections card.
+                let has_video = self.player.upgrade().is_some_and(|p| p.current_file().is_some());
+                if has_video && self.editor.upgrade().is_some_and(|e| e.section_count() == 0) {
+                    let target = JumpTarget::Sections;
+                    notice = notice
+                        .jump(target)
+                        .action("Show the sections", move || crate::ui::jump::go(target));
+                }
+                Self::tell(notice);
                 return;
             }
         };
