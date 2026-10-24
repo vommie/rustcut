@@ -398,9 +398,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Audio "Copy (no re-encode)" works (0.0.23): a job with one section takes the source's audio tracks unchanged.
   Before, every job with audio failed when it rendered. With several sections, or when the container cannot take the
-  source's audio (e.g. AAC in WebM), Save is off and its tooltip names the reason before the job is saved.
-- QuickTime (.mov) with Opus or FLAC audio is marked as an error in the Codecs panel (ffmpeg refuses it; it was only a
-  warning, and the render failed) (0.0.23).
+  source's audio (e.g. AAC in WebM), Save is off and its tooltip names the reason before the job is saved. Since
+  0.0.24 the copied audio starts exactly with the section in MKV and WebM too (it started up to a second early and
+  out of sync with the picture).
+- QuickTime (.mov) with Opus or FLAC audio (0.0.23) or with AV1 video (0.0.24) is marked as an error in the Codecs
+  panel (ffmpeg refuses it; it was only a warning, and the render failed).
 - A `rustview` launcher that cannot find its program (exit code 126 or 127, e.g. a wrapper script) shows RustView as
   unavailable with the reason, instead of as connected without tags (0.0.23).
 - The Tag & Rate panel lays out the tag tree like RustView again (0.0.22): the tags run down a column and a new

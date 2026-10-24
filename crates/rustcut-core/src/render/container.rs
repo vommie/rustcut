@@ -139,10 +139,11 @@ impl Container {
                         format!("FLAC in {} does not play on many devices", self.display_name()),
                     );
                 }
+                // ffmpeg's QuickTime muxer takes AV1 only in MP4 ("av1 only supported in MP4 and AVIF", render matrix).
                 if self == Self::Mov && family == CodecFamily::Av1 {
                     push(
-                        Severity::Warning,
-                        "AV1 in QuickTime (.mov) does not play on many devices; use MP4 or MKV".to_owned(),
+                        Severity::Error,
+                        "QuickTime (.mov) cannot carry AV1 video; use MP4 or MKV".to_owned(),
                     );
                 }
                 if audio == AudioCodec::Copy {

@@ -375,8 +375,11 @@ impl Builder<'_> {
             }
         }
         if audio.copy {
-            // The input's own `-ss`/`-to` cut the copied packets.
-            args.extend(os(&["-map", "0:a"]));
+            // The input's own `-ss`/`-to` cut the copied packets, but the demuxer starts at the video keyframe before
+            // the section: `-copypriorss 0` drops the audio packets before the start, which Matroska would otherwise
+            // keep in front of the video (the render matrix found 1 s too much, out of sync; MP4 hid it in an edit
+            // list).
+            args.extend(os(&["-map", "0:a", "-copypriorss:a", "0"]));
         }
         args.extend(os(&FPS_MODE));
         args.extend(os(&["-map_metadata", "0", "-map_chapters", "-1"]));
