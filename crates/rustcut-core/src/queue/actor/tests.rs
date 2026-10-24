@@ -211,6 +211,26 @@ async fn crashed_jobs_wait_again_and_their_leftovers_go() {
     std::fs::write(dir.path().join(format!("deshake/job-{}.trf", id.0)), b"t").unwrap();
     std::fs::create_dir_all(dir.path().join(format!("passlog/job-{}", id.0))).unwrap();
     std::fs::write(spec.target_path(), b"an older output").unwrap();
+    // The render the killed RustCut left running, stopped (its job was paused): a stand-in that names the temp file and
+    // leads its own process group like ffmpeg.
+    let script = format!("kill -STOP \\$\\$; : '{}'", temp.display());
+    let out = std::process::Command::new("sh")
+        .args(["-c", &format!("setsid sh -c \"{script}\" >/dev/null 2>&1 & echo $!")])
+        .output()
+        .unwrap();
+    let orphan: i32 = String::from_utf8(out.stdout).unwrap().trim().parse().unwrap();
+    let state = || {
+        std::fs::read_to_string(format!("/proc/{orphan}/stat"))
+            .map(|s| s.rsplit_once(") ").unwrap().1.chars().next().unwrap())
+    };
+    let start = std::time::Instant::now();
+    while state().ok() != Some('T') {
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "the stand-in did not stop itself"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
 
     let (store, _thread) = spawn_store(Store::open(&path, &dir.path().join("backups")).unwrap()).unwrap();
     let (queue, _task) = spawn_queue(
@@ -228,6 +248,10 @@ async fn crashed_jobs_wait_again_and_their_leftovers_go() {
     assert!(!dir.path().join(format!("deshake/job-{}.trf", id.0)).exists());
     assert!(!dir.path().join(format!("passlog/job-{}", id.0)).exists());
     assert!(spec.target_path().exists(), "the target is never touched");
+    assert!(
+        state().is_err() || state().ok() == Some('Z'),
+        "the orphaned render is stopped, also when it was paused"
+    );
     queue
         .handle
         .request(|reply| QueueCommand::Shutdown { reply })

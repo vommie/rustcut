@@ -496,6 +496,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A render no longer goes on after RustCut crashed (0.0.30): when RustCut was killed or crashed while a job rendered,
+  ffmpeg went on encoding in the background, and after the next start the same job rendered a second time beside it.
+  At start, RustCut now stops the renders of its own interrupted jobs that an earlier RustCut left behind (and those
+  of an interrupted probe render) before it cleans up their work files.
 - Audio "Copy (no re-encode)" works (0.0.23): a job with one section takes the source's audio tracks unchanged.
   Before, every job with audio failed when it rendered. With several sections, or when the container cannot take the
   source's audio (e.g. AAC in WebM), Save is off and its tooltip names the reason before the job is saved. Since

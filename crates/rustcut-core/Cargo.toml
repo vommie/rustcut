@@ -27,6 +27,7 @@ md-5.workspace = true
 minijinja.workspace = true
 parking_lot.workspace = true
 path-clean.workspace = true
+procfs.workspace = true
 quick_cache.workspace = true
 rusqlite.workspace = true
 rusqlite_migration.workspace = true

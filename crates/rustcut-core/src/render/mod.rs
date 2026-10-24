@@ -61,7 +61,7 @@ pub use profile::{
 pub use progress::{ProgressParser, ProgressSample};
 pub use runner::{
     Action, Control, GroupSignal, HEAD_LINES, JobLog, MAX_LINE_CHARS, PassError, PassEvent, PassOptions, QUIT_GRACE,
-    RenderPriority, StopReason, Supervisor, TAIL_LINES, TERMINATE_GRACE, command_line, run_pass,
+    RenderPriority, StopReason, Supervisor, TAIL_LINES, TERMINATE_GRACE, command_line, run_pass, stop_orphans,
 };
 pub use simple::{QualityBand, QualitySlider, Speed};
 pub use validate::{MAX_FILM_GRAIN, MAX_VARIANCE_BOOST, issues_of};
