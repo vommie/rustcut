@@ -9,6 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Arch package (0.0.19): `./build-package.sh` builds `dist/rustcut-<version>-1-x86_64.pkg.tar.zst` (install it with
+  `sudo pacman -U dist/rustcut-<version>-1-x86_64.pkg.tar.zst`). It brings the desktop entry (RustCut opens videos
+  from Dolphin and other file managers, several at once; the taskbar entry shows the queue's progress), the AppStream
+  metainfo and the app icon in every size; it depends on `mpv` and `ffmpeg`, RustView and the desktop portal are
+  optional. The package is built without the debugging server for automated UI checks.
+- `scripts/release.sh` prepares a release (package, checksums, notes from this changelog) without tagging or publishing
+  anything; `scripts/check-all.sh` validates the desktop file and the metainfo and, without `--fast`, builds the package,
+  checks its content and lints it with namcap.
 - App icon (0.0.18): a film frame with scissors in RustView's style; the windows and the tray use it.
 - Tray icon (optional, `desktop.tray.enabled`, off by default): shows the queue in its tooltip ("1 rendering, 2 waiting ·
   42 %"); a click shows or hides the window (a minimized window comes back), its menu pauses or resumes the queue

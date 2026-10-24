@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.vommie.rustcut</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>RustCut</name>
+  <developer id="io.github.vommie">
+    <name>vommie</name>
+  </developer>
+  <summary>Local video cutter with a render queue, tagging and rating in RustView</summary>
+  <description>
+    <p>
+      RustCut opens a video in an embedded mpv player, lets you mark the sections to keep on a zoomable timeline, applies
+      filters with a live preview and renders the result with FFmpeg through a persistent queue. The rendered clips are
+      tagged and rated directly in the RustView library.
+    </p>
+    <ul>
+      <li>Timeline with sections, marks, zoom and NLE-style keys (I/O, J/K/L, frame steps), all keys configurable</li>
+      <li>Filters with a live preview: crop on the video with handles or by holding Ctrl, auto-crop, deinterlace, resize,
+        rotate and mirror, two-pass deshake with a probe render</li>
+      <li>Render profiles for x264, x265 and AV1 with a simple and an expert view, checked by the real encoder</li>
+      <li>Queue with parallel workers, pause and resume, crash recovery, progress, ETA and a size estimate per job</li>
+      <li>Every output is verified before it replaces a file; an existing file is never touched by a failed render</li>
+      <li>Tag and rate the clips in RustView with its own tag tree and rating bar</li>
+      <li>Taskbar progress, notifications, an optional tray icon and an action when the queue is done</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.vommie.rustcut.desktop</launchable>
+  <url type="homepage">https://github.com/vommie/rustcut</url>
+  <url type="bugtracker">https://github.com/vommie/rustcut/issues</url>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Video</category>
+    <category>AudioVideoEditing</category>
+  </categories>
+  <keywords>
+    <keyword>video</keyword>
+    <keyword>cutter</keyword>
+    <keyword>trim</keyword>
+    <keyword>ffmpeg</keyword>
+    <keyword>mpv</keyword>
+    <keyword>AV1</keyword>
+  </keywords>
+  <provides>
+    <binary>rustcut</binary>
+  </provides>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="@VERSION@" date="@DATE@" />
+  </releases>
+</component>

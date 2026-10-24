@@ -2,10 +2,8 @@
 # Runs every check the project has, in order, and reports each step. Nothing is skipped silently: a step whose tool is
 # missing is reported as SKIPPED with the package to install, and the script then exits with a failure.
 #
-#   scripts/check-all.sh           everything including the release build
-#   scripts/check-all.sh --fast    without the release build
-#
-# The packaging steps (desktop file, AppStream metainfo, package build) join this list with milestone P5, when those files exist.
+#   scripts/check-all.sh           everything including the release build and the package (build, content, namcap)
+#   scripts/check-all.sh --fast    without the release build and the package
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -38,12 +36,15 @@ needs() {
   return 1
 }
 
-# The changelog documents the current version or has entries under [Unreleased] (Keep a Changelog).
-changelog_documents_version() {
-  if grep -q "^## \[$version\]" CHANGELOG.md; then return 0; fi
-  if awk '/^## \[Unreleased\]/{u=1; next} /^## \[/{u=0} u && /^- /{found=1} END{exit !found}' CHANGELOG.md; then return 0; fi
-  echo "CHANGELOG.md has neither a section for $version nor entries under [Unreleased]"
-  return 1
+# The AppStream metainfo with its placeholders filled in, as the PKGBUILD installs it.
+validate_metainfo() {
+  local tmp status
+  tmp=$(mktemp --suffix=.metainfo.xml)
+  sed "s/@VERSION@/$version/; s/@DATE@/$(date +%F)/" packaging/io.github.vommie.rustcut.metainfo.xml > "$tmp"
+  appstreamcli validate --no-net "$tmp"
+  status=$?
+  rm -f "$tmp"
+  return "$status"
 }
 
 step "Dependencies and tools" scripts/check-deps.sh --quiet
@@ -51,7 +52,14 @@ step "Formatting (cargo fmt --check)" cargo fmt --all --check
 step "Clippy with warnings denied" cargo cl
 step "Tests (core, player, app)" cargo t
 step "Cargo.lock is up to date" cargo metadata --locked --format-version 1 --no-deps >/dev/null
-step "Changelog documents this version" changelog_documents_version
+step "Changelog documents this version" scripts/release.sh --check
+
+if needs desktop-file-validate desktop-file-utils "Desktop file validation"; then
+  step "Desktop file validation" desktop-file-validate packaging/io.github.vommie.rustcut.desktop
+fi
+if needs appstreamcli appstream "AppStream metainfo validation"; then
+  step "AppStream metainfo validation" validate_metainfo
+fi
 
 if needs cargo-audit cargo-audit "Vulnerability scan (cargo audit)"; then
   step "Vulnerability scan (cargo audit)" cargo audit --quiet
@@ -62,6 +70,9 @@ fi
 
 if [ "$fast" = 0 ]; then
   step "Release build" cargo br
+  if needs namcap namcap "Package build, content check and lint (namcap)"; then
+    step "Package build, content check and lint (namcap)" ./build-package.sh --lint
+  fi
 fi
 
 echo

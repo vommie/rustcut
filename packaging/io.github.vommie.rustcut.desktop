@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=RustCut
+GenericName=Video Cutter
+Comment=Cut sections out of videos, filter and render them through a queue, tag and rate them in RustView
+Exec=rustcut %F
+TryExec=rustcut
+Icon=rustcut
+Terminal=false
+Categories=AudioVideo;Video;AudioVideoEditing;
+Keywords=video;cut;cutter;trim;section;crop;deshake;render;encode;ffmpeg;mpv;av1;x264;x265;queue;tag;rating;
+MimeType=video/*;video/mp4;video/matroska;video/x-matroska;video/webm;video/quicktime;video/vnd.avi;video/x-msvideo;video/mpeg;video/mp2t;video/x-ms-wmv;video/x-flv;video/ogg;video/x-ogm+ogg;video/x-theora+ogg;video/3gpp;video/3gpp2;video/dv;
+StartupWMClass=io.github.vommie.rustcut
+StartupNotify=true
+SingleMainWindow=true
