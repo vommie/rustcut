@@ -1,0 +1,172 @@
+// The bell at the right end of the menu bar (M6.5, user decisions Q-N8): the number of unread errors and warnings (as
+// the setting says) in the worst one's color; a click lists the last three messages of this session with their time,
+// and "Show all" opens the Logs panel's "Messages" source. A click outside closes the list.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { HistoryView, Notices, NoticeLook } from "notice_types.slint";
+import { NoticeButton } from "notice_parts.slint";
+import { TooltipHost } from "tooltip.slint";
+
+export component NoticeBell inherits Rectangle {
+    width: 30px;
+    height: 24px;
+    border-radius: 5px;
+    background: Notices.bell-open ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : transparent;
+
+    host := TooltipHost {
+        text: Notices.unread > 0 ? "Messages: " + Notices.unread + " unread" : "Messages of this session";
+    }
+
+    AppIcon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        icon: IconId.bell;
+        size: IconSize.md;
+        color: Notices.unread > 0 ? NoticeLook.color(Notices.unread-level) : Theme.text-muted;
+    }
+
+    if Notices.unread > 0: Rectangle {
+        x: parent.width - self.width + 2px;
+        y: -2px;
+        width: Math.max(14px, badge.preferred-width + 6px);
+        height: 14px;
+        border-radius: 7px;
+        background: NoticeLook.color(Notices.unread-level);
+
+        badge := Text {
+            text: Notices.unread > 99 ? "99+" : Notices.unread;
+            color: Theme.background;
+            font-size: 10px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                host.press();
+            }
+        }
+        clicked => { Notices.bell-toggled(); }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+}
+
+component RecentRow inherits Rectangle {
+    in property <HistoryView> entry;
+
+    height: row.preferred-height;
+
+    row := HorizontalLayout {
+        padding: 6px;
+        spacing: 8px;
+
+        VerticalLayout {
+            alignment: start;
+            padding-top: 1px;
+
+            AppIcon {
+                icon: NoticeLook.icon(root.entry.level);
+                size: IconSize.sm;
+                color: NoticeLook.color(root.entry.level);
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 1px;
+
+            Text {
+                text: root.entry.title;
+                color: Theme.text;
+                font-weight: 600;
+                font-size: 12px;
+                overflow: elide;
+                min-width: 0px;
+            }
+
+            if root.entry.detail != "": Text {
+                text: root.entry.detail;
+                color: Theme.text-muted;
+                font-size: 11px;
+                wrap: TextWrap.word-wrap;
+                min-width: 0px;
+            }
+        }
+
+        Text {
+            text: root.entry.time;
+            color: Theme.status-deleted;
+            font-size: 11px;
+        }
+    }
+}
+
+// The list under the bell; `anchor-x`/`anchor-y` = the bell's bottom right corner in layer coordinates.
+export component BellPopup inherits Rectangle {
+    in property <length> anchor-x;
+    in property <length> anchor-y;
+
+    // A click anywhere else closes the list.
+    TouchArea {
+        clicked => { Notices.bell-toggled(); }
+    }
+
+    card := Rectangle {
+        x: Math.max(8px, root.anchor-x - self.width);
+        y: root.anchor-y + 6px;
+        width: 340px;
+        height: list.preferred-height;
+        background: Theme.surface;
+        border-radius: 8px;
+        border-width: 1px;
+        border-color: Theme.surface-selected;
+        drop-shadow-blur: 16px;
+        drop-shadow-color: #000000a0;
+        drop-shadow-offset-y: 4px;
+
+        // Clicks inside stay inside.
+        TouchArea { }
+
+        list := VerticalLayout {
+            padding: 8px;
+            spacing: 4px;
+
+            Text {
+                text: "Messages";
+                color: Theme.primary;
+                font-weight: 700;
+            }
+
+            if Notices.recent.length == 0: Text {
+                text: "No messages yet in this session.";
+                color: Theme.text-muted;
+                font-size: 12px;
+            }
+
+            for entry in Notices.recent: RecentRow {
+                entry: entry;
+            }
+
+            HorizontalLayout {
+                alignment: end;
+                padding-top: 4px;
+
+                NoticeButton {
+                    text: "Show all (" + Notices.total + ")";
+                    clicked => { Notices.show-all(); }
+                }
+            }
+        }
+    }
+}

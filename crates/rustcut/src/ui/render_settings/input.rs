@@ -7,7 +7,7 @@ use slint::ComponentHandle as _;
 
 use super::RenderSettingsBridge;
 use super::state::Row;
-use crate::ui::status::Level;
+use crate::ui::notices::{Kind, Notice};
 use crate::{MainWindow, RenderSettings};
 
 pub(super) fn connect(bridge: &Rc<RenderSettingsBridge>, window: &MainWindow) {
@@ -168,11 +168,11 @@ impl RenderSettingsBridge {
     fn library_result(&self, result: Result<String, LibraryError>) {
         match result {
             Ok(message) => {
-                self.status(Level::Info, &message);
+                Self::tell(Notice::new(Kind::ProfileChanged, message));
                 self.changed(true);
             }
             Err(e) => {
-                self.status(Level::Warning, &format!("{}.", capitalized(&e.to_string())));
+                Self::tell(Notice::new(Kind::ProfileRefused, capitalized(&e.to_string())));
                 self.publish();
             }
         }

@@ -12,6 +12,7 @@ pub mod keymap;
 pub mod logs;
 pub mod media_info;
 pub mod menu;
+pub mod notices;
 pub mod open;
 pub mod player;
 pub mod power;

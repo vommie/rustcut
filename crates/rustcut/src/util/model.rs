@@ -38,3 +38,58 @@ pub fn sync_with<P: Clone + PartialEq, T: Clone + 'static>(
     }
     rows.clone_into(shown);
 }
+
+/// Makes `model` equal to `rows` where every row has an identity (`id`): rows of ids that are gone are removed, new ids
+/// are inserted at their place and a row that changed is set in place, so Slint keeps the elements of the other rows and
+/// runs the appear animation only for the new ones (the toasts). A row that moved is removed and inserted again.
+pub fn sync_keyed<T: Clone + PartialEq + 'static, K: PartialEq>(
+    model: &VecModel<T>,
+    rows: Vec<T>,
+    id: impl Fn(&T) -> K,
+) {
+    let ids: Vec<K> = rows.iter().map(&id).collect();
+    for index in (0..model.row_count()).rev() {
+        if model.row_data(index).is_some_and(|row| !ids.contains(&id(&row))) {
+            model.remove(index);
+        }
+    }
+    for (index, row) in rows.into_iter().enumerate() {
+        let key = id(&row);
+        match model.row_data(index) {
+            Some(current) if id(&current) == key => {
+                if current != row {
+                    model.set_row_data(index, row);
+                }
+            }
+            _ => {
+                if let Some(old) =
+                    (index..model.row_count()).find(|&i| model.row_data(i).is_some_and(|r| id(&r) == key))
+                {
+                    model.remove(old);
+                }
+                model.insert(index, row);
+            }
+        }
+    }
+    while model.row_count() > ids.len() {
+        model.remove(model.row_count() - 1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use slint::{Model as _, VecModel};
+
+    use super::sync_keyed;
+
+    #[test]
+    fn keyed_rows_keep_their_place_and_new_ones_are_inserted() {
+        let model = VecModel::from(vec![(1, "a"), (2, "b"), (3, "c")]);
+        sync_keyed(&model, vec![(4, "d"), (1, "a"), (3, "C")], |r| r.0);
+        assert_eq!(model.iter().collect::<Vec<_>>(), [(4, "d"), (1, "a"), (3, "C")]);
+        sync_keyed(&model, vec![(3, "C"), (4, "d")], |r| r.0);
+        assert_eq!(model.iter().collect::<Vec<_>>(), [(3, "C"), (4, "d")]);
+        sync_keyed(&model, Vec::new(), |r| r.0);
+        assert_eq!(model.row_count(), 0);
+    }
+}

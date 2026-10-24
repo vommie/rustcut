@@ -1,5 +1,5 @@
-// Main window of RustCut: the dock (ADR-12) with its two sidebars around the video, the banners above it (known source,
-// probe render), the timeline and the transport bar, a
+// Main window of RustCut: the dock (ADR-12) with its two sidebars around the video, the notices (M6.5: the banner over
+// the video, the toasts, the bell in the menu bar), the timeline and the transport bar, a
 // slim status line, the menus (File, Playback, Sections, Filters, View) with the keymap's shortcuts, the key scope that
 // hands every other key press to the keymap (src/ui/editor/), the modal dialogs of saving a job (conflict, missing
 // tags or rating; src/ui/export/), the question before a job replaces the editor's draft (src/ui/editing/), the context
@@ -16,7 +16,6 @@ import { Playback } from "player_types.slint";
 import { PlayerTransport } from "player_transport.slint";
 import { Status, StatusLine } from "status_line.slint";
 import { MediaInfoPanel, MediaInfoRow, MediaInfoSection } from "media_info_panel.slint";
-import { KnownSource, KnownSourceBanner } from "source_banner.slint";
 import { Shortcuts } from "shortcuts.slint";
 import { Timeline, TimelineBlock, TimelineStrip, TimelineTick } from "timeline_view.slint";
 import { SectionRowView, Sections } from "sections_card.slint";
@@ -26,7 +25,6 @@ import { GlobalTooltip, Tip, TipKey, TipKeys, TipPlacement, TipRect, TipRow, Tip
 import { TooltipLayer } from "tooltip_layer.slint";
 import { DialogState } from "dialog_frame.slint";
 import { OptionRowView, Probe, RenderIssueView, RenderSettings } from "render_types.slint";
-import { ProbeBanner } from "probe_banner.slint";
 import { ConflictJobView, ConflictOptionView, Export, PreviewView } from "export_types.slint";
 import { Queue, QueueChipView, QueueColumnView, QueueRowView } from "queue_types.slint";
 import { Job, JobLoad, JobRowView, JobSectionView, LogLineView, Logs } from "job_types.slint";
@@ -40,20 +38,24 @@ import { FolderRowView, HotkeyChipView, HotkeyRowView, ProfileItemView, SettingC
 import { SettingsWindow } from "settings_window.slint";
 import { TooltipSettings } from "tooltip.slint";
 import { Power } from "power_types.slint";
-import { PowerBanner } from "power_banner.slint";
 import { QuitDialog } from "power_quit_dialog.slint";
 import { AppTray } from "tray.slint";
 import { Jump } from "jump.slint";
+import { BannerView, HistoryView, Notices, ToastView } from "notice_types.slint";
+import { NoticeBanner } from "notice_banner.slint";
+import { ToastLayer } from "notice_toasts.slint";
+import { BellPopup, NoticeBell } from "notice_bell.slint";
 
 export {
     Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
-    MediaInfoRow, MediaInfoSection, KnownSource, Shortcuts, Timeline, TimelineBlock, TimelineTick, Sections,
+    MediaInfoRow, MediaInfoSection, Shortcuts, Timeline, TimelineBlock, TimelineTick, Sections,
     SectionRowView, Filters, FilterRowView, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe, Export,
     ConflictJobView, ConflictOptionView, PreviewView, TipRow, Tip, TipKey, TipKeys, TipPlacement, TipRect, TipSide,
     GlobalTooltip, TooltipLogic, DialogState, Queue, QueueRowView, QueueColumnView, QueueChipView, TagRate, TagNodeView,
     TagColumnView, TagHistoryItemModel, TagHistoryRowModel, Job, JobRowView, JobSectionView, Logs, LogLineView, JobLoad,
     ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderRowView,
-    ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power, AppTray, Jump
+    ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power, AppTray, Jump, Notices,
+    ToastView, BannerView, HistoryView
 }
 
 export component MainWindow inherits Window {
@@ -92,6 +94,10 @@ export component MainWindow inherits Window {
     callback open-settings-page(string);
     // Help: one of RustCut's folders in the file manager ("config", "data", "logs", "cache").
     callback open-folder(string);
+
+    // Where the content starts in window coordinates (below the menu bar); overlays place themselves with it.
+    property <length> content-x: key-scope.absolute-position.x;
+    property <length> content-y: key-scope.absolute-position.y;
 
     // "<file> (<folder>) - RustCut" while a file is open (src/app/window.rs).
     in property <string> window-title: root.app-name;
@@ -440,12 +446,6 @@ export component MainWindow inherits Window {
                     horizontal-stretch: 1;
                     min-width: 240px;
 
-                    KnownSourceBanner { }
-
-                    ProbeBanner { }
-
-                    PowerBanner { }
-
                     player := PlayerView {
                         vertical-stretch: 1;
                         frame: root.video-frame;
@@ -477,6 +477,26 @@ export component MainWindow inherits Window {
 
             StatusLine { }
         }
+    }
+
+    // The banner lies on the top of the video, full width (Q-N8).
+    notice-banner := NoticeBanner {
+        x: player.absolute-position.x - root.content-x;
+        y: player.absolute-position.y - root.content-y;
+        width: player.width;
+    }
+
+    ToastLayer {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        video-x: player.absolute-position.x - root.content-x;
+        video-y: player.absolute-position.y - root.content-y;
+        video-width: player.width;
+        video-height: player.height;
+        top-inset: notice-banner.shown-height;
+        bottom-inset: Theme.status-bar-height;
     }
 
     DockOverlay {
@@ -512,6 +532,22 @@ export component MainWindow inherits Window {
         y: 0;
         width: parent.width;
         height: parent.height;
+    }
+
+    if Notices.bell-open: BellPopup {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        anchor-x: bell.x + bell.width;
+        anchor-y: bell.y + bell.height;
+    }
+
+    // The bell sits in the menu bar's row, at its right end (the content starts below the menu bar).
+    bell := NoticeBell {
+        visible: Notices.bell;
+        x: parent.width - self.width - 8px;
+        y: (root.content-y - self.height) / 2 - root.content-y;
     }
 
     ContextMenuLayer {

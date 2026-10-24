@@ -9,6 +9,7 @@ mod logging;
 mod persistence;
 mod services;
 mod shutdown;
+mod tools;
 pub mod window;
 
 use std::process::ExitCode;
@@ -46,6 +47,7 @@ use crate::ui::keymap::{Action, Keymap};
 use crate::ui::logs::LogsBridge;
 use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::menu::ContextMenuBridge;
+use crate::ui::notices::{self, Kind, Notice};
 use crate::ui::open::{FileOpener, OpenerParts};
 use crate::ui::player::{PlayerBridge, PlayerBridgeError};
 use crate::ui::power::PowerBridge;
@@ -53,7 +55,6 @@ use crate::ui::probe::{self, ProbeBridge};
 use crate::ui::queue::{MenuKeys, QueueBridge};
 use crate::ui::render_settings::RenderSettingsBridge;
 use crate::ui::settings::SettingsBridge;
-use crate::ui::status::{self, Level};
 use crate::ui::tags::TagsBridge;
 use crate::ui::tray::TrayBridge;
 
@@ -152,6 +153,23 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     live::look(&main, &loaded.settings);
     crate::ui::tooltip::install(&main);
     let menu = ContextMenuBridge::install(&main);
+    // Every message goes through the notice center (M6.5); what came before it is shown now.
+    let notice_center = notices::install(
+        &main,
+        notices::Parts {
+            ui: &ui,
+            runtime: runtime.handle().clone(),
+            writer: writer.clone(),
+            menu: &menu,
+            settings: &loaded.settings.notices,
+        },
+    );
+    tools::check(
+        runtime.handle(),
+        &ui,
+        loaded.settings.advanced.ffmpeg.clone(),
+        loaded.settings.advanced.ffprobe.clone(),
+    );
     let (keys, save_key) = queue_keys(&loaded.settings);
     let queue = QueueBridge::install(
         &main,
@@ -209,6 +227,29 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &loaded.ui_state.logs,
         log.book(),
     );
+    // The bell's "Show all": the Logs panel with the messages of this session.
+    {
+        let (dock, logs) = (Rc::downgrade(&dock), Rc::downgrade(&logs));
+        notice_center.hooks().show_all = Some(Box::new(move || {
+            if let Some(dock) = dock.upgrade() {
+                dock.reveal(PanelId::Logs);
+            }
+            if let Some(logs) = logs.upgrade() {
+                logs.show_messages();
+            }
+        }));
+    }
+    {
+        let (dock, logs) = (Rc::downgrade(&dock), Rc::downgrade(&logs));
+        notice_center.hooks().show_log = Some(Box::new(move || {
+            if let Some(dock) = dock.upgrade() {
+                dock.reveal(PanelId::Logs);
+            }
+            if let Some(logs) = logs.upgrade() {
+                logs.show_app_log();
+            }
+        }));
+    }
     {
         let (inspector, logs) = (Rc::downgrade(&inspector), Rc::downgrade(&logs));
         queue.hooks().refreshed = Some(Box::new(move || {
@@ -376,7 +417,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     );
     let power = PowerBridge::install(
         &main,
-        (&ui, runtime.handle(), &queue, &menu),
+        (runtime.handle(), &queue, &menu),
         desktop,
         &loaded.settings,
         loaded
@@ -432,12 +473,14 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             instance,
             power: Rc::downgrade(&power),
             tray: Rc::downgrade(&tray),
+            notices: Rc::downgrade(&notice_center),
+            ui: ui.clone(),
         },
     );
     shutdown::watch_signals(runtime.handle(), ui, main.as_weak());
 
     if let Some(problem) = store_problem {
-        status::show(&main, Level::Warning, &problem);
+        notices::post(Notice::new(Kind::DatabaseUnusable, "The queue cannot be saved").detail(problem));
     }
     if let Some(first) = cli.files.first() {
         opener.open(first.clone());

@@ -11,10 +11,10 @@ use slint::platform::Key;
 use super::Editor;
 use crate::ui::filters::FiltersBridge;
 use crate::ui::keymap::{Action, KeyPress};
+use crate::ui::notices::{self, Kind, Notice};
 use crate::ui::player::ShuttleKey;
 use crate::ui::queue::QueueBridge;
 use crate::ui::sections::Bound;
-use crate::ui::status::Level;
 use crate::{MainWindow, Playback, Shortcuts};
 
 /// Whether a key event's text is `key` (Slint sends special keys as private-use characters).
@@ -227,10 +227,11 @@ impl Editor {
         };
         match result {
             Ok(number) => {
-                self.status(Level::Info, &format!("Section {number} added"));
+                self.edit_accepted();
+                notices::post(Notice::new(Kind::SectionAdded, format!("Section {number} added")));
                 self.publish();
             }
-            Err(e) => self.status(Level::Warning, &e.to_string()),
+            Err(e) => self.refused(e.to_string()),
         }
     }
 

@@ -7,7 +7,6 @@ use slint::ComponentHandle as _;
 
 use super::Editor;
 use crate::ui::sections::{Bound, EditError};
-use crate::ui::status::Level;
 use crate::{MainWindow, Sections};
 
 pub(super) fn connect(editor: &Rc<Editor>, window: &MainWindow) {
@@ -117,7 +116,7 @@ impl Editor {
                 true
             }
             Err(e) => {
-                self.status(Level::Warning, &e.to_string());
+                self.refused(e.to_string());
                 false
             }
         }

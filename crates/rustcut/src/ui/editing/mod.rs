@@ -22,11 +22,11 @@ use crate::ui::editor::Editor;
 use crate::ui::export::ExportBridge;
 use crate::ui::filters::FiltersBridge;
 use crate::ui::inspector::InspectorBridge;
+use crate::ui::notices::{self, Kind, Level, Notice};
 use crate::ui::open::{FileOpener, StartAt};
 use crate::ui::player::PlayerBridge;
 use crate::ui::queue::QueueBridge;
 use crate::ui::render_settings::RenderSettingsBridge;
-use crate::ui::status::{self, Level};
 use crate::ui::tags::{Choice, TagsBridge};
 use crate::{JobLoad, MainWindow};
 
@@ -154,14 +154,14 @@ impl JobEditor {
 
     pub fn load(&self, id: JobId) {
         if self.loading.get().is_some() {
-            self.status(
+            Self::tell(
                 Level::Info,
                 "A job is being loaded into the editor; try again in a moment.",
             );
             return;
         }
         if self.session.borrow().as_ref().is_some_and(|s| s.id == id) {
-            self.status(Level::Info, &format!("Job {id} is in the editor already."));
+            Self::tell(Level::Info, &format!("Job {id} is in the editor already."));
             return;
         }
         let handle = self.handle.clone();
@@ -185,7 +185,7 @@ impl JobEditor {
         let spec = match answer {
             Ok(spec) => spec,
             Err(e) => {
-                self.status(Level::Error, &format!("The job cannot be loaded into the editor: {e}"));
+                Self::tell(Level::Error, &format!("The job cannot be loaded into the editor: {e}"));
                 return;
             }
         };
@@ -193,7 +193,7 @@ impl JobEditor {
             return;
         };
         if state.is_active() {
-            self.status(
+            Self::tell(
                 Level::Warning,
                 &format!("Job {id} is rendering; it can be loaded when it ends."),
             );
@@ -235,7 +235,7 @@ impl JobEditor {
         };
         match set_aside {
             Some(aside) => self.begin(asking.id, asking.state, asking.spec, aside),
-            None => self.status(Level::Info, "The job was not loaded; the editor keeps its draft."),
+            None => Self::tell(Level::Info, "The job was not loaded; the editor keeps its draft."),
         }
     }
 
@@ -284,7 +284,7 @@ impl JobEditor {
             return;
         };
         if !opened {
-            self.status(
+            Self::tell(
                 Level::Error,
                 &format!("Job {id} cannot be edited: its source does not open."),
             );
@@ -317,7 +317,7 @@ impl JobEditor {
             (true, false) => format!("Save ({key}) updates it."),
             (false, _) => "Saving makes a new job.".to_owned(),
         };
-        self.status(Level::Info, &format!("Job {id} is in the editor. {how}"));
+        Self::tell(Level::Info, &format!("Job {id} is in the editor. {how}"));
     }
 
     /// The export saved the edited job (updated, or as a new job): the editing ends.
@@ -328,7 +328,7 @@ impl JobEditor {
     /// "Stop editing": the job stays as it is.
     pub fn stop(&self) {
         if let Some(id) = self.session.borrow().as_ref().map(|s| s.id) {
-            self.status(Level::Info, &format!("Stopped editing job {id}; it stays as it was."));
+            Self::tell(Level::Info, &format!("Stopped editing job {id}; it stays as it was."));
         }
         self.end(true);
     }
@@ -343,7 +343,7 @@ impl JobEditor {
         self.mark(None);
         tracing::info!(job = edit.id.0, file = %path.display(), "[Queue] Editing ended: another file was opened");
         if edit.set_aside.is_some() {
-            self.status(
+            Self::tell(
                 Level::Warning,
                 &format!("Editing of job {} ended; the draft set aside was dropped.", edit.id),
             );
@@ -414,7 +414,7 @@ impl JobEditor {
             Some(Box::new(move |opened| {
                 let Some(bridge) = weak.upgrade() else { return };
                 if !opened {
-                    bridge.status(
+                    Self::tell(
                         Level::Warning,
                         "The draft set aside could not be restored: its video does not open.",
                     );
@@ -440,11 +440,16 @@ impl JobEditor {
         );
     }
 
-    fn status(&self, level: Level, message: &str) {
+    /// Loading and editing say nothing by default (Q-N8 #33/#34: the job is highlighted instead); a job that cannot be
+    /// loaded is an error toast.
+    fn tell(level: Level, message: &str) {
         tracing::info!(message, "[Queue]");
-        if let Some(window) = self.window.upgrade() {
-            status::show(&window, level, message);
-        }
+        let kind = if level >= Level::Warning {
+            Kind::JobLoadFailed
+        } else {
+            Kind::Editing
+        };
+        notices::post(Notice::new(kind, message).level(level));
     }
 }
 

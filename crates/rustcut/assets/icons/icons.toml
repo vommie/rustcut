@@ -175,3 +175,10 @@ key_up = { tabler = "arrow-up", doc = "The Up arrow key on a key cap" }
 key_down = { tabler = "arrow-down", doc = "The Down arrow key on a key cap" }
 tip_hold = { tabler = "hand-click", doc = "A button that acts only when held (in its tooltip)" }
 jump_to = { tabler = "target-arrow", doc = "Show the option a message is about (jump mark, Q-N6)" }
+
+# --- Notices (M6.5) -------------------------------------------------------------------------------------------------
+notice_info = { tabler = "info-circle", doc = "A hint (toasts, banners, the bell's list)" }
+bell = { tabler = "bell", doc = "The history bell in the menu bar" }
+notice_mute = { tabler = "bell-off", doc = "Don't show this kind of message again" }
+chevron_left = { tabler = "chevron-left", doc = "Previous page (toast and banner pager)" }
+log_messages = { tabler = "message-dots", doc = "Logs panel: the messages of this session" }

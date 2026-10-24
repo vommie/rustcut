@@ -28,7 +28,7 @@ pub fn index(choice: WhenDone) -> usize {
     CHOICES.iter().position(|c| *c == choice).unwrap_or(0)
 }
 
-/// The countdown before quit, suspend or power off; the banner over the video shows it, Escape aborts it.
+/// The countdown before quit, suspend or power off; its message has an Abort button, Escape aborts it too.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Countdown {
     pub action: WhenDone,
@@ -59,15 +59,19 @@ impl Countdown {
         Tick::Wait
     }
 
-    /// "Suspending in 5 s".
-    pub fn text(&self) -> String {
-        let verb = match self.action {
+    /// "Suspending" (the message's title: it stays while the seconds run).
+    pub const fn verb(&self) -> &'static str {
+        match self.action {
             WhenDone::Quit => "Quitting RustCut",
             WhenDone::Suspend => "Suspending",
             WhenDone::PowerOff => "Powering off",
             WhenDone::Nothing | WhenDone::Notify => "Done",
-        };
-        format!("The queue is done. {verb} in {} s", self.left)
+        }
+    }
+
+    /// "The queue is done. Suspending in 5 s".
+    pub fn text(&self) -> String {
+        format!("The queue is done. {} in {} s", self.verb(), self.left)
     }
 }
 

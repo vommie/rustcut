@@ -16,7 +16,7 @@ use slint::ComponentHandle as _;
 use super::ExportBridge;
 use super::dialog::{ConflictDialog, DialogInput, Outcome, silent_outcome};
 use super::state::JobFacts;
-use crate::ui::status::Level;
+use crate::ui::notices::{self, Kind, Notice};
 use crate::{Export, MainWindow};
 
 /// A job waiting for its target: everything but the target's stem and the overwrite flag.
@@ -51,7 +51,7 @@ impl ExportBridge {
         let draft = match self.draft(force_new) {
             Ok(draft) => draft,
             Err(message) => {
-                self.status(Level::Warning, &message);
+                Self::tell(Notice::new(Kind::SaveRefused, "The job was not saved").detail(message));
                 return;
             }
         };
@@ -76,7 +76,10 @@ impl ExportBridge {
                 Ok((scan, exists)) => bridge.decide(draft, scan, exists),
                 Err(e) => {
                     bridge.saving.set(false);
-                    bridge.status(Level::Error, &format!("The target folder could not be checked: {e}"));
+                    Self::tell(
+                        Notice::new(Kind::SaveFailed, "The job was not saved")
+                            .detail(format!("The target folder could not be checked: {e}")),
+                    );
                     bridge.publish();
                 }
             }
@@ -219,7 +222,10 @@ impl ExportBridge {
                 self.enqueue(draft, outcome);
             } else {
                 self.saving.set(false);
-                self.status(Level::Error, "The file exists and no free name was found.");
+                Self::tell(
+                    Notice::new(Kind::SaveFailed, "The job was not saved")
+                        .detail("The file exists and no free name was found."),
+                );
                 self.publish();
             }
             return;
@@ -298,7 +304,7 @@ impl ExportBridge {
                         editing.job_saved();
                     }
                 }
-                Err(e) => bridge.status(Level::Error, &format!("The job was not saved: {e}")),
+                Err(e) => Self::tell(Notice::new(Kind::SaveFailed, "The job was not saved").detail(e.to_string())),
             }
             bridge.rescan();
         });
@@ -317,7 +323,9 @@ impl ExportBridge {
         if clear && let Some(editor) = self.editor.upgrade() {
             editor.clear_sections();
         }
-        self.status(Level::Success, &format!("Job {id} queued: {file}"));
+        notices::clear_kind(Kind::SaveRefused);
+        notices::clear_kind(Kind::SaveFailed);
+        Self::tell(Notice::new(Kind::JobQueued, format!("Job {id} queued")).detail(file));
     }
 
     pub(super) fn with_dialog(&self, change: impl FnOnce(&mut ConflictDialog)) {
@@ -344,7 +352,7 @@ impl ExportBridge {
 
     fn cancel(&self) {
         if self.pending.borrow_mut().take().is_some() {
-            self.status(Level::Info, "Not saved: the conflict dialog was canceled.");
+            Self::tell(Notice::new(Kind::SaveCanceled, "Not saved").detail("The conflict dialog was canceled."));
         }
         self.publish_dialog();
         if let Some(window) = self.window.upgrade() {

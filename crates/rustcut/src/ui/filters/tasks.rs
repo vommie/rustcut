@@ -9,7 +9,7 @@ use rustcut_core::media::{detect_crop, detect_interlace};
 
 use super::FiltersBridge;
 use super::state::{Edge, InterlaceHint, Source};
-use crate::ui::status::Level;
+use crate::ui::notices::{Kind, Level, Notice};
 
 impl FiltersBridge {
     /// Starts the interlace check of the open file.
@@ -61,7 +61,10 @@ impl FiltersBridge {
             }
         };
         let Some((file, duration, frame, prefix)) = job else {
-            self.status(Level::Warning, "Black borders can be detected once a video is open.");
+            Self::tell(Notice::new(
+                Kind::NoVideo,
+                "Black borders can be detected once a video is open",
+            ));
             return;
         };
         self.state.borrow_mut().auto_crop_running = true;
@@ -83,11 +86,15 @@ impl FiltersBridge {
             match result {
                 Ok(found) if found.samples_used == 0 => {
                     bridge.publish_card();
-                    bridge.status(Level::Warning, "Only black frames were found; nothing to crop.");
+                    Self::tell(
+                        Notice::new(Kind::AutoCrop, "Nothing to crop")
+                            .detail("Only black frames were found.")
+                            .level(Level::Warning),
+                    );
                 }
                 Ok(found) if found.crop.is_identity() => {
                     bridge.publish_card();
-                    bridge.status(Level::Info, "No black borders found.");
+                    Self::tell(Notice::new(Kind::AutoCrop, "No black borders found").level(Level::Info));
                 }
                 Ok(found) => {
                     tracing::info!(crop = ?found.crop, samples = found.samples_used, "[Filters] Black borders");
@@ -110,14 +117,14 @@ impl FiltersBridge {
                         (v > 0).then(|| format!("{v} {name}"))
                     })
                     .collect();
-                    bridge.status(
-                        Level::Success,
-                        &format!("Black borders cropped: {} pixels", parts.join(", ")),
+                    Self::tell(
+                        Notice::new(Kind::AutoCrop, "Black borders cropped")
+                            .detail(format!("{} pixels", parts.join(", "))),
                     );
                 }
                 Err(e) => {
                     bridge.publish_card();
-                    bridge.status(Level::Error, &format!("Black borders not detected: {e}"));
+                    Self::tell(Notice::new(Kind::AutoCropFailed, "Black borders not detected").detail(e.to_string()));
                 }
             }
         });

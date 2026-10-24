@@ -288,6 +288,10 @@ fn the_log_source_round_trips_and_unknown_sources_read_as_the_job() {
     assert_eq!(read.logs.source, LogSource::RustView);
     let text = std::fs::read_to_string(dir.path().join("ui-state.toml")).unwrap();
     assert!(text.contains("source = \"rustview\""), "{text}");
+    state.logs.source = LogSource::Messages;
+    save(dir.path(), &state).unwrap();
+    let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+    assert_eq!(read.logs.source, LogSource::Messages);
     // 0.0.15 wrote no source; a later version's source keeps the rest of the panel.
     for text in [
         "version = 1\n[logs]\nsearch = \"x\"\n",

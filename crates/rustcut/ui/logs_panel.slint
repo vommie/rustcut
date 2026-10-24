@@ -86,6 +86,13 @@ export component LogsPanel inherits Rectangle {
                 clicked => { Logs.select-source(2); }
             }
 
+            IconButton {
+                icon: IconId.log-messages;
+                checked: Logs.source == 3;
+                tooltip: "The messages of this session";
+                clicked => { Logs.select-source(3); }
+            }
+
             Text {
                 horizontal-stretch: 1;
                 text: Logs.has-job ? Logs.title : "No job chosen";

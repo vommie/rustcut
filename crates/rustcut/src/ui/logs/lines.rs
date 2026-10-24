@@ -6,6 +6,7 @@ use rustcut_core::settings::LogSource;
 use rustcut_core::store::{LogLine, LogStream};
 
 use crate::app::log_book::BookLine;
+use crate::ui::notices::{Entry, Level as NoticeLevel};
 
 /// How a line is drawn (the numbers are `logs_panel.slint`'s).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -90,6 +91,38 @@ pub fn book_shown(lines: &[BookLine], source: LogSource, search: &str, errors_on
                 && (needle.is_empty() || text.to_lowercase().contains(&needle));
             keep.then(|| ShownLine {
                 number: usize::try_from(line.seq).unwrap_or(usize::MAX),
+                text,
+                level,
+            })
+        })
+        .collect()
+}
+
+/// The messages of this session (`LogSource::Messages`) that pass the filter: time, level, title and detail; a message
+/// that showed nowhere says so.
+pub fn messages_shown(entries: &[Entry], search: &str, errors_only: bool) -> Vec<ShownLine> {
+    let needle = search.trim().to_lowercase();
+    entries
+        .iter()
+        .filter_map(|entry| {
+            let (level, word) = match entry.level {
+                NoticeLevel::Error => (LineLevel::Error, "ERROR"),
+                NoticeLevel::Warning => (LineLevel::Warning, "WARN"),
+                NoticeLevel::Success => (LineLevel::Info, "OK"),
+                NoticeLevel::Info => (LineLevel::Info, "INFO"),
+            };
+            let mut text = format!("{} {word:<5} {}", entry.time, entry.title);
+            if !entry.detail.is_empty() {
+                text.push_str(" · ");
+                text.push_str(&entry.detail.replace('\n', " · "));
+            }
+            if entry.silent {
+                text.push_str(" (not shown)");
+            }
+            let keep = (!errors_only || level >= LineLevel::Warning)
+                && (needle.is_empty() || text.to_lowercase().contains(&needle));
+            keep.then(|| ShownLine {
+                number: usize::try_from(entry.seq).unwrap_or(usize::MAX),
                 text,
                 level,
             })
@@ -186,6 +219,38 @@ mod tests {
             level,
             text: text.into(),
         }
+    }
+
+    #[test]
+    fn the_messages_of_the_session() {
+        use crate::ui::notices::Kind;
+        let entry = |seq, level, title: &str, detail: &str, silent| Entry {
+            seq,
+            time: "15:42:07".into(),
+            kind: Kind::JobQueued,
+            level,
+            title: title.into(),
+            detail: detail.into(),
+            silent,
+            read: false,
+        };
+        let entries = [
+            entry(1, NoticeLevel::Success, "Job 3 queued", "clip - 03.mkv", false),
+            entry(2, NoticeLevel::Error, "Cannot open clip.mp4", "Invalid data", false),
+            entry(3, NoticeLevel::Info, "Section 2 added", "", true),
+        ];
+        let all = messages_shown(&entries, "", false);
+        let texts: Vec<&str> = all.iter().map(|l| l.text.as_str()).collect();
+        assert_eq!(
+            texts,
+            [
+                "15:42:07 OK    Job 3 queued · clip - 03.mkv",
+                "15:42:07 ERROR Cannot open clip.mp4 · Invalid data",
+                "15:42:07 INFO  Section 2 added (not shown)",
+            ]
+        );
+        assert_eq!(messages_shown(&entries, "", true).len(), 1);
+        assert_eq!(messages_shown(&entries, "CLIP.mp4", false).len(), 1);
     }
 
     #[test]

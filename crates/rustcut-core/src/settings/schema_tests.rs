@@ -4,6 +4,11 @@ use super::schema::*;
 use crate::render::DEFAULT_PROFILE_ID;
 use crate::settings::{LoadOutcome, VersionedFile as _, load, save};
 
+/// A version 1 file (every release before the notice system) loads through the one migration to version 2 without notes.
+fn clean_v1(outcome: &LoadOutcome<Settings>) -> bool {
+    matches!(outcome, LoadOutcome::Migrated { from: 1, notes, .. } if notes.is_empty())
+}
+
 #[test]
 fn defaults_survive_a_round_trip() {
     let dir = tempfile::tempdir().unwrap();
@@ -38,16 +43,13 @@ fn a_file_of_0_0_5_without_a_keymap_still_loads() {
                [player]\nauto_play = false\n";
     std::fs::write(dir.path().join("config.toml"), old).unwrap();
     let outcome = load::<Settings>(dir.path(), &dir.path().join("b")).unwrap();
-    assert!(
-        matches!(outcome, LoadOutcome::Loaded { ref notes, .. } if notes.is_empty()),
-        "{outcome:?}"
-    );
+    assert!(clean_v1(&outcome), "{outcome:?}");
     let value = outcome.into_value();
     assert!(value.keymap.is_empty());
     assert_eq!((value.editor.seek_step_secs, value.editor.seek_step_long_secs), (5, 60));
     assert!(!value.player.auto_play);
-    // Nothing to back up: no migration happened.
-    assert!(!dir.path().join("b").exists());
+    // Version 1 files go through the notice migration of version 2 (backed up first).
+    assert!(dir.path().join("b").exists());
 }
 
 #[test]
@@ -137,7 +139,7 @@ fn user_profiles_round_trip_and_a_broken_one_is_skipped() {
     assert_eq!(kept.video.preset.as_deref(), Some("slow"));
     assert_eq!((kept.video.aq_mode.as_deref(), kept.video.scene_cuts), (None, None));
     assert_eq!(read.render.default_profile, DEFAULT_PROFILE_ID, "\"old\" is gone");
-    assert!(!dir.path().join("b").exists(), "no migration, no backup");
+    assert!(dir.path().join("b").exists(), "version 1 is migrated, backed up first");
 }
 
 #[test]
@@ -167,16 +169,12 @@ fn hold_time_and_draft_on_load_have_defaults_and_are_tolerant() {
     let old = "version = 1\n[general]\nsingle_instance = false\n[editor]\nauto_section = \"whole_video\"\n";
     std::fs::write(dir.path().join("config.toml"), old).unwrap();
     let outcome = load::<Settings>(dir.path(), &dir.path().join("b")).unwrap();
-    assert!(
-        matches!(outcome, LoadOutcome::Loaded { ref notes, .. } if notes.is_empty()),
-        "{outcome:?}"
-    );
+    assert!(clean_v1(&outcome), "{outcome:?}");
     let value = outcome.into_value();
     assert_eq!(value.general.hold_to_confirm_ms, 2_000);
     assert!(!value.general.single_instance);
     assert_eq!(value.editor.draft_on_load, DraftOnLoad::Replace);
     assert_eq!(value.editor.auto_section, AutoSection::WholeVideo);
-    assert!(!dir.path().join("b").exists());
 
     // A value of a later version reads as the default; the rest of the section stays.
     let text = "version = 1\n[editor]\nseek_step_secs = 4\ndraft_on_load = \"teleport\"\n";
@@ -213,14 +211,10 @@ fn appearance_and_tag_history_have_defaults_and_are_sanitized() {
     let old = "version = 1\n[rustview]\ntimeout_secs = 7\n";
     std::fs::write(dir.path().join("config.toml"), old).unwrap();
     let outcome = load::<Settings>(dir.path(), &dir.path().join("b")).unwrap();
-    assert!(
-        matches!(outcome, LoadOutcome::Loaded { ref notes, .. } if notes.is_empty()),
-        "{outcome:?}"
-    );
+    assert!(clean_v1(&outcome), "{outcome:?}");
     let value = outcome.into_value();
     assert_eq!(value.appearance, AppearanceSettings::default());
     assert_eq!((value.rustview.timeout_secs, value.rustview.tag_history_size), (7, 20));
-    assert!(!dir.path().join("b").exists());
 
     let mut s = Settings::default();
     s.appearance.tooltip_delay_ms = 60_000;
@@ -236,14 +230,10 @@ fn dialog_settings_have_defaults_bad_values_read_as_defaults_and_ranges_are_kept
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("config.toml"), "version = 1\n[queue]\nworkers = 2\n").unwrap();
     let outcome = load::<Settings>(dir.path(), &dir.path().join("b")).unwrap();
-    assert!(
-        matches!(outcome, LoadOutcome::Loaded { ref notes, .. } if notes.is_empty()),
-        "{outcome:?}"
-    );
+    assert!(clean_v1(&outcome), "{outcome:?}");
     let value = outcome.into_value();
     assert_eq!(value.dialogs, DialogSettings::default());
     assert_eq!(value.queue.workers, 2);
-    assert!(!dir.path().join("b").exists());
     let c = &value.dialogs.conflict;
     assert_eq!(
         (
@@ -291,4 +281,60 @@ fn sidecar_writing_is_on_by_default_and_old_files_load() {
     assert!(s.hashing.write_sidecar);
     let s: Settings = toml::from_str("version = 1\n[hashing]\nwrite_sidecar = false\n").unwrap();
     assert!(!s.hashing.write_sidecar);
+}
+
+#[test]
+fn a_file_of_0_0_24_moves_its_notice_options_with_a_backup() {
+    use crate::settings::{KindRoute, NoticePlace};
+    let dir = tempfile::tempdir().unwrap();
+    let old = "version = 1\n[warnings]\nno_tags = false\nknown_source = false\n[desktop]\ntaskbar_progress = false\n\
+               [desktop.notifications]\nenabled = true\njob_finished = true\njob_failed = true\nqueue_done = true\n\
+               timeout_secs = 12\n";
+    std::fs::write(dir.path().join("config.toml"), old).unwrap();
+    let outcome = load::<Settings>(dir.path(), &dir.path().join("b")).unwrap();
+    let LoadOutcome::Migrated {
+        value,
+        from: 1,
+        backup,
+        notes,
+    } = outcome
+    else {
+        panic!("{outcome:?}")
+    };
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(
+        std::fs::read_to_string(&backup).unwrap(),
+        old,
+        "the old file is backed up first"
+    );
+    assert!(
+        !value.warnings.no_tags && !value.desktop.taskbar_progress,
+        "the other values stay"
+    );
+    assert_eq!(value.notices.desktop.timeout_secs, 12);
+    assert_eq!(
+        value.notices.kinds.get("job_finished"),
+        Some(&KindRoute {
+            place: None,
+            desktop: Some(true)
+        })
+    );
+    assert_eq!(
+        value.notices.kinds.get("known_source"),
+        Some(&KindRoute {
+            place: Some(NoticePlace::Nothing),
+            desktop: None
+        })
+    );
+    assert!(
+        !value.notices.kinds.contains_key("job_failed"),
+        "a default stays a default"
+    );
+    save(dir.path(), &value).unwrap();
+    let text = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
+    assert!(text.starts_with("version = 2"), "{text}");
+    assert!(
+        !text.contains("[desktop.notifications]") && !text.contains("known_source = false"),
+        "{text}"
+    );
 }

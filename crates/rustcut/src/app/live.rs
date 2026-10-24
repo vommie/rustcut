@@ -12,11 +12,13 @@ use slint::ComponentHandle as _;
 
 use super::SettingsWriter;
 use super::logging::LevelSetter;
+use crate::ui::dispatcher::UiDispatcher;
 use crate::ui::editing::JobEditor;
 use crate::ui::editor::Editor;
 use crate::ui::export::ExportBridge;
 use crate::ui::filters::FiltersBridge;
 use crate::ui::media_info::MediaInfoBridge;
+use crate::ui::notices::NoticeCenter;
 use crate::ui::player::PlayerBridge;
 use crate::ui::power::PowerBridge;
 use crate::ui::probe::ProbeBridge;
@@ -48,6 +50,8 @@ pub struct Parts {
     pub instance: Box<dyn Fn(bool)>,
     pub power: Weak<PowerBridge>,
     pub tray: Weak<TrayBridge>,
+    pub notices: Weak<NoticeCenter>,
+    pub ui: UiDispatcher,
 }
 
 /// The hold time and the tooltips of the main window.
@@ -123,10 +127,16 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
         }
         send_queue(&p.queue, QueueCommand::SetRenderEnv(Box::new(env)));
     }
-    if before.warnings.known_source != after.warnings.known_source
+    let known_source = crate::ui::media_info::known_source::wanted(after);
+    if crate::ui::media_info::known_source::wanted(before) != known_source
         && let Some(media) = p.media.upgrade()
     {
-        media.set_known_source(after.warnings.known_source);
+        media.set_known_source(known_source);
+    }
+    if before.notices != after.notices
+        && let Some(center) = p.notices.upgrade()
+    {
+        center.apply_settings(&after.notices);
     }
     if before.hashing != after.hashing
         && let Some(media) = p.media.upgrade()
@@ -182,6 +192,12 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
 /// encoders are checked again with the new ffmpeg (the Codecs panel and the profile editor follow).
 fn programs_changed(p: &Parts, after: &Settings) {
     tracing::info!("[Settings] Programs changed; checking the encoders again");
+    super::tools::check(
+        &p.runtime,
+        &p.ui,
+        after.advanced.ffmpeg.clone(),
+        after.advanced.ffprobe.clone(),
+    );
     if let Some(media) = p.media.upgrade() {
         media.set_ffprobe(after.advanced.ffprobe.clone());
     }

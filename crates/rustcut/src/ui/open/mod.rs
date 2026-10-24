@@ -23,9 +23,9 @@ use crate::ui::editor::Editor;
 use crate::ui::export::ExportBridge;
 use crate::ui::filters::FiltersBridge;
 use crate::ui::media_info::MediaInfoBridge;
+use crate::ui::notices::{self, Kind, Level, Notice};
 use crate::ui::player::PlayerBridge;
 use crate::ui::probe::ProbeBridge;
-use crate::ui::status::{self, Level};
 use crate::{MainWindow, Playback};
 
 pub struct FileOpener {
@@ -135,11 +135,11 @@ impl FileOpener {
             let opened = match kind {
                 Ok(true) => opener.open_checked(&path, start, then.is_some()),
                 Ok(false) => {
-                    opener.report(Level::Warning, &format!("Not a file: {}", path.display()));
+                    Self::report(Level::Warning, format!("Not a file: {}", path.display()), String::new());
                     false
                 }
                 Err(e) => {
-                    opener.report(Level::Error, &format!("Cannot open {}: {e}", path.display()));
+                    Self::report(Level::Error, format!("Cannot open {}", file_name(&path)), e.to_string());
                     false
                 }
             };
@@ -173,7 +173,7 @@ impl FileOpener {
             None => player.open(path),
         };
         if let Err(e) = result {
-            self.report(Level::Error, &format!("Cannot open {}: {e}", path.display()));
+            Self::report(Level::Error, format!("Cannot open {}", file_name(path)), e.to_string());
             return false;
         }
         tracing::info!(path = %path.display(), "[Open] Opened");
@@ -191,8 +191,11 @@ impl FileOpener {
         }
         if let Some(window) = self.window.upgrade() {
             window.set_window_title(title(Some(path)).as_str().into());
-            status::show(&window, Level::Info, "Ready");
         }
+        // The file opens: an earlier file's problems are over.
+        notices::clear_kind(Kind::OpenFailed);
+        notices::clear_kind(Kind::PlaybackFailed);
+        notices::post(Notice::new(Kind::Ready, "Ready"));
         true
     }
 
@@ -226,7 +229,11 @@ impl FileOpener {
             }
         });
         if let Err(e) = spawned {
-            self.report(Level::Error, &format!("The file dialog could not be opened: {e}"));
+            Self::report(
+                Level::Error,
+                "The file dialog could not be opened".to_owned(),
+                e.to_string(),
+            );
         }
     }
 
@@ -253,16 +260,26 @@ impl FileOpener {
         }
     }
 
-    fn report(&self, level: Level, message: &str) {
+    /// A file that does not open: a banner with the way to the log, where the details are (Q-N8 #12).
+    fn report(level: Level, title: String, detail: String) {
         match level {
-            Level::Error => tracing::error!("[Open] {message}"),
-            Level::Warning => tracing::warn!("[Open] {message}"),
-            Level::Info | Level::Success => tracing::info!("[Open] {message}"),
+            Level::Error => tracing::error!(detail, "[Open] {title}"),
+            Level::Warning => tracing::warn!(detail, "[Open] {title}"),
+            Level::Info | Level::Success => tracing::info!(detail, "[Open] {title}"),
         }
-        if let Some(window) = self.window.upgrade() {
-            status::show(&window, level, message);
-        }
+        notices::post(
+            Notice::new(Kind::OpenFailed, title)
+                .detail(detail)
+                .level(level)
+                .action("Show log", notices::show_app_log),
+        );
     }
+}
+
+/// "clip.mp4" of a path (the whole path when it has no name).
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())
 }
 
 /// Opens the first of `files` forwarded by a second start and brings the window to the front (UI thread).

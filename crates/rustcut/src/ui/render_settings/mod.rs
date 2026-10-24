@@ -27,7 +27,7 @@ use tokio::sync::watch;
 use self::state::{Check, CheckStatus, Encoders, PanelState};
 use self::view::RowView;
 use crate::app::SettingsWriter;
-use crate::ui::status::{self, Level};
+use crate::ui::notices::{self, Notice};
 use crate::util::model::sync;
 use crate::{MainWindow, OptionRowView, RenderIssueView, RenderSettings};
 
@@ -245,9 +245,9 @@ impl RenderSettingsBridge {
             let profiles = self.state.borrow().library.user().to_vec();
             self.settings.borrow_mut().render.profiles.clone_from(&profiles);
             if !self.writer.update(|settings| settings.render.profiles = profiles) {
-                self.status(
-                    Level::Warning,
-                    "config.toml is from a newer RustCut: the profiles are not saved.",
+                Self::tell(
+                    Notice::new(notices::Kind::SettingsReadOnly, "The profiles are not saved")
+                        .detail("config.toml is from a newer RustCut."),
                 );
             }
         }
@@ -328,11 +328,9 @@ impl RenderSettingsBridge {
         self.publish();
     }
 
-    fn status(&self, level: Level, message: &str) {
-        tracing::info!("[Render] {message}");
-        if let Some(window) = self.window.upgrade() {
-            status::show(&window, level, message);
-        }
+    fn tell(notice: Notice) {
+        tracing::info!("[Render] {}", notice.text());
+        notices::post(notice);
     }
 
     /// Shows the whole panel.

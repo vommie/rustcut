@@ -1,8 +1,9 @@
 //! General, Warnings & Confirmations, Desktop Integration, Appearance and Advanced & Logs.
 
-use rustcut_core::settings::{GeneralSettings, Settings};
+use rustcut_core::settings::{GeneralSettings, NoticePlace, Settings};
 
 use super::Card;
+use crate::ui::notices::{self, Kind as NoticeKind};
 use crate::ui::settings::field::{Field, Kind, Value, WRONG_VALUE, always, number, path_field, switch};
 
 pub static GENERAL: &[Card] = &[
@@ -106,18 +107,50 @@ pub static WARNINGS: &[Card] = &[
     Card {
         title: "When a video opens",
         description: "",
-        fields: &[switch!(
-            "warnings.known_source",
-            "Warn about a source that was cut before",
-            "Computes the video's MD5 in the background (or takes it from RustView or a .md5 file) and shows a \
-             banner when RustView knows it from an earlier cut. Off: nothing is read.",
-            warnings.known_source
-        )],
+        fields: &[Field {
+            key: "notices.kinds.known_source.place",
+            label: "Warn about a source that was cut before",
+            help: "Computes the video's MD5 in the background (or takes it from RustView or a .md5 file) and shows a \
+                   banner when RustView knows it from an earlier cut. Off: nothing is read.",
+            kind: Kind::Switch,
+            live: true,
+            get: |s| Value::Bool(notices::place_of(&s.notices, NoticeKind::KnownSource) != NoticePlace::Nothing),
+            set: |s, v| {
+                let place = if v.as_bool()? {
+                    NoticeKind::KnownSource.info().place
+                } else {
+                    NoticePlace::Nothing
+                };
+                notices::set_place(&mut s.notices, NoticeKind::KnownSource, place)
+            },
+            enabled: always,
+            indent: false,
+        }],
     },
 ];
 
 fn notifications_on(s: &Settings) -> bool {
-    s.desktop.notifications.enabled
+    s.notices.desktop.enabled
+}
+
+/// A switch for whether a message kind also goes to the desktop (`[notices.kinds.<id>] desktop`).
+macro_rules! desktop_switch {
+    ($key:literal, $label:literal, $help:literal, $kind:ident) => {
+        Field {
+            key: $key,
+            label: $label,
+            help: $help,
+            kind: Kind::Switch,
+            live: true,
+            get: |s| Value::Bool(notices::desktop_of(&s.notices, NoticeKind::$kind)),
+            set: |s, v| {
+                notices::set_desktop(&mut s.notices, NoticeKind::$kind, v.as_bool()?);
+                Ok(())
+            },
+            enabled: always,
+            indent: false,
+        }
+    };
 }
 
 fn tray_on(s: &Settings) -> bool {
@@ -130,37 +163,37 @@ pub static DESKTOP: &[Card] = &[
         description: "Desktop notifications about the queue.",
         fields: &[
             switch!(
-                "desktop.notifications.enabled",
+                "notices.desktop.enabled",
                 "Show notifications",
                 "Master switch for every notification below.",
-                desktop.notifications.enabled
+                notices.desktop.enabled
             ),
-            switch!(
-                "desktop.notifications.job_finished",
+            desktop_switch!(
+                "notices.kinds.job_finished.desktop",
                 "A job finished",
                 "One notification per finished job, with Open folder.",
-                desktop.notifications.job_finished
+                JobFinished
             )
             .under(notifications_on),
-            switch!(
-                "desktop.notifications.job_failed",
+            desktop_switch!(
+                "notices.kinds.job_failed.desktop",
                 "A job failed",
-                "With the reason ffmpeg gave.",
-                desktop.notifications.job_failed
+                "With the reason ffmpeg gave, while RustCut is not in front.",
+                JobFailed
             )
             .under(notifications_on),
-            switch!(
-                "desktop.notifications.queue_done",
+            desktop_switch!(
+                "notices.kinds.queue_done.desktop",
                 "The queue is done",
-                "When the last waiting job ended.",
-                desktop.notifications.queue_done
+                "When the last waiting job ended, while RustCut is not in front.",
+                QueueDone
             )
             .under(notifications_on),
             number!(
-                "desktop.notifications.timeout_secs",
+                "notices.desktop.timeout_secs",
                 "Shown for",
                 "Seconds a notification stays; 0 = until it is dismissed.",
-                desktop.notifications.timeout_secs: u16,
+                notices.desktop.timeout_secs: u16,
                 0..=600,
                 1,
                 "s"

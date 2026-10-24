@@ -29,8 +29,8 @@ use rustcut_player::VideoFilter;
 use slint::{ComponentHandle as _, ModelRc, SharedString, VecModel};
 
 use self::state::{CropMode, FiltersState, InterlaceHint, Source};
+use crate::ui::notices::{self, Kind, Level, Notice};
 use crate::ui::player::PlayerBridge;
-use crate::ui::status::{self, Level};
 use crate::util::model::sync;
 use crate::{CropOverlay, FilterRowView, Filters, MainWindow};
 
@@ -224,7 +224,7 @@ impl FiltersBridge {
 
     pub fn reset(&self) {
         self.update(FiltersState::reset);
-        self.status(Level::Info, "Filters reset");
+        Self::tell(Notice::new(Kind::FiltersReset, "Filters reset"));
     }
 
     pub fn rotate(&self, clockwise: bool) {
@@ -238,7 +238,9 @@ impl FiltersBridge {
     /// Starts or finishes editing the crop on the video (the button, the key).
     pub fn toggle_crop_edit(&self) {
         if self.suspended.get() {
-            self.status(Level::Info, "The probe render is playing: Esc returns to the source.");
+            Self::tell(
+                Notice::new(Kind::ProbeLocked, "The probe render is playing").detail("Esc returns to the source."),
+            );
             return;
         }
         let session = self.state.borrow().crop_session().map(|s| s.mode);
@@ -246,7 +248,10 @@ impl FiltersBridge {
             Some(CropMode::Edit) => self.end_crop(true),
             Some(CropMode::Quick) | None => {
                 if !self.state.borrow_mut().begin_crop(CropMode::Edit) {
-                    self.status(Level::Warning, "The crop can be edited once a video is open.");
+                    Self::tell(Notice::new(
+                        Kind::NoVideo,
+                        "The crop can be edited once a video is open",
+                    ));
                 }
                 self.publish();
             }
@@ -274,11 +279,13 @@ impl FiltersBridge {
         }
     }
 
-    fn status(&self, level: Level, message: &str) {
-        tracing::info!("[Filters] {message}");
-        if let Some(window) = self.window.upgrade() {
-            status::show(&window, level, message);
+    fn tell(notice: Notice) {
+        if notice.level >= Level::Warning {
+            tracing::warn!("[Filters] {}", notice.text());
+        } else {
+            tracing::info!("[Filters] {}", notice.text());
         }
+        notices::post(notice);
     }
 
     // --- Showing the state ------------------------------------------------------------------------------------------

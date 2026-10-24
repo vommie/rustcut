@@ -10,7 +10,7 @@ use slint::ComponentHandle as _;
 
 use super::ExportBridge;
 use super::save::Draft;
-use crate::ui::status::Level;
+use crate::ui::notices::{Kind, Notice};
 use crate::{Export, MainWindow};
 
 /// What the job lacks that the warnings ask about.
@@ -146,9 +146,8 @@ impl ExportBridge {
             window.invoke_focus_keys();
         }
         if answer == Answer::BackToTagging {
-            self.status(
-                Level::Info,
-                "Not saved: choose the tags and the rating, then save again.",
+            Self::tell(
+                Notice::new(Kind::SaveCanceled, "Not saved").detail("Choose the tags and the rating, then save again."),
             );
             if let Some(tags) = self.tags.upgrade() {
                 tags.reveal();
@@ -160,9 +159,9 @@ impl ExportBridge {
             pending.missing.silence(&mut self.warnings.borrow_mut());
             let warnings = self.warnings.borrow().clone();
             if !self.writer.update(|s| s.warnings = warnings) {
-                self.status(
-                    Level::Warning,
-                    "config.toml is from a newer RustCut: the choice is kept for this run only.",
+                Self::tell(
+                    Notice::new(Kind::SettingsReadOnly, "Not saved")
+                        .detail("config.toml is from a newer RustCut: the choice is kept for this run only."),
                 );
             }
         }
