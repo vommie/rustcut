@@ -179,3 +179,37 @@ fn every_video_format_rustcut_lists_is_read_by_the_installed_ffmpeg() {
         assert!(demuxers.contains(demuxer), ".{ext}: ffmpeg has no demuxer {demuxer}");
     }
 }
+
+/// The keyframe alone makes the picture of every test video at once: the fallbacks (an exact decode, the start) are for
+/// odd files, not the rule. Before the timestamps passed through, 10 of these 18 files gave no picture this way.
+#[test]
+fn the_fast_picture_works_for_every_test_video() {
+    use rustcut_core::media::{picture_time, thumbnail_args};
+    let rt = runtime();
+    let service = PreviewService::new(PreviewOptions::default());
+    let dir = golden_dir();
+    let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.is_file() && rustcut_core::media::is_video_file(p))
+        .collect();
+    files.sort();
+    assert!(files.len() >= 15, "{} test videos", files.len());
+    for file in files {
+        let preview = rt.block_on(service.preview(&file)).unwrap();
+        let info = preview.info.as_ref().unwrap();
+        let (stream, _) = info.primary_video().unwrap();
+        let at = picture_time(info.duration(), 10);
+        let out = std::process::Command::new("ffmpeg")
+            .args(thumbnail_args(&file, stream.index, at, true))
+            .output()
+            .unwrap();
+        assert_eq!(
+            out.stdout.len(),
+            usize::try_from(THUMB_WIDTH * THUMB_HEIGHT * 4).unwrap(),
+            "{}: {}",
+            file.display(),
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+}

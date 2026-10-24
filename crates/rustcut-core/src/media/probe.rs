@@ -38,6 +38,9 @@ pub struct ProbeOptions {
     pub timeout: Duration,
     /// Time limit of [`probe_frame_timing`].
     pub timing_timeout: Duration,
+    /// Run at a low CPU and drive priority (the previews of the conflict dialog): the player and the desktop come
+    /// first. Off for what the user waits for (the open video's description).
+    pub background: bool,
 }
 
 impl Default for ProbeOptions {
@@ -46,6 +49,7 @@ impl Default for ProbeOptions {
             program: None,
             timeout: PROBE_TIMEOUT,
             timing_timeout: TIMING_TIMEOUT,
+            background: false,
         }
     }
 }
@@ -103,7 +107,14 @@ pub fn timing_args(file: &Path, stream_index: u32) -> Vec<OsString> {
 /// Probes `file`'s container and streams (without [`MediaInfo::frame_timing`]). Must run on the tokio runtime;
 /// dropping the future kills ffprobe.
 pub async fn probe(file: &Path, options: &ProbeOptions) -> Result<MediaInfo, ProbeError> {
-    let output = run(options.program(), probe_args(file), options.timeout, MAX_OUTPUT).await?;
+    let output = run_as(
+        options.program(),
+        probe_args(file),
+        options.timeout,
+        MAX_OUTPUT,
+        options.background,
+    )
+    .await?;
     match (decode(&output.stdout), output.status.success()) {
         (Ok(info), true) => Ok(info),
         (Err(DecodeError::Reported(reason)), _) => Err(ProbeError::Unreadable(reason)),
@@ -170,6 +181,21 @@ pub(crate) async fn run(
     timeout: Duration,
     max_stdout: u64,
 ) -> Result<Output, ProbeError> {
+    run_as(program, args, timeout, max_stdout, false).await
+}
+
+/// Niceness of a background tool (never below RustCut's own).
+const BACKGROUND_NICE: i32 = 10;
+
+/// [`run`], in the `background` at niceness [`BACKGROUND_NICE`] and the lowest best-effort drive priority: it waits for
+/// the player and the desktop, and still goes ahead of renders (they use the idle class).
+pub(crate) async fn run_as(
+    program: &Path,
+    args: Vec<OsString>,
+    timeout: Duration,
+    max_stdout: u64,
+    background: bool,
+) -> Result<Output, ProbeError> {
     let program_name = || program.display().to_string();
     let mut command = Command::new(program);
     command
@@ -187,6 +213,9 @@ pub(crate) async fn run(
             error: e.to_string(),
         },
     })?;
+    if background && let Some(pid) = child.id() {
+        lower_priority(pid);
+    }
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
     let collect = async {
@@ -215,6 +244,22 @@ pub(crate) async fn run(
     })
 }
 
+/// Lowers a started tool's CPU and drive priority; a failure only costs speed elsewhere (logged).
+fn lower_priority(pid: u32) {
+    let Some(pid) = i32::try_from(pid).ok().and_then(rustix::process::Pid::from_raw) else {
+        return;
+    };
+    let own = rustix::process::getpriority_process(None).unwrap_or(0);
+    if let Err(e) = rustix::process::setpriority_process(Some(pid), BACKGROUND_NICE.max(own)) {
+        tracing::debug!(error = %e, "[Media] Niceness of a background tool not set");
+    }
+    let io = ioprio::Priority::new(ioprio::Class::BestEffort(ioprio::BePriorityLevel::lowest()));
+    let target = ioprio::Target::Process(ioprio::Pid::from_raw(pid.as_raw_nonzero().get()));
+    if let Err(e) = ioprio::set_priority(target, io) {
+        tracing::debug!(error = %e, "[Media] Drive priority of a background tool not set");
+    }
+}
+
 /// Reads a pipe to its end, failing when it carries more than `limit` bytes.
 async fn read_capped(pipe: Option<impl AsyncRead + Unpin>, limit: u64) -> Result<Vec<u8>, String> {
     let Some(pipe) = pipe else { return Ok(Vec::new()) };
@@ -240,6 +285,23 @@ fn last_line(stderr: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_background_tool_runs_at_a_low_priority() {
+        // `sh` reports its own niceness and drive priority class/level (from /proc and ionice-free procfs fields).
+        let script = "read -r _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ n _ < /proc/$$/stat; echo $n";
+        let output = run_as(
+            Path::new("sh"),
+            vec!["-c".into(), format!("sleep 0.2; {script}").into()],
+            Duration::from_secs(5),
+            1024,
+            true,
+        )
+        .await
+        .unwrap();
+        let nice: i32 = String::from_utf8_lossy(&output.stdout).trim().parse().unwrap();
+        assert!(nice >= BACKGROUND_NICE, "niceness {nice}");
+    }
 
     #[test]
     fn arguments_keep_the_path_a_path() {

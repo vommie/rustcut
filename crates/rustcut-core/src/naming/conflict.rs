@@ -38,18 +38,30 @@ pub struct ExistingFile {
 
 /// Reads the names in `folder` (never fails: an unreadable folder is reported as such).
 pub async fn scan_folder(folder: &Path) -> FolderScan {
-    let Ok(mut entries) = tokio::fs::read_dir(folder).await else {
+    let folder = folder.to_path_buf();
+    // One blocking pass (tokio's `read_dir` hops to the blocking pool every 32 entries): names only, no `stat` per
+    // entry, so the kernel answers from its directory cache without touching the drive.
+    tokio::task::spawn_blocking(move || scan_folder_now(&folder))
+        .await
+        .unwrap_or_default()
+}
+
+/// [`scan_folder`] on the calling thread.
+pub fn scan_folder_now(folder: &Path) -> FolderScan {
+    let Ok(entries) = std::fs::read_dir(folder) else {
         return FolderScan::default();
     };
     let mut names = HashSet::new();
-    while names.len() < MAX_SCANNED {
-        match entries.next_entry().await {
-            Ok(Some(entry)) => {
+    for entry in entries {
+        if names.len() >= MAX_SCANNED {
+            break;
+        }
+        match entry {
+            Ok(entry) => {
                 if let Some(name) = entry.file_name().to_str() {
                     names.insert(name.to_owned());
                 }
             }
-            Ok(None) => break,
             Err(e) => {
                 tracing::debug!(folder = %folder.display(), error = %e, "[Export] Folder scan stopped");
                 break;

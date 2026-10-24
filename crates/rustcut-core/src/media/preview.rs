@@ -4,8 +4,9 @@
 //!
 //! A few files at a time (`PreviewOptions::parallel`, settings `dialogs.conflict.parallel_pictures`); a batch reads its
 //! first file (the existing target) before the others. The picture is the keyframe at or before the chosen place,
-//! decoded alone on one thread (2-4 times faster than decoding up to the exact time; about 50 ms for 1080p H.264 or AV1
-//! here), with an exact decode and then the file's start as fallbacks. Results are cached by path, size, modification
+//! decoded alone on one thread with its timestamp passed through (40-50 ms and 0.2-2 MB read per file here, where an
+//! exact decode reads up to 6.5 MB), with an exact decode and then the file's start as fallbacks. ffprobe and ffmpeg run
+//! at a low CPU and drive priority, so the player and the desktop never wait for them. Results are cached by path, size, modification
 //! time and place (a changed file is read again); two requests for the same file share one read. Dropping a request
 //! kills its ffprobe or ffmpeg.
 
@@ -21,7 +22,7 @@ use tokio::sync::{Semaphore, mpsc};
 use tokio::task::{JoinHandle, JoinSet};
 
 use super::model::MediaInfo;
-use super::probe::{ProbeOptions, probe, run as run_tool};
+use super::probe::{ProbeOptions, probe, run_as};
 use crate::time::Timestamp;
 
 /// Width and height of a picture (16:9; a picture of another shape is fitted inside and the rest left transparent).
@@ -324,6 +325,7 @@ async fn read(path: &Path, key: &Key, options: &PreviewOptions) -> Preview {
     let probe_options = ProbeOptions {
         program: programs.ffprobe.clone(),
         timeout: PROBE_LIMIT,
+        background: true,
         ..ProbeOptions::default()
     };
     let mut preview = Preview {
@@ -375,9 +377,15 @@ async fn read(path: &Path, key: &Key, options: &PreviewOptions) -> Preview {
 
 async fn picture(ffmpeg: &Path, path: &Path, stream: u32, at: Timestamp, fast: bool) -> Result<Thumbnail, String> {
     let size = picture_bytes();
-    let output = run_tool(ffmpeg, thumbnail_args(path, stream, at, fast), PICTURE_LIMIT, size)
-        .await
-        .map_err(|e| e.to_string())?;
+    let output = run_as(
+        ffmpeg,
+        thumbnail_args(path, stream, at, fast),
+        PICTURE_LIMIT,
+        size,
+        true,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
     if !output.status.success() {
         return Err(output.failure().to_string());
     }
@@ -404,7 +412,9 @@ pub fn picture_time(duration: Option<Timestamp>, percent: u8) -> Timestamp {
 
 /// ffmpeg's arguments for one RGBA picture of [`THUMB_WIDTH`] x [`THUMB_HEIGHT`] of the stream with ffmpeg's index
 /// `stream` at `at`: the source's pixel aspect and rotation applied (ffmpeg turns by itself), fitted inside and centered
-/// on a transparent ground. `fast` decodes only the keyframe at or before `at`, on one thread.
+/// on a transparent ground. `fast` decodes only the keyframe at or before `at`, on one thread. Timestamps pass through:
+/// a keyframe before `at` would otherwise be dropped (no picture), and ffmpeg's demuxer would read on meanwhile (up to
+/// the whole file; measured 2026-10-24: 0.2-2 MB read per picture with passthrough, 1-22 MB without).
 pub fn thumbnail_args(file: &Path, stream: u32, at: Timestamp, fast: bool) -> Vec<OsString> {
     let (w, h) = (THUMB_WIDTH, THUMB_HEIGHT);
     let filter = format!(
@@ -426,7 +436,21 @@ pub fn thumbnail_args(file: &Path, stream: u32, at: Timestamp, fast: bool) -> Ve
     args.push(format!("0:{stream}").into());
     args.extend(["-frames:v", "1", "-vf"].map(OsString::from));
     args.push(filter.into());
-    args.extend(["-an", "-sn", "-dn", "-f", "rawvideo", "-pix_fmt", "rgba", "-"].map(OsString::from));
+    args.extend(
+        [
+            "-an",
+            "-sn",
+            "-dn",
+            "-fps_mode",
+            "passthrough",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgba",
+            "-",
+        ]
+        .map(OsString::from),
+    );
     args
 }
 

@@ -95,8 +95,9 @@ notify-rust = "4"
 isolang = "2"
 
 # Process control of the ffmpeg renders: signals to the process group (pause = SIGSTOP/SIGCONT, cancel), niceness, and the
-# no-replace rename that puts a verified render onto its target without ever clobbering a file that appeared meanwhile.
-rustix = { version = "1", features = ["process", "fs"] }
+# no-replace rename that puts a verified render onto its target without ever clobbering a file that appeared meanwhile;
+# `posix_fadvise` and the thread id for the hash reads (read-ahead advice, drive priority of the reading thread).
+rustix = { version = "1", features = ["process", "fs", "thread"] }
 # The idle I/O class for the renders (`ioprio_set` on the process group), so the desktop stays responsive.
 ioprio = "0.2"
 # Shell quoting of the ffmpeg command line in the job log (copy and paste it into a terminal to reproduce a render).
