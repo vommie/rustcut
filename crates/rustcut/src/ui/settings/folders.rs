@@ -97,7 +97,11 @@ mod tests {
         assert_eq!(remove(&mut folders, 1).unwrap().path, PathBuf::from("/"));
         assert_eq!(remove(&mut folders, 7), None);
         assert_eq!(follow_selection(&before, &folders, Some(2)), Some(1));
-        assert_eq!(follow_selection(&before, &folders, Some(1)), None, "removed: back to the source folder");
+        assert_eq!(
+            follow_selection(&before, &folders, Some(1)),
+            None,
+            "removed: back to the source folder"
+        );
         assert_eq!(follow_selection(&before, &folders, None), None);
     }
 }

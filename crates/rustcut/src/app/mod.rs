@@ -2,8 +2,8 @@
 //! window, event loop, and the one quit path (`shutdown`).
 
 mod cli;
-mod logging;
 mod live;
+mod logging;
 mod persistence;
 mod services;
 mod shutdown;
@@ -29,6 +29,7 @@ use self::services::{
     forward, listen, open_store, start_queue, start_runtime, stop_hashing, stop_player, stop_queue, stop_store,
     stop_sync,
 };
+use crate::MainWindow;
 use crate::desktop::instance;
 use crate::ui::dispatcher::{SlintSink, UiDispatcher};
 use crate::ui::dock::{DockBridge, PanelId, persist as dock_persist};
@@ -49,7 +50,6 @@ use crate::ui::render_settings::RenderSettingsBridge;
 use crate::ui::settings::SettingsBridge;
 use crate::ui::status::{self, Level};
 use crate::ui::tags::TagsBridge;
-use crate::MainWindow;
 
 /// How long the runtime may take to finish its tasks at quit.
 const RUNTIME_SHUTDOWN: Duration = Duration::from_secs(2);
@@ -351,7 +351,9 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             let _ = sync_handle.send(SyncCommand::Probe);
         }));
         let render = Rc::downgrade(&render);
-        hooks.encoders = Some(Box::new(move || render.upgrade().map(|r| r.encoders()).unwrap_or_default()));
+        hooks.encoders = Some(Box::new(move || {
+            render.upgrade().map(|r| r.encoders()).unwrap_or_default()
+        }));
     }
     live::connect(
         &writer,

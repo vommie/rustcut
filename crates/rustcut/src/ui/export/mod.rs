@@ -127,10 +127,7 @@ impl ExportBridge {
     /// template, the warnings and the automatic section follow; the card keeps the selected folder when it is still
     /// listed.
     pub fn settings_changed(&self, settings: &Settings) {
-        let changed = self
-            .state
-            .borrow_mut()
-            .set_settings(&settings.export);
+        let changed = self.state.borrow_mut().set_settings(&settings.export);
         self.warnings.replace(settings.warnings.clone());
         self.auto_section.set(settings.editor.auto_section);
         if changed {

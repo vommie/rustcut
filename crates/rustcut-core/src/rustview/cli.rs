@@ -64,7 +64,9 @@ impl CliClient {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         let started = std::time::Instant::now();
-        let child = child.spawn().map_err(|e| spawn_error(&self.program, &e))?;
+        let child = crate::process::spawn(&mut child)
+            .await
+            .map_err(|e| spawn_error(&self.program, &e))?;
         let limit = Duration::from_secs(u64::from(self.timeout_secs));
         let output = match tokio::time::timeout(limit, child.wait_with_output()).await {
             Ok(Ok(output)) => output,

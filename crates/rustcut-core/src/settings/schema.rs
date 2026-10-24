@@ -456,7 +456,10 @@ impl VersionedFile for Settings {
             "rustview.tag_history_size brought into range",
             !RustViewSettings::TAG_HISTORY.contains(history),
         ) {
-            *history = (*history).clamp(*RustViewSettings::TAG_HISTORY.start(), *RustViewSettings::TAG_HISTORY.end());
+            *history = (*history).clamp(
+                *RustViewSettings::TAG_HISTORY.start(),
+                *RustViewSettings::TAG_HISTORY.end(),
+            );
         }
         let delay = &mut self.appearance.tooltip_delay_ms;
         if fix(

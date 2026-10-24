@@ -95,11 +95,8 @@ impl ExportState {
         let mut changed = false;
         if self.folders != settings.target_folders {
             let before = self.target_folder();
-            self.folder = crate::ui::settings::folders::follow_selection(
-                &self.folders,
-                &settings.target_folders,
-                self.folder,
-            );
+            self.folder =
+                crate::ui::settings::folders::follow_selection(&self.folders, &settings.target_folders, self.folder);
             self.folders.clone_from(&settings.target_folders);
             changed = self.target_folder() != before;
         }

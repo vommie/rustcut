@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Settings window (File > Settings..., Ctrl+, or Help > About RustCut), styled like RustView's: General, Player,
+- Settings window (0.0.15; File > Settings..., Ctrl+, or Help > About RustCut), styled like RustView's: General, Player,
   Editor & Sections, Filters, Export & Naming, Render Profiles, Queue, RustView, Warnings & Confirmations, Hotkeys,
   Desktop Integration, Appearance, Advanced & Logs and About (with the Slint attribution). Every change is saved at
   once (no Save button); options that only work from the next start say so. A held button in the page header puts
@@ -313,6 +313,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The last progress of a render (often its end) is no longer lost when ffmpeg writes it just before it exits.
+- Starting ffmpeg, ffprobe or rustview tries again for a moment while the system reports the program as busy (for
+  example while a package update replaces it) instead of failing the job at once.
 - Quitting RustCut while a video without audio is open no longer logs "The file cannot be played: The video output
   could not be started." (0.0.14). Closing the window takes the video output away from the player, which is a normal
   end of playback, not a failure; a real failure of the video output still shows the error over the video.

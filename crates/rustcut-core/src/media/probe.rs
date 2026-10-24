@@ -171,22 +171,22 @@ pub(crate) async fn run(
     max_stdout: u64,
 ) -> Result<Output, ProbeError> {
     let program_name = || program.display().to_string();
-    let mut child = Command::new(program)
+    let mut command = Command::new(program);
+    command
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|e| match e.kind() {
-            std::io::ErrorKind::NotFound => ProbeError::NotFound {
-                program: program_name(),
-            },
-            _ => ProbeError::Spawn {
-                program: program_name(),
-                error: e.to_string(),
-            },
-        })?;
+        .kill_on_drop(true);
+    let mut child = crate::process::spawn(&mut command).await.map_err(|e| match e.kind() {
+        std::io::ErrorKind::NotFound => ProbeError::NotFound {
+            program: program_name(),
+        },
+        _ => ProbeError::Spawn {
+            program: program_name(),
+            error: e.to_string(),
+        },
+    })?;
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
     let collect = async {

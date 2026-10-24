@@ -156,7 +156,9 @@ impl Field {
         let value = match (self.kind, edit, &before) {
             (Kind::Switch, Edit::Toggle, Value::Bool(b)) => Value::Bool(!b),
             (Kind::Choice(items), Edit::Choose(index), _) if index < items.len() => Value::Index(index),
-            (Kind::Number { min, max, unit, .. }, Edit::Type(text), _) => Value::Number(parse_number(&text, min, max, unit)?),
+            (Kind::Number { min, max, unit, .. }, Edit::Type(text), _) => {
+                Value::Number(parse_number(&text, min, max, unit)?)
+            }
             (Kind::Number { min, max, step, .. }, Edit::Step(steps), Value::Number(n)) => {
                 Value::Number(n.saturating_add(step.saturating_mul(i64::from(steps))).clamp(min, max))
             }

@@ -350,7 +350,10 @@ impl SettingsBridge {
             (String::new(), false)
         } else {
             (
-                format!("{} stays with another action; remove it there first.", missing.join(", ")),
+                format!(
+                    "{} stays with another action; remove it there first.",
+                    missing.join(", ")
+                ),
                 true,
             )
         };
@@ -405,7 +408,10 @@ fn option_row(r: &crate::ui::render_settings::view::RowView) -> OptionRowView {
         label: r.label.as_str().into(),
         tooltip: r.tooltip.as_str().into(),
         items: ModelRc::new(VecModel::from(
-            r.items.iter().map(|i| SharedString::from(i.as_str())).collect::<Vec<_>>(),
+            r.items
+                .iter()
+                .map(|i| SharedString::from(i.as_str()))
+                .collect::<Vec<_>>(),
         )),
         index: i32::try_from(r.index).unwrap_or(0),
         text: r.text.as_str().into(),

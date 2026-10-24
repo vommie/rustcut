@@ -223,7 +223,10 @@ mod tests {
         let log = std::rc::Rc::clone(&seen);
         writer.subscribe(move |before, after| log.borrow_mut().push((before.queue.workers, after.queue.workers)));
         assert!(writer.update(|s| s.queue.workers = 4));
-        assert!(writer.update(|s| s.queue.workers = 4), "saved again, no change to report");
+        assert!(
+            writer.update(|s| s.queue.workers = 4),
+            "saved again, no change to report"
+        );
         assert_eq!(*seen.borrow(), vec![(3, 4)]);
 
         let other = tempfile::tempdir().unwrap();

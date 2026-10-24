@@ -90,9 +90,7 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     let t = this.clone();
     ui.on_record(move |id| with(&t, |b| b.record(&id)));
     let t = this.clone();
-    ui.on_recorded(move |text, control, alt, shift, meta| {
-        with(&t, |b| b.recorded(&text, [control, alt, shift, meta]))
-    });
+    ui.on_recorded(move |text, control, alt, shift, meta| with(&t, |b| b.recorded(&text, [control, alt, shift, meta])));
     let t = this.clone();
     ui.on_cancel_recording(move || with(&t, SettingsBridge::cancel_recording));
     let t = this.clone();

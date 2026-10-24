@@ -25,8 +25,7 @@ pub static QUEUE: &[Card] = &[
                 "Start paused",
                 "When jobs are waiting at start, the queue starts paused instead of rendering at once.",
                 queue.pause_on_start
-            )
-            ,
+            ),
         ],
     },
     Card {
@@ -46,8 +45,7 @@ pub static QUEUE: &[Card] = &[
                     (WhenDone::Suspend, "Suspend"),
                     (WhenDone::PowerOff, "Power off")
                 ]
-            )
-            ,
+            ),
             number!(
                 "queue.when_done_countdown_secs",
                 "Countdown",
@@ -130,7 +128,7 @@ pub static RUSTVIEW: &[Card] = &[
                 "rustview.test",
                 "Test the connection",
                 "Asks RustView for its tags now; the Tag & Rate panel shows the answer.",
-                "Test"
+                "Test",
             )
             .under(link_on),
         ],

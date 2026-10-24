@@ -11,10 +11,10 @@ pub mod known_source;
 mod state;
 
 use std::cell::RefCell;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use parking_lot::Mutex;
 use rustcut_core::hashing::{HashCommand, HashEvent, HashService};

@@ -68,7 +68,11 @@ mod tests {
                     assert!(matches!(value, Value::Index(i) if i < items.len()), "{}", f.key);
                 }
                 Kind::Number { min, max, .. } => {
-                    assert!(matches!(value, Value::Number(n) if (min..=max).contains(&n)), "{}", f.key);
+                    assert!(
+                        matches!(value, Value::Number(n) if (min..=max).contains(&n)),
+                        "{}",
+                        f.key
+                    );
                 }
                 Kind::Text { .. } | Kind::Path { .. } => assert!(matches!(value, Value::Text(_)), "{}", f.key),
                 Kind::Button(_) => assert_eq!(value, Value::None, "{}", f.key),
@@ -105,7 +109,11 @@ mod tests {
             let before = (f.get)(&s);
             assert_eq!(f.apply(&mut s, edit), Ok(true), "{}", f.key);
             assert_ne!((f.get)(&s), before, "{}", f.key);
-            assert!(s.clone().sanitize().is_empty(), "{} leaves a value sanitizing repairs", f.key);
+            assert!(
+                s.clone().sanitize().is_empty(),
+                "{} leaves a value sanitizing repairs",
+                f.key
+            );
             assert!(f.reset(&mut s), "{}", f.key);
             assert_eq!(s, base, "{}", f.key);
         }
@@ -123,7 +131,10 @@ mod tests {
         let hold = field("general.hold_to_confirm_ms").unwrap();
         assert_eq!(hold.apply(&mut s, Edit::Type("1500 ms".into())), Ok(true));
         assert_eq!(s.general.hold_to_confirm_ms, 1_500);
-        assert!(hold.apply(&mut s, Edit::Type("100".into())).is_err(), "between 0 and the shortest hold");
+        assert!(
+            hold.apply(&mut s, Edit::Type("100".into())).is_err(),
+            "between 0 and the shortest hold"
+        );
         assert_eq!(hold.apply(&mut s, Edit::Type("0".into())), Ok(true));
     }
 
@@ -133,7 +144,10 @@ mod tests {
         let template = field("export.name_template").unwrap();
         assert!(template.apply(&mut s, Edit::Type("{{ nope }}".into())).is_err());
         assert!(template.apply(&mut s, Edit::Type("{{ name ".into())).is_err());
-        assert_eq!(template.apply(&mut s, Edit::Type("{{ source }} {{ date }}".into())), Ok(true));
+        assert_eq!(
+            template.apply(&mut s, Edit::Type("{{ source }} {{ date }}".into())),
+            Ok(true)
+        );
         let color = field("player.background").unwrap();
         assert!(color.apply(&mut s, Edit::Type("black".into())).is_err());
         assert_eq!(color.apply(&mut s, Edit::Type("#202030".into())), Ok(true));

@@ -77,23 +77,23 @@ pub async fn run_pass(
         pass.kind.label(),
         command_line(options.program, &pass.args)
     ));
-    let mut child = Command::new(options.program)
+    let mut command = Command::new(options.program);
+    command
         .args(&pass.args)
         .process_group(0)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|e| match e.kind() {
-            std::io::ErrorKind::NotFound => PassError::NotFound {
-                program: program.clone(),
-            },
-            _ => PassError::Spawn {
-                program: program.clone(),
-                error: e.to_string(),
-            },
-        })?;
+        .kill_on_drop(true);
+    let mut child = crate::process::spawn(&mut command).await.map_err(|e| match e.kind() {
+        std::io::ErrorKind::NotFound => PassError::NotFound {
+            program: program.clone(),
+        },
+        _ => PassError::Spawn {
+            program: program.clone(),
+            error: e.to_string(),
+        },
+    })?;
     let group = child.id().and_then(ProcessGroup::led_by);
     let mut lowered = false;
     if let Some(group) = group {
@@ -152,7 +152,10 @@ pub async fn run_pass(
         }
     };
     drop(stdin);
-    drain(&mut stdout, &mut stderr, &mut parser, log).await;
+    // Progress written just before the exit (often the final `progress=end`) is read here, after `wait` returned.
+    for sample in drain(&mut stdout, &mut stderr, &mut parser, log).await {
+        events(PassEvent::Progress(sample));
+    }
 
     match supervisor.stop_reason() {
         Some(StopReason::Canceled) => {
@@ -233,19 +236,22 @@ async fn next_line<R: tokio::io::AsyncRead + Unpin>(pipe: &mut Option<Lines<R>>)
     Some(text.trim_end_matches('\r').to_owned())
 }
 
-/// Reads what is left in the pipes after the exit (bounded, a stray grandchild could keep them open).
+/// Reads what is left in the pipes after the exit (bounded, a stray grandchild could keep them open) and returns the
+/// progress samples found in it.
 async fn drain<O, E>(
     stdout: &mut Option<Lines<O>>,
     stderr: &mut Option<Lines<E>>,
     parser: &mut ProgressParser,
     log: &mut JobLog,
-) where
+) -> Vec<ProgressSample>
+where
     O: tokio::io::AsyncRead + Unpin,
     E: tokio::io::AsyncRead + Unpin,
 {
+    let mut samples = Vec::new();
     let rest = async {
         while let Some(line) = next_line(stdout).await {
-            parser.push_line(&line);
+            samples.extend(parser.push_line(&line));
         }
         while let Some(line) = next_line(stderr).await {
             log.push(LogStream::Ffmpeg, &line);
@@ -254,6 +260,7 @@ async fn drain<O, E>(
     if tokio::time::timeout(DRAIN_TIMEOUT, rest).await.is_err() {
         tracing::debug!("[Render] ffmpeg's pipes stayed open after its exit");
     }
+    samples
 }
 
 async fn sleep_until(deadline: Option<Instant>) {

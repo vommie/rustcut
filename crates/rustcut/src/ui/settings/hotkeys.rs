@@ -24,8 +24,14 @@ pub enum Recorded {
     Waiting,
     Bound(String),
     /// The key belongs to `other`; the same key again moves it.
-    Taken { chord: String, other: Action },
-    Moved { chord: String, from: Action },
+    Taken {
+        chord: String,
+        other: Action,
+    },
+    Moved {
+        chord: String,
+        from: Action,
+    },
 }
 
 #[derive(Debug, Clone, Default)]
@@ -82,7 +88,11 @@ pub const fn group(action: Action) -> &'static str {
 
 /// The parsed default keys of `action`.
 fn default_chords(action: Action) -> Vec<Chord> {
-    action.default_keys().iter().filter_map(|k| Chord::parse(k).ok()).collect()
+    action
+        .default_keys()
+        .iter()
+        .filter_map(|k| Chord::parse(k).ok())
+        .collect()
 }
 
 fn texts(chords: &[Chord]) -> Vec<&str> {
@@ -117,18 +127,58 @@ pub fn rows(keymap: &Keymap, search: &str) -> Vec<HotkeyRow> {
 pub fn table(keymap: &Keymap) -> KeymapTable {
     let full = keymap.to_table();
     full.into_iter()
-        .filter(|(id, _)| {
-            Action::from_id(id).is_some_and(|a| texts(keymap.chords(a)) != texts(&default_chords(a)))
-        })
+        .filter(|(id, _)| Action::from_id(id).is_some_and(|a| texts(keymap.chords(a)) != texts(&default_chords(a))))
         .collect()
 }
 
 /// Slint's names of the keys that are not a plain character.
 const NAMED_KEYS: [&str; 46] = [
-    "LeftArrow", "RightArrow", "UpArrow", "DownArrow", "Home", "End", "PageUp", "PageDown", "Insert", "Delete",
-    "Backspace", "Return", "Tab", "Space", "Plus", "HyphenMinus", "Comma", "Period", "Equals", "ScrollLock", "Pause",
-    "SysReq", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "F13", "F14", "F15", "F16",
-    "F17", "F18", "F19", "F20", "F21", "F22", "F23", "F24",
+    "LeftArrow",
+    "RightArrow",
+    "UpArrow",
+    "DownArrow",
+    "Home",
+    "End",
+    "PageUp",
+    "PageDown",
+    "Insert",
+    "Delete",
+    "Backspace",
+    "Return",
+    "Tab",
+    "Space",
+    "Plus",
+    "HyphenMinus",
+    "Comma",
+    "Period",
+    "Equals",
+    "ScrollLock",
+    "Pause",
+    "SysReq",
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F6",
+    "F7",
+    "F8",
+    "F9",
+    "F10",
+    "F11",
+    "F12",
+    "F13",
+    "F14",
+    "F15",
+    "F16",
+    "F17",
+    "F18",
+    "F19",
+    "F20",
+    "F21",
+    "F22",
+    "F23",
+    "F24",
 ];
 
 /// The chord a key press makes, written with Slint's key names; `None` for a modifier alone or a key without a name.
@@ -144,7 +194,11 @@ pub fn chord_of(press: &KeyPress<'_>) -> Option<Chord> {
         Key::MetaR,
         Key::CapsLock,
     ];
-    if press.text.is_empty() || modifier_keys.iter().any(|k| press.text == slint::SharedString::from(*k).as_str()) {
+    if press.text.is_empty()
+        || modifier_keys
+            .iter()
+            .any(|k| press.text == slint::SharedString::from(*k).as_str())
+    {
         return None;
     }
     let mut prefix = String::new();
@@ -158,7 +212,12 @@ pub fn chord_of(press: &KeyPress<'_>) -> Option<Chord> {
             prefix.push_str(name);
         }
     }
-    let digit = press.text.chars().next().filter(char::is_ascii_digit).map(|d| format!("Digit{d}"));
+    let digit = press
+        .text
+        .chars()
+        .next()
+        .filter(char::is_ascii_digit)
+        .map(|d| format!("Digit{d}"));
     let upper = press.text.to_uppercase();
     NAMED_KEYS
         .iter()
@@ -215,7 +274,10 @@ impl HotkeysPage {
                 }
                 let _ = keymap.bind(action, chord);
                 self.cancel();
-                Recorded::Moved { chord: text, from: other }
+                Recorded::Moved {
+                    chord: text,
+                    from: other,
+                }
             }
             Some(other) => {
                 self.pending_move = Some(text.clone());
@@ -277,7 +339,10 @@ mod tests {
         assert!(rows(&keymap, "").iter().all(|r| !r.changed));
 
         page.start(Action::MirrorHorizontal);
-        assert_eq!(page.press(&mut keymap, &press("h", false, false)), Recorded::Bound("H".into()));
+        assert_eq!(
+            page.press(&mut keymap, &press("h", false, false)),
+            Recorded::Bound("H".into())
+        );
         assert_eq!(page.recording, None);
         page.start(Action::MirrorVertical);
         let taken = page.press(&mut keymap, &press("m", false, false));

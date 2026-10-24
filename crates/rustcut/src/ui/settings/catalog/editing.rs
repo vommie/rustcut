@@ -1,6 +1,6 @@
 //! Player, Editor & Sections, Filters and Export & Naming (the template; the target folders have their own editor).
 
-use rustcut_core::edit::{DeshakeCrop, DeshakeInterpolation, DeshakeParams, Deinterlacer};
+use rustcut_core::edit::{Deinterlacer, DeshakeCrop, DeshakeInterpolation, DeshakeParams};
 use rustcut_core::naming::{NameContext, render_stem};
 use rustcut_core::settings::{AutoSection, DraftOnLoad, Settings};
 
@@ -9,9 +9,7 @@ use crate::ui::settings::field::{Field, Kind, Value, WRONG_VALUE, always, choice
 
 fn set_background(s: &mut Settings, v: Value) -> Result<(), String> {
     let text = v.as_text()?;
-    let ok = text.len() == 7
-        && text.starts_with('#')
-        && text.chars().skip(1).all(|c| c.is_ascii_hexdigit());
+    let ok = text.len() == 7 && text.starts_with('#') && text.chars().skip(1).all(|c| c.is_ascii_hexdigit());
     if !ok {
         return Err("Type a color as #RRGGBB, for example #000000.".into());
     }
@@ -22,7 +20,10 @@ fn set_background(s: &mut Settings, v: Value) -> Result<(), String> {
 fn set_hwdec(s: &mut Settings, v: Value) -> Result<(), String> {
     let text = v.as_text()?;
     let text = if text.is_empty() { "auto-copy" } else { text };
-    if !text.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | ',' | '_')) {
+    if !text
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | ',' | '_'))
+    {
         return Err("Type one of mpv's hwdec values, for example auto-copy, no or vaapi.".into());
     }
     text.clone_into(&mut s.player.hwdec);
@@ -54,7 +55,9 @@ pub static PLAYER: &[Card] = &[
                 label: "Hardware decoding",
                 help: "mpv's hwdec: auto-copy (default), auto, no, vaapi, nvdec, vulkan. Without a GPU, mpv decodes in \
                        software.",
-                kind: Kind::Text { placeholder: "auto-copy" },
+                kind: Kind::Text {
+                    placeholder: "auto-copy",
+                },
                 live: true,
                 get: |s| Value::Text(s.player.hwdec.clone()),
                 set: set_hwdec,

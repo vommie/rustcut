@@ -165,7 +165,10 @@ fn programs_changed(p: &Parts, after: &Settings) {
             .ffmpeg
             .clone()
             .unwrap_or_else(|| std::path::PathBuf::from("ffmpeg"));
-        render.set_ffmpeg(ffmpeg, spawn_capability_check(&p.runtime, after.advanced.ffmpeg.clone()));
+        render.set_ffmpeg(
+            ffmpeg,
+            spawn_capability_check(&p.runtime, after.advanced.ffmpeg.clone()),
+        );
     }
 }
 

@@ -142,16 +142,26 @@ mod tests {
         let mut settings = Settings::default();
         settings.queue.workers = 2;
         let mut errors = BTreeMap::new();
-        errors.insert("queue.when_done_countdown_secs".to_owned(), "Type a whole number.".to_owned());
+        errors.insert(
+            "queue.when_done_countdown_secs".to_owned(),
+            "Type a whole number.".to_owned(),
+        );
         let queue = cards(Page::Queue, &settings, &errors, &Paths);
         let workers = queue.first().and_then(|c| c.rows.first()).unwrap();
-        assert_eq!((workers.kind, workers.text.as_str(), workers.enabled), (RowKind::Number, "2", true));
+        assert_eq!(
+            (workers.kind, workers.text.as_str(), workers.enabled),
+            (RowKind::Number, "2", true)
+        );
         let tray = cards(Page::Desktop, &settings, &errors, &Paths)
             .iter()
             .flat_map(|c| c.rows.clone())
             .find(|r| r.key == "desktop.tray.enabled")
             .unwrap();
-        assert!(tray.description.ends_with("Applies at the next start."), "{}", tray.description);
+        assert!(
+            tray.description.ends_with("Applies at the next start."),
+            "{}",
+            tray.description
+        );
         assert!(!workers.description.contains("next start"));
         let countdown = queue.get(1).and_then(|c| c.rows.get(1)).unwrap();
         assert_eq!(countdown.error, "Type a whole number.");
@@ -168,7 +178,10 @@ mod tests {
         settings.rustview.enabled = false;
         let rustview = cards(Page::RustView, &settings, &errors, &Paths);
         let binary = rustview.first().and_then(|c| c.rows.get(1)).unwrap();
-        assert_eq!((binary.kind, binary.enabled, binary.indent), (RowKind::File, false, true));
+        assert_eq!(
+            (binary.kind, binary.enabled, binary.indent),
+            (RowKind::File, false, true)
+        );
         let export = cards(Page::Export, &settings, &errors, &Paths);
         assert!(export.first().unwrap().description.ends_with("Now: \"Holiday - 01\"."));
     }

@@ -244,17 +244,23 @@ fn the_queue_job_and_logs_panels_round_trip_and_old_files_load() {
 fn the_settings_window_round_trips_and_old_files_load() {
     let dir = tempfile::tempdir().unwrap();
     // 0.0.14 wrote no `[settings]`.
-    std::fs::write(dir.path().join("ui-state.toml"), "version = 1\n[window]\nwidth = 1000\n").unwrap();
+    std::fs::write(
+        dir.path().join("ui-state.toml"),
+        "version = 1\n[window]\nwidth = 1000\n",
+    )
+    .unwrap();
     let loaded = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
     assert_eq!(loaded.settings, SettingsWindowState::default());
 
-    let mut state = UiState::default();
-    state.settings = SettingsWindowState {
-        width: 1000,
-        height: 700,
-        page: "hotkeys".into(),
-        profile: Some("my-hevc".into()),
-        hotkey_search: "crop".into(),
+    let state = UiState {
+        settings: SettingsWindowState {
+            width: 1000,
+            height: 700,
+            page: "hotkeys".into(),
+            profile: Some("my-hevc".into()),
+            hotkey_search: "crop".into(),
+        },
+        ..UiState::default()
     };
     save(dir.path(), &state).unwrap();
     let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();

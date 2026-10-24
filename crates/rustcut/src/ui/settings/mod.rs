@@ -120,7 +120,10 @@ impl SettingsBridge {
             hooks: RefCell::default(),
             models: Models {
                 pages: Rc::new(VecModel::from(
-                    Page::ALL.iter().map(|p| SharedString::from(p.title())).collect::<Vec<_>>(),
+                    Page::ALL
+                        .iter()
+                        .map(|p| SharedString::from(p.title()))
+                        .collect::<Vec<_>>(),
                 )),
                 cards: Rc::new(VecModel::default()),
                 card_rows: RefCell::default(),
@@ -172,7 +175,11 @@ impl SettingsBridge {
                 Err(e) => {
                     tracing::error!(error = %e, "[Settings] The settings window could not be opened");
                     if let Some(main) = self.main.upgrade() {
-                        status::show(&main, Level::Error, &format!("The settings window could not be opened: {e}"));
+                        status::show(
+                            &main,
+                            Level::Error,
+                            &format!("The settings window could not be opened: {e}"),
+                        );
                     }
                     return;
                 }
@@ -335,7 +342,8 @@ impl SettingsBridge {
             _ => return,
         };
         self.runtime.spawn_blocking(move || {
-            if let Err(e) = std::fs::create_dir_all(&path).and_then(|()| opener::open(&path).map_err(std::io::Error::other))
+            if let Err(e) =
+                std::fs::create_dir_all(&path).and_then(|()| opener::open(&path).map_err(std::io::Error::other))
             {
                 tracing::warn!(folder = %path.display(), error = %e, "[Settings] The folder could not be opened");
             }

@@ -14,8 +14,7 @@ pub static GENERAL: &[Card] = &[
             "One window",
             "A second start hands its files to the running RustCut instead of opening another window.",
             general.single_instance
-        )
-        ],
+        )],
     },
     Card {
         title: "Deleting and discarding",
@@ -113,8 +112,7 @@ pub static WARNINGS: &[Card] = &[
             "Computes the video's MD5 in the background (or takes it from RustView or a .md5 file) and shows a \
              banner when RustView knows it from an earlier cut. Off: nothing is read.",
             warnings.known_source
-        )
-        ],
+        )],
     },
 ];
 
@@ -256,8 +254,7 @@ pub static ADVANCED: &[Card] = &[
                 advanced.ffmpeg,
                 "ffmpeg (from PATH)",
                 folder: false
-            )
-            ,
+            ),
             path_field!(
                 "advanced.ffprobe",
                 "ffprobe",
@@ -265,8 +262,7 @@ pub static ADVANCED: &[Card] = &[
                 advanced.ffprobe,
                 "ffprobe (from PATH)",
                 folder: false
-            )
-            ,
+            ),
         ],
     },
     Card {
@@ -293,14 +289,8 @@ pub static ADVANCED: &[Card] = &[
                 1..=365,
                 1,
                 "days"
-            )
-            ,
-            Field::button(
-                "open.logs",
-                "Log folder",
-                "The daily log files of the app.",
-                "Open"
             ),
+            Field::button("open.logs", "Log folder", "The daily log files of the app.", "Open"),
         ],
     },
     Card {
@@ -311,19 +301,19 @@ pub static ADVANCED: &[Card] = &[
                 "open.config",
                 "Settings",
                 "config.toml, ui-state.toml and their backups.",
-                "Open"
+                "Open",
             ),
             Field::button(
                 "open.data",
                 "Data",
                 "The queue database and the deshake analysis files.",
-                "Open"
+                "Open",
             ),
             Field::button(
                 "open.cache",
                 "Cache",
                 "Probe renders and encoder checks; safe to delete.",
-                "Open"
+                "Open",
             ),
         ],
     },
