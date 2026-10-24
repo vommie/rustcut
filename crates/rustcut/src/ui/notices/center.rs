@@ -30,6 +30,8 @@ use crate::{HistoryView, MainWindow, Notices, ToastView};
 const TICK: Duration = Duration::from_millis(100);
 /// The bell lists this many.
 const RECENT: usize = 3;
+/// How long a test banner stays.
+const TEST_BANNER: Duration = Duration::from_secs(8);
 /// The summary card's id (the Slint side sends -1; real cards count from 1).
 const SUMMARY: u64 = 0;
 /// Desktop buttons kept for a click (the oldest are dropped).
@@ -172,6 +174,29 @@ impl NoticeCenter {
         if notice.force_desktop || desktop_now(route, self.in_front()) {
             self.send_desktop(&notice);
         }
+    }
+
+    /// The Settings window's test: the kind's sample, marked "(test)", at the place the kind goes now, on the desktop
+    /// too when the kind goes there (even with RustCut in front); a banner of a test goes after a few seconds.
+    pub fn test(&self, kind: Kind) -> super::Route {
+        let info = kind.info();
+        let route = route(kind, info.level, &self.settings.borrow());
+        let mut notice = Notice::new(kind, format!("{} (test)", info.sample.0)).detail(info.sample.1);
+        if route.place == NoticePlace::Banner {
+            let key = format!("test:{}", info.id);
+            notice = notice.key(key.clone());
+            let me = Weak::clone(&self.me);
+            slint::Timer::single_shot(TEST_BANNER, move || {
+                if let Some(center) = me.upgrade() {
+                    center.clear(&key);
+                }
+            });
+        }
+        if route.desktop {
+            notice = notice.force_desktop();
+        }
+        self.post(notice);
+        route
     }
 
     /// The state with `key` is over: its toast fades, its banner goes.

@@ -12,6 +12,7 @@ pub enum Page {
     Queue,
     RustView,
     Warnings,
+    Messages,
     Dialogs,
     Hotkeys,
     Desktop,
@@ -28,10 +29,11 @@ pub enum Special {
     Profiles,
     Hotkeys,
     About,
+    Messages,
 }
 
 impl Page {
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::General,
         Self::Player,
         Self::Editor,
@@ -41,6 +43,7 @@ impl Page {
         Self::Queue,
         Self::RustView,
         Self::Warnings,
+        Self::Messages,
         Self::Dialogs,
         Self::Hotkeys,
         Self::Desktop,
@@ -61,6 +64,7 @@ impl Page {
             Self::Queue => "queue",
             Self::RustView => "rustview",
             Self::Warnings => "warnings",
+            Self::Messages => "messages",
             Self::Dialogs => "dialogs",
             Self::Hotkeys => "hotkeys",
             Self::Desktop => "desktop",
@@ -81,6 +85,7 @@ impl Page {
             Self::Queue => "Queue",
             Self::RustView => "RustView",
             Self::Warnings => "Warnings & Confirmations",
+            Self::Messages => "Messages",
             Self::Dialogs => "Dialogs",
             Self::Hotkeys => "Hotkeys",
             Self::Desktop => "Desktop Integration",
@@ -109,6 +114,7 @@ impl Page {
             Self::Profiles => Special::Profiles,
             Self::Hotkeys => Special::Hotkeys,
             Self::About => Special::About,
+            Self::Messages => Special::Messages,
             _ => Special::None,
         }
     }

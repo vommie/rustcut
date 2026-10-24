@@ -4,6 +4,7 @@
 mod app;
 mod dialogs;
 mod editing;
+mod messages;
 mod work;
 
 pub use self::editing::template_example;
@@ -30,6 +31,7 @@ pub fn cards(page: Page) -> &'static [Card] {
         Page::Queue => work::QUEUE,
         Page::RustView => work::RUSTVIEW,
         Page::Warnings => app::WARNINGS,
+        Page::Messages => messages::MESSAGES,
         Page::Dialogs => dialogs::DIALOGS,
         Page::Desktop => app::DESKTOP,
         Page::Appearance => app::APPEARANCE,
@@ -166,16 +168,14 @@ mod tests {
     fn sub_options_wait_for_their_switch() {
         let mut s = Settings::default();
         s.notices.desktop.enabled = false;
-        let finished = field("notices.kinds.job_finished.desktop").unwrap();
-        assert!(finished.indent);
-        assert_eq!(finished.apply(&mut s, Edit::Toggle), Ok(false));
+        let timeout = field("notices.desktop.timeout_secs").unwrap();
+        assert!(timeout.indent);
+        assert_eq!(timeout.apply(&mut s, Edit::Step(1)), Ok(false));
         s.notices.desktop.enabled = true;
-        assert_eq!(finished.apply(&mut s, Edit::Toggle), Ok(true));
-        assert_eq!(s.notices.kinds.get("job_finished").and_then(|r| r.desktop), Some(true));
-        let known = field("notices.kinds.known_source.place").unwrap();
-        assert_eq!(known.apply(&mut s, Edit::Toggle), Ok(true));
-        assert!(s.notices.kinds.contains_key("known_source"));
-        assert_eq!(known.apply(&mut s, Edit::Toggle), Ok(true));
-        assert!(!s.notices.kinds.contains_key("known_source"), "back to the default");
+        assert_eq!(timeout.apply(&mut s, Edit::Step(1)), Ok(true));
+        assert_eq!(s.notices.desktop.timeout_secs, 9);
+        let max = field("notices.toasts.max_visible").unwrap();
+        s.notices.toasts.stacking = rustcut_core::settings::ToastStacking::All;
+        assert!(!(max.enabled)(&s), "the limit means nothing for \"all\"");
     }
 }

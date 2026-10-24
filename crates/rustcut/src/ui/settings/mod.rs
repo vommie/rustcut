@@ -12,6 +12,7 @@ pub mod folders;
 mod handlers;
 mod hotkeys;
 mod input;
+mod messages;
 pub mod page;
 mod profiles;
 mod view;
@@ -34,8 +35,8 @@ use crate::ui::notices::{self, Kind, Notice};
 use crate::ui::render_settings::state::Encoders;
 use crate::util::model::{sync, sync_with};
 use crate::{
-    FolderRowView, HoldConfirm, HotkeyChipView, HotkeyRowView, MainWindow, OptionRowView, ProfileItemView,
-    RenderIssueView, SettingCardView, SettingRowView, SettingsUi, SettingsWindow, TooltipSettings,
+    FolderRowView, HoldConfirm, HotkeyChipView, HotkeyRowView, MainWindow, MessageKindView, OptionRowView,
+    ProfileItemView, RenderIssueView, SettingCardView, SettingRowView, SettingsUi, SettingsWindow, TooltipSettings,
 };
 
 /// What the window asks of other parts of the app (set by the app after install).
@@ -62,6 +63,8 @@ struct Models {
     audio: Rc<VecModel<OptionRowView>>,
     expert: Rc<VecModel<OptionRowView>>,
     hotkeys: Rc<VecModel<HotkeyRowView>>,
+    kinds: Rc<VecModel<MessageKindView>>,
+    muted: Rc<VecModel<MessageKindView>>,
 }
 
 pub struct SettingsBridge {
@@ -84,6 +87,10 @@ pub struct SettingsBridge {
     hotkeys_shown: RefCell<Vec<hotkeys::HotkeyRow>>,
     hooks: RefCell<Hooks>,
     models: Models,
+    /// The Messages page: the kind tested last and what the test showed (for a few seconds), and its rows as shown.
+    tested: RefCell<Option<(Kind, String)>>,
+    tested_timer: slint::Timer,
+    messages_shown: RefCell<messages::Shown>,
 }
 
 impl SettingsBridge {
@@ -132,7 +139,12 @@ impl SettingsBridge {
                 audio: Rc::new(VecModel::default()),
                 expert: Rc::new(VecModel::default()),
                 hotkeys: Rc::new(VecModel::default()),
+                kinds: Rc::new(VecModel::default()),
+                muted: Rc::new(VecModel::default()),
             },
+            tested: RefCell::new(None),
+            tested_timer: slint::Timer::default(),
+            messages_shown: RefCell::default(),
         });
         let this = Rc::downgrade(&bridge);
         main.on_open_settings(move || {
@@ -266,6 +278,8 @@ impl SettingsBridge {
         ui.set_profile_expert(ModelRc::from(Rc::clone(&m.expert)));
         ui.set_hotkeys(ModelRc::from(Rc::clone(&m.hotkeys)));
         ui.set_hotkey_search(self.hotkeys.borrow().search.as_str().into());
+        ui.set_kinds(ModelRc::from(Rc::clone(&m.kinds)));
+        ui.set_muted(ModelRc::from(Rc::clone(&m.muted)));
         ui.set_app_name(APP_NAME.into());
         ui.set_app_version(VERSION.into());
         ui.set_about_paths(self.about_paths().into());
@@ -369,6 +383,7 @@ impl SettingsBridge {
             Special::Profiles => 2,
             Special::Hotkeys => 3,
             Special::About => 4,
+            Special::Messages => 5,
         });
         ui.set_resettable(!catalog::cards(page).is_empty() || page == Page::Hotkeys);
         let cards = view::cards(page, &settings, &self.errors.borrow(), self);
@@ -377,6 +392,7 @@ impl SettingsBridge {
             Special::Folders => self.publish_folders(&settings),
             Special::Profiles => self.publish_profiles(&ui, &settings),
             Special::Hotkeys => self.publish_hotkeys(&ui),
+            Special::Messages => self.publish_messages(&ui, &settings),
             Special::None | Special::About => {}
         }
     }

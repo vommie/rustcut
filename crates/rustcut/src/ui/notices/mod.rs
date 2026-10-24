@@ -66,6 +66,20 @@ pub fn clear_kind(kind: Kind) {
     clear(kind.id());
 }
 
+/// Shows the sample of `kind` where it goes now (the Settings window's test) and says where that is.
+pub fn test(kind: Kind) -> Route {
+    center().map_or_else(
+        || {
+            route(
+                kind,
+                kind.info().level,
+                &rustcut_core::settings::NoticeSettings::default(),
+            )
+        },
+        |c| c.test(kind),
+    )
+}
+
 /// The number of the history's newest entry (0 = none).
 pub fn history_seq() -> u64 {
     center().map_or(0, |center| center.history().seq())

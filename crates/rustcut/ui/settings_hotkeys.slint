@@ -6,6 +6,7 @@ import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { IconButton } from "controls.slint";
 import { SettingsCard } from "settings_card.slint";
+import { SettingsSearch } from "settings_search.slint";
 import { HotkeyChipView, HotkeyRowView, SettingsUi } from "settings_types.slint";
 
 component KeyChip inherits Rectangle {
@@ -59,58 +60,6 @@ component KeyChip inherits Rectangle {
     }
 }
 
-/// A one-line search field whose text follows the typing.
-component SearchBox inherits Rectangle {
-    in property <string> initial;
-    callback edited(string);
-
-    height: 24px;
-    border-radius: 4px;
-    background: Theme.background;
-    border-width: 1px;
-    border-color: input.has-focus ? Theme.primary : Theme.border;
-
-    HorizontalLayout {
-        padding-left: 6px;
-        padding-right: 6px;
-        spacing: 6px;
-
-        VerticalLayout {
-            alignment: center;
-
-            AppIcon {
-                icon: IconId.search;
-                size: IconSize.sm;
-                color: Theme.text-muted;
-            }
-        }
-
-        Rectangle {
-            horizontal-stretch: 1;
-
-            if input.text == "": Text {
-                x: 0;
-                width: parent.width;
-                text: "Filter by action or key";
-                color: Theme.status-deleted;
-                font-size: 12px;
-                vertical-alignment: center;
-            }
-
-            input := TextInput {
-                width: parent.width;
-                height: parent.height;
-                single-line: true;
-                color: Theme.text;
-                font-size: 12px;
-                vertical-alignment: center;
-                init => { self.text = root.initial; }
-                edited => { root.edited(self.text); }
-            }
-        }
-    }
-}
-
 export component SettingsHotkeys inherits SettingsCard {
     title: "Keys";
     description: "Keys work in the main window when no text field has the keyboard. A key with Ctrl, Alt or Meta also works from the menus.";
@@ -139,8 +88,9 @@ export component SettingsHotkeys inherits SettingsCard {
         }
     }
 
-    SearchBox {
+    SettingsSearch {
         initial: SettingsUi.hotkey-search;
+        placeholder: "Filter by action or key";
         edited(text) => { SettingsUi.hotkey-search-edited(text); }
     }
 
