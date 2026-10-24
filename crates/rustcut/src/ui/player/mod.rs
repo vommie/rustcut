@@ -65,8 +65,8 @@ pub struct PlayerBridge {
     player: Player,
     state: Arc<Mutex<PlaybackState>>,
     window: slint::Weak<MainWindow>,
-    auto_play: bool,
-    wheel_step: u8,
+    auto_play: Cell<bool>,
+    wheel_step: Cell<u8>,
     /// Wheel movement that has not made a whole notch yet (touchpads send small steps).
     wheel_rest: Cell<f32>,
     /// The emulated backward playback while J is active, and the timer that moves it.
@@ -138,8 +138,8 @@ impl PlayerBridge {
             player,
             state,
             window: window.as_weak(),
-            auto_play: settings.auto_play,
-            wheel_step: settings.wheel_volume_step,
+            auto_play: Cell::new(settings.auto_play),
+            wheel_step: Cell::new(settings.wheel_volume_step),
             wheel_rest: Cell::new(0.0),
             reverse: Cell::new(None),
             reverse_timer: slint::Timer::default(),
@@ -147,6 +147,32 @@ impl PlayerBridge {
         bridge.connect(window);
         bridge.refresh();
         Ok(bridge)
+    }
+
+    /// The player settings changed in the Settings window: auto play and the wheel step hold from now on; the preview
+    /// audio filters, the hardware decoding and the background change at once.
+    pub fn apply_settings(&self, before: &PlayerSettings, settings: &PlayerSettings) {
+        self.auto_play.set(settings.auto_play);
+        self.wheel_step.set(settings.wheel_volume_step);
+        let audio = |s: &PlayerSettings| AudioOptions {
+            mute_last_second: s.mute_last_second,
+            loudnorm: s.loudnorm_preview,
+        };
+        if audio(before) != audio(settings)
+            && let Err(e) = self.player.set_audio(audio(settings))
+        {
+            tracing::warn!(error = %e, "[Player] The preview audio filters could not be changed");
+        }
+        if before.hwdec != settings.hwdec
+            && let Err(e) = self.player.set_hwdec(&settings.hwdec)
+        {
+            tracing::warn!(error = %e, "[Player] The hardware decoding could not be changed");
+        }
+        if before.background != settings.background
+            && let Err(e) = self.player.set_background(&settings.background)
+        {
+            tracing::warn!(error = %e, "[Player] The background could not be changed");
+        }
     }
 
     /// Opens `path` (it waits for the video surface if the window has not rendered yet). Auto play decides whether it
@@ -159,7 +185,7 @@ impl PlayerBridge {
             path,
             OpenOptions {
                 start: None,
-                play: Some(self.auto_play),
+                play: Some(self.auto_play.get()),
             },
         )
     }
@@ -288,7 +314,7 @@ impl PlayerBridge {
         };
         let Some(window) = self.window.upgrade() else { return };
         let current = window.global::<Playback<'_>>().get_volume();
-        self.set_volume(current.saturating_add(notches.saturating_mul(i32::from(self.wheel_step))));
+        self.set_volume(current.saturating_add(notches.saturating_mul(i32::from(self.wheel_step.get()))));
     }
 
     fn set_volume(&self, percent: i32) {

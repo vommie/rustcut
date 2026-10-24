@@ -17,3 +17,24 @@ pub fn sync<T: Clone + PartialEq + 'static>(model: &VecModel<T>, rows: Vec<T>) {
         model.remove(model.row_count() - 1);
     }
 }
+
+/// Like [`sync`] for rows whose Slint form holds models (compared by pointer, so never equal): `shown` keeps the rows as
+/// last shown, and only the rows that differ from it are made again with `make`.
+pub fn sync_with<P: Clone + PartialEq, T: Clone + 'static>(
+    model: &VecModel<T>,
+    shown: &mut Vec<P>,
+    rows: &[P],
+    make: impl Fn(&P) -> T,
+) {
+    for (index, row) in rows.iter().enumerate() {
+        match shown.get(index) {
+            Some(current) if current == row && index < model.row_count() => {}
+            _ if index < model.row_count() => model.set_row_data(index, make(row)),
+            _ => model.push(make(row)),
+        }
+    }
+    while model.row_count() > rows.len() {
+        model.remove(model.row_count() - 1);
+    }
+    rows.clone_into(shown);
+}

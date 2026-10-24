@@ -100,7 +100,8 @@ impl Editor {
             tags.cancel_edit();
             return true;
         }
-        let Some(action) = self.keymap.lookup(press) else {
+        let found = self.keymap.borrow().lookup(press);
+        let Some(action) = found else {
             return false;
         };
         if press.repeat && !action.repeats() {
@@ -126,16 +127,17 @@ impl Editor {
                 }
             }
             Action::Quit => window.invoke_quit(),
+            Action::OpenSettings => window.invoke_open_settings(),
             Action::TogglePause => self.with_player(|p| p.toggle_pause()),
             Action::ShuttleReverse => self.with_player(|p| p.shuttle(ShuttleKey::Reverse)),
             Action::ShuttleStop => self.with_player(|p| p.shuttle(ShuttleKey::Stop)),
             Action::ShuttleForward => self.with_player(|p| p.shuttle(ShuttleKey::Forward)),
             Action::FrameBack => self.with_player(|p| p.step_frame(true)),
             Action::FrameForward => self.with_player(|p| p.step_frame(false)),
-            Action::SeekBack => self.with_player(|p| p.seek_by(-self.seek_step)),
-            Action::SeekForward => self.with_player(|p| p.seek_by(self.seek_step)),
-            Action::SeekBackLong => self.with_player(|p| p.seek_by(-self.seek_step_long)),
-            Action::SeekForwardLong => self.with_player(|p| p.seek_by(self.seek_step_long)),
+            Action::SeekBack => self.with_player(|p| p.seek_by(-self.seek_step.get())),
+            Action::SeekForward => self.with_player(|p| p.seek_by(self.seek_step.get())),
+            Action::SeekBackLong => self.with_player(|p| p.seek_by(-self.seek_step_long.get())),
+            Action::SeekForwardLong => self.with_player(|p| p.seek_by(self.seek_step_long.get())),
             Action::PreviousCut => self.jump_to_cut(false),
             Action::NextCut => self.jump_to_cut(true),
             Action::ToggleMute => playback.invoke_toggle_mute(),

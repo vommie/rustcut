@@ -106,6 +106,11 @@ pub fn default_chain(defaults: &FilterDefaults) -> FilterChain {
 }
 
 impl FiltersState {
+    /// The defaults a fresh chain gets from now on (the current chain stays as it is).
+    pub fn set_defaults(&mut self, defaults: FilterDefaults) {
+        self.defaults = defaults;
+    }
+
     /// The state at startup: the kept chain when "keep" was on, else the defaults.
     pub fn new(
         defaults: FilterDefaults,

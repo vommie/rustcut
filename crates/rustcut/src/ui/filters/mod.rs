@@ -57,7 +57,7 @@ pub struct FiltersBridge {
     window: slint::Weak<MainWindow>,
     player: Weak<PlayerBridge>,
     runtime: tokio::runtime::Handle,
-    detect: DetectOptions,
+    detect: RefCell<DetectOptions>,
     state: RefCell<FiltersState>,
     /// The open file and a number that changes with every open (late results of an older file are dropped).
     file: RefCell<Option<PathBuf>>,
@@ -96,10 +96,10 @@ impl FiltersBridge {
             window: window.as_weak(),
             player: Rc::downgrade(player),
             runtime,
-            detect: DetectOptions {
+            detect: RefCell::new(DetectOptions {
                 program: settings.advanced.ffmpeg.clone(),
                 ..DetectOptions::default()
-            },
+            }),
             state: RefCell::new(state),
             file: RefCell::new(None),
             generation: Cell::new(0),
@@ -173,6 +173,16 @@ impl FiltersBridge {
     }
 
     /// What `ui-state.toml` keeps of the filters.
+    /// The ffmpeg that auto-crop and the interlace check run (changed in the Settings window).
+    pub fn set_ffmpeg(&self, program: Option<PathBuf>) {
+        self.detect.borrow_mut().program = program;
+    }
+
+    /// The deinterlacer and deshake defaults changed in the Settings window: fresh chains take them.
+    pub fn set_defaults(&self, defaults: rustcut_core::settings::FilterDefaults) {
+        self.state.borrow_mut().set_defaults(defaults);
+    }
+
     pub fn save_into(&self, export: &mut ExportPanelState) {
         let st = self.state.borrow();
         export.preview_filters = st.preview;

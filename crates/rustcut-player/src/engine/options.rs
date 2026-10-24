@@ -93,7 +93,7 @@ impl PlayerOptions {
 }
 
 /// `#RRGGBB` (mpv also accepts other forms, but the settings store this one).
-fn is_color(text: &str) -> bool {
+pub(crate) fn is_color(text: &str) -> bool {
     text.strip_prefix('#')
         .is_some_and(|hex| hex.len() == 6 && hex.chars().all(|c| c.is_ascii_hexdigit()))
 }

@@ -34,6 +34,9 @@ import { JobLoadDialog } from "job_load_dialog.slint";
 import { ConflictDialog } from "export_dialog.slint";
 import { MetadataDialog } from "export_metadata_dialog.slint";
 import { TagColumnView, TagHistoryItemModel, TagHistoryRowModel, TagNodeView, TagRate } from "tag_types.slint";
+import { FolderRowView, HotkeyChipView, HotkeyRowView, ProfileItemView, SettingCardView, SettingRowView, SettingsUi } from "settings_types.slint";
+import { SettingsWindow } from "settings_window.slint";
+import { TooltipSettings } from "tooltip.slint";
 
 export {
     Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
@@ -41,7 +44,8 @@ export {
     SectionRowView, Filters, FilterRowView, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe, Export,
     ConflictJobView, ConflictOptionView, Queue, QueueRowView, QueueColumnView, QueueChipView, TagRate, TagNodeView,
     TagColumnView, TagHistoryItemModel, TagHistoryRowModel, Job, JobRowView, JobSectionView, Logs, LogLineView, JobLoad,
-    ContextMenu, MenuItemView, MenuLevelView, HoldConfirm
+    ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderRowView,
+    ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings
 }
 
 export component MainWindow inherits Window {
@@ -73,6 +77,11 @@ export component MainWindow inherits Window {
     callback open-path(string);
     // File > Quit: the same path as closing the window.
     callback quit();
+    // File > Settings and Help > About: the Settings window on a page ("" = the page it showed last; src/ui/settings/).
+    callback open-settings();
+    callback open-settings-page(string);
+    // Help: one of RustCut's folders in the file manager ("config", "data", "logs", "cache").
+    callback open-folder(string);
 
     // "<file> (<folder>) - RustCut" while a file is open (src/app/window.rs).
     in property <string> window-title: root.app-name;
@@ -109,6 +118,14 @@ export component MainWindow inherits Window {
                 shortcut: Shortcuts.save;
                 enabled: Export.can-save && !Export.dialog-open && !Export.meta-open;
                 activated => { Export.save(); }
+            }
+
+            MenuSeparator { }
+
+            MenuItem {
+                title: "Settings...";
+                shortcut: Shortcuts.settings;
+                activated => { root.open-settings(); }
             }
 
             MenuSeparator { }
@@ -339,6 +356,32 @@ export component MainWindow inherits Window {
             MenuItem {
                 title: "Reset Layout";
                 activated => { Dock.reset-layout(); }
+            }
+        }
+
+        Menu {
+            title: "Help";
+
+            MenuItem {
+                title: "Open Settings Folder";
+                activated => { root.open-folder("config"); }
+            }
+
+            MenuItem {
+                title: "Open Data Folder";
+                activated => { root.open-folder("data"); }
+            }
+
+            MenuItem {
+                title: "Open Log Folder";
+                activated => { root.open-folder("logs"); }
+            }
+
+            MenuSeparator { }
+
+            MenuItem {
+                title: "About RustCut";
+                activated => { root.open-settings-page("about"); }
             }
         }
     }

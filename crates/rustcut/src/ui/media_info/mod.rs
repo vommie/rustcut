@@ -14,6 +14,7 @@ use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use parking_lot::Mutex;
 use rustcut_core::hashing::{HashCommand, HashEvent, HashService};
@@ -62,14 +63,25 @@ pub struct MediaInfoBridge {
     hashing: HashService,
     /// The RustView sync actor (lookups of the source's record and hash); `None` without RustView.
     sync: Option<SyncHandle>,
-    probe_options: ProbeOptions,
+    probe_options: RefCell<ProbeOptions>,
     /// Hash every opened file and look it up in RustView (the known-source warning).
-    auto_hash: bool,
+    auto_hash: Arc<AtomicBool>,
     probe_task: RefCell<Option<tokio::task::AbortHandle>>,
     events_task: tokio::task::AbortHandle,
 }
 
 impl MediaInfoBridge {
+    /// Whether the next opened video is hashed and looked up in RustView (`warnings.known_source`, changed in the
+    /// Settings window).
+    pub fn set_known_source(&self, on: bool) {
+        self.auto_hash.store(on, Ordering::Relaxed);
+    }
+
+    /// The ffprobe that reads the next opened video (changed in the Settings window).
+    pub fn set_ffprobe(&self, program: Option<std::path::PathBuf>) {
+        self.probe_options.borrow_mut().program = program;
+    }
+
     /// Handles the panel's callbacks and the hash service's events from now on. The app owns the only strong reference.
     pub fn install(
         window: &MainWindow,
@@ -80,13 +92,13 @@ impl MediaInfoBridge {
         settings: &Settings,
     ) -> Rc<Self> {
         let state = Arc::new(Mutex::new(MediaPanelState::default()));
-        let known_source = settings.warnings.known_source;
+        let known_source = Arc::new(AtomicBool::new(settings.warnings.known_source));
         let events_task = runtime
             .spawn(forward_hash_events(
                 hashing.clone(),
                 Lookup {
                     sync: sync.clone(),
-                    known_source,
+                    known_source: Arc::clone(&known_source),
                     state: Arc::clone(&state),
                     ui: ui.clone(),
                     window: window.as_weak(),
@@ -100,10 +112,10 @@ impl MediaInfoBridge {
             runtime,
             hashing,
             sync,
-            probe_options: ProbeOptions {
+            probe_options: RefCell::new(ProbeOptions {
                 program: settings.advanced.ffprobe.clone(),
                 ..ProbeOptions::default()
-            },
+            }),
             auto_hash: known_source,
             probe_task: RefCell::new(None),
             events_task,
@@ -136,7 +148,7 @@ impl MediaInfoBridge {
         let (generation, previous) = {
             let mut state = self.state.lock();
             let previous = state.file.clone();
-            (state.opening(path, self.auto_hash), previous)
+            (state.opening(path, self.auto_hash.load(Ordering::Relaxed)), previous)
         };
         if let Some(previous) = previous.filter(|p| p != path) {
             self.send_hash(HashCommand::Cancel { path: previous });
@@ -148,7 +160,7 @@ impl MediaInfoBridge {
             task.abort();
         }
         let file = path.to_path_buf();
-        let options = self.probe_options.clone();
+        let options = self.probe_options.borrow().clone();
         let state = Arc::clone(&self.state);
         let ui = self.ui.clone();
         let window = self.window.clone();
@@ -180,7 +192,7 @@ impl MediaInfoBridge {
             }
         });
         *self.probe_task.borrow_mut() = Some(task.abort_handle());
-        if self.auto_hash {
+        if self.auto_hash.load(Ordering::Relaxed) {
             self.request_hash(path.to_path_buf(), generation);
         }
         self.refresh();
@@ -223,7 +235,7 @@ impl MediaInfoBridge {
         };
         let lookup = Lookup {
             sync: Some(sync.clone()),
-            known_source: self.auto_hash,
+            known_source: Arc::clone(&self.auto_hash),
             state: Arc::clone(&self.state),
             ui: self.ui.clone(),
             window: self.window.clone(),
@@ -349,7 +361,7 @@ fn register_hash(sync: Option<&SyncHandle>, md5: String) {
 /// What the known-source check needs on the runtime.
 struct Lookup {
     sync: Option<SyncHandle>,
-    known_source: bool,
+    known_source: Arc<AtomicBool>,
     state: Arc<Mutex<MediaPanelState>>,
     ui: UiDispatcher,
     window: slint::Weak<MainWindow>,
@@ -363,7 +375,7 @@ impl Lookup {
         if register {
             register_hash(self.sync.as_ref(), md5.to_owned());
         }
-        let Some(sync) = self.sync.as_ref().filter(|_| self.known_source) else {
+        let Some(sync) = self.sync.as_ref().filter(|_| self.known_source.load(Ordering::Relaxed)) else {
             return;
         };
         let generation = {

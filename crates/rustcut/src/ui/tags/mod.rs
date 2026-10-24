@@ -115,6 +115,12 @@ impl TagsBridge {
         bridge
     }
 
+    /// How many tags the history keeps (`rustview.tag_history_size`, also while RustCut runs).
+    pub fn set_history_size(&self, size: u8) {
+        self.state.borrow_mut().set_history_size(usize::from(size));
+        self.publish();
+    }
+
     pub fn set_on_reveal(&self, hook: impl Fn() + 'static) {
         *self.on_reveal.borrow_mut() = Some(Box::new(hook));
     }

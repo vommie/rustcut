@@ -32,6 +32,10 @@ impl QuitPath {
                 tracing::info!("[App] Window closed; quitting");
                 path.capture(&main);
             }
+            // The Settings window may still be open: closing the main window quits all the same.
+            if let Err(e) = slint::quit_event_loop() {
+                tracing::warn!(error = %e, "[App] The event loop could not be ended");
+            }
             slint::CloseRequestResponse::HideWindow
         });
         let (this, weak) = (Rc::downgrade(&path), main.as_weak());

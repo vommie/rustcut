@@ -32,6 +32,41 @@ pub struct UiState {
     pub logs: LogPanelState,
     /// Path of the last opened video's folder (the file dialog starts there).
     pub last_open_dir: Option<std::path::PathBuf>,
+    /// The Settings window. A value this version cannot read counts as missing.
+    #[serde_as(as = "DefaultOnError")]
+    pub settings: SettingsWindowState,
+}
+
+/// The Settings window (M4.2): its size, the page it showed last and what each page had selected.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SettingsWindowState {
+    /// Logical pixels.
+    pub width: u32,
+    pub height: u32,
+    /// The page's id (`general`, `hotkeys`, ...; an unknown id shows the first page).
+    pub page: String,
+    /// The profile selected on the Render Profiles page.
+    pub profile: Option<String>,
+    /// The Hotkeys page's filter.
+    pub hotkey_search: String,
+}
+
+impl SettingsWindowState {
+    pub const WIDTH: std::ops::RangeInclusive<u32> = 600..=16_384;
+    pub const HEIGHT: std::ops::RangeInclusive<u32> = 400..=16_384;
+}
+
+impl Default for SettingsWindowState {
+    fn default() -> Self {
+        Self {
+            width: 900,
+            height: 660,
+            page: String::new(),
+            profile: None,
+            hotkey_search: String::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -257,8 +292,10 @@ pub struct TagPanelState {
 }
 
 impl TagPanelState {
-    /// Longest tag history (RustView's default).
-    pub const HISTORY_MAX: usize = 20;
+    /// Longest tag history kept (the largest `rustview.tag_history_size`).
+    pub const HISTORY_MAX: usize = 100;
+    /// The tag history's length when nothing else is set (RustView's default).
+    pub const HISTORY_DEFAULT: usize = 20;
     /// Smallest and largest height of the tag history's body (RustView's limits).
     pub const HISTORY_HEIGHT: std::ops::RangeInclusive<u32> = 40..=500;
 
@@ -351,6 +388,12 @@ impl VersionedFile for UiState {
             };
         }
         self.tags.sanitize(&mut notes);
+        let s = &mut self.settings;
+        if !SettingsWindowState::WIDTH.contains(&s.width) || !SettingsWindowState::HEIGHT.contains(&s.height) {
+            notes.push(format!("settings window size {}x{} reset", s.width, s.height));
+            let fresh = SettingsWindowState::default();
+            (s.width, s.height) = (fresh.width, fresh.height);
+        }
         notes
     }
 }

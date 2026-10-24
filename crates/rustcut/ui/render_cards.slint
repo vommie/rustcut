@@ -7,122 +7,11 @@ import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { ChoiceButton, IconButton, NumberField, Switch } from "controls.slint";
 import { TooltipArea } from "tooltip.slint";
+import { OptionRow } from "render_option_row.slint";
 import { PlayerSeekBar } from "player_seek_bar.slint";
 import { Shortcuts } from "shortcuts.slint";
 import { OptionRowView, Probe, RenderIssueView, RenderSettings } from "render_types.slint";
 import { Playback } from "player_types.slint";
-
-/// The name of an option, explained by its tooltip; colored when the option has an issue.
-component RowLabel inherits TooltipArea {
-    in property <string> label;
-    in property <int> mark;
-
-    horizontal-stretch: 0;
-    min-width: 40px;
-
-    Text {
-        width: parent.width;
-        height: parent.height;
-        text: root.label;
-        color: root.mark == 2 ? Theme.status-corrupt : root.mark == 1 ? Theme.accent : Theme.text-muted;
-        font-size: 11px;
-        vertical-alignment: center;
-        overflow: elide;
-    }
-}
-
-/// One option: its label on the left, the control on the right.
-component OptionRow inherits HorizontalLayout {
-    in property <OptionRowView> option;
-
-    spacing: 6px;
-    min-height: root.option.kind == 4 ? 38px : 24px;
-
-    // The labels take a fixed share, so every control starts at the same place.
-    RowLabel {
-        width: 36%;
-        label: root.option.label;
-        mark: root.option.mark;
-        text: root.option.tooltip;
-    }
-
-    HorizontalLayout {
-        horizontal-stretch: 1;
-        min-width: 60px;
-
-        if root.option.kind == 0: ChoiceButton {
-            items: root.option.items;
-            current: root.option.index;
-            tooltip: root.option.tooltip;
-            enabled: root.option.enabled;
-            selected(index) => { RenderSettings.choose(root.option.key, index); }
-        }
-
-        // Keeps a choice or a switch at its own width on the left.
-        if root.option.kind == 0 || root.option.kind == 2: Rectangle {
-            horizontal-stretch: 1;
-            min-width: 0;
-        }
-
-        if root.option.kind == 1: NumberField {
-            text: root.option.text;
-            placeholder: root.option.placeholder;
-            tooltip: root.option.tooltip;
-            enabled: root.option.enabled;
-            committed(text) => { return RenderSettings.type-text(root.option.key, text); }
-            stepped(steps) => { RenderSettings.step(root.option.key, steps); }
-        }
-
-        if root.option.kind == 2: VerticalLayout {
-            alignment: center;
-
-            Switch {
-                checked: root.option.checked;
-                enabled: root.option.enabled;
-                tooltip: root.option.tooltip;
-                toggled => { RenderSettings.toggle(root.option.key); }
-            }
-        }
-
-        if root.option.kind == 3: NumberField {
-            text: root.option.text;
-            placeholder: root.option.placeholder;
-            tooltip: root.option.tooltip;
-            enabled: root.option.enabled;
-            alignment: left;
-            committed(text) => { return RenderSettings.type-text(root.option.key, text); }
-        }
-
-        if root.option.kind == 4: VerticalLayout {
-            spacing: 0px;
-
-            slider := PlayerSeekBar {
-                height: 20px;
-                enabled: root.option.enabled;
-                value: root.option.steps > 0 ? root.option.position / root.option.steps : 0;
-                changed(value, final) => {
-                    RenderSettings.slide(root.option.key, Math.round(value * root.option.steps));
-                }
-            }
-
-            TooltipArea {
-                text: root.option.tooltip;
-                height: 16px;
-
-                Text {
-                    width: parent.width;
-                    height: parent.height;
-                    text: root.option.text;
-                    color: root.option.enabled ? Theme.text : Theme.text-muted;
-                    font-size: 11px;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                    overflow: elide;
-                }
-            }
-        }
-    }
-}
 
 /// A stack of option rows.
 component OptionRows inherits VerticalLayout {
@@ -134,6 +23,11 @@ component OptionRows inherits VerticalLayout {
 
     for item in root.rows: OptionRow {
         option: item;
+        choose(key, index) => { RenderSettings.choose(key, index); }
+        slide(key, position) => { RenderSettings.slide(key, position); }
+        toggle(key) => { RenderSettings.toggle(key); }
+        type-text(key, text) => { return RenderSettings.type-text(key, text); }
+        step(key, steps) => { RenderSettings.step(key, steps); }
     }
 }
 

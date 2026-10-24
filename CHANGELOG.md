@@ -9,6 +9,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Settings window (0.0.15; File > Settings..., Ctrl+, or Help > About RustCut), styled like RustView's: General, Player,
+  Editor & Sections, Filters, Export & Naming, Render Profiles, Queue, RustView, Warnings & Confirmations, Hotkeys,
+  Desktop Integration, Appearance, Advanced & Logs and About (with the Slint attribution). Every change is saved at
+  once (no Save button); options that only work from the next start say so. A held button in the page header puts
+  the page's options back to their defaults. The window's size, its page, the selected profile and the hotkey filter
+  are kept in `ui-state.toml` (new `[settings]` table).
+  - Export & Naming: the file-name template is checked while you type it and shows an example; the named target
+    folders can be added, labeled, reordered and removed (held).
+  - Render Profiles: every profile with the one new jobs start with (star); built-in profiles are shown read-only,
+    "Duplicate" makes an own copy, and an own profile is saved with every change, renamed or deleted (held). The
+    Codecs panel follows at once.
+  - Hotkeys: every action with its keys, a filter, a key button that waits for the next key (Escape cancels), a
+    cross per key, and a reset per action. A key another action has is named first; pressing it again moves it.
+    `config.toml` keeps only the actions whose keys differ from the defaults.
+- New settings (no migration; older files load with these defaults): `appearance.tooltips` (on) and
+  `appearance.tooltip_delay_ms` (600), `rustview.tag_history_size` (20, up to 100), key `open_settings` (Ctrl+,).
+- Help menu: open the settings, data and log folders.
+
 - Queue panel (0.0.13): in a narrow sidebar the jobs show as two-line rows; as the panel gets wider (or its group is
   maximized) it becomes a table whose columns join as there is room: number, name, state with the render's
   progress, ETA, length (and the number of sections), size (estimated while rendering, measured when finished),
@@ -281,12 +299,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Settings changed in the Settings window apply while RustCut runs where they can: hold time, tooltips, keys, seek
+  steps, auto play, wheel step, preview audio filters, the export card's folders, template and warnings, the
+  automatic section, filter defaults, the draft rule when a job is edited, render profiles, ffmpeg's priority and
+  stall limit, the number of jobs at the same time, the RustView link and the tag history size, the log level and
+  how long log files are kept, hardware decoding and the background color of the player (also while a video plays),
+  the ffmpeg and ffprobe programs (the encoders are checked again), the known-source warning, and "One window" (a
+  second start opens its own window as soon as it is off). Only the tray icon still needs a new start.
+- Closing the main window quits RustCut even while the Settings window is open.
 - The Render Settings panel's tab is called "Codecs" (shorter; your layout keeps its place).
 - The queue panel's actions apply to every selected job; its buttons sit below the list.
 - The Sections card's buttons are icons with tooltips (set start/end to the playhead, add, move, delete).
 
 ### Fixed
 
+- The last progress of a render (often its end) is no longer lost when ffmpeg writes it just before it exits.
+- Starting ffmpeg, ffprobe or rustview tries again for a moment while the system reports the program as busy (for
+  example while a package update replaces it) instead of failing the job at once.
 - Quitting RustCut while a video without audio is open no longer logs "The file cannot be played: The video output
   could not be started." (0.0.14). Closing the window takes the video output away from the player, which is a normal
   end of playback, not a failure; a real failure of the video output still shows the error over the video.

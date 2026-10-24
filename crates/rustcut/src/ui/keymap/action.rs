@@ -8,6 +8,7 @@ pub enum Action {
     Open,
     Save,
     Quit,
+    OpenSettings,
     TogglePause,
     ShuttleReverse,
     ShuttleStop,
@@ -49,10 +50,11 @@ pub enum Action {
 }
 
 impl Action {
-    pub const ALL: [Self; 41] = [
+    pub const ALL: [Self; 42] = [
         Self::Open,
         Self::Save,
         Self::Quit,
+        Self::OpenSettings,
         Self::TogglePause,
         Self::ShuttleReverse,
         Self::ShuttleStop,
@@ -99,6 +101,7 @@ impl Action {
             Self::Open => "open",
             Self::Save => "save",
             Self::Quit => "quit",
+            Self::OpenSettings => "open_settings",
             Self::TogglePause => "toggle_pause",
             Self::ShuttleReverse => "shuttle_reverse",
             Self::ShuttleStop => "shuttle_stop",
@@ -150,6 +153,7 @@ impl Action {
             Self::Open => "Open file",
             Self::Save => "Save job",
             Self::Quit => "Quit",
+            Self::OpenSettings => "Open the settings",
             Self::TogglePause => "Play / pause",
             Self::ShuttleReverse => "Play backward (again: faster)",
             Self::ShuttleStop => "Stop",
@@ -197,6 +201,7 @@ impl Action {
             Self::Open => &["Control+O"],
             Self::Save => &["Control+S", "F9"],
             Self::Quit => &["Control+Q"],
+            Self::OpenSettings => &["Control+Comma"],
             Self::TogglePause => &["Space"],
             Self::ShuttleReverse => &["J"],
             Self::ShuttleStop => &["K"],

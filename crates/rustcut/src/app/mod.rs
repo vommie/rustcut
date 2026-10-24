@@ -2,29 +2,35 @@
 //! window, event loop, and the one quit path (`shutdown`).
 
 mod cli;
+mod live;
 mod logging;
 mod persistence;
+mod services;
 mod shutdown;
 pub mod window;
 
 use std::process::ExitCode;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use clap::Parser as _;
 use rustcut_core::app_identity::{APP_NAME, VERSION};
-use rustcut_core::hashing::{HashCommand, HashService, spawn_hash_service};
-use rustcut_core::queue::{QueueCommand, QueueOptions, QueueService, SyncLink, spawn_queue_linked};
+use rustcut_core::hashing::spawn_hash_service;
+use rustcut_core::queue::SyncLink;
 use rustcut_core::render::{HardwareContext, RenderEnv, probe_dir, spawn_capability_check};
-use rustcut_core::rustview::{CliClient, SyncCommand, SyncService, spawn_sync};
+use rustcut_core::rustview::{CliClient, SyncCommand, spawn_sync};
 use rustcut_core::settings::{AppPaths, Settings};
-use rustcut_core::store::{Store, StoreCommand, StoreHandle, spawn_store};
 use slint::ComponentHandle as _;
 
 pub use cli::Cli;
 pub use persistence::SettingsWriter;
 
-use crate::desktop::instance::{self, Request};
+use self::services::{
+    forward, listen, open_store, start_queue, start_runtime, stop_hashing, stop_player, stop_queue, stop_store,
+    stop_sync,
+};
+use crate::MainWindow;
+use crate::desktop::instance;
 use crate::ui::dispatcher::{SlintSink, UiDispatcher};
 use crate::ui::dock::{DockBridge, PanelId, persist as dock_persist};
 use crate::ui::editing::{EditingParts, JobEditor};
@@ -36,14 +42,14 @@ use crate::ui::keymap::{Action, Keymap};
 use crate::ui::logs::LogsBridge;
 use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::menu::ContextMenuBridge;
-use crate::ui::open::{self, FileOpener, OpenerParts};
+use crate::ui::open::{FileOpener, OpenerParts};
 use crate::ui::player::{PlayerBridge, PlayerBridgeError};
 use crate::ui::probe::{self, ProbeBridge};
 use crate::ui::queue::{MenuKeys, QueueBridge};
 use crate::ui::render_settings::RenderSettingsBridge;
+use crate::ui::settings::SettingsBridge;
 use crate::ui::status::{self, Level};
 use crate::ui::tags::TagsBridge;
-use crate::{HoldConfirm, MainWindow};
 
 /// How long the runtime may take to finish its tasks at quit.
 const RUNTIME_SHUTDOWN: Duration = Duration::from_secs(2);
@@ -136,8 +142,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         records: sync_records,
     };
     let queue_service = start_queue(&runtime, &store, &loaded, &encoders, sync_link);
-    main.global::<HoldConfirm<'_>>()
-        .set_duration(i64::from(loaded.settings.general.hold_to_confirm_ms));
+    live::look(&main, &loaded.settings);
     let menu = ContextMenuBridge::install(&main);
     let (keys, save_key) = queue_keys(&loaded.settings);
     let queue = QueueBridge::install(
@@ -269,7 +274,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         runtime.handle().clone(),
         &loaded.settings,
         &loaded.ui_state.export,
-        writer,
+        writer.clone(),
     );
     editor.set_export(&export);
     let opener = FileOpener::install(
@@ -312,7 +317,66 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             }
         }));
     }
-    let server = single_instance.then(|| listen(&socket, &runtime, &ui, &main)).flatten();
+    // The single-instance socket: listening while `general.single_instance` is on (also switched while running).
+    let server = Rc::new(std::cell::RefCell::new(
+        single_instance
+            .then(|| listen(&socket, runtime.handle(), &ui, &main.as_weak()))
+            .flatten(),
+    ));
+    let instance: Box<dyn Fn(bool)> = {
+        let (server, runtime, ui, main) = (Rc::clone(&server), runtime.handle().clone(), ui.clone(), main.as_weak());
+        Box::new(move |on| {
+            let mut server = server.borrow_mut();
+            if !on {
+                if server.take().is_some() {
+                    tracing::info!("[Instance] No longer listening: a second start opens its own window");
+                }
+            } else if server.is_none() {
+                *server = listen(&socket, &runtime, &ui, &main);
+            }
+        })
+    };
+    tags.set_history_size(loaded.settings.rustview.tag_history_size);
+    let settings_window = SettingsBridge::install(
+        &main,
+        runtime.handle().clone(),
+        writer.clone(),
+        loaded.paths.clone(),
+        &loaded.ui_state.settings,
+    );
+    {
+        let mut hooks = settings_window.hooks();
+        let sync_handle = sync.handle.clone();
+        hooks.probe_rustview = Some(Box::new(move || {
+            let _ = sync_handle.send(SyncCommand::Probe);
+        }));
+        let render = Rc::downgrade(&render);
+        hooks.encoders = Some(Box::new(move || {
+            render.upgrade().map(|r| r.encoders()).unwrap_or_default()
+        }));
+    }
+    live::connect(
+        &writer,
+        live::Parts {
+            main: main.as_weak(),
+            editor: Rc::downgrade(&editor),
+            player: Rc::downgrade(&player),
+            export: Rc::downgrade(&export),
+            filters: Rc::downgrade(&filters),
+            render: Rc::downgrade(&render),
+            tags: Rc::downgrade(&tags),
+            editing: Rc::downgrade(&editing),
+            queue: queue_service.handle.clone(),
+            sync: sync.handle.clone(),
+            paths: loaded.paths.clone(),
+            env: RenderEnv::new(&loaded.settings, &loaded.paths, HardwareContext::default()),
+            log: log.level_setter(),
+            media: Rc::downgrade(&media),
+            probe: Rc::downgrade(&probe),
+            runtime: runtime.handle().clone(),
+            instance,
+        },
+    );
     shutdown::watch_signals(runtime.handle(), ui, main.as_weak());
 
     if let Some(problem) = store_problem {
@@ -344,8 +408,12 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     queue.save_into(&mut ui_state.queue);
     ui_state.job.collapsed = inspector.collapsed();
     logs.save_into(&mut ui_state.logs);
+    settings_window.save_into(&mut ui_state.settings);
     persistence::save_ui_state(&loaded, &ui_state);
-    drop(server);
+    settings_window.shut_down();
+    // Stop listening now (the settings' listener holds the holder until the end of `run`).
+    drop(server.borrow_mut().take());
+    drop(settings_window);
     drop(editing);
     drop(opener);
     drop(export);
@@ -388,196 +456,4 @@ fn queue_keys(settings: &Settings) -> (MenuKeys, String) {
         },
         label(Action::Save),
     )
-}
-
-/// The tokio runtime of the services (ADR-4). Built before the window: it takes about a millisecond (logged), and mpv's
-/// first events need the dispatcher, whose coalescing runs on it.
-fn start_runtime() -> Result<tokio::runtime::Runtime, AppError> {
-    let started = Instant::now();
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .thread_name("rustcut-rt")
-        .build()
-        .map_err(AppError::Runtime)?;
-    tracing::debug!(micros = started.elapsed().as_micros(), "[App] Runtime started");
-    Ok(runtime)
-}
-
-/// Hands the command line's files to a running instance of this profile. `true` = it took them, this start ends.
-fn forward(socket: &std::path::Path, cli: &Cli) -> bool {
-    let request = Request::Open {
-        files: instance::absolute_files(&cli.files),
-    };
-    match instance::send(socket, &request) {
-        Ok(Some(reply)) if reply.ok => {
-            tracing::info!(
-                files = cli.files.len(),
-                "[Instance] RustCut is already running; files forwarded"
-            );
-            true
-        }
-        Ok(Some(reply)) => {
-            tracing::warn!(message = %reply.message, "[Instance] The running instance refused the files; starting anyway");
-            false
-        }
-        Ok(None) => false,
-        Err(e) => {
-            tracing::warn!(error = %e, "[Instance] The running instance did not answer; starting anyway");
-            false
-        }
-    }
-}
-
-/// Listens for a second start; its files open in this window. `None` (logged) when the socket cannot be used.
-fn listen(
-    socket: &std::path::Path,
-    runtime: &tokio::runtime::Runtime,
-    ui: &UiDispatcher,
-    main: &MainWindow,
-) -> Option<instance::Server> {
-    let ui = ui.clone();
-    let main = main.as_weak();
-    let served = instance::serve(socket, runtime.handle(), move |request| {
-        if let Request::Open { files } = request {
-            let main = main.clone();
-            ui.post(move || {
-                if let Some(main) = main.upgrade() {
-                    open::open_forwarded(&main, &files);
-                }
-            });
-        }
-    });
-    match served {
-        Ok(server) => Some(server),
-        Err(e) => {
-            tracing::warn!(error = %e, "[Instance] Not listening for a second start; it opens its own window");
-            None
-        }
-    }
-}
-
-/// Opens the queue database and starts its thread. A database that cannot be used (newer, damaged, no access) is left
-/// alone: the queue runs on a database in memory for this run, and the returned text says so in the status line.
-fn open_store(paths: &AppPaths) -> (StoreHandle, Option<std::thread::JoinHandle<()>>, Option<String>) {
-    let (store, problem) = match Store::open(&paths.database(), &paths.data_backups()) {
-        Ok(store) => (store, None),
-        Err(e) => {
-            tracing::error!(error = %e, "[Store] The queue database cannot be used; jobs are kept in memory for this run");
-            let problem = format!("The queue database cannot be used ({e}); jobs are kept only until RustCut quits.");
-            match Store::open_in_memory() {
-                Ok(store) => (store, Some(problem)),
-                Err(e) => {
-                    tracing::error!(error = %e, "[Store] Not even a database in memory could be opened");
-                    return (StoreHandle::closed(), None, Some(problem));
-                }
-            }
-        }
-    };
-    match spawn_store(store) {
-        Ok((handle, thread)) => (handle, Some(thread), problem),
-        Err(e) => {
-            tracing::error!(error = %e, "[Store] The database thread could not be started");
-            (
-                StoreHandle::closed(),
-                None,
-                Some(format!("The queue database thread could not be started: {e}")),
-            )
-        }
-    }
-}
-
-/// Starts the queue engine with the settings and the panel's last processing state; once the capability check knows
-/// the hardware (a VAAPI device), the renders get it.
-fn start_queue(
-    runtime: &tokio::runtime::Runtime,
-    store: &StoreHandle,
-    loaded: &persistence::Loaded,
-    encoders: &tokio::sync::watch::Receiver<Option<std::sync::Arc<rustcut_core::render::Capabilities>>>,
-    sync: SyncLink,
-) -> QueueService {
-    let settings: &Settings = &loaded.settings;
-    let options = QueueOptions {
-        workers: settings.queue.workers,
-        paused: loaded.ui_state.queue.paused,
-        pause_on_start: settings.queue.pause_on_start,
-        when_done: loaded.ui_state.queue.when_done.unwrap_or(settings.queue.when_done),
-    };
-    let env = RenderEnv::new(settings, &loaded.paths, HardwareContext::default());
-    let (service, _task) = spawn_queue_linked(runtime.handle(), store.clone(), env.clone(), options, Some(sync));
-    let mut capabilities = encoders.clone();
-    let handle = service.handle.clone();
-    runtime.spawn(async move {
-        while capabilities.changed().await.is_ok() {
-            let hardware = capabilities.borrow_and_update().as_ref().map(|c| c.hardware.clone());
-            if let Some(hardware) = hardware {
-                if hardware != HardwareContext::default() {
-                    let _ = handle.send(QueueCommand::SetRenderEnv(Box::new(RenderEnv { hardware, ..env })));
-                }
-                return;
-            }
-        }
-    });
-    service
-}
-
-/// Stops the queue: running renders end (they wait again at the next start); takes at most a few seconds.
-fn stop_queue(queue: &QueueService) {
-    if queue
-        .handle
-        .blocking_request(|reply| QueueCommand::Shutdown { reply })
-        .is_err()
-    {
-        tracing::debug!("[App] The queue had already stopped");
-    }
-}
-
-/// Closes the database after the commands before it and joins its thread.
-fn stop_store(store: &StoreHandle, thread: Option<std::thread::JoinHandle<()>>) {
-    if store
-        .blocking_request(|reply| StoreCommand::Shutdown { reply })
-        .is_err()
-    {
-        tracing::debug!("[App] The database had already stopped");
-    }
-    if let Some(thread) = thread
-        && thread.join().is_err()
-    {
-        tracing::warn!("[App] The database thread ended with a panic");
-    }
-}
-
-/// Stops the RustView sync: a running `rustview` call is dropped (its child killed); records it reported before are
-/// stored by the queue, which stops after it. Unfinished work is picked up at the next start from the stored records.
-fn stop_sync(sync: &SyncService) {
-    if sync
-        .handle
-        .blocking_request(|reply| SyncCommand::Shutdown { reply })
-        .is_err()
-    {
-        tracing::debug!("[App] The RustView sync had already stopped");
-    }
-}
-
-/// Stops the hash service: a running read ends at its next chunk (the service waits for it at most two seconds).
-fn stop_hashing(hashing: &HashService) {
-    if hashing
-        .handle
-        .blocking_request(|reply| HashCommand::Shutdown { reply })
-        .is_err()
-    {
-        tracing::debug!("[App] The hash service had already stopped");
-    }
-}
-
-/// Drops the last reference to the player: mpv quits and its threads are joined.
-fn stop_player(player: Rc<PlayerBridge>) {
-    match Rc::try_unwrap(player) {
-        Ok(player) => drop(player),
-        Err(player) => {
-            tracing::warn!(
-                references = Rc::strong_count(&player),
-                "[App] The player is still referenced; it stops when the last reference goes"
-            );
-        }
-    }
 }

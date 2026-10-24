@@ -152,3 +152,10 @@ filter_clear = { tabler = "filter-off", doc = "Show every job again" }
 copy = { tabler = "copy", doc = "Copy to the clipboard" }
 log_follow = { tabler = "arrow-autofit-down", doc = "Stay at the newest line" }
 job_details = { tabler = "file-description", doc = "Show the job in the Job panel" }
+
+# --- Settings window -----------------------------------------------------------------------------------------------
+settings_reset = { tabler = "restore", doc = "Put the options of a settings page back to their defaults" }
+browse = { tabler = "folder-open", doc = "Pick a file or a folder with the file dialog" }
+hotkey_add = { tabler = "keyboard", doc = "Press a new key for the action" }
+profile_default = { tabler = "star", doc = "The profile new jobs start with (outline: make it so)" }
+profile_default_set = { tabler = "star", style = "filled", doc = "The profile new jobs start with" }

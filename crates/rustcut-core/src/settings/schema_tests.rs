@@ -205,3 +205,26 @@ fn hold_time_and_draft_on_load_have_defaults_and_are_tolerant() {
         assert_eq!(s.general.hold_to_confirm_ms, kept);
     }
 }
+
+#[test]
+fn appearance_and_tag_history_have_defaults_and_are_sanitized() {
+    // A file of 0.0.14 has neither `[appearance]` nor `rustview.tag_history_size`: the defaults fill in, no migration.
+    let dir = tempfile::tempdir().unwrap();
+    let old = "version = 1\n[rustview]\ntimeout_secs = 7\n";
+    std::fs::write(dir.path().join("config.toml"), old).unwrap();
+    let outcome = load::<Settings>(dir.path(), &dir.path().join("b")).unwrap();
+    assert!(
+        matches!(outcome, LoadOutcome::Loaded { ref notes, .. } if notes.is_empty()),
+        "{outcome:?}"
+    );
+    let value = outcome.into_value();
+    assert_eq!(value.appearance, AppearanceSettings::default());
+    assert_eq!((value.rustview.timeout_secs, value.rustview.tag_history_size), (7, 20));
+    assert!(!dir.path().join("b").exists());
+
+    let mut s = Settings::default();
+    s.appearance.tooltip_delay_ms = 60_000;
+    s.rustview.tag_history_size = 0;
+    assert_eq!(s.sanitize().len(), 2);
+    assert_eq!((s.appearance.tooltip_delay_ms, s.rustview.tag_history_size), (5_000, 1));
+}

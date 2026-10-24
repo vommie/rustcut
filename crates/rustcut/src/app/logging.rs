@@ -30,7 +30,41 @@ pub struct LogControl {
     handle: Option<reload::Handle<EnvFilter, Registry>>,
     from_env: bool,
     file: FileSink,
-    guard: Mutex<Option<WorkerGuard>>,
+    guard: Arc<Mutex<Option<WorkerGuard>>>,
+}
+
+/// Changes the log filter and the log files while RustCut runs.
+#[derive(Clone)]
+pub struct LevelSetter {
+    handle: Option<reload::Handle<EnvFilter, Registry>>,
+    from_env: bool,
+    file: FileSink,
+    guard: Arc<Mutex<Option<WorkerGuard>>>,
+}
+
+impl LevelSetter {
+    /// Writes the daily files to `dir` again, keeping the newest `keep_days` (older ones are deleted now).
+    pub fn reopen(&self, dir: &Path, keep_days: u16) {
+        open_file(&self.file, &self.guard, dir, keep_days);
+    }
+
+    /// Uses `level` unless `RUST_LOG` was given (the environment wins).
+    pub fn apply(&self, level: &str) {
+        if self.from_env {
+            return;
+        }
+        let Some(handle) = &self.handle else { return };
+        match EnvFilter::try_new(level) {
+            Ok(filter) => {
+                if let Err(e) = handle.reload(filter) {
+                    tracing::warn!(error = %e, "[App] The log level could not be changed");
+                } else {
+                    tracing::debug!(level, "[App] Log level from the settings");
+                }
+            }
+            Err(e) => tracing::warn!(level, error = %e, "[App] The configured log level is not valid; keeping info"),
+        }
+    }
 }
 
 /// Installs the global subscriber. A second call (tests) leaves the first one in place.
@@ -54,33 +88,37 @@ pub fn init() -> LogControl {
         handle: installed.then_some(handle),
         from_env,
         file,
-        guard: Mutex::new(None),
+        guard: Arc::new(Mutex::new(None)),
     }
 }
 
 impl LogControl {
     /// Uses the configured level unless `RUST_LOG` was given (the environment wins).
     pub fn apply_setting(&self, level: &str) {
-        if self.from_env {
-            return;
-        }
-        let Some(handle) = &self.handle else { return };
-        match EnvFilter::try_new(level) {
-            Ok(filter) => {
-                if let Err(e) = handle.reload(filter) {
-                    tracing::warn!(error = %e, "[App] The log level could not be changed");
-                } else {
-                    tracing::debug!(level, "[App] Log level from the settings");
-                }
-            }
-            Err(e) => tracing::warn!(level, error = %e, "[App] The configured log level is not valid; keeping info"),
+        self.level_setter().apply(level);
+    }
+
+    /// Changes the level and the log files later (the Settings window).
+    pub fn level_setter(&self) -> LevelSetter {
+        LevelSetter {
+            handle: self.handle.clone(),
+            from_env: self.from_env,
+            file: self.file.clone(),
+            guard: Arc::clone(&self.guard),
         }
     }
 
     /// Starts writing the log to daily files in `dir`, keeping the newest `keep_days` (at least one).
     pub fn open_file(&self, dir: &Path, keep_days: u16) {
+        open_file(&self.file, &self.guard, dir, keep_days);
+    }
+}
+
+/// Starts writing the log to daily files in `dir` (again), keeping the newest `keep_days`.
+fn open_file(file: &FileSink, guard: &Mutex<Option<WorkerGuard>>, dir: &Path, keep_days: u16) {
+    {
         if let Err(e) = std::fs::create_dir_all(dir) {
-            self.file.close();
+            file.close();
             tracing::warn!(dir = %dir.display(), error = %e, "[App] No log folder; logging to stderr only");
             return;
         }
@@ -92,13 +130,13 @@ impl LogControl {
             .build(dir);
         match appender {
             Ok(appender) => {
-                let (writer, guard) = tracing_appender::non_blocking(appender);
-                self.file.open(writer);
-                *self.guard.lock() = Some(guard);
+                let (writer, new_guard) = tracing_appender::non_blocking(appender);
+                file.open(writer);
+                *guard.lock() = Some(new_guard);
                 tracing::info!(dir = %dir.display(), keep_days, "[App] Logging to files");
             }
             Err(e) => {
-                self.file.close();
+                file.close();
                 tracing::warn!(dir = %dir.display(), error = %e, "[App] No log file; logging to stderr only");
             }
         }

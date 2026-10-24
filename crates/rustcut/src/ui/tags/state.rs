@@ -83,6 +83,8 @@ pub struct TagPanel {
     pub editing: Option<Editing>,
     /// Choosing the branches to hide (a click hides or shows one).
     pub hide_mode: bool,
+    /// How many tags the history keeps (`rustview.tag_history_size`).
+    history_size: usize,
 }
 
 impl TagPanel {
@@ -102,8 +104,15 @@ impl TagPanel {
                 tags: saved.locked.clone(),
                 rating: None,
             },
+            history_size: TagPanelState::HISTORY_DEFAULT,
             ..Self::default()
         }
+    }
+
+    /// The history keeps this many tags from now on (the oldest go when it is shorter now).
+    pub fn set_history_size(&mut self, size: usize) {
+        self.history_size = size.clamp(1, TagPanelState::HISTORY_MAX);
+        self.history.truncate(self.history_size);
     }
 
     /// What `ui-state.toml` keeps (sets sorted, so the file does not change on every save).
@@ -180,7 +189,7 @@ impl TagPanel {
         }
         let assigned = self.choice_mut().toggle(id);
         if assigned {
-            TagHistoryManager::record_tag_used(&mut self.history, id, TagPanelState::HISTORY_MAX);
+            TagHistoryManager::record_tag_used(&mut self.history, id, self.history_size);
         } else if self.editing.is_none() {
             self.locked.retain(|t| *t != id);
         }
@@ -205,7 +214,7 @@ impl TagPanel {
             self.locked.push(id);
             if !self.draft.tags.contains(&id) {
                 self.draft.tags.push(id);
-                TagHistoryManager::record_tag_used(&mut self.history, id, TagPanelState::HISTORY_MAX);
+                TagHistoryManager::record_tag_used(&mut self.history, id, self.history_size);
             }
         }
         true

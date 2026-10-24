@@ -42,7 +42,7 @@ pub struct RenderSettingsBridge {
     /// The settings as last written (the user's profiles change in it).
     settings: RefCell<Settings>,
     writer: SettingsWriter,
-    ffmpeg: PathBuf,
+    ffmpeg: RefCell<PathBuf>,
     /// Where the check writes its few frames.
     check_dir: PathBuf,
     check_timer: slint::Timer,
@@ -80,11 +80,13 @@ impl RenderSettingsBridge {
             state: RefCell::new(PanelState::new(library, selection)),
             settings: RefCell::new(settings.clone()),
             writer,
-            ffmpeg: settings
-                .advanced
-                .ffmpeg
-                .clone()
-                .unwrap_or_else(|| PathBuf::from("ffmpeg")),
+            ffmpeg: RefCell::new(
+                settings
+                    .advanced
+                    .ffmpeg
+                    .clone()
+                    .unwrap_or_else(|| PathBuf::from("ffmpeg")),
+            ),
             check_dir: cache_dir.join("check"),
             check_timer: slint::Timer::default(),
             check_task: RefCell::new(None),
@@ -150,6 +152,37 @@ impl RenderSettingsBridge {
             return Some(st.profile().clone());
         }
         st.library.get(id).cloned()
+    }
+
+    /// The user's profiles changed elsewhere (the Settings window): the list follows; the working copy keeps its
+    /// settings (marked modified when its profile is gone or differs now).
+    pub fn profiles_changed(&self, user: &[RenderProfile]) {
+        {
+            let mut st = self.state.borrow_mut();
+            if st.library.user() == user {
+                return;
+            }
+            st.library = ProfileLibrary::new(user.to_vec());
+            let state = &mut *st;
+            state.selection.follow(&state.library);
+        }
+        self.settings.borrow_mut().render.profiles = user.to_vec();
+        self.changed(false);
+    }
+
+    /// Another ffmpeg (the Settings window): the encoders are checked again with it (`encoders` is the new check) and
+    /// the settings check uses it.
+    pub fn set_ffmpeg(&self, ffmpeg: PathBuf, encoders: watch::Receiver<Option<Arc<Capabilities>>>) {
+        *self.ffmpeg.borrow_mut() = ffmpeg;
+        self.state.borrow_mut().encoders = Encoders::Checking;
+        self.state.borrow_mut().check = None;
+        self.watch_encoders(encoders);
+        self.changed(false);
+    }
+
+    /// What the capability check knows about the encoders (the Settings window's profile editor).
+    pub fn encoders(&self) -> Encoders {
+        self.state.borrow().encoders.clone()
     }
 
     /// The capability check's result once known (encoder availability, the VAAPI device, vid.stab).
@@ -252,7 +285,7 @@ impl RenderSettingsBridge {
             };
             (st.profile().clone(), hardware)
         };
-        let (ffmpeg, dir) = (self.ffmpeg.clone(), self.check_dir.clone());
+        let (ffmpeg, dir) = (self.ffmpeg.borrow().clone(), self.check_dir.clone());
         let checked = profile.clone();
         let task = self
             .runtime
