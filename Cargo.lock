@@ -4858,7 +4858,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "arboard",
  "az",
@@ -4891,7 +4891,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-core"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "atomic-write-file",
  "az",
@@ -4924,7 +4924,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-player"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "glow",
  "hdrhistogram",

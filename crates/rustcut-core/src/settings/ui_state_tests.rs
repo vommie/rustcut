@@ -203,6 +203,7 @@ fn the_queue_job_and_logs_panels_round_trip_and_old_files_load() {
         search: "error".into(),
         errors_only: true,
         follow: false,
+        source: LogSource::App,
     };
     save(dir.path(), &state).unwrap();
     assert_eq!(
@@ -275,4 +276,25 @@ fn the_settings_window_round_trips_and_old_files_load() {
     std::fs::write(dir.path().join("ui-state.toml"), "version = 1\nsettings = 3\n").unwrap();
     let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
     assert_eq!(read.settings, SettingsWindowState::default());
+}
+
+#[test]
+fn the_log_source_round_trips_and_unknown_sources_read_as_the_job() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = UiState::default();
+    state.logs.source = LogSource::RustView;
+    save(dir.path(), &state).unwrap();
+    let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+    assert_eq!(read.logs.source, LogSource::RustView);
+    let text = std::fs::read_to_string(dir.path().join("ui-state.toml")).unwrap();
+    assert!(text.contains("source = \"rustview\""), "{text}");
+    // 0.0.15 wrote no source; a later version's source keeps the rest of the panel.
+    for text in [
+        "version = 1\n[logs]\nsearch = \"x\"\n",
+        "version = 1\n[logs]\nsearch = \"x\"\nsource = \"gpu\"\n",
+    ] {
+        std::fs::write(dir.path().join("ui-state.toml"), text).unwrap();
+        let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+        assert_eq!((read.logs.source, read.logs.search.as_str()), (LogSource::Job, "x"));
+    }
 }

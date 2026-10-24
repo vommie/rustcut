@@ -18,6 +18,8 @@ use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
 use tracing_subscriber::{EnvFilter, Registry, fmt, reload};
 
+use super::log_book::LogBook;
+
 /// Lines logged before the file is open are kept up to this size (startup logs a few kilobytes).
 const EARLY_BUFFER_LIMIT: usize = 1 << 20;
 
@@ -31,6 +33,7 @@ pub struct LogControl {
     from_env: bool,
     file: FileSink,
     guard: Arc<Mutex<Option<WorkerGuard>>>,
+    book: LogBook,
 }
 
 /// Changes the log filter and the log files while RustCut runs.
@@ -73,8 +76,10 @@ pub fn init() -> LogControl {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let (layer, handle) = reload::Layer::new(filter);
     let file = FileSink::default();
+    let book = LogBook::default();
     let installed = tracing_subscriber::registry()
         .with(layer)
+        .with(book.layer())
         .with(fmt::layer().with_target(false))
         .with(
             fmt::layer()
@@ -89,6 +94,7 @@ pub fn init() -> LogControl {
         from_env,
         file,
         guard: Arc::new(Mutex::new(None)),
+        book,
     }
 }
 
@@ -96,6 +102,11 @@ impl LogControl {
     /// Uses the configured level unless `RUST_LOG` was given (the environment wins).
     pub fn apply_setting(&self, level: &str) {
         self.level_setter().apply(level);
+    }
+
+    /// This run's log in memory (the Logs panel's App and RustView logs).
+    pub fn book(&self) -> LogBook {
+        self.book.clone()
     }
 
     /// Changes the level and the log files later (the Settings window).

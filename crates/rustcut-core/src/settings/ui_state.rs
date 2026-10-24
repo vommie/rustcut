@@ -227,7 +227,22 @@ pub struct JobPanelState {
     pub collapsed: Vec<String>,
 }
 
+/// Which log the Logs panel shows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LogSource {
+    /// The stored log of the queue's current job.
+    #[default]
+    Job,
+    /// RustCut's own log of this run.
+    App,
+    /// The lines of the RustView link and the Tag & Rate panel.
+    #[serde(rename = "rustview")]
+    RustView,
+}
+
 /// The Logs panel's filter.
+#[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LogPanelState {
@@ -237,6 +252,9 @@ pub struct LogPanelState {
     pub errors_only: bool,
     /// Stay at the newest line.
     pub follow: bool,
+    /// A value this version does not know reads as the job's log.
+    #[serde_as(as = "DefaultOnError")]
+    pub source: LogSource,
 }
 
 impl Default for LogPanelState {
@@ -245,6 +263,7 @@ impl Default for LogPanelState {
             search: String::new(),
             errors_only: false,
             follow: true,
+            source: LogSource::Job,
         }
     }
 }

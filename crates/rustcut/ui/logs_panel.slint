@@ -1,6 +1,6 @@
-// The Logs panel (src/ui/logs/ fills `Logs`; user decision Q-Q1): the stored log of the queue's current job, RustCut's
-// notes and ffmpeg's lines, errors red and warnings yellow, with a search, "errors only", following the newest line
-// and Copy. The app's own log and the RustView log join it later.
+// The Logs panel (src/ui/logs/ fills `Logs`; user decision Q-Q1, M4.3): the stored log of the queue's current job
+// (RustCut's notes and ffmpeg's lines), RustCut's own log of this run, or its RustView part; errors red and warnings
+// yellow, with a search, "errors only", following the newest line and Copy.
 
 import { ListView } from "std-widgets.slint";
 import { Theme } from "styles.slint";
@@ -65,6 +65,27 @@ export component LogsPanel inherits Rectangle {
         HorizontalLayout {
             spacing: 4px;
 
+            IconButton {
+                icon: IconId.job-details;
+                checked: Logs.source == 0;
+                tooltip: "The log of the job chosen in the queue";
+                clicked => { Logs.select-source(0); }
+            }
+
+            IconButton {
+                icon: IconId.panel-logs;
+                checked: Logs.source == 1;
+                tooltip: "RustCut's own log of this run";
+                clicked => { Logs.select-source(1); }
+            }
+
+            IconButton {
+                icon: IconId.rustview-connected;
+                checked: Logs.source == 2;
+                tooltip: "The RustView link's log of this run";
+                clicked => { Logs.select-source(2); }
+            }
+
             Text {
                 horizontal-stretch: 1;
                 text: Logs.has-job ? Logs.title : "No job chosen";
@@ -77,8 +98,8 @@ export component LogsPanel inherits Rectangle {
 
             IconButton {
                 icon: IconId.reload;
-                enabled: Logs.has-job && !Logs.loading;
-                tooltip: "Read the log again";
+                enabled: Logs.source == 0 && Logs.has-job && !Logs.loading;
+                tooltip: "Read the job's log again";
                 clicked => { Logs.refresh(); }
             }
         }
