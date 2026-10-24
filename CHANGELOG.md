@@ -388,6 +388,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The Tag & Rate panel lays out the tag tree like RustView again (0.0.22): the tags run down a column and a new
+  column starts only when the area is full. Before, every tag got a column of its own, so the tags stood side by side
+  in one row.
 - The last progress of a render (often its end) is no longer lost when ffmpeg writes it just before it exits.
 - Starting ffmpeg, ffprobe or rustview tries again for a moment while the system reports the program as busy (for
   example while a package update replaces it) instead of failing the job at once.

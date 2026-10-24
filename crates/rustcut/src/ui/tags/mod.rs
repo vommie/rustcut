@@ -32,6 +32,10 @@ use crate::ui::status::{self, Level};
 use crate::util::model::sync;
 use crate::{MainWindow, TagColumnView, TagHistoryItemModel, TagHistoryRowModel, TagNodeView, TagRate};
 
+/// The tree area's height until the panel reports it, in logical pixels: RustView's start value
+/// (`AppState::tag_tree_available_height`), so the first columns are laid out like RustView's.
+const INITIAL_TREE_HEIGHT: f32 = 450.0;
+
 thread_local! {
     /// The bridge, for what the runtime task hands to the UI thread.
     static BRIDGE: RefCell<Weak<TagsBridge>> = const { RefCell::new(Weak::new()) };
@@ -93,7 +97,7 @@ impl TagsBridge {
             } else {
                 ConnectionState::Disabled
             }),
-            tree_height: Cell::new(0.0),
+            tree_height: Cell::new(INITIAL_TREE_HEIGHT),
             rows_per_column: Cell::new(1),
             history_width: Cell::new(0.0),
             columns: Rc::new(VecModel::default()),
@@ -512,5 +516,17 @@ async fn follow(sync: SyncService, ui: UiDispatcher) {
             }
             Err(RecvError::Closed) => return,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{INITIAL_TREE_HEIGHT, TagTreeBuilder};
+
+    #[test]
+    fn the_first_columns_hold_many_rows_like_rustview() {
+        // Before the panel reports its height the tree is split for RustView's start height: one row per column
+        // (every tag beside the other) was the bug of 0.0.21 (user report Q-N5).
+        assert_eq!(TagTreeBuilder::rows_per_column(INITIAL_TREE_HEIGHT), 18);
     }
 }
