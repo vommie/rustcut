@@ -73,12 +73,6 @@ export component SettingsRow inherits Rectangle {
                 wrap: word-wrap;
             }
 
-            if root.option.error != "": Text {
-                text: root.option.error;
-                color: Theme.status-corrupt;
-                font-size: 11px;
-                wrap: word-wrap;
-            }
         }
 
         VerticalLayout {
@@ -105,8 +99,11 @@ export component SettingsRow inherits Rectangle {
                     width: 80px;
                     text: root.option.text;
                     enabled: root.option.enabled;
+                    bubble: "settings:" + root.option.key;
                     committed(text) => { return SettingsUi.type-text(root.option.key, text); }
                     stepped(steps) => { SettingsUi.step(root.option.key, steps); }
+                    typed(text) => { SettingsUi.text-typed(root.option.key, text); }
+                    canceled => { SettingsUi.text-canceled(root.option.key); }
                 }
 
                 Text {
@@ -124,7 +121,10 @@ export component SettingsRow inherits Rectangle {
                 placeholder: root.option.placeholder;
                 enabled: root.option.enabled;
                 alignment: left;
+                bubble: "settings:" + root.option.key;
                 committed(text) => { return SettingsUi.type-text(root.option.key, text); }
+                typed(text) => { SettingsUi.text-typed(root.option.key, text); }
+                canceled => { SettingsUi.text-canceled(root.option.key); }
             }
 
             if root.option.kind == 4 || root.option.kind == 5: HorizontalLayout {
@@ -136,7 +136,10 @@ export component SettingsRow inherits Rectangle {
                     placeholder: root.option.placeholder;
                     enabled: root.option.enabled;
                     alignment: left;
+                    bubble: "settings:" + root.option.key;
                     committed(text) => { return SettingsUi.type-text(root.option.key, text); }
+                    typed(text) => { SettingsUi.text-typed(root.option.key, text); }
+                    canceled => { SettingsUi.text-canceled(root.option.key); }
                 }
 
                 IconButton {

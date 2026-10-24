@@ -12,6 +12,7 @@ import { SettingsCard } from "settings_card.slint";
 import { SettingsRow } from "settings_row.slint";
 import { SettingsSearch } from "settings_search.slint";
 import { MessageKindView, SettingsUi } from "settings_types.slint";
+import { BubbleAnchor } from "bubble.slint";
 
 component MessageTab inherits Rectangle {
     in property <string> text;
@@ -184,7 +185,9 @@ component KindRow inherits VerticalLayout {
                 spacing: 5px;
                 horizontal-stretch: 0;
 
+                // Kept in place (hidden) for a bubble kind, so the rows stay aligned.
                 Text {
+                    visible: root.kind.desktop-allowed;
                     text: "Desktop";
                     color: Theme.text-muted;
                     font-size: 11px;
@@ -195,8 +198,9 @@ component KindRow inherits VerticalLayout {
                     alignment: center;
 
                     Switch {
+                        visible: root.kind.desktop-allowed;
                         checked: root.kind.desktop;
-                        enabled: !root.kind.locked;
+                        enabled: !root.kind.locked && root.kind.desktop-allowed;
                         tooltip: root.kind.desktop ? "Also a desktop notification (while RustCut is not in front)"
                             : "No desktop notification";
                         toggled => { SettingsUi.kind-desktop(root.kind.id); }
@@ -212,6 +216,11 @@ component KindRow inherits VerticalLayout {
                     checked: root.kind.tested != "";
                     tooltip: "Test: show this message where it appears now";
                     clicked => { SettingsUi.kind-test(root.kind.id); }
+
+                    // A bubble's test shows at this button (its input may not be on screen).
+                    BubbleAnchor {
+                        key: "test:" + root.kind.id;
+                    }
                 }
             }
 

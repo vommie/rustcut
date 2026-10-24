@@ -31,10 +31,10 @@ pub(super) struct Draft {
     force_new: bool,
 }
 
-/// The open conflict dialog with its job.
+/// The open conflict dialog with its job (none while it only shows the files, `browse.rs`).
 pub(super) struct Pending {
     pub(super) dialog: ConflictDialog,
-    draft: Draft,
+    pub(super) draft: Option<Draft>,
 }
 
 impl ExportBridge {
@@ -232,7 +232,10 @@ impl ExportBridge {
         }
         tracing::info!(target = %target.display(), "[Export] The target is taken; asking");
         self.saving.set(false);
-        *self.pending.borrow_mut() = Some(Pending { dialog, draft });
+        *self.pending.borrow_mut() = Some(Pending {
+            dialog,
+            draft: Some(draft),
+        });
         self.publish_dialog();
         self.start_previews();
         self.publish();
@@ -339,21 +342,35 @@ impl ExportBridge {
         let Some(pending) = self.pending.borrow_mut().take() else {
             return;
         };
+        let Some(draft) = pending.draft else {
+            // Only looking at the files: the button closes.
+            self.close_dialog();
+            return;
+        };
         let Some(outcome) = pending.dialog.outcome() else {
-            *self.pending.borrow_mut() = Some(pending);
+            *self.pending.borrow_mut() = Some(Pending {
+                dialog: pending.dialog,
+                draft: Some(draft),
+            });
             return;
         };
         self.publish_dialog();
         if let Some(window) = self.window.upgrade() {
             window.invoke_focus_keys();
         }
-        self.enqueue(pending.draft, outcome);
+        self.enqueue(draft, outcome);
     }
 
     fn cancel(&self) {
-        if self.pending.borrow_mut().take().is_some() {
+        if let Some(pending) = self.pending.borrow_mut().take()
+            && pending.draft.is_some()
+        {
             Self::tell(Notice::new(Kind::SaveCanceled, "Not saved").detail("The conflict dialog was canceled."));
         }
+        self.close_dialog();
+    }
+
+    fn close_dialog(&self) {
         self.publish_dialog();
         if let Some(window) = self.window.upgrade() {
             window.invoke_focus_keys();

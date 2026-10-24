@@ -1,12 +1,13 @@
 //! The Sections card's callbacks: marks from the playhead or typed, seeking to a time, adding, selecting, editing, moving
-//! and deleting sections. Refused edits say why in the status line.
+//! and deleting sections. A refused typed time says why in a bubble at its field (`section_bubbles.rs`).
 
 use std::rc::Rc;
 
 use slint::ComponentHandle as _;
 
 use super::Editor;
-use crate::ui::sections::{Bound, EditError};
+use super::section_bubbles::{mark_anchor, row_anchor};
+use crate::ui::sections::{Bound, EditError, SectionsState};
 use crate::{MainWindow, Sections};
 
 pub(super) fn connect(editor: &Rc<Editor>, window: &MainWindow) {
@@ -31,8 +32,23 @@ pub(super) fn connect(editor: &Rc<Editor>, window: &MainWindow) {
                 .borrow_mut()
                 .sections
                 .set_mark_text(bound(which), text.as_str());
-            editor.finish_edit(result)
+            editor.finish_typed(&mark_anchor(which), result)
         })
+    });
+    let this = Rc::downgrade(editor);
+    sections.on_mark_typed(move |which, text| {
+        if let Some(editor) = this.upgrade() {
+            editor.time_typed(
+                &mark_anchor(which),
+                SectionsState::check_mark_text(bound(which), text.as_str()),
+            );
+        }
+    });
+    let this = Rc::downgrade(editor);
+    sections.on_mark_canceled(move |which| {
+        if let Some(editor) = this.upgrade() {
+            editor.time_done(&mark_anchor(which));
+        }
     });
     let this = Rc::downgrade(editor);
     sections.on_add(move || {
@@ -79,8 +95,27 @@ pub(super) fn connect(editor: &Rc<Editor>, window: &MainWindow) {
                     None => Err(EditError::Gone),
                 }
             };
-            editor.finish_edit(result)
+            editor.finish_typed(&row_anchor(row, which), result)
         })
+    });
+    let this = Rc::downgrade(editor);
+    sections.on_row_typed(move |row, which, text| {
+        if let Some(editor) = this.upgrade() {
+            let check = {
+                let st = editor.state.borrow();
+                match usize::try_from(row).ok().and_then(|i| st.sections.id_at(i)) {
+                    Some(id) => st.sections.check_edit(id, bound(which), text.as_str()),
+                    None => Err(EditError::Gone),
+                }
+            };
+            editor.time_typed(&row_anchor(row, which), check);
+        }
+    });
+    let this = Rc::downgrade(editor);
+    sections.on_row_canceled(move |row, which| {
+        if let Some(editor) = this.upgrade() {
+            editor.time_done(&row_anchor(row, which));
+        }
     });
     let this = Rc::downgrade(editor);
     sections.on_move_up(move || {
@@ -107,16 +142,18 @@ fn bound(which: i32) -> Bound {
 }
 
 impl Editor {
-    /// Publishes an accepted edit; a refused one says why. `true` = accepted (the field closes).
-    fn finish_edit(&self, result: Result<(), EditError>) -> bool {
+    /// Publishes an accepted typed time; a refused one says why in a bubble at its field (`anchor`). `true` =
+    /// accepted (the field closes).
+    fn finish_typed(&self, anchor: &str, result: Result<(), EditError>) -> bool {
         match result {
             Ok(()) => {
+                self.time_done(anchor);
                 self.edit_accepted();
                 self.publish();
                 true
             }
             Err(e) => {
-                self.refused(e.to_string());
+                self.time_refused(anchor, &e);
                 false
             }
         }

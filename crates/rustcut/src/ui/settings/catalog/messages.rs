@@ -154,6 +154,22 @@ pub static MESSAGES: &[Card] = &[
         ],
     },
     Card {
+        title: "Bubbles",
+        description: "Notes at the field or option they are about: a refused value, the target file's name, \
+                      overlapping sections, a problem of the render settings. They stay until the problem is solved; \
+                      × hides one until its words change. The mouse wheel over a bubble makes it more transparent \
+                      (down) or more opaque (up), to see what lies under it.",
+        fields: &[number!(
+            "notices.bubbles.opacity",
+            "Opacity",
+            "How opaque a bubble starts (20 to 100 %).",
+            notices.bubbles.opacity: u8,
+            20..=100,
+            10,
+            "%"
+        )],
+    },
+    Card {
         title: "History",
         description: "The messages of this session: the bell in the menu bar lists the last three, \"Show all\" the \
                       rest in the Logs panel.",

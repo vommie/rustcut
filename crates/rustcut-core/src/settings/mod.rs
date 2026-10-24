@@ -17,8 +17,9 @@ pub use dialog_ui::{DialogSize, DialogUiState};
 pub use dialogs::{ConflictDialogSettings, ConflictPreselect, DialogSettings, PictureScope, TileSize};
 pub use file::{FileError, LoadOutcome, MigrationStep, VersionedFile, backup_file, load, save};
 pub use notices::{
-    BannerAnimation, BannerAttention, BannerSettings, BellBadge, DesktopNoticeSettings, HistorySettings, KindRoute,
-    NoticePlace, NoticeSettings, ToastAnimation, ToastOrder, ToastPosition, ToastSettings, ToastStacking,
+    BannerAnimation, BannerAttention, BannerSettings, BellBadge, BubbleSettings, DesktopNoticeSettings,
+    HistorySettings, KindRoute, NoticePlace, NoticeSettings, ToastAnimation, ToastOrder, ToastPosition, ToastSettings,
+    ToastStacking,
 };
 pub use paths::AppPaths;
 pub use schema::{

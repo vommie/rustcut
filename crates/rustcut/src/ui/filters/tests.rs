@@ -332,7 +332,11 @@ fn the_card_tells_the_output_size_and_the_interlace_check() {
     let card = view::card(&s);
     assert_eq!(card.interlace_hint, "Interlaced (TFF)");
     assert_eq!(card.interlace_level, HintLevel::Attention);
-    assert!(card.interlace_detail.contains("250 top-field-first"));
+    assert!(card.interlace_detail.contains("top field first"));
+    assert_eq!(
+        card.interlace_rows.first(),
+        Some(&("Top field first".to_owned(), "250 frames".to_owned()))
+    );
     assert_eq!(card.rows.len(), 6);
     assert!(!card.rows[0].can_up && card.rows[0].can_down);
     assert_eq!(view::card(&s).resize_auto_height, "auto (1079)");

@@ -41,10 +41,38 @@ impl FiltersBridge {
             };
             bridge.state.borrow_mut().interlace = hint;
             bridge.publish_card();
+            bridge.tell_interlaced(hint);
         });
         if let Err(e) = spawned {
             tracing::error!(error = %e, "[Filters] The event loop is gone; no interlace check");
         }
+    }
+
+    /// The optional message about an interlaced video (Q-N10: by default only the card's note says it): while
+    /// Deinterlace is off, with a button that switches it on.
+    fn tell_interlaced(&self, hint: InterlaceHint) {
+        let InterlaceHint::Known(rustcut_core::media::Interlacing::Interlaced { top_field_first }, _) = hint else {
+            return;
+        };
+        if self.state.borrow().chain.is_enabled(FilterKind::Deinterlace) {
+            return;
+        }
+        let bridge = Weak::clone(&self.me);
+        crate::ui::notices::post(
+            Notice::new(Kind::Interlaced, "The video is interlaced")
+                .detail(format!(
+                    "{} field first: switch Deinterlace on, or the output shows combing on movement.",
+                    if top_field_first { "Top" } else { "Bottom" }
+                ))
+                .action("Switch Deinterlace on", move || {
+                    if let Some(bridge) = bridge.upgrade() {
+                        bridge.update(|s| {
+                            let deinterlacer = s.deinterlacer();
+                            s.set_deinterlacer(deinterlacer);
+                        });
+                    }
+                }),
+        );
     }
 
     /// Detects the black borders over several points of the video and crops them (the button, the key).

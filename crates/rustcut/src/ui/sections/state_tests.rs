@@ -145,6 +145,22 @@ fn cut_points_and_overlaps() {
     assert!(rows.iter().all(|r| r.overlapping));
     assert_eq!(s.cut_points(), [t(0), t(10), t(15), t(20), t(25), t(100)]);
     assert_eq!(rows.iter().map(|r| r.number).collect::<Vec<_>>(), [1, 2]);
+    // The later section's bubble names the earlier one.
+    assert_eq!(s.overlaps(), [(1, 1)]);
+}
+
+#[test]
+fn typed_times_are_checked_without_a_change() {
+    let mut s = with_marks(10, 20);
+    let id = s.add_current().unwrap();
+    assert!(SectionsState::check_mark_text(Bound::Start, "").is_ok());
+    assert!(matches!(
+        SectionsState::check_mark_text(Bound::Start, "1:2x"),
+        Err(EditError::NotATime(_))
+    ));
+    assert_eq!(s.check_edit(id, Bound::End, "0:00:10"), Err(EditError::Empty));
+    assert!(s.check_edit(id, Bound::End, "0:00:30").is_ok());
+    assert_eq!(s.list().get(id).map(Section::end), Some(t(20)), "nothing changed");
 }
 
 #[test]

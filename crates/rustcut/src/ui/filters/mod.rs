@@ -366,6 +366,16 @@ impl FiltersBridge {
         f.set_interlace_hint(card.interlace_hint.as_str().into());
         f.set_interlace_level(card.interlace_level as i32);
         f.set_interlace_detail(card.interlace_detail.as_str().into());
+        f.set_interlace_rows(ModelRc::new(VecModel::from(
+            card.interlace_rows
+                .iter()
+                .map(|(label, value)| crate::TipRow {
+                    label: label.as_str().into(),
+                    value: value.as_str().into(),
+                    heading: false,
+                })
+                .collect::<Vec<_>>(),
+        )));
         let c = card.crop;
         f.set_crop_edges(strings([c.top, c.right, c.bottom, c.left].iter().map(u32::to_string)));
         f.set_crop_editing(card.crop_editing);

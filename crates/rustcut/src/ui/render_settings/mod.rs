@@ -5,6 +5,7 @@
 //! copy in the background (debounced, the stale check aborted), and saves the user's profiles into `config.toml`
 //! through the settings writer.
 
+mod bubbles;
 mod choices;
 mod input;
 pub mod rows;
@@ -29,7 +30,7 @@ use self::view::RowView;
 use crate::app::SettingsWriter;
 use crate::ui::notices::{self, Notice};
 use crate::util::model::sync;
-use crate::{MainWindow, OptionRowView, RenderIssueView, RenderSettings};
+use crate::{MainWindow, OptionRowView, RenderSettings};
 
 /// Quiet time after the last change before the real encoder checks the settings.
 const CHECK_DELAY: Duration = Duration::from_millis(500);
@@ -48,7 +49,8 @@ pub struct RenderSettingsBridge {
     check_timer: slint::Timer,
     check_task: RefCell<Option<tokio::task::AbortHandle>>,
     profiles: Rc<VecModel<SharedString>>,
-    issues: Rc<VecModel<RenderIssueView>>,
+    /// The issues and refused values shown as bubbles at their rows (M6.5c).
+    bubbles: RefCell<bubbles::CodecBubbles>,
     video: Rc<VecModel<OptionRowView>>,
     audio: Rc<VecModel<OptionRowView>>,
     expert: Rc<VecModel<OptionRowView>>,
@@ -98,7 +100,7 @@ impl RenderSettingsBridge {
             check_timer: slint::Timer::default(),
             check_task: RefCell::new(None),
             profiles: Rc::new(VecModel::default()),
-            issues: Rc::new(VecModel::default()),
+            bubbles: RefCell::default(),
             video: Rc::new(VecModel::default()),
             audio: Rc::new(VecModel::default()),
             expert: Rc::new(VecModel::default()),
@@ -106,7 +108,6 @@ impl RenderSettingsBridge {
         });
         let rs = window.global::<RenderSettings<'_>>();
         rs.set_profiles(ModelRc::from(Rc::clone(&bridge.profiles)));
-        rs.set_issues(ModelRc::from(Rc::clone(&bridge.issues)));
         rs.set_video_rows(ModelRc::from(Rc::clone(&bridge.video)));
         rs.set_audio_rows(ModelRc::from(Rc::clone(&bridge.audio)));
         rs.set_expert_rows(ModelRc::from(Rc::clone(&bridge.expert)));
@@ -354,23 +355,13 @@ impl RenderSettingsBridge {
         rs.set_profile_name(name.as_str().into());
         rs.set_modified(panel.modified);
         rs.set_user_profile(panel.user_profile);
-        sync(
-            &self.issues,
-            panel
-                .issues
-                .iter()
-                .map(|i| RenderIssueView {
-                    error: i.error,
-                    text: i.text.as_str().into(),
-                })
-                .collect(),
-        );
         rs.set_check_text(panel.check_text.as_str().into());
         rs.set_check_running(panel.check_running);
         rs.set_encoders_note(panel.encoders_note.as_str().into());
         sync(&self.video, panel.video.iter().map(row).collect());
         sync(&self.audio, panel.audio.iter().map(row).collect());
         sync(&self.expert, panel.expert.iter().map(row).collect());
+        self.publish_bubbles(&panel);
         if let Some(changed) = self.changed.borrow().as_ref() {
             changed();
         }

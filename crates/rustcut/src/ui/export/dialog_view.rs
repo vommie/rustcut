@@ -18,6 +18,7 @@ pub(super) fn tab_titles(dialog: &ConflictDialog) -> Vec<String> {
         .map(|tab| match tab {
             Tab::Similar => format!("{} ({})", tab.title(), dialog.series.len() + dialog.others.len()),
             Tab::Queue => format!("{} ({})", tab.title(), dialog.conflicts.queued.len()),
+            Tab::Decision if dialog.browse => "Target".to_owned(),
             Tab::Decision => tab.title().to_owned(),
         })
         .collect()
@@ -50,7 +51,8 @@ impl ExportBridge {
         let title = match (c.exists.is_some(), c.queued.is_empty()) {
             (true, false) => "The file exists, and queued jobs write it too",
             (true, true) => "The file exists already",
-            _ => "Queued jobs write the same file",
+            (false, false) => "Queued jobs write the same file",
+            (false, true) => "Files in the target folder",
         };
         e.set_dialog_title(title.into());
         e.set_dialog_file(dialog.file.as_str().into());
@@ -115,7 +117,8 @@ impl ExportBridge {
         e.set_dialog_tile_width(i32::try_from(self.dialog_settings.borrow().tile_size.width()).unwrap_or(112));
         e.set_dialog_selected(i32::try_from(dialog.selected).unwrap_or_default());
         e.set_dialog_typed(dialog.typed.as_str().into());
-        e.set_dialog_can_confirm(dialog.outcome().is_some());
+        e.set_dialog_browse(dialog.browse);
+        e.set_dialog_can_confirm(dialog.browse || dialog.outcome().is_some());
         e.set_dialog_confirm_text(dialog.confirm_text().into());
         e.set_dialog_open(true);
     }

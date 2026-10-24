@@ -82,13 +82,16 @@ pub struct KindInfo {
     pub sample: (&'static str, &'static str),
 }
 
-use NoticePlace::{Banner, Nothing, Status, Toast};
+use NoticePlace::{Banner, Bubble, Nothing, Status, Toast};
 
 const EVENT: &[NoticePlace] = &[Toast, Banner, Status, Nothing];
 const LOUD: &[NoticePlace] = &[Toast, Banner, Nothing];
 const QUIET: &[NoticePlace] = &[Status, Toast, Nothing];
 const STATE: &[NoticePlace] = &[Banner, Nothing];
 const FIXED_BANNER: &[NoticePlace] = &[Banner];
+/// At the input a check is about (M6.5c); hints and warnings can be switched off.
+const BUBBLE: &[NoticePlace] = &[Bubble];
+const BUBBLE_OR_NOT: &[NoticePlace] = &[Bubble, Nothing];
 
 macro_rules! kinds {
     ($( $(#[$doc:meta])* $variant:ident = $id:literal, $title:literal, $group:ident, $level:ident, $place:ident,
@@ -135,6 +138,16 @@ kinds! {
         critical false, ("The job was not saved", "Set a section start and end first.");
     SaveFailed = "save_failed", "Save failed", Saving, Error, Banner, FIXED_BANNER, desktop true, critical true,
         ("The job was not saved", "The target folder could not be checked: permission denied");
+    /// The export card's name check (M6.5c): files in the folder with similar names.
+    TargetSimilar = "target_similar", "Similar names in the target folder", Saving, Info, Bubble, BUBBLE_OR_NOT,
+        desktop false, critical false,
+        ("2 files in the folder have similar names", "basic_h264_720p - 01.mkv, basic_h264_720p - 02.mp4");
+    /// The target file exists or a queued job writes it: Save asks what to do.
+    TargetConflict = "target_conflict", "Target file exists or is queued", Saving, Warning, Bubble, BUBBLE_OR_NOT,
+        desktop false, critical false, ("The file exists", "Save asks what to do.");
+    /// The name or the folder cannot be used: the job cannot be saved like this.
+    TargetProblem = "target_problem", "Target cannot be used", Saving, Error, Bubble, BUBBLE, desktop false,
+        critical false, ("The folder does not exist or cannot be read", "/videos/out");
     SaveCanceled = "save_canceled", "Save canceled", Saving, Info, Status, QUIET, desktop false, critical false,
         ("Not saved", "The conflict dialog was canceled.");
     Ready = "ready", "File opened", Source, Info, Status, QUIET, desktop false, critical false, ("Ready", "");
@@ -146,11 +159,20 @@ kinds! {
         ("This video was cut before", "First cut on 2026-10-12. 3 files in the library were made from it.");
     SectionAdded = "section_added", "Section added", Sections, Info, Status, QUIET, desktop false, critical false,
         ("Section 2 added", "");
+    /// A typed time that is no time, or puts the end before the start (M6.5c).
+    TimeInvalid = "time_invalid", "Typed time refused", Sections, Error, Bubble, BUBBLE, desktop false,
+        critical false, ("\"1:2x\" is not a time", "Type H:MM:SS.mmm, for example 0:01:23.500.");
+    /// Two sections share a part (rendered twice).
+    SectionsOverlap = "sections_overlap", "Sections overlap", Sections, Warning, Bubble, BUBBLE_OR_NOT,
+        desktop false, critical false, ("Overlaps section 1", "The shared part is rendered twice.");
     SectionRefused = "section_refused", "Section not possible", Sections, Warning, Toast, EVENT, desktop false,
         critical false, ("Set a section start and end first", "");
     /// A filter action that needs an open video (M6.5e disables them instead).
     NoVideo = "no_video", "Needs an open video", Filters, Warning, Toast, EVENT, desktop false, critical false,
         ("The crop can be edited once a video is open", "");
+    /// The interlace check found combing (Q-N10: the card's note is quiet; a toast or banner only on request).
+    Interlaced = "interlaced", "Interlaced video found", Filters, Info, Nothing, LOUD, desktop false,
+        critical false, ("The video is interlaced", "Switch Deinterlace on in the Filters card.");
     FiltersReset = "filters_reset", "Filters reset", Filters, Info, Status, QUIET, desktop false, critical false,
         ("Filters reset", "");
     AutoCrop = "auto_crop", "Black borders cropped", Filters, Success, Toast, EVENT, desktop false, critical false,
@@ -167,12 +189,18 @@ kinds! {
         critical false, ("Probe render: 10 s around 0:06", "AV1 balanced · the timeline waits; Esc returns");
     ProbeLocked = "probe_locked", "Editing waits for the probe", Probe, Info, Status, QUIET, desktop false,
         critical false, ("The probe render is playing", "Esc returns to the source.");
+    /// An error or warning of the render settings, at its option (M6.5c).
+    ProfileIssue = "profile_issue", "Render settings problem", Codecs, Error, Bubble, BUBBLE, desktop false,
+        critical false, ("WebM cannot hold AAC audio", "Choose Opus or Vorbis, or another container.");
     ProfileChanged = "profile_changed", "Render profile saved", Codecs, Success, Toast, EVENT, desktop false,
         critical false, ("Profile \"My HEVC\" saved", "");
     ProfileRefused = "profile_refused", "Render profile not changed", Codecs, Warning, Toast, EVENT, desktop false,
         critical false, ("A profile with this name exists", "");
     SettingsReadOnly = "settings_read_only", "Settings not saved", Settings, Warning, Toast, EVENT, desktop false,
         critical false, ("Not saved", "config.toml is from a newer RustCut: the choice is kept for this run only.");
+    /// A typed value the option refuses (the Settings window, the Codecs panel; M6.5c).
+    ValueInvalid = "value_invalid", "Typed value refused", Settings, Error, Bubble, BUBBLE, desktop false,
+        critical false, ("Not a value here", "Type a whole number from 1 to 10.");
     SettingsWindowFailed = "settings_window_failed", "Settings window failed", Settings, Error, Toast, EVENT,
         desktop true, critical false, ("The settings window could not be opened", "No OpenGL context");
     JobFinished = "job_finished", "Job finished", Queue, Success, Nothing, &[Toast, Nothing], desktop false,
@@ -242,11 +270,19 @@ mod tests {
                 "{}: config ids are snake_case",
                 info.id
             );
-            // Q-N8: errors also go to the desktop while RustCut is not in front.
+            // Q-N8: errors also go to the desktop while RustCut is not in front; a bubble belongs to an input the
+            // user works with, never the desktop.
             assert_eq!(
                 info.desktop,
-                info.level == Level::Error || matches!(kind, Kind::QueueDone | Kind::PowerCountdown),
+                (info.level == Level::Error && info.place != Bubble)
+                    || matches!(kind, Kind::QueueDone | Kind::PowerCountdown),
                 "{}",
+                info.id
+            );
+            assert_eq!(
+                info.place == Bubble,
+                info.places.contains(&Bubble),
+                "{}: a bubble kind is a bubble or nothing",
                 info.id
             );
             if info.critical {

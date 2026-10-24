@@ -8,6 +8,7 @@
 //! editor is busy finds the state free (and is skipped if not: the editor publishes itself afterwards).
 
 mod actions;
+mod section_bubbles;
 mod sections_input;
 mod timeline_input;
 
@@ -82,6 +83,10 @@ pub struct Editor {
     queue: RefCell<Weak<QueueBridge>>,
     /// The status line shows a refused edit: the next accepted one replaces it.
     warned: Cell<bool>,
+    /// Time fields whose refused text has a bubble (their anchors, M6.5c).
+    time_bubbles: RefCell<std::collections::HashSet<String>>,
+    /// The keys of the overlap bubbles posted last.
+    overlap_bubbles: RefCell<Vec<String>>,
     ticks: Rc<VecModel<TimelineTick>>,
     blocks: Rc<VecModel<TimelineBlock>>,
     rows: Rc<VecModel<SectionRowView>>,
@@ -130,6 +135,8 @@ impl Editor {
             export: RefCell::new(Weak::new()),
             queue: RefCell::new(Weak::new()),
             warned: Cell::new(false),
+            time_bubbles: RefCell::default(),
+            overlap_bubbles: RefCell::default(),
             ticks: Rc::new(VecModel::default()),
             blocks: Rc::new(VecModel::default()),
             rows: Rc::new(VecModel::default()),
@@ -528,14 +535,7 @@ impl Editor {
         sections.set_can_move_down(selected.is_some_and(|i| i + 1 < rows.len()));
         sections.set_can_delete(selected.is_some());
         sections.set_summary(summary(s).into());
-        sections.set_note(
-            if rows.iter().any(|r| r.overlapping) {
-                "Overlapping sections are rendered twice."
-            } else {
-                ""
-            }
-            .into(),
-        );
+        self.publish_overlaps(&s.overlaps());
         sync(
             &self.rows,
             rows.iter()

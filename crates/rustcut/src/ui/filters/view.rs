@@ -49,6 +49,8 @@ pub struct CardView {
     pub interlace_hint: String,
     pub interlace_level: HintLevel,
     pub interlace_detail: String,
+    /// The tooltip's frame counts (label, value).
+    pub interlace_rows: Vec<(String, String)>,
     /// The crop as seen in the output.
     pub crop: Crop,
     pub crop_editing: bool,
@@ -87,6 +89,7 @@ pub fn card(state: &FiltersState) -> CardView {
         .collect();
     let (output, output_warning) = output_text(state);
     let (interlace_hint, interlace_level, interlace_detail) = interlace(state.interlace);
+    let interlace_rows = interlace_counts(state.interlace);
     let (width, height, algorithm) = state.resize();
     let (auto_w, auto_h) = resize_auto(state, width, height);
     let session = state.crop_session();
@@ -104,6 +107,7 @@ pub fn card(state: &FiltersState) -> CardView {
         interlace_hint,
         interlace_level,
         interlace_detail,
+        interlace_rows,
         crop: state.shown_crop(),
         crop_editing: session.is_some_and(|s| s.mode == CropMode::Edit),
         crop_quick: session.is_some_and(|s| s.mode == CropMode::Quick),
@@ -166,26 +170,44 @@ fn interlace(hint: InterlaceHint) -> (String, HintLevel, String) {
             HintLevel::Hidden,
             "The interlace check could not run.".into(),
         ),
-        InterlaceHint::Known(verdict, c) => {
-            let counts = format!(
-                "idet counted {} top-field-first, {} bottom-field-first, {} progressive and {} undetermined frames.",
-                c.tff, c.bff, c.progressive, c.undetermined
-            );
-            match verdict {
-                Interlacing::Interlaced { top_field_first } => (
-                    format!("Interlaced ({})", if top_field_first { "TFF" } else { "BFF" }),
-                    HintLevel::Attention,
-                    format!("The video is interlaced: switch Deinterlace on. {counts}"),
+        InterlaceHint::Known(verdict, _) => match verdict {
+            Interlacing::Interlaced { top_field_first } => (
+                format!("Interlaced ({})", if top_field_first { "TFF" } else { "BFF" }),
+                HintLevel::Attention,
+                format!(
+                    "The video is interlaced ({} field first): switch Deinterlace on, or the output shows combing \
+                         on movement.",
+                    if top_field_first { "top" } else { "bottom" }
                 ),
-                Interlacing::Progressive => ("Progressive".into(), HintLevel::Muted, counts),
-                Interlacing::Unknown => (
-                    "Unclear".into(),
-                    HintLevel::Muted,
-                    format!("The frames do not tell clearly. {counts}"),
-                ),
-            }
-        }
+            ),
+            Interlacing::Progressive => (
+                "Progressive".into(),
+                HintLevel::Muted,
+                "The video has whole frames: Deinterlace is not needed.".into(),
+            ),
+            Interlacing::Unknown => (
+                "Unclear".into(),
+                HintLevel::Muted,
+                "The frames do not tell clearly: look at movement in the video.".into(),
+            ),
+        },
     }
+}
+
+/// The frames ffmpeg's idet counted (the interlace note's tooltip, Q-N10).
+fn interlace_counts(hint: InterlaceHint) -> Vec<(String, String)> {
+    let InterlaceHint::Known(_, c) = hint else {
+        return Vec::new();
+    };
+    [
+        ("Top field first", c.tff),
+        ("Bottom field first", c.bff),
+        ("Progressive", c.progressive),
+        ("Undetermined", c.undetermined),
+    ]
+    .into_iter()
+    .map(|(label, n)| (label.to_owned(), format!("{n} frames")))
+    .collect()
 }
 
 /// What an empty width or height comes to (ffmpeg keeps the aspect ratio), as a field placeholder.

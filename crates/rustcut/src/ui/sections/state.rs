@@ -321,6 +321,46 @@ impl SectionsState {
         points
     }
 
+    /// Whether `text` would be accepted as the mark `_bound` (nothing changes; the bubble of a refused time, M6.5c).
+    pub fn check_mark_text(_bound: Bound, text: &str) -> Result<(), EditError> {
+        if text.trim().is_empty() {
+            return Ok(());
+        }
+        parse(text).map(|_| ())
+    }
+
+    /// Whether `text` would be accepted as the bound of the section `id` (nothing changes).
+    pub fn check_edit(&self, id: SectionId, bound: Bound, text: &str) -> Result<(), EditError> {
+        let t = self.limit(parse(text)?);
+        let section = self.list.get(id).ok_or(EditError::Gone)?;
+        match bound {
+            Bound::Start => section.with_start(t),
+            Bound::End => section.with_end(t),
+        }
+        .map(|_| ())
+        .map_err(|e| match e {
+            SectionError::Empty(_) | SectionError::Negative(_) => EditError::Empty,
+        })
+    }
+
+    /// Every section that shares a part with an earlier one: its row index and the earlier section's number (the
+    /// first such), in list order.
+    pub fn overlaps(&self) -> Vec<(usize, usize)> {
+        let ids: Vec<SectionId> = self.list.iter().map(|(id, _)| id).collect();
+        let pairs = self.list.overlapping_pairs();
+        ids.iter()
+            .enumerate()
+            .filter_map(|(later, id)| {
+                pairs
+                    .iter()
+                    .filter(|(_, b)| b == id)
+                    .filter_map(|(a, _)| ids.iter().position(|x| x == a))
+                    .min()
+                    .map(|earlier| (later, earlier + 1))
+            })
+            .collect()
+    }
+
     /// The list for the Sections card and the timeline.
     pub fn rows(&self) -> Vec<SectionRow> {
         let overlapping: Vec<SectionId> = self

@@ -79,6 +79,8 @@ export struct MessageKindView {
     // Critical: always at its place, never muted.
     locked: bool,
     desktop: bool,
+    // A desktop notification makes sense (not for a bubble at an input).
+    desktop-allowed: bool,
     // "Don't show again" is offered (hints and confirmations).
     mutable: bool,
     muted: bool,
@@ -102,8 +104,11 @@ export global SettingsUi {
     callback reset-page();
     callback toggle(/* key */ string);
     callback choose(/* key */ string, /* index */ int);
-    // A typed value; false keeps the field open and marked.
+    // A typed value; false keeps the field open and marked (with a bubble that says why, M6.5c).
     callback type-text(/* key */ string, /* text */ string) -> bool;
+    // A field with a refused text is typed in again, or closed without keeping a value.
+    callback text-typed(/* key */ string, /* text */ string);
+    callback text-canceled(/* key */ string);
     callback step(/* key */ string, /* steps */ int);
     // The browse button of a path row.
     callback pick(/* key */ string);

@@ -5,6 +5,7 @@
 //! then). `ui/notice_*.slint` draws the toasts, the banner over the video and the bell.
 
 mod banners;
+mod bubbles;
 mod center;
 mod history;
 mod kind;
@@ -16,6 +17,7 @@ mod view;
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
+pub use bubbles::{Area, TYPING};
 pub use center::{Hooks, NoticeCenter, Parts};
 pub use history::Entry;
 pub use kind::{Group, Kind, KindInfo, Level};
@@ -58,6 +60,31 @@ pub fn clear(key: &str) {
         center.clear(key);
     } else {
         PENDING.with(|p| p.borrow_mut().retain(|n| n.key.as_deref() != Some(key)));
+    }
+}
+
+/// An input check of `key` found nothing wrong anymore: its bubble goes after `grace`, unless the key changes before
+/// (the user types on).
+pub fn clear_soon(key: &str, grace: std::time::Duration) {
+    if let Some(center) = center() {
+        center.clear_after(key, grace);
+    } else {
+        PENDING.with(|p| p.borrow_mut().retain(|n| n.key.as_deref() != Some(key)));
+    }
+}
+
+/// A window's layout changed (a card folded, a panel moved, another Settings page): the bubbles find their fields
+/// again now instead of at the layers' next look.
+pub fn layout_changed() {
+    if let Some(center) = center() {
+        center.layout_changed();
+    }
+}
+
+/// The Settings window shows its bubbles (called once it is made).
+pub fn attach_settings(window: &crate::SettingsWindow) {
+    if let Some(center) = center() {
+        center.attach_settings(window);
     }
 }
 

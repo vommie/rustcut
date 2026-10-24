@@ -3,7 +3,9 @@
 
 use std::fmt;
 use std::rc::Rc;
+use std::time::Duration;
 
+use super::bubbles::Area;
 use super::kind::{Kind, Level};
 use crate::ui::jump::JumpTarget;
 
@@ -41,6 +43,13 @@ impl fmt::Debug for Click {
     }
 }
 
+/// Where a bubble stands: its scroll area and the anchors' keys in order of preference (`BubbleAnchor.key`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Anchor {
+    pub area: Area,
+    pub keys: Vec<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Notice {
     pub kind: Kind,
@@ -59,6 +68,10 @@ pub struct Notice {
     pub force_desktop: bool,
     /// Seconds the desktop notification stays instead of the setting's.
     pub desktop_secs: Option<u32>,
+    /// A bubble's place (kinds that go to a bubble).
+    pub anchor: Option<Anchor>,
+    /// A bubble waits this long for the next change of its key (an input check while typing).
+    pub grace: Duration,
 }
 
 impl Notice {
@@ -76,7 +89,27 @@ impl Notice {
             stays: false,
             force_desktop: false,
             desktop_secs: None,
+            anchor: None,
+            grace: Duration::ZERO,
         }
+    }
+
+    /// A bubble at the first of `keys` that is shown in `area` (its key is the first anchor unless it has one).
+    #[must_use]
+    pub fn at<S: Into<String>>(mut self, area: Area, keys: impl IntoIterator<Item = S>) -> Self {
+        let keys: Vec<String> = keys.into_iter().map(Into::into).collect();
+        if self.key.is_none() {
+            self.key = keys.first().cloned();
+        }
+        self.anchor = Some(Anchor { area, keys });
+        self
+    }
+
+    /// A bubble that waits until its key had no other change for `grace` (an input check while typing).
+    #[must_use]
+    pub const fn grace(mut self, grace: Duration) -> Self {
+        self.grace = grace;
+        self
     }
 
     #[must_use]

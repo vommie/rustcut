@@ -42,10 +42,12 @@ pub struct RowView {
     pub mark: Mark,
 }
 
+/// An issue of the settings: its bubble stands at the first row of its field (M6.5c).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IssueView {
     pub error: bool,
     pub text: String,
+    pub field: ProfileField,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,6 +115,7 @@ pub fn panel(state: &PanelState) -> PanelView {
             .map(|i| IssueView {
                 error: i.severity == Severity::Error,
                 text: sentence(&i.message),
+                field: i.field,
             })
             .collect(),
         check_text,

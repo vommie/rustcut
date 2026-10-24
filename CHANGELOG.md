@@ -9,6 +9,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Bubbles at the field a message is about (0.0.27): a small closable note like a tooltip, with a colored stripe for
+  its level, that points at its field and stays until the problem is solved; × hides it until its words change. They
+  show for the job's target name in Job Finalization ("The file exists", "Job #3 writes this file too", similar names
+  in the folder; a click on it opens the target folder's files with their pictures, to look, with the queued jobs that
+  write the file), a target folder that cannot be read, a typed section time that is no time, sections that overlap
+  (at the later one), every error and warning of the render settings at its option in the Codecs panel (at the profile
+  choice when the option's card is folded) and a typed value the Codecs panel or the Settings window refuses. While you
+  type, a check waits until you pause (0.6 s), and a bubble that shows changes its words in place. A bubble stays
+  inside its panel, moves with scrolling, goes when its panel or card is hidden and turns above its field when there is
+  no room below. The mouse wheel over a bubble makes it more transparent (down) or more opaque (up), to see what lies
+  under it; Settings > Messages > Look & behavior has its start opacity (`[notices.bubbles] opacity`, 20-100 %,
+  default 100). The bubble kinds are listed on the Message kinds tab; their test shows the bubble at the test button.
+- The interlace note of the Deinterlace filter explains itself in its tooltip: the verdict and how many frames ffmpeg
+  counted top field first, bottom field first, progressive and undetermined. A new message kind "Interlaced video
+  found" can show it as a toast or banner with a button that switches Deinterlace on (Settings > Messages; by default
+  only the note says it).
+
 - Settings > Messages (0.0.26), a page with three tabs. "Look & behavior": where toasts appear, how several stack,
   how many show, their order, animation and time per level; how banners come and whether a new error lights up; the
   bell and its number; desktop notifications and their time. "Message kinds": every kind of message RustCut shows,
@@ -74,6 +91,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   sidecar" (`[hashing] write_sidecar`, on).
 
 ### Changed
+
+- The line under the file name in Job Finalization, the issue list of the Codecs panel's Profile card, the red text
+  under a refused Settings value and the overlap note under the section list became bubbles at their fields (0.0.27).
+  A refused typed section time no longer shows a toast.
 
 - The desktop notification switches (Desktop Integration) and the warning about a source cut before (Warnings &
   Confirmations) moved to Settings > Messages; their old places have a button that opens it (0.0.26).

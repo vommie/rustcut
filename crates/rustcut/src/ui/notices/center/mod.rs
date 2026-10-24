@@ -12,17 +12,19 @@ use slint::winit_030::WinitWindowAccessor as _;
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 
 use super::banners::{BannerBoard, NewBanner, Set};
+use super::bubbles::{Area, BubbleCenter, Win};
 use super::history::History;
 use super::kind::{Kind, Level};
 use super::notice::{Action, Click, Notice};
-use super::route::{can_mute, desktop_now, route};
+use super::route::{desktop_now, route};
 use super::toasts::{Added, NewToast, ToastStack};
 use super::view;
+
+mod input;
 use crate::app::SettingsWriter;
 use crate::desktop::notify::{self, Note, Style};
-use crate::icons::Icon;
 use crate::ui::dispatcher::UiDispatcher;
-use crate::ui::menu::{ContextMenuBridge, MenuAction, MenuItem};
+use crate::ui::menu::ContextMenuBridge;
 use crate::ui::status;
 use crate::{HistoryView, MainWindow, Notices, ToastView};
 
@@ -84,6 +86,7 @@ pub struct NoticeCenter {
     timer: slint::Timer,
     pulse: Cell<i32>,
     hooks: RefCell<Hooks>,
+    bubbles: Rc<BubbleCenter>,
 }
 
 /// What the center needs from the app.
@@ -118,11 +121,13 @@ impl NoticeCenter {
             timer: slint::Timer::default(),
             pulse: Cell::new(0),
             hooks: RefCell::default(),
+            bubbles: BubbleCenter::new(parts.settings.bubbles.opacity),
         });
+        center.bubbles.attach(Win::Main, window);
         let notices = window.global::<Notices<'_>>();
         notices.set_toasts(ModelRc::from(Rc::clone(&center.toast_model)));
         notices.set_recent(ModelRc::from(Rc::clone(&center.recent_model)));
-        connect(&center, &notices);
+        input::connect(&center, &notices);
         center.publish_all();
         center
     }
@@ -137,7 +142,20 @@ impl NoticeCenter {
             return;
         }
         self.settings.replace(settings.clone());
+        self.bubbles.set_opacity(settings.bubbles.opacity);
+        self.bubbles
+            .retain(|kind| route(kind, kind.info().level, settings).place == NoticePlace::Bubble);
         self.publish_all();
+    }
+
+    pub fn layout_changed(&self) {
+        self.bubbles.look_again(Win::Main);
+        self.bubbles.look_again(Win::Settings);
+    }
+
+    /// The bubbles of the Settings window show there (it has its own globals).
+    pub fn attach_settings(&self, window: &crate::SettingsWindow) {
+        self.bubbles.attach(Win::Settings, window);
     }
 
     pub fn history(&self) -> std::cell::Ref<'_, History> {
@@ -147,6 +165,16 @@ impl NoticeCenter {
     pub fn post(&self, notice: Notice) {
         let route = route(notice.kind, notice.level, &self.settings.borrow());
         tracing::debug!(kind = notice.kind.id(), place = ?route.place, muted = route.muted, "[Notice] {}", notice.text());
+        let bubble_key = || notice.key.clone().unwrap_or_else(|| notice.kind.id().to_owned());
+        if route.place == NoticePlace::Bubble {
+            // A state at an input: not in the history (it would fill while the user types).
+            self.bubbles.set(&bubble_key(), Some(&notice), notice.grace);
+            return;
+        }
+        if notice.anchor.is_some() {
+            // A bubble's kind the user moved elsewhere: no bubble stays behind.
+            self.bubbles.set(&bubble_key(), None, Duration::ZERO);
+        }
         let clock = chrono::Local::now();
         let fresh = match route.place {
             NoticePlace::Toast => self.toast(&notice, clock.format("%H:%M").to_string()),
@@ -182,6 +210,17 @@ impl NoticeCenter {
         let info = kind.info();
         let route = route(kind, info.level, &self.settings.borrow());
         let mut notice = Notice::new(kind, format!("{} (test)", info.sample.0)).detail(info.sample.1);
+        if route.place == NoticePlace::Bubble {
+            // Its input may not be on screen: the test shows it at the test button.
+            let key = format!("test:{}", info.id);
+            notice = notice.at(Area::Settings, [key.clone()]);
+            let me = Weak::clone(&self.me);
+            slint::Timer::single_shot(TEST_BANNER, move || {
+                if let Some(center) = me.upgrade() {
+                    center.clear(&key);
+                }
+            });
+        }
         if route.place == NoticePlace::Banner {
             let key = format!("test:{}", info.id);
             notice = notice.key(key.clone());
@@ -199,8 +238,14 @@ impl NoticeCenter {
         route
     }
 
-    /// The state with `key` is over: its toast fades, its banner goes.
+    /// The state with `key` is over: its toast fades, its banner and its bubble go.
     pub fn clear(&self, key: &str) {
+        self.clear_after(key, Duration::ZERO);
+    }
+
+    /// Like [`Self::clear`]; a bubble goes after `grace` unless its key changes before (an input check while typing).
+    pub fn clear_after(&self, key: &str, grace: Duration) {
+        self.bubbles.set(key, None, grace);
         let now = Instant::now();
         let toast = self.toasts.borrow_mut().close_key(key, now).is_some();
         let banner = self.banners.borrow_mut().clear(key);
@@ -379,163 +424,6 @@ impl NoticeCenter {
         }
     }
 
-    // ---- what the user does on the cards
-
-    fn close_toast(&self, id: u64) {
-        let now = Instant::now();
-        if id == SUMMARY {
-            self.toasts.borrow_mut().close_all(now);
-            self.publish_toasts();
-        } else if self.toasts.borrow_mut().close(id, now) {
-            self.publish_toasts();
-        }
-    }
-
-    fn toast_clicked(&self, id: u64) {
-        if id == SUMMARY {
-            self.toasts.borrow_mut().set_expanded(true);
-            self.publish_toasts();
-            return;
-        }
-        let click = self.toast_runs.borrow().get(&id).and_then(|r| r.click.clone());
-        self.close_toast(id);
-        run_click(click);
-    }
-
-    fn toast_action(&self, id: u64, index: usize) {
-        let action = self
-            .toast_runs
-            .borrow()
-            .get(&id)
-            .and_then(|r| r.actions.get(index).cloned());
-        let Some(action) = action else { return };
-        if action.closes {
-            self.close_toast(id);
-        }
-        (action.run)();
-    }
-
-    fn toast_menu(&self, id: u64, x: f32, y: f32) {
-        let Some(toast) = self.toasts.borrow().get(id).cloned() else {
-            return;
-        };
-        let Some(menu) = self.menu.upgrade() else { return };
-        let mut items = vec![MenuItem::Action(MenuAction::new(
-            "copy",
-            "Copy the text",
-            Some(Icon::Copy),
-        ))];
-        if can_mute(toast.kind) && toast.level.is_quiet() {
-            items.push(MenuItem::Action(MenuAction::new(
-                "mute",
-                "Don't show this kind again",
-                Some(Icon::NoticeMute),
-            )));
-        }
-        items.push(MenuItem::Action(MenuAction::new(
-            "close_all",
-            "Close all messages",
-            Some(Icon::Close),
-        )));
-        let me = Weak::clone(&self.me);
-        let text = if toast.detail.is_empty() {
-            toast.title
-        } else {
-            format!("{}: {}", toast.title.trim_end_matches('.'), toast.detail)
-        };
-        menu.show(&items, x, y, move |pick| {
-            let Some(center) = me.upgrade() else { return };
-            match pick {
-                "copy" => {
-                    crate::util::clipboard::copy(text.clone());
-                }
-                "mute" => center.mute(id),
-                "close_all" => {
-                    center.toasts.borrow_mut().close_all(Instant::now());
-                    center.publish_toasts();
-                }
-                _ => {}
-            }
-        });
-    }
-
-    /// "Don't show this kind again" (hints and confirmations only, Q-N8).
-    fn mute(&self, id: u64) {
-        let Some(kind) = self.toasts.borrow().get(id).map(|t| t.kind) else {
-            return;
-        };
-        if !can_mute(kind) {
-            return;
-        }
-        tracing::info!(kind = kind.id(), "[Notice] Muted");
-        self.settings.borrow_mut().muted.insert(kind.id().to_owned());
-        self.writer.update(|s| {
-            s.notices.muted.insert(kind.id().to_owned());
-        });
-        self.close_toast(id);
-    }
-
-    fn banner_key(&self) -> Option<String> {
-        self.banners.borrow().current().map(|(b, _, _)| b.key.clone())
-    }
-
-    fn banner_closed(&self) {
-        if let Some(key) = self.banner_key() {
-            self.banners.borrow_mut().hide(&key);
-            self.publish_banner();
-        }
-    }
-
-    fn banner_clicked(&self) {
-        let click = self
-            .banner_key()
-            .and_then(|key| self.banner_runs.borrow().get(&key).and_then(|r| r.click.clone()));
-        run_click(click);
-    }
-
-    fn banner_action(&self, index: usize) {
-        let Some(key) = self.banner_key() else { return };
-        let action = self
-            .banner_runs
-            .borrow()
-            .get(&key)
-            .and_then(|r| r.actions.get(index).cloned());
-        let Some(action) = action else { return };
-        if action.closes {
-            self.banners.borrow_mut().hide(&key);
-            self.publish_banner();
-        }
-        (action.run)();
-    }
-
-    fn bell_toggled(&self) {
-        let Some(window) = self.window.upgrade() else { return };
-        let notices = window.global::<Notices<'_>>();
-        let open = !notices.get_bell_open();
-        notices.set_bell_open(open);
-        if open {
-            self.history.borrow_mut().mark_read();
-        }
-        self.publish_bell();
-    }
-
-    pub(super) fn show_log(&self) {
-        if let Some(show) = &self.hooks.borrow().show_log {
-            show();
-        }
-    }
-
-    fn show_all(&self) {
-        if let Some(window) = self.window.upgrade() {
-            window.global::<Notices<'_>>().set_bell_open(false);
-        }
-        self.history.borrow_mut().mark_read();
-        self.publish_bell();
-        if let Some(show) = &self.hooks.borrow().show_all {
-            show();
-        }
-    }
-
     // ---- publishing
 
     fn publish_all(&self) {
@@ -613,59 +501,10 @@ impl NoticeCenter {
     }
 }
 
-fn run_click(click: Option<Click>) {
+pub(super) fn run_click(click: Option<Click>) {
     match click {
         Some(Click::Jump(target)) => crate::ui::jump::go(target),
         Some(Click::Run(run)) => run(),
         None => {}
     }
-}
-
-fn id_of(id: i32) -> u64 {
-    u64::try_from(id).unwrap_or(0)
-}
-
-fn connect(center: &Rc<NoticeCenter>, notices: &Notices<'_>) {
-    macro_rules! on {
-        ($setter:ident, |$c:ident $(, $arg:ident: $ty:ty)*| $body:expr) => {{
-            let weak = Rc::downgrade(center);
-            notices.$setter(move |$($arg: $ty),*| {
-                if let Some($c) = weak.upgrade() {
-                    $body;
-                }
-            });
-        }};
-    }
-    on!(on_toast_clicked, |c, id: i32| c.toast_clicked(id_of(id)));
-    on!(on_toast_closed, |c, id: i32| c.close_toast(id_of(id)));
-    on!(on_toast_action, |c, id: i32, index: i32| c
-        .toast_action(id_of(id), usize::try_from(index).unwrap_or(0)));
-    on!(on_toast_hover, |c, id: i32, on: bool| {
-        c.toasts.borrow_mut().hover(id_of(id), on, Instant::now());
-        c.publish_toasts();
-    });
-    on!(on_toast_menu, |c, id: i32, x: f32, y: f32| c.toast_menu(
-        id_of(id),
-        x,
-        y
-    ));
-    on!(on_toast_mute, |c, id: i32| c.mute(id_of(id)));
-    on!(on_set_expanded, |c, on: bool| {
-        c.toasts.borrow_mut().set_expanded(on);
-        c.publish_toasts();
-    });
-    on!(on_page_toasts, |c, delta: i32| {
-        c.toasts.borrow_mut().page(delta);
-        c.publish_toasts();
-    });
-    on!(on_banner_closed, |c| c.banner_closed());
-    on!(on_banner_clicked, |c| c.banner_clicked());
-    on!(on_banner_action, |c, index: i32| c
-        .banner_action(usize::try_from(index).unwrap_or(0)));
-    on!(on_page_banners, |c, delta: i32| {
-        c.banners.borrow_mut().page(delta);
-        c.publish_banner();
-    });
-    on!(on_bell_toggled, |c| c.bell_toggled());
-    on!(on_show_all, |c| c.show_all());
 }

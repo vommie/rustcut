@@ -223,9 +223,10 @@ export component ConflictDialog inherits Rectangle {
                     spacing: 12px;
 
                     AppIcon {
-                        icon: IconId.status-warning;
+                        icon: Export.dialog-browse && !Export.dialog-has-existing ? IconId.target-folder
+                            : IconId.status-warning;
                         size: IconSize.xl;
-                        color: Theme.accent;
+                        color: Export.dialog-browse && !Export.dialog-has-existing ? Theme.text-muted : Theme.accent;
                     }
 
                     VerticalLayout {
@@ -296,9 +297,17 @@ export component ConflictDialog inherits Rectangle {
 
                         if Export.dialog-tab-kind == 0 && Export.dialog-has-existing: ExistingFile { }
 
-                        if Export.dialog-tab-kind == 0 && !Export.dialog-has-existing: QueuedJobs { }
+                        if Export.dialog-tab-kind == 0 && !Export.dialog-has-existing && Export.dialog-jobs.length > 0:
+                            QueuedJobs { }
 
-                        if Export.dialog-tab-kind == 0: VerticalLayout {
+                        if Export.dialog-tab-kind == 0 && Export.dialog-browse && !Export.dialog-has-existing
+                            && Export.dialog-jobs.length == 0: Text {
+                            text: "No file has this name yet.";
+                            color: Theme.text-muted;
+                            font-size: 12px;
+                        }
+
+                        if Export.dialog-tab-kind == 0 && !Export.dialog-browse: VerticalLayout {
                             spacing: 2px;
 
                             Text {
@@ -352,7 +361,7 @@ export component ConflictDialog inherits Rectangle {
                         overflow: elide;
                     }
 
-                    DialogButton {
+                    if !Export.dialog-browse: DialogButton {
                         text: "Cancel";
                         clicked => { Export.dialog-cancel(); }
                     }
