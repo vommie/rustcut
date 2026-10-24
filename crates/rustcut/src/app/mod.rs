@@ -3,6 +3,7 @@
 
 mod cli;
 mod live;
+pub mod log_book;
 mod logging;
 mod persistence;
 mod services;
@@ -193,7 +194,14 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &tags,
         &loaded.ui_state.job.collapsed,
     );
-    let logs = LogsBridge::install(&main, &ui, runtime.handle().clone(), &queue, &loaded.ui_state.logs);
+    let logs = LogsBridge::install(
+        &main,
+        &ui,
+        runtime.handle().clone(),
+        &queue,
+        &loaded.ui_state.logs,
+        log.book(),
+    );
     {
         let (inspector, logs) = (Rc::downgrade(&inspector), Rc::downgrade(&logs));
         queue.hooks().refreshed = Some(Box::new(move || {

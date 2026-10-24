@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Logs panel (0.0.16): besides the log of the job chosen in the queue, it shows RustCut's own log of this run (the
+  lines the log file gets, with time and level) or only its RustView part (the link and the Tag & Rate panel). The
+  log grows while it is shown; search, "errors only", following the newest line and Copy work on every log. The
+  chosen log is kept in `ui-state.toml` (`logs.source`).
 - Settings window (0.0.15; File > Settings..., Ctrl+, or Help > About RustCut), styled like RustView's: General, Player,
   Editor & Sections, Filters, Export & Naming, Render Profiles, Queue, RustView, Warnings & Confirmations, Hotkeys,
   Desktop Integration, Appearance, Advanced & Logs and About (with the Slint attribution). Every change is saved at

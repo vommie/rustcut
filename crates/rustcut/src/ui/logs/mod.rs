@@ -1,7 +1,9 @@
-//! The Logs panel's bridge (M4.1, user decision Q-Q1): the stored log of the queue's current job, read on the runtime
-//! (`QueueCommand::Log`) when the job changes or a render of it ends, filtered by the search and "errors only"
-//! (`lines.rs`, kept in `UiState.logs`), and copied to the clipboard on its own thread. The log of a running render is
-//! stored when the render ends.
+//! The Logs panel's bridge (M4.1, user decision Q-Q1; M4.3): one of three logs, filtered by the search and "errors
+//! only" (`lines.rs`, kept in `UiState.logs` with the chosen log) and copied to the clipboard on its own thread:
+//! - the stored log of the queue's current job, read on the runtime (`QueueCommand::Log`) when the job changes or a
+//!   render of it ends (the log of a running render is stored when the render ends);
+//! - RustCut's own log of this run (`app::log_book`, the lines the log file gets), shown again while it grows;
+//! - its RustView part (the link and the Tag & Rate panel).
 
 mod lines;
 
@@ -10,12 +12,13 @@ use std::rc::{Rc, Weak};
 
 use rustcut_core::job::{JobId, JobStateKind};
 use rustcut_core::queue::{JobSummary, QueueCommand, QueueError};
-use rustcut_core::settings::LogPanelState;
+use rustcut_core::settings::{LogPanelState, LogSource};
 use rustcut_core::store::LogLine;
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 
-pub use lines::{LineLevel, ShownLine, level, shown, summary, to_text};
+pub use lines::{LineLevel, ShownLine, book_shown, level, shown, summary, to_text};
 
+use crate::app::log_book::LogBook;
 use crate::ui::dispatcher::UiDispatcher;
 use crate::ui::queue::{QueueBridge, file_label};
 use crate::ui::status::{self, Level};
@@ -25,6 +28,8 @@ use crate::{LogLineView, Logs, MainWindow};
 
 /// Most lines read from the store (a render keeps at most 2 200; several attempts add up).
 const READ_LIMIT: usize = 20_000;
+/// How often the app's log is looked at while it is shown (a new line shows within this time).
+const BOOK_POLL: std::time::Duration = std::time::Duration::from_millis(300);
 
 thread_local! {
     static BRIDGE: RefCell<Weak<LogsBridge>> = const { RefCell::new(Weak::new()) };
@@ -60,6 +65,10 @@ pub struct LogsBridge {
     lines: RefCell<Vec<LogLine>>,
     reads: Cell<u64>,
     model: Rc<VecModel<LogLineView>>,
+    /// The app's log of this run, and the number of its newest line as last shown.
+    book: LogBook,
+    book_shown: Cell<u64>,
+    book_timer: slint::Timer,
 }
 
 impl LogsBridge {
@@ -70,6 +79,7 @@ impl LogsBridge {
         runtime: tokio::runtime::Handle,
         queue: &Rc<QueueBridge>,
         saved: &LogPanelState,
+        book: LogBook,
     ) -> Rc<Self> {
         let bridge = Rc::new(Self {
             window: window.as_weak(),
@@ -81,6 +91,9 @@ impl LogsBridge {
             lines: RefCell::new(Vec::new()),
             reads: Cell::new(0),
             model: Rc::new(VecModel::default()),
+            book,
+            book_shown: Cell::new(0),
+            book_timer: slint::Timer::default(),
         });
         BRIDGE.with(|b| *b.borrow_mut() = Rc::downgrade(&bridge));
         let l = window.global::<Logs<'_>>();
@@ -88,8 +101,65 @@ impl LogsBridge {
         l.set_search(saved.search.as_str().into());
         l.set_errors_only(saved.errors_only);
         connect(&bridge, window);
-        bridge.publish();
+        bridge.source_changed();
         bridge
+    }
+
+    fn source(&self) -> LogSource {
+        self.state.borrow().source
+    }
+
+    /// Shows `source` from now on.
+    fn select_source(self: &Rc<Self>, source: LogSource) {
+        if self.source() == source {
+            return;
+        }
+        self.state.borrow_mut().source = source;
+        tracing::debug!(?source, "[Logs] Showing another log");
+        self.source_changed();
+    }
+
+    /// The header and the lines of the chosen log; the app's log is looked at again while it is shown.
+    fn source_changed(self: &Rc<Self>) {
+        let source = self.source();
+        if source == LogSource::Job {
+            self.book_timer.stop();
+        } else {
+            let weak = Rc::downgrade(self);
+            self.book_timer.start(slint::TimerMode::Repeated, BOOK_POLL, move || {
+                if let Some(b) = weak.upgrade()
+                    && b.book.latest() != b.book_shown.get()
+                {
+                    b.publish();
+                }
+            });
+        }
+        if let Some(window) = self.window.upgrade() {
+            let l = window.global::<Logs<'_>>();
+            l.set_source(match source {
+                LogSource::Job => 0,
+                LogSource::App => 1,
+                LogSource::RustView => 2,
+            });
+            match source {
+                LogSource::Job => {}
+                LogSource::App => {
+                    l.set_has_job(true);
+                    l.set_title("RustCut · this run".into());
+                    l.set_note("".into());
+                }
+                LogSource::RustView => {
+                    l.set_has_job(true);
+                    l.set_title("RustView link · this run".into());
+                    l.set_note("".into());
+                }
+            }
+        }
+        if source == LogSource::Job {
+            self.read_for.set(None);
+            self.follow_queue();
+        }
+        self.publish();
     }
 
     /// What `ui-state.toml` keeps of the panel.
@@ -99,6 +169,9 @@ impl LogsBridge {
 
     /// The queue panel refreshed: reads the log again when its job changed or a render of it ended.
     pub fn follow_queue(&self) {
+        if self.source() != LogSource::Job {
+            return;
+        }
         let row = self.queue.upgrade().and_then(|q| q.current()).map(|(row, _, _)| row);
         let Some(window) = self.window.upgrade() else { return };
         let l = window.global::<Logs<'_>>();
@@ -180,13 +253,25 @@ impl LogsBridge {
         });
     }
 
+    /// The lines of the chosen log that pass the filter, and how many it has.
+    fn current(&self) -> (Vec<ShownLine>, usize) {
+        let st = self.state.borrow();
+        if st.source == LogSource::Job {
+            let lines = self.lines.borrow();
+            return (shown(&lines, &st.search, st.errors_only), lines.len());
+        }
+        let lines = self.book.lines();
+        self.book_shown.set(lines.last().map_or(0, |l| l.seq));
+        let total = book_shown(&lines, st.source, "", false).len();
+        (book_shown(&lines, st.source, &st.search, st.errors_only), total)
+    }
+
     fn publish(&self) {
         let Some(window) = self.window.upgrade() else { return };
+        let (shown, total) = self.current();
         let st = self.state.borrow();
-        let lines = self.lines.borrow();
-        let shown = shown(&lines, &st.search, st.errors_only);
         let l = window.global::<Logs<'_>>();
-        l.set_summary(summary(lines.len(), &shown).into());
+        l.set_summary(summary(total, &shown).into());
         l.set_follow(st.follow);
         sync(
             &self.model,
@@ -202,10 +287,7 @@ impl LogsBridge {
     }
 
     fn copy(&self) {
-        let text = {
-            let st = self.state.borrow();
-            to_text(&shown(&self.lines.borrow(), &st.search, st.errors_only))
-        };
+        let text = to_text(&self.current().0);
         let Some(window) = self.window.upgrade() else { return };
         let lines = text.lines().count();
         if clipboard::copy(text) {
@@ -242,6 +324,16 @@ fn connect(bridge: &Rc<LogsBridge>, window: &MainWindow) {
             let on = !b.state.borrow().follow;
             b.state.borrow_mut().follow = on;
             b.publish();
+        }
+    });
+    let weak = Rc::downgrade(bridge);
+    l.on_select_source(move |index| {
+        if let Some(b) = weak.upgrade() {
+            b.select_source(match index {
+                1 => LogSource::App,
+                2 => LogSource::RustView,
+                _ => LogSource::Job,
+            });
         }
     });
     let weak = Rc::downgrade(bridge);

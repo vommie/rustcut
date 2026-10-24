@@ -2,7 +2,10 @@
 //! (errors red, warnings yellow, RustCut's notes and the command lines set apart), filtered by a search text and an
 //! "errors only" switch (both in `UiState.logs`), and the text that Copy puts on the clipboard.
 
+use rustcut_core::settings::LogSource;
 use rustcut_core::store::{LogLine, LogStream};
+
+use crate::app::log_book::BookLine;
 
 /// How a line is drawn (the numbers are `logs_panel.slint`'s).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -58,6 +61,36 @@ pub fn shown(lines: &[LogLine], search: &str, errors_only: bool) -> Vec<ShownLin
             keep.then(|| ShownLine {
                 number: i + 1,
                 text: line.line.clone(),
+                level,
+            })
+        })
+        .collect()
+}
+
+/// Whether a line of the app's log belongs to the RustView log (the link and the Tag & Rate panel).
+pub fn is_rustview(line: &BookLine) -> bool {
+    line.text.starts_with("[RustView]") || line.text.starts_with("[Tags]")
+}
+
+/// The lines of the app's log (`LogSource::App`) or its RustView part that pass the filter, numbered by their place
+/// in this run's log; each line starts with its time and level.
+pub fn book_shown(lines: &[BookLine], source: LogSource, search: &str, errors_only: bool) -> Vec<ShownLine> {
+    let needle = search.trim().to_lowercase();
+    lines
+        .iter()
+        .filter(|line| source != LogSource::RustView || is_rustview(line))
+        .filter_map(|line| {
+            let level = match line.level {
+                tracing::Level::ERROR => LineLevel::Error,
+                tracing::Level::WARN => LineLevel::Warning,
+                _ => LineLevel::Info,
+            };
+            let text = format!("{} {:<5} {}", line.time, line.level, line.text);
+            let keep = (!errors_only || level >= LineLevel::Warning)
+                && (needle.is_empty() || text.to_lowercase().contains(&needle));
+            keep.then(|| ShownLine {
+                number: usize::try_from(line.seq).unwrap_or(usize::MAX),
+                text,
                 level,
             })
         })
@@ -144,5 +177,38 @@ mod tests {
         assert_eq!(summary(log.len(), &found), "1 of 6 lines · 1 error");
         assert_eq!(to_text(&found), "[libx264 @ 0x55] [error] height not divisible by 2\n");
         assert_eq!(summary(1, &shown(&log[..1], "", false)), "1 line");
+    }
+
+    fn book(seq: u64, level: tracing::Level, text: &str) -> BookLine {
+        BookLine {
+            seq,
+            time: "14:05:09.123".into(),
+            level,
+            text: text.into(),
+        }
+    }
+
+    #[test]
+    fn the_app_log_and_its_rustview_part() {
+        let log = vec![
+            book(7, tracing::Level::INFO, "[Queue] Started jobs=0"),
+            book(8, tracing::Level::WARN, "[RustView] Not reachable error=not installed"),
+            book(9, tracing::Level::INFO, "[Tags] Tag tree loaded tags=10"),
+            book(10, tracing::Level::ERROR, "[Store] The queue database cannot be used"),
+        ];
+        let app = book_shown(&log, LogSource::App, "", false);
+        assert_eq!(app.len(), 4);
+        assert_eq!(app.first().unwrap().text, "14:05:09.123 INFO  [Queue] Started jobs=0");
+        assert_eq!(app.first().unwrap().number, 7);
+        let rustview = book_shown(&log, LogSource::RustView, "", false);
+        assert_eq!(rustview.iter().map(|l| l.number).collect::<Vec<_>>(), [8, 9]);
+        assert_eq!(rustview.first().unwrap().level, LineLevel::Warning);
+        let errors = book_shown(&log, LogSource::App, "", true);
+        assert_eq!(errors.iter().map(|l| l.number).collect::<Vec<_>>(), [8, 10]);
+        assert_eq!(
+            book_shown(&log, LogSource::App, "warn", false).len(),
+            1,
+            "the level text is searchable"
+        );
     }
 }

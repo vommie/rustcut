@@ -18,6 +18,6 @@ pub use schema::{
     RustViewSettings, Settings, TargetFolder, TraySettings, WarningSettings, WhenDone, WriteTiming,
 };
 pub use ui_state::{
-    ExportPanelState, JobPanelState, LogPanelState, ProbeState, QueuePanelState, SettingsWindowState, TagPanelState,
-    TimelineState, UiState, WindowState,
+    ExportPanelState, JobPanelState, LogPanelState, LogSource, ProbeState, QueuePanelState, SettingsWindowState,
+    TagPanelState, TimelineState, UiState, WindowState,
 };

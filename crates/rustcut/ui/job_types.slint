@@ -53,6 +53,8 @@ export struct LogLineView {
 }
 
 export global Logs {
+    // Which log: 0 the queue's current job, 1 RustCut's own log of this run, 2 its RustView part.
+    in property <int> source;
     in property <bool> has-job;
     in property <string> title;
     // Why there is nothing (yet): "The log is stored when the render ends."
@@ -70,6 +72,7 @@ export global Logs {
     callback toggle-follow();
     callback copy();
     callback refresh();
+    callback select-source(int);
 }
 
 export global JobLoad {
