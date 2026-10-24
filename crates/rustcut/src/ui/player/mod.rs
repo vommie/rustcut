@@ -226,6 +226,11 @@ impl PlayerBridge {
         self.command(|p| p.set_loop(false));
     }
 
+    /// Pauses or plays (a dialog that needs the user's eyes pauses a playing video and plays it again afterwards).
+    pub fn set_paused(&self, paused: bool) {
+        self.command(|p| p.set_paused(paused));
+    }
+
     /// Whether the player is paused (or has nothing to play).
     pub fn is_paused(&self) -> bool {
         !self.state.lock().playing()

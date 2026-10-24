@@ -1,0 +1,379 @@
+// The dialogs about a start that cannot go on as usual (M6.5d, user decision Q-N10), filled by src/ui/problems/:
+// a settings file from a newer RustCut (a tab per file, the settings this version does not know, four ways; both tabs'
+// choices apply on confirm) and an unusable queue database (five ways, the fitting one preselected, open the folder,
+// copy the details). Modal over the main window like the conflict dialog; keys: 1-5 pick a way, Up/Down move, Tab
+// switches the tab, Enter confirms, Escape takes the safe way (continue without saving, a temporary queue).
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { IconButton } from "controls.slint";
+import { SmoothScrollArea } from "smooth_scroll_view.slint";
+import { GlobalTooltip } from "tooltip.slint";
+import { ConflictOptionView } from "export_types.slint";
+import { DialogButton, DialogTabs, OptionRow } from "export_dialog_parts.slint";
+import { DialogFrame, DialogState } from "dialog_frame.slint";
+
+export global Problems {
+    // ---- A file from a newer RustCut.
+    in property <bool> newer-open;
+    in property <[string]> newer-tabs;
+    in property <int> newer-tab;
+    in property <string> newer-text;
+    // "3 settings this version does not know" (empty = none) and the list.
+    in property <string> newer-unknown-title;
+    in property <[string]> newer-unknown;
+    in-out property <bool> newer-unknown-open;
+    in property <[ConflictOptionView]> newer-options;
+    in property <int> newer-selected;
+    in property <string> newer-confirm-text;
+    callback newer-select(int);
+    callback newer-step(int);
+    callback newer-set-tab(int);
+    callback newer-confirm();
+    // Escape: continue without saving.
+    callback newer-escape();
+    callback newer-open-folder();
+
+    // ---- The queue database.
+    in property <bool> db-open;
+    in property <string> db-title;
+    in property <string> db-text;
+    // Why the last way did not work ("" = nothing failed).
+    in property <string> db-failed;
+    in property <[ConflictOptionView]> db-options;
+    in property <int> db-selected;
+    in property <string> db-confirm-text;
+    in property <bool> db-busy;
+    callback db-select(int);
+    callback db-step(int);
+    callback db-confirm();
+    // Escape: a temporary queue.
+    callback db-escape();
+    callback db-open-folder();
+    callback db-copy();
+}
+
+/// Keys of both dialogs.
+component DialogKeys inherits FocusScope {
+    callback select(int);
+    callback step(int);
+    callback confirm();
+    callback escape();
+    callback cycle(int);
+
+    init => {
+        GlobalTooltip.hide-cold();
+        self.focus();
+    }
+
+    key-pressed(event) => {
+        GlobalTooltip.hide-cold();
+        if event.text == Key.Escape {
+            root.escape();
+            return accept;
+        }
+        if event.text == Key.Return {
+            root.confirm();
+            return accept;
+        }
+        if event.text == Key.UpArrow {
+            root.step(-1);
+            return accept;
+        }
+        if event.text == Key.DownArrow {
+            root.step(1);
+            return accept;
+        }
+        if event.text == Key.Tab || event.text == Key.Backtab {
+            root.cycle(event.text == Key.Tab ? 1 : -1);
+            self.focus();
+            return accept;
+        }
+        if event.text == "1" || event.text == "2" || event.text == "3" || event.text == "4" || event.text == "5" {
+            root.select(event.text.to-float() - 1);
+            return accept;
+        }
+        accept
+    }
+}
+
+/// The icon, title and text at the top of a dialog.
+component Header inherits HorizontalLayout {
+    in property <IconId> icon;
+    in property <color> tint;
+    in property <string> title;
+    in property <string> text;
+
+    spacing: 12px;
+
+    AppIcon {
+        icon: root.icon;
+        size: IconSize.xl;
+        color: root.tint;
+    }
+
+    VerticalLayout {
+        horizontal-stretch: 1;
+        spacing: 4px;
+
+        Text {
+            text: root.title;
+            color: Theme.text;
+            font-size: 15px;
+            font-weight: 700;
+            wrap: word-wrap;
+        }
+
+        Text {
+            text: root.text;
+            color: Theme.text-muted;
+            font-size: 12px;
+            wrap: word-wrap;
+        }
+    }
+}
+
+export component NewerFileDialog inherits Rectangle {
+    background: #000000a0;
+
+    TouchArea { }
+
+    keys := DialogKeys {
+        select(index) => { Problems.newer-select(index); }
+        step(delta) => { Problems.newer-step(delta); }
+        confirm => { Problems.newer-confirm(); }
+        escape => { Problems.newer-escape(); }
+        cycle(delta) => {
+            if Problems.newer-tabs.length > 1 {
+                Problems.newer-set-tab(Math.mod(Problems.newer-tab + delta + Problems.newer-tabs.length,
+                    Problems.newer-tabs.length));
+            }
+        }
+
+        DialogFrame {
+            area-width: root.width;
+            area-height: root.height;
+            default-width: 600px;
+            default-height: 520px;
+            least-width: 460px;
+            least-height: 380px;
+            stored-width <=> DialogState.newer-width;
+            stored-height <=> DialogState.newer-height;
+
+            VerticalLayout {
+                padding: 14px;
+                spacing: 10px;
+
+                Header {
+                    icon: IconId.status-warning;
+                    tint: Theme.accent;
+                    title: "Settings from a newer RustCut";
+                    text: Problems.newer-text;
+                }
+
+                if Problems.newer-tabs.length > 1: DialogTabs {
+                    titles: Problems.newer-tabs;
+                    current: Problems.newer-tab;
+                    picked(index) => {
+                        Problems.newer-set-tab(index);
+                        keys.focus();
+                    }
+                }
+
+                SmoothScrollArea {
+                    vertical-stretch: 1;
+                    content-width: self.width;
+                    content-height: body.preferred-height;
+                    scrollbar-size: 7px;
+
+                    body := VerticalLayout {
+                        alignment: start;
+                        spacing: 4px;
+                        padding-right: 12px;
+
+                        if Problems.newer-unknown-title != "": Rectangle {
+                            height: 26px;
+                            border-radius: 4px;
+                            background: unknown-touch.has-hover ? Theme.surface-hover : Theme.surface;
+
+                            unknown-touch := TouchArea {
+                                mouse-cursor: MouseCursor.pointer;
+                                clicked => {
+                                    Problems.newer-unknown-open = !Problems.newer-unknown-open;
+                                    keys.focus();
+                                }
+                            }
+
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                spacing: 6px;
+
+                                AppIcon {
+                                    y: (parent.height - self.height) / 2;
+                                    icon: Problems.newer-unknown-open ? IconId.chevron-down : IconId.chevron-right;
+                                    size: IconSize.sm;
+                                    color: Theme.primary;
+                                }
+
+                                Text {
+                                    text: Problems.newer-unknown-title;
+                                    color: Theme.primary;
+                                    font-size: 12px;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        if Problems.newer-unknown-open: VerticalLayout {
+                            padding-left: 28px;
+                            padding-bottom: 4px;
+                            spacing: 1px;
+
+                            for key in Problems.newer-unknown: Text {
+                                text: key;
+                                color: Theme.text-muted;
+                                font-family: "monospace";
+                                font-size: 11px;
+                            }
+                        }
+
+                        for option in Problems.newer-options: OptionRow {
+                            option: option;
+                            selected: option.key == Problems.newer-selected;
+                            picked => {
+                                Problems.newer-select(option.key);
+                                keys.focus();
+                            }
+                            confirmed => { Problems.newer-confirm(); }
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+
+                    IconButton {
+                        icon: IconId.reveal-file;
+                        tooltip: "Open the folder with the settings files";
+                        clicked => { Problems.newer-open-folder(); }
+                    }
+
+                    Rectangle {
+                        horizontal-stretch: 1;
+                    }
+
+                    DialogButton {
+                        text: Problems.newer-confirm-text;
+                        primary: true;
+                        clicked => { Problems.newer-confirm(); }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component QueueDatabaseDialog inherits Rectangle {
+    background: #000000a0;
+
+    TouchArea { }
+
+    keys := DialogKeys {
+        select(index) => { Problems.db-select(index); }
+        step(delta) => { Problems.db-step(delta); }
+        confirm => {
+            if !Problems.db-busy {
+                Problems.db-confirm();
+            }
+        }
+        escape => {
+            if !Problems.db-busy {
+                Problems.db-escape();
+            }
+        }
+
+        DialogFrame {
+            area-width: root.width;
+            area-height: root.height;
+            default-width: 600px;
+            default-height: 500px;
+            least-width: 460px;
+            least-height: 380px;
+            stored-width <=> DialogState.database-width;
+            stored-height <=> DialogState.database-height;
+
+            VerticalLayout {
+                padding: 14px;
+                spacing: 10px;
+
+                Header {
+                    icon: IconId.status-error;
+                    tint: Theme.status-corrupt;
+                    title: Problems.db-title;
+                    text: Problems.db-text;
+                }
+
+                if Problems.db-failed != "": Text {
+                    text: Problems.db-failed;
+                    color: Theme.status-corrupt;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+
+                SmoothScrollArea {
+                    vertical-stretch: 1;
+                    content-width: self.width;
+                    content-height: body.preferred-height;
+                    scrollbar-size: 7px;
+
+                    body := VerticalLayout {
+                        alignment: start;
+                        spacing: 4px;
+                        padding-right: 12px;
+
+                        for option in Problems.db-options: OptionRow {
+                            option: option;
+                            selected: option.key == Problems.db-selected;
+                            picked => {
+                                Problems.db-select(option.key);
+                                keys.focus();
+                            }
+                            confirmed => {
+                                if !Problems.db-busy {
+                                    Problems.db-confirm();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+
+                    IconButton {
+                        icon: IconId.reveal-file;
+                        tooltip: "Open the folder with the queue database";
+                        clicked => { Problems.db-open-folder(); }
+                    }
+
+                    IconButton {
+                        icon: IconId.copy;
+                        tooltip: "Copy the details (for a bug report)";
+                        clicked => { Problems.db-copy(); }
+                    }
+
+                    Rectangle {
+                        horizontal-stretch: 1;
+                    }
+
+                    DialogButton {
+                        text: Problems.db-busy ? "Working..." : Problems.db-confirm-text;
+                        primary: true;
+                        enabled: !Problems.db-busy;
+                        clicked => { Problems.db-confirm(); }
+                    }
+                }
+            }
+        }
+    }
+}

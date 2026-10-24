@@ -47,11 +47,12 @@ use crate::ui::keymap::{Action, Keymap};
 use crate::ui::logs::LogsBridge;
 use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::menu::ContextMenuBridge;
-use crate::ui::notices::{self, Kind, Notice};
+use crate::ui::notices;
 use crate::ui::open::{FileOpener, OpenerParts};
 use crate::ui::player::{PlayerBridge, PlayerBridgeError};
 use crate::ui::power::PowerBridge;
 use crate::ui::probe::{self, ProbeBridge};
+use crate::ui::problems::{ProblemParts, ProblemsBridge};
 use crate::ui::queue::{MenuKeys, QueueBridge};
 use crate::ui::render_settings::RenderSettingsBridge;
 use crate::ui::settings::SettingsBridge;
@@ -333,6 +334,15 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &loaded.ui_state.export,
         writer.clone(),
     );
+    {
+        // The known-source banner's "Show N files" (M6.5d).
+        let export = Rc::downgrade(&export);
+        crate::ui::media_info::known_source::install_dialog(move |list| {
+            if let Some(export) = export.upgrade() {
+                export.show_known(list);
+            }
+        });
+    }
     editor.set_export(&export);
     // The card checks the job again when the render settings or the source's description change (Q-N6).
     {
@@ -479,9 +489,22 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     );
     shutdown::watch_signals(runtime.handle(), ui, main.as_weak());
 
-    if let Some(problem) = store_problem {
-        notices::post(Notice::new(Kind::DatabaseUnusable, "The queue cannot be saved").detail(problem));
-    }
+    // A newer settings file or an unusable queue database: their dialogs come first (M6.5d).
+    let _problems = ProblemsBridge::install(
+        &main,
+        ProblemParts {
+            runtime: runtime.handle().clone(),
+            paths: &loaded.paths,
+            writer,
+            ui_read_only: Rc::clone(&loaded.ui_read_only),
+            store: store.clone(),
+            queue: queue_service.handle.clone(),
+            queue_bridge: &queue,
+            power: &power,
+        },
+        loaded.newer.clone(),
+        store_problem,
+    );
     if let Some(first) = cli.files.first() {
         opener.open(first.clone());
     }

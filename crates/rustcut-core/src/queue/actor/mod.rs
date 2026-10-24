@@ -154,31 +154,11 @@ impl Actor {
             stopping: false,
             sync,
         };
-        let recovered = actor
-            .store_request(|reply| StoreCommand::RecoverInterrupted {
-                note: RECOVERED_NOTE.into(),
-                reply,
-            })
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!(error = %e, "[Queue] Interrupted jobs could not be recovered");
-                Vec::new()
-            });
-        let jobs = actor
-            .store_request(|reply| StoreCommand::Jobs { reply })
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!(error = %e, "[Queue] The jobs could not be read; the queue starts empty");
-                Vec::new()
-            });
+        let (jobs, recovered) = actor.read_jobs().await;
         let waiting = jobs.iter().any(|j| j.state == JobState::Waiting);
         let paused = options.paused || (options.pause_on_start && waiting);
         actor.model = Model::new(jobs, options.workers, paused, options.when_done);
-        for id in &recovered {
-            if let Some(record) = actor.model.get(*id) {
-                StaleFiles::of(record, &actor.env.dirs).remove().await;
-            }
-        }
+        actor.clean_recovered(&recovered).await;
         tracing::info!(
             jobs = actor.model.jobs().len(),
             recovered = recovered.len(),
@@ -189,6 +169,61 @@ impl Actor {
         actor.sync_resume();
         actor.kick().await;
         actor
+    }
+
+    /// The jobs of the store after the crash recovery, and the recovered ones.
+    async fn read_jobs(&self) -> (Vec<crate::store::JobRecord>, Vec<JobId>) {
+        let recovered = self
+            .store_request(|reply| StoreCommand::RecoverInterrupted {
+                note: RECOVERED_NOTE.into(),
+                reply,
+            })
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!(error = %e, "[Queue] Interrupted jobs could not be recovered");
+                Vec::new()
+            });
+        let jobs = self
+            .store_request(|reply| StoreCommand::Jobs { reply })
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!(error = %e, "[Queue] The jobs could not be read; the queue starts empty");
+                Vec::new()
+            });
+        (jobs, recovered)
+    }
+
+    async fn clean_recovered(&self, recovered: &[JobId]) {
+        for id in recovered {
+            if let Some(record) = self.model.get(*id) {
+                StaleFiles::of(record, &self.env.dirs).remove().await;
+            }
+        }
+    }
+
+    /// `QueueCommand::Reload`: the store was replaced; its jobs take the place of the ones shown (nothing renders).
+    pub(super) async fn reload(&mut self) -> Result<usize, QueueError> {
+        if !self.workers.is_empty() {
+            return Err(QueueError::Store("a job is rendering".into()));
+        }
+        let (jobs, recovered) = self.read_jobs().await;
+        let state = self.model.processing();
+        let old: Vec<JobId> = self.model.jobs().iter().map(|j| j.id).collect();
+        self.model = Model::new(jobs, state.workers, state.paused, state.when_done);
+        self.clean_recovered(&recovered).await;
+        if !old.is_empty() {
+            self.events.publish(QueueEvent::Removed(old));
+        }
+        for record in self.model.jobs() {
+            self.events.publish(QueueEvent::Added(Box::new(summarize(record))));
+        }
+        self.events
+            .publish(QueueEvent::Reordered(self.model.jobs().iter().map(|j| j.id).collect()));
+        self.publish_processing();
+        tracing::info!(jobs = self.model.jobs().len(), "[Queue] Reloaded from the store");
+        self.sync_resume();
+        self.kick().await;
+        Ok(self.model.jobs().len())
     }
 
     /// A store request whose failure becomes [`QueueError::Store`].

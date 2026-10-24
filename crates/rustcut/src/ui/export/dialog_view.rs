@@ -18,6 +18,11 @@ pub(super) fn tab_titles(dialog: &ConflictDialog) -> Vec<String> {
         .map(|tab| match tab {
             Tab::Similar => format!("{} ({})", tab.title(), dialog.series.len() + dialog.others.len()),
             Tab::Queue => format!("{} ({})", tab.title(), dialog.conflicts.queued.len()),
+            Tab::Known => format!(
+                "{} ({})",
+                tab.title(),
+                dialog.known.as_ref().map_or(0, |k| k.files.len())
+            ),
             Tab::Decision if dialog.browse => "Target".to_owned(),
             Tab::Decision => tab.title().to_owned(),
         })
@@ -30,6 +35,7 @@ const fn tab_kind(tab: Tab) -> i32 {
         Tab::Decision => 0,
         Tab::Similar => 2,
         Tab::Queue => 3,
+        Tab::Known => 4,
     }
 }
 
@@ -54,7 +60,14 @@ impl ExportBridge {
             (false, false) => "Queued jobs write the same file",
             (false, true) => "Files in the target folder",
         };
-        e.set_dialog_title(title.into());
+        e.set_dialog_known_mode(dialog.known.is_some());
+        match &dialog.known {
+            Some(known) => {
+                e.set_dialog_title(known.title.as_str().into());
+                e.set_dialog_text(known.text.as_str().into());
+            }
+            None => e.set_dialog_title(title.into()),
+        }
         e.set_dialog_file(dialog.file.as_str().into());
         let folder = dialog.folder.display().to_string();
         let separator = if folder.ends_with(std::path::MAIN_SEPARATOR) {

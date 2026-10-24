@@ -9,6 +9,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Dialogs for a start that cannot go on as usual (0.0.28). **Settings from a newer RustCut**: when `config.toml` or
+  `ui-state.toml` was written by a newer RustCut, a dialog (one tab per file) says so, lists the settings this version
+  does not know and offers: continue without saving (the default; the Settings window says so at its top), back up the
+  file and save it with this version, back up the file and start with defaults, or quit; both tabs' choices apply when
+  you confirm, and "Open folder" shows the files. **The queue cannot be opened**: when the queue database is damaged,
+  from a newer RustCut or out of reach, a dialog offers to rescue the readable jobs into a new queue, back the file up
+  and start empty, continue with a temporary queue, try again or quit (the fitting way is preselected), plus "Open
+  folder" and "Copy details". The old file is always kept in the backup folder. While the queue is temporary, a red
+  line at the top of the queue panel says so (a click shows the ways again), and quitting with unfinished jobs asks
+  first ("Quit and lose them" has to be held).
+- "This video was cut before" has a button "Show N files" (0.0.28): a dialog lists every file RustView knows was made
+  from the open video, with its picture, folder, length, size, date, rating and tags, "file missing" when it is gone
+  and the queued job that writes it, each with play and "show in the file manager". A second tab shows the files in
+  the target folder whose names look like the video's (the same list as the conflict dialog's). A playing video pauses
+  while the dialog is open and plays on when it closes. A source RustView knows without files gets the banner alone;
+  a job loaded into the editor never shows it.
+
 - Bubbles at the field a message is about (0.0.27): a small closable note like a tooltip, with a colored stripe for
   its level, that points at its field and stays until the problem is solved; × hides it until its words change. They
   show for the job's target name in Job Finalization ("The file exists", "Job #3 writes this file too", similar names

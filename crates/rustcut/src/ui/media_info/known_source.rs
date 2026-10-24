@@ -2,9 +2,13 @@
 //! hash on open, bug 3). The bridge clears the banner when a file opens; once the open file's MD5 is known and the
 //! known-source notice is not routed to "nothing" (`[notices.kinds.known_source]`), [`lookup`] asks RustView
 //! (`check-hash` through the sync actor, on the runtime) and the bridge shows the [`view`] of the answer with [`show`]
-//! if that file is still open.
+//! if that file is still open. When RustView knows files made from it, the banner's "Show N files" opens the dialog
+//! with them (M6.5d, user decision Q-N10; [`install_dialog`]); a source RustView knows without files gets the banner
+//! alone. A file RustCut opens itself (a job loaded into the editor) shows no banner.
 
-use std::path::Path;
+use std::cell::RefCell;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use rustcut_core::naming::same_path;
 use rustcut_core::rustview::{HashCheck, SyncCommand, SyncHandle};
@@ -12,14 +16,26 @@ use rustcut_core::settings::{NoticePlace, Settings};
 
 use crate::ui::notices::{self, Kind, Level, Notice};
 
-/// Library files listed in the banner; the detail line gives the full count.
-const LISTED_FILES: usize = 3;
+use crate::ui::export::KnownList;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnownSourceView {
     pub title: String,
     pub detail: String,
-    pub files: Vec<String>,
+    /// Every library file made from it (the dialog lists them).
+    pub files: Vec<PathBuf>,
+}
+
+/// Opens the known-source dialog (the export bridge owns it).
+type OpenDialog = Rc<dyn Fn(KnownList)>;
+
+thread_local! {
+    static DIALOG: RefCell<Option<OpenDialog>> = const { RefCell::new(None) };
+}
+
+/// The function the banner's "Show N files" runs (UI thread).
+pub fn install_dialog(open: impl Fn(KnownList) + 'static) {
+    DIALOG.with(|d| *d.borrow_mut() = Some(Rc::new(open)));
 }
 
 /// The banner for RustView's answer about `source`; `None` when no job was made from it (or the call did not succeed).
@@ -43,17 +59,13 @@ pub fn view(check: &HashCheck, source: &Path) -> Option<KnownSourceView> {
     }
     detail.push(match count {
         0 => "No file in the library was made from it.".to_owned(),
-        1 => "1 file in the library was made from it:".to_owned(),
-        n => format!("{n} files in the library were made from it:"),
+        1 => "1 file in the library was made from it.".to_owned(),
+        n => format!("{n} files in the library were made from it."),
     });
-    let mut files: Vec<String> = others.iter().take(LISTED_FILES).map(|f| (*f).clone()).collect();
-    if count > LISTED_FILES {
-        files.push(format!("and {} more", count - LISTED_FILES));
-    }
     Some(KnownSourceView {
         title: "This video was cut before".into(),
         detail: detail.join(" "),
-        files,
+        files: others.iter().map(|f| PathBuf::from(f.as_str())).collect(),
     })
 }
 
@@ -66,12 +78,24 @@ pub fn wanted(settings: &Settings) -> bool {
 pub fn show(view: Option<&KnownSourceView>) {
     match view {
         Some(view) => {
-            let mut detail = view.detail.clone();
-            for file in &view.files {
-                detail.push('\n');
-                detail.push_str(file);
+            let mut notice = Notice::new(Kind::KnownSource, view.title.as_str()).detail(view.detail.as_str());
+            if !view.files.is_empty() {
+                let list = KnownList {
+                    title: view.title.clone(),
+                    text: view.detail.clone(),
+                    files: view.files.clone(),
+                };
+                let label = match view.files.len() {
+                    1 => "Show the file".to_owned(),
+                    n => format!("Show {n} files"),
+                };
+                notice = notice.action(label, move || {
+                    if let Some(open) = DIALOG.with(|d| d.borrow().clone()) {
+                        open(list.clone());
+                    }
+                });
             }
-            notices::post(Notice::new(Kind::KnownSource, view.title.as_str()).detail(detail));
+            notices::post(notice);
         }
         None => notices::clear_kind(Kind::KnownSource),
     }
@@ -147,15 +171,14 @@ mod tests {
         assert_eq!(one.title, "This video was cut before");
         assert_eq!(
             one.detail,
-            "First cut on 2026-10-01 12:30:00 UTC. 1 file in the library was made from it:"
+            "First cut on 2026-10-01 12:30:00 UTC. 1 file in the library was made from it."
         );
-        assert_eq!(one.files, ["/lib/clip - 01.mkv"]);
+        assert_eq!(one.files, [PathBuf::from("/lib/clip - 01.mkv")]);
         let mut five = check(true, 5);
         five.associated_files.push(SOURCE.into());
         let many = view(&five, source).unwrap();
-        assert!(many.detail.ends_with("5 files in the library were made from it:"));
-        assert_eq!(many.files.len(), 4);
-        assert_eq!(many.files.last().map(String::as_str), Some("and 2 more"));
+        assert!(many.detail.ends_with("5 files in the library were made from it."));
+        assert_eq!(many.files.len(), 5, "every file, the source's own record left out");
         let none = view(
             &HashCheck {
                 date_time: None,

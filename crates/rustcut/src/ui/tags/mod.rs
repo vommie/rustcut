@@ -78,6 +78,16 @@ pub struct TagsBridge {
 }
 
 impl TagsBridge {
+    /// The names of the tags `ids` as the tree has them ("Travel, Iceland").
+    pub fn names_of(&self, ids: &[u32]) -> String {
+        view::tag_names(&self.state.borrow(), ids)
+    }
+
+    /// The RustView link (lookups of other panels: the known-source dialog's ratings and tags).
+    pub fn sync_handle(&self) -> rustcut_core::rustview::SyncHandle {
+        self.sync.handle.clone()
+    }
+
     /// Takes over the Tag & Rate panel. The app owns the only strong reference.
     pub fn install(
         window: &MainWindow,

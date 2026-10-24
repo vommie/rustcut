@@ -371,6 +371,7 @@ impl ExportBridge {
     }
 
     fn close_dialog(&self) {
+        self.resume_video();
         self.publish_dialog();
         if let Some(window) = self.window.upgrade() {
             window.invoke_focus_keys();
@@ -421,6 +422,16 @@ pub(super) fn connect_dialog(bridge: &Rc<ExportBridge>, window: &MainWindow) {
     e.on_dialog_cancel(move || {
         if let Some(b) = weak.upgrade() {
             b.cancel();
+        }
+    });
+    let weak = Rc::downgrade(bridge);
+    e.on_dialog_open_other(move || {
+        if let Some(b) = weak.upgrade() {
+            b.pending.borrow_mut().take();
+            b.close_dialog();
+            if let Some(window) = b.window.upgrade() {
+                window.invoke_open_file();
+            }
         }
     });
     let weak = Rc::downgrade(bridge);

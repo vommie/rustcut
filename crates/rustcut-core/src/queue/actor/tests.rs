@@ -297,3 +297,45 @@ async fn a_failing_job_never_stalls_the_queue() {
         .await
         .unwrap();
 }
+
+#[tokio::test]
+async fn a_replaced_store_is_read_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let (store, _thread) = spawn_store(Store::open_in_memory().unwrap()).unwrap();
+    let (queue, _task) = spawn_queue(
+        &tokio::runtime::Handle::current(),
+        store.clone(),
+        env(dir.path()),
+        options(true),
+    );
+    assert!(snapshot(&queue).await.jobs.is_empty());
+    // The database dialog rescued two jobs into another database.
+    let mut rescued = Store::open_in_memory().unwrap();
+    for stem in ["a", "b"] {
+        rescued
+            .insert_job(&spec_in(dir.path(), stem), &JobState::Waiting)
+            .unwrap();
+    }
+    store
+        .request(|reply| StoreCommand::Replace {
+            store: Box::new(rescued),
+            reply,
+        })
+        .await
+        .unwrap();
+    let mut events = queue.events.subscribe();
+    let loaded = queue
+        .handle
+        .request(|reply| QueueCommand::Reload { reply })
+        .await
+        .unwrap();
+    assert_eq!(loaded, Ok(2));
+    assert_eq!(snapshot(&queue).await.jobs.len(), 2);
+    let mut added = 0;
+    while let Ok(event) = events.try_recv() {
+        if matches!(event, QueueEvent::Added(_)) {
+            added += 1;
+        }
+    }
+    assert_eq!(added, 2, "the panel learns about the jobs");
+}

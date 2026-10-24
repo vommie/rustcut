@@ -17,6 +17,7 @@ pub mod open;
 pub mod player;
 pub mod power;
 pub mod probe;
+pub mod problems;
 pub mod queue;
 pub mod render_settings;
 pub mod sections;

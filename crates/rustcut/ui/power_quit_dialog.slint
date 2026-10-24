@@ -103,7 +103,8 @@ export component QuitDialog inherits Rectangle {
                         spacing: 4px;
 
                         Text {
-                            text: Power.ask-done ? "Nothing to wait for anymore" : "Quit while rendering?";
+                            text: Power.ask-loss ? "Jobs would be lost"
+                                : Power.ask-done ? "Nothing to wait for anymore" : "Quit while rendering?";
                             color: Theme.text;
                             font-size: 15px;
                             font-weight: 700;
@@ -123,28 +124,39 @@ export component QuitDialog inherits Rectangle {
                     spacing: 8px;
                     alignment: end;
 
-                    if !Power.ask-done: HoldButton {
+                    if Power.ask-loss: HoldButton {
+                        text: "Quit and lose them";
+                        confirmed => { Power.quit-now(); }
+                    }
+
+                    if Power.ask-loss: DialogButton {
+                        text: "Stay";
+                        primary: true;
+                        clicked => { Power.keep(); }
+                    }
+
+                    if !Power.ask-done && !Power.ask-loss: HoldButton {
                         text: "Quit now";
                         confirmed => { Power.quit-now(); }
                     }
 
-                    if !Power.ask-done: DialogButton {
+                    if !Power.ask-done && !Power.ask-loss: DialogButton {
                         text: "Quit when done";
                         clicked => { Power.quit-when-done(); }
                     }
 
-                    if !Power.ask-done: DialogButton {
+                    if !Power.ask-done && !Power.ask-loss: DialogButton {
                         text: "Keep rendering";
                         primary: true;
                         clicked => { Power.keep(); }
                     }
 
-                    if Power.ask-done: DialogButton {
+                    if Power.ask-done && !Power.ask-loss: DialogButton {
                         text: "Stay";
                         clicked => { Power.keep(); }
                     }
 
-                    if Power.ask-done: DialogButton {
+                    if Power.ask-done && !Power.ask-loss: DialogButton {
                         text: "Quit now";
                         primary: true;
                         clicked => { Power.quit-now(); }

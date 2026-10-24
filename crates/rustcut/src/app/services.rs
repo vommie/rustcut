@@ -9,7 +9,7 @@ use rustcut_core::queue::{QueueCommand, QueueOptions, QueueService, SyncLink, sp
 use rustcut_core::render::{HardwareContext, RenderEnv};
 use rustcut_core::rustview::{SyncCommand, SyncService};
 use rustcut_core::settings::{AppPaths, Settings};
-use rustcut_core::store::{Store, StoreCommand, StoreHandle, spawn_store};
+use rustcut_core::store::{Problem, Store, StoreCommand, StoreHandle, spawn_store};
 
 use super::{AppError, Cli, persistence};
 use crate::MainWindow;
@@ -17,6 +17,7 @@ use crate::desktop::instance::{self, Request};
 use crate::ui::dispatcher::UiDispatcher;
 use crate::ui::open;
 use crate::ui::player::PlayerBridge;
+use crate::ui::problems::StoreProblem;
 
 /// The tokio runtime of the services (ADR-4). Built before the window: it takes about a millisecond (logged), and mpv's
 /// first events need the dispatcher, whose coalescing runs on it.
@@ -86,12 +87,15 @@ pub(super) fn listen(
 
 /// Opens the queue database and starts its thread. A database that cannot be used (newer, damaged, no access) is left
 /// alone: the queue runs on a database in memory for this run, and the returned text says so in the status line.
-pub(super) fn open_store(paths: &AppPaths) -> (StoreHandle, Option<std::thread::JoinHandle<()>>, Option<String>) {
+pub(super) fn open_store(paths: &AppPaths) -> (StoreHandle, Option<std::thread::JoinHandle<()>>, Option<StoreProblem>) {
     let (store, problem) = match Store::open(&paths.database(), &paths.data_backups()) {
         Ok(store) => (store, None),
         Err(e) => {
-            tracing::error!(error = %e, "[Store] The queue database cannot be used; jobs are kept in memory for this run");
-            let problem = format!("The queue database cannot be used ({e}); jobs are kept only until RustCut quits.");
+            tracing::error!(error = %e, "[Store] The queue database cannot be used; jobs are kept in memory until a way out is chosen");
+            let problem = StoreProblem {
+                problem: Problem::of(&e),
+                error: e.to_string(),
+            };
             match Store::open_in_memory() {
                 Ok(store) => (store, Some(problem)),
                 Err(e) => {
@@ -108,7 +112,10 @@ pub(super) fn open_store(paths: &AppPaths) -> (StoreHandle, Option<std::thread::
             (
                 StoreHandle::closed(),
                 None,
-                Some(format!("The queue database thread could not be started: {e}")),
+                Some(StoreProblem {
+                    problem: Problem::NoAccess,
+                    error: format!("the database thread could not be started: {e}"),
+                }),
             )
         }
     }

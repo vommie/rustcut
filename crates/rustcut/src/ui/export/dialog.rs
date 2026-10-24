@@ -44,6 +44,8 @@ pub enum Tab {
     Decision,
     Similar,
     Queue,
+    /// The files RustView knows were made from the open video (the known-source dialog, M6.5d).
+    Known,
 }
 
 impl Tab {
@@ -52,8 +54,29 @@ impl Tab {
             Self::Decision => "Decision",
             Self::Similar => "Similar files",
             Self::Queue => "Queue",
+            Self::Known => "Made from it",
         }
     }
+}
+
+/// What the known-source dialog shows about the open video.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KnownFiles {
+    pub title: String,
+    pub text: String,
+    pub files: Vec<KnownFile>,
+}
+
+/// A file RustView knows was made from the open video, with what RustView and the queue say about it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct KnownFile {
+    pub path: PathBuf,
+    pub rating: Option<u8>,
+    /// Tag names joined ("Travel, Iceland").
+    pub tags: String,
+    /// "Job #3" while a queued job writes it.
+    pub job: String,
+    pub missing: bool,
 }
 
 /// What saving does after the dialog.
@@ -95,6 +118,8 @@ pub struct ConflictDialog {
     pub others: Vec<String>,
     /// Only shows the files (the name check's bubble): no choices, one button that closes.
     pub browse: bool,
+    /// The known-source dialog (M6.5d): RustView's files of the open video, the header's title and text.
+    pub known: Option<KnownFiles>,
     /// The free name listed first: the next number, or "(n)" (no counter, or chosen in the settings).
     primary_free: Choice,
     container: Container,
@@ -145,6 +170,7 @@ impl ConflictDialog {
             series,
             others,
             browse: false,
+            known: None,
             primary_free: Choice::NextNumber,
             container,
             scan: input.scan,
@@ -162,6 +188,15 @@ impl ConflictDialog {
         self.browse = true;
         self.options.clear();
         self.selected = 0;
+        self
+    }
+
+    /// The known-source dialog: the files made from the open video first, the similar names beside them.
+    #[must_use]
+    pub fn knowing(mut self, known: KnownFiles) -> Self {
+        self = self.browsing();
+        self.known = Some(known);
+        self.tab = Tab::Known;
         self
     }
 
@@ -336,6 +371,13 @@ impl ConflictDialog {
 
     /// The tabs with content, in order.
     pub fn tabs(&self) -> Vec<Tab> {
+        if self.known.is_some() {
+            let mut tabs = vec![Tab::Known];
+            if !self.series.is_empty() || !self.others.is_empty() {
+                tabs.push(Tab::Similar);
+            }
+            return tabs;
+        }
         let mut tabs = vec![Tab::Decision];
         if !self.series.is_empty() || !self.others.is_empty() {
             tabs.push(Tab::Similar);

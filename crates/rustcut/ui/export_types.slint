@@ -19,7 +19,8 @@ export struct ConflictOptionView {
 // A file of the conflict dialog with its preview (src/ui/export/previews.rs). `state`: 0 loading, 1 picture,
 // 2 no picture (`note` says why), 3 not readable.
 export struct PreviewView {
-    // 1 = the series, 2 = the other names (0 = the existing file); `index` within the group.
+    // 1 = the series, 2 = the other names, 3 = the known source's files (0 = the existing file); `index` within the
+    // group.
     group: int,
     index: int,
     name: string,
@@ -35,6 +36,13 @@ export struct PreviewView {
     date: string,
     note: string,
     tip-rows: [TipRow],
+    // A file RustView knows was made from the source (the known-source dialog, M6.5d): its folder, rating (-1 = none),
+    // tag names, whether the file is gone, and the queued job that writes it ("Job #3", "" = none).
+    folder: string,
+    rating: int,
+    tags: string,
+    missing: bool,
+    job: string,
 }
 
 // A queued job that writes the same file.
@@ -117,6 +125,12 @@ export global Export {
     in property <bool> dialog-can-confirm;
     // Only looking at the target folder's files (the name check's bubble): no choices, the button closes.
     in property <bool> dialog-browse;
+    // The known-source dialog (M6.5d): the files RustView knows were made from the open video, the header's text and
+    // "Open another video".
+    in property <bool> dialog-known-mode;
+    in property <string> dialog-text;
+    in property <[PreviewView]> dialog-known;
+    callback dialog-open-other();
     in property <string> dialog-confirm-text;
 
     // The question before a job without tags or rating is saved (modal; user decision Q-G1).

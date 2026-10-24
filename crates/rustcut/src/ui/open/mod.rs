@@ -178,7 +178,7 @@ impl FileOpener {
         }
         tracing::info!(path = %path.display(), "[Open] Opened");
         if let Some(media) = self.media.upgrade() {
-            media.file_opened(path);
+            media.file_opened(path, by_rustcut);
         }
         if let Some(editor) = self.editor.upgrade() {
             editor.file_opened();

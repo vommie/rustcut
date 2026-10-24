@@ -6,6 +6,8 @@ export global Power {
     in property <bool> asking;
     in property <bool> ask-done;
     in property <string> ask-text;
+    // The question is about jobs a temporary queue would lose (M6.5d): "Quit and lose them" (held) or "Stay".
+    in property <bool> ask-loss;
     callback keep();
     callback quit-when-done();
     callback quit-now();

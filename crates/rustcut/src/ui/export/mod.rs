@@ -14,6 +14,7 @@ mod dialog_tests;
 mod dialog_view;
 mod editing;
 mod job_check;
+mod known;
 mod metadata;
 mod previews;
 mod save;
@@ -30,7 +31,10 @@ use rustcut_core::time::Timestamp;
 use slint::ComponentHandle as _;
 
 pub use check::{At, CardCheck, CardInput, Level as CheckLevel, card_check};
-pub use dialog::{Choice, ConflictDialog, DialogInput, DialogOption, Outcome, Tab, silent_outcome};
+pub use dialog::{
+    Choice, ConflictDialog, DialogInput, DialogOption, KnownFile, KnownFiles, Outcome, Tab, silent_outcome,
+};
+pub use known::KnownList;
 pub use metadata::{MetadataFacts, Missing, missing};
 pub use state::{ExportDraft, ExportState, JobFacts, MAX_COUNTER, SOURCE_FOLDER, codec_label};
 
@@ -99,6 +103,8 @@ pub struct ExportBridge {
     shown_problem: RefCell<Option<JobProblem>>,
     /// The check's bubble as it was posted last (M6.5c).
     shown_check: RefCell<Option<bubbles::CheckBubble>>,
+    /// The known-source dialog paused the video: it plays on when the dialog closes (M6.5d).
+    resume_after_dialog: Cell<bool>,
 }
 
 /// The key of the banner about the job problem.
@@ -154,6 +160,7 @@ impl ExportBridge {
             refresh: Cell::new(false),
             shown_problem: RefCell::new(None),
             shown_check: RefCell::new(None),
+            resume_after_dialog: Cell::new(false),
         });
         connect(&bridge, window);
         save::connect_dialog(&bridge, window);

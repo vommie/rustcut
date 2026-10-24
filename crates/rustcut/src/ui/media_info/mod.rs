@@ -146,11 +146,15 @@ impl MediaInfoBridge {
     }
 
     /// A file was opened (UI thread; the path was checked on the runtime): probe it, and hash it when wanted.
-    pub fn file_opened(&self, path: &Path) {
+    /// `by_rustcut`: RustCut opened it itself (a job loaded into the editor, the way back from the probe): its source
+    /// is known, no banner says so.
+    pub fn file_opened(&self, path: &Path, by_rustcut: bool) {
         let (generation, previous) = {
             let mut state = self.state.lock();
             let previous = state.file.clone();
-            (state.opening(path, self.auto_hash.load(Ordering::Relaxed)), previous)
+            let generation = state.opening(path, self.auto_hash.load(Ordering::Relaxed));
+            state.known_quiet = by_rustcut;
+            (generation, previous)
         };
         if let Some(previous) = previous.filter(|p| p != path) {
             self.send_hash(HashCommand::Cancel { path: previous });
@@ -388,10 +392,13 @@ impl Lookup {
         let view = known_source::lookup(sync, path, md5).await;
         let state = Arc::clone(&self.state);
         self.ui.post(move || {
-            if state.lock().generation != generation {
-                return;
+            let (current, quiet) = {
+                let state = state.lock();
+                (state.generation == generation, state.known_quiet)
+            };
+            if current && !quiet {
+                known_source::show(view.as_ref());
             }
-            known_source::show(view.as_ref());
         });
     }
 }

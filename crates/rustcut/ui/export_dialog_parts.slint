@@ -363,7 +363,7 @@ export component PreviewRow inherits Rectangle {
     in property <PreviewView> preview;
     in property <length> picture-width;
 
-    height: root.picture-width * 9 / 16 + 8px;
+    height: Math.max(root.picture-width * 9 / 16 + 8px, row-layout.preferred-height);
     border-radius: 5px;
     background: row-touch.has-hover ? Theme.surface-hover : transparent;
 
@@ -372,7 +372,7 @@ export component PreviewRow inherits Rectangle {
         double-clicked => { Export.dialog-open-file(root.preview.group, root.preview.index, false); }
     }
 
-    HorizontalLayout {
+    row-layout := HorizontalLayout {
         padding-top: 4px;
         padding-bottom: 4px;
         padding-left: 4px;
@@ -425,23 +425,78 @@ export component PreviewRow inherits Rectangle {
                 }
             }
 
-            Text {
+            if root.preview.folder != "": Text {
+                text: root.preview.missing ? root.preview.folder + " · file missing" : root.preview.folder;
+                color: root.preview.missing ? Theme.status-corrupt : Theme.text-muted;
+                font-size: 11px;
+                overflow: elide;
+            }
+
+            if !root.preview.missing: Text {
                 text: root.preview.facts;
                 color: Theme.text-muted;
                 font-size: 11px;
                 overflow: elide;
             }
 
-            if root.preview.date != "": Text {
+            if root.preview.date != "" && !root.preview.missing: Text {
                 text: "Modified " + root.preview.date;
                 color: Theme.text-muted;
                 font-size: 11px;
+            }
+
+            // Rating, tags and the queued job of a file the known-source dialog lists.
+            if root.preview.rating >= 0 || root.preview.tags != "" || root.preview.job != "": HorizontalLayout {
+                spacing: 4px;
+                height: 16px;
+
+                if root.preview.rating >= 0: Rectangle {
+                    width: 16px;
+                    border-radius: 3px;
+                    background: root.preview.rating == 0 ? #dddddd : root.preview.rating == 1 ? #eeaaaa
+                        : root.preview.rating == 2 ? #ffcc88 : root.preview.rating == 3 ? #88ee88
+                        : root.preview.rating == 4 ? #6688ee : #cc88ee;
+
+                    Text {
+                        text: root.preview.rating;
+                        color: #181825;
+                        font-size: 10px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+
+                if root.preview.job != "": Rectangle {
+                    width: job-label.preferred-width + 10px;
+                    border-radius: 3px;
+                    background: Theme.primary.with-alpha(0.18);
+
+                    job-label := Text {
+                        text: root.preview.job;
+                        color: Theme.primary;
+                        font-size: 10px;
+                        font-weight: 600;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+
+                Text {
+                    horizontal-stretch: 1;
+                    text: root.preview.tags;
+                    color: Theme.text-muted;
+                    font-size: 11px;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
             }
         }
 
         IconButton {
             y: (parent.height - self.height) / 2;
             icon: IconId.play-file;
+            enabled: !root.preview.missing;
             tooltip: "Play in the default player";
             clicked => { Export.dialog-open-file(root.preview.group, root.preview.index, false); }
         }

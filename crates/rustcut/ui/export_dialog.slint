@@ -12,7 +12,7 @@ import { IconButton } from "controls.slint";
 import { SmoothScrollArea } from "smooth_scroll_view.slint";
 import { GlobalTooltip, TooltipArea } from "tooltip.slint";
 import { Export } from "export_types.slint";
-import { DialogButton, DialogTabs, OptionRow, PreviewPicture, SimilarGroup } from "export_dialog_parts.slint";
+import { DialogButton, DialogTabs, OptionRow, PreviewPicture, PreviewRow, SimilarGroup } from "export_dialog_parts.slint";
 import { DialogFrame, DialogState } from "dialog_frame.slint";
 
 export { DialogButton }
@@ -223,10 +223,10 @@ export component ConflictDialog inherits Rectangle {
                     spacing: 12px;
 
                     AppIcon {
-                        icon: Export.dialog-browse && !Export.dialog-has-existing ? IconId.target-folder
+                        icon: Export.dialog-browse && !Export.dialog-has-existing && !Export.dialog-known-mode ? IconId.target-folder
                             : IconId.status-warning;
                         size: IconSize.xl;
-                        color: Export.dialog-browse && !Export.dialog-has-existing ? Theme.text-muted : Theme.accent;
+                        color: Export.dialog-browse && !Export.dialog-has-existing && !Export.dialog-known-mode ? Theme.text-muted : Theme.accent;
                     }
 
                     VerticalLayout {
@@ -241,8 +241,16 @@ export component ConflictDialog inherits Rectangle {
                             wrap: word-wrap;
                         }
 
+                        // The known-source dialog: when the video was cut first and how many files came of it.
+                        if Export.dialog-known-mode: Text {
+                            text: Export.dialog-text;
+                            color: Theme.text-muted;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+
                         // The whole path; a long folder is cut in the middle so the file name always shows.
-                        TooltipArea {
+                        if !Export.dialog-known-mode: TooltipArea {
                             text: Export.dialog-path;
                             height: 18px;
 
@@ -344,6 +352,15 @@ export component ConflictDialog inherits Rectangle {
                         }
 
                         if Export.dialog-tab-kind == 3: QueuedJobs { }
+
+                        if Export.dialog-tab-kind == 4: VerticalLayout {
+                            spacing: 2px;
+
+                            for file in Export.dialog-known: PreviewRow {
+                                preview: file;
+                                picture-width: Export.dialog-tile-width * 1px;
+                            }
+                        }
                     }
                 }
 
@@ -359,6 +376,11 @@ export component ConflictDialog inherits Rectangle {
                         font-size: 11px;
                         vertical-alignment: center;
                         overflow: elide;
+                    }
+
+                    if Export.dialog-known-mode: DialogButton {
+                        text: "Open another video";
+                        clicked => { Export.dialog-open-other(); }
                     }
 
                     if !Export.dialog-browse: DialogButton {

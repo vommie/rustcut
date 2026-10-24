@@ -12,6 +12,7 @@ mod schema_tests;
 mod ui_state;
 #[cfg(test)]
 mod ui_state_tests;
+mod unknown;
 
 pub use dialog_ui::{DialogSize, DialogUiState};
 pub use dialogs::{ConflictDialogSettings, ConflictPreselect, DialogSettings, PictureScope, TileSize};
@@ -31,3 +32,4 @@ pub use ui_state::{
     ExportPanelState, JobPanelState, LogPanelState, LogSource, ProbeState, QueuePanelState, SettingsWindowState,
     TagPanelState, TimelineState, UiState, WindowState,
 };
+pub use unknown::unknown_keys;
