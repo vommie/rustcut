@@ -69,6 +69,10 @@ struct Shared {
 pub struct QueueStatus {
     /// Jobs rendering now (not paused).
     pub rendering: usize,
+    /// Jobs rendering or paused in the middle of a render.
+    pub active: usize,
+    /// Processing is paused (nothing new starts).
+    pub processing_paused: bool,
     /// Jobs waiting, rendering or paused.
     pub open: usize,
     pub overall: Option<Overall>,
@@ -481,6 +485,8 @@ fn status_of(view: &QueueView) -> QueueStatus {
     let kinds = || view.rows.iter().map(|r| r.state.kind());
     QueueStatus {
         rendering: kinds().filter(|k| *k == JobStateKind::Rendering).count(),
+        active: kinds().filter(|k| k.is_active()).count(),
+        processing_paused: view.paused(),
         open: kinds()
             .filter(|k| {
                 matches!(

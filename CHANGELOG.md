@@ -313,6 +313,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The close question while a job renders follows the queue: while it is open no new job starts (the running ones go
+  on). Once no job renders anymore (the running render or the whole queue is done), it says so and RustCut quits by
+  itself after 3 s; "Stay" (Escape) keeps RustCut open and lets the queue go on. With "when done" set to quit,
+  suspend or power off, that action runs instead (and RustCut quits after a suspend).
 - Settings changed in the Settings window apply while RustCut runs where they can: hold time, tooltips, keys, seek
   steps, auto play, wheel step, preview audio filters, the export card's folders, template and warnings, the
   automatic section, filter defaults, the draft rule when a job is edited, render profiles, ffmpeg's priority and

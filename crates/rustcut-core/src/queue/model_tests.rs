@@ -103,6 +103,24 @@ fn unreadable_rows_paused_queues_and_worker_counts() {
 }
 
 #[test]
+fn held_starts_let_running_jobs_finish_and_nothing_new_start() {
+    let jobs = vec![job(1, "a", JobState::Waiting), job(2, "b", JobState::Waiting)];
+    let mut model = Model::new(jobs, 1, false, WhenDone::Nothing);
+    assert_eq!(start_picks(&mut model), ids(&[1]));
+    model.set_hold_starts(true);
+    model.transition(JobId(1), JobState::Finished, None).unwrap();
+    model.count_end(&JobState::Finished);
+    assert!(
+        model.schedule().is_empty(),
+        "the user wants to quit: job 2 does not start"
+    );
+    assert_eq!(model.take_done(), None, "job 2 still waits: the queue is not done");
+    assert!(!model.is_paused(), "holding is not the stored pause");
+    model.set_hold_starts(false);
+    assert_eq!(start_picks(&mut model), ids(&[2]), "staying lets the queue go on");
+}
+
+#[test]
 fn moves_keep_the_relative_order() {
     let order = ids(&[1, 2, 3, 4, 5]);
     assert_eq!(moved(&order, &ids(&[2, 4]), MoveTarget::Up), ids(&[2, 1, 4, 3, 5]));

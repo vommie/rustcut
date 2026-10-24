@@ -46,6 +46,8 @@ pub struct Model {
     workers: u8,
     paused: bool,
     pause_after_current: bool,
+    /// The user wants to quit (the close question is open): no new job starts, the running ones go on. Not stored.
+    hold_starts: bool,
     when_done: WhenDone,
     tally: Tally,
 }
@@ -58,6 +60,7 @@ impl Model {
             workers: workers.clamp(1, MAX_WORKERS),
             paused,
             pause_after_current: false,
+            hold_starts: false,
             when_done,
             tally: Tally::default(),
         }
@@ -113,6 +116,11 @@ impl Model {
     pub fn set_pause_after_current(&mut self, on: bool) {
         self.pause_after_current = on;
         self.settle_pause();
+    }
+
+    /// While on, no new job starts (the running ones go on); off lets the queue go on as before.
+    pub fn set_hold_starts(&mut self, on: bool) {
+        self.hold_starts = on;
     }
 
     pub fn set_workers(&mut self, workers: u8) {
@@ -195,7 +203,7 @@ impl Model {
     /// is the target of a running job or of another job picked in the same round (they would share the temp file).
     /// A job that has to wait for its target does not stall the jobs behind it (PyCutRv bug 9).
     pub fn schedule(&self) -> Vec<JobId> {
-        if self.paused || self.pause_after_current {
+        if self.paused || self.pause_after_current || self.hold_starts {
             return Vec::new();
         }
         let mut busy: Vec<&Path> = self

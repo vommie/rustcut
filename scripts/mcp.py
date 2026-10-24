@@ -8,6 +8,8 @@ when started with SLINT_MCP_PORT, e.g. by `scripts/session.sh --mcp PORT`). Stan
     scripts/mcp.py [--port P] find ID                   handles of the elements with a qualified id (MainWindow::player)
     scripts/mcp.py [--port P] click ID                  left click on the first element with that id
     scripts/mcp.py [--port P] shot FILE                 PNG screenshot of the main window (as Slint renders it)
+    scripts/mcp.py [--port P] key CHORD                 a key or chord (`ctrl+s`, `Escape`, `shift+Right`) delivered
+                                                        inside the app: nothing reaches other windows, nothing stays held
 
 `--window N` (after `--port`) acts on the N-th open window instead of the first (the Settings window once it is open).
 The port defaults to $SLINT_MCP_PORT, then 9315. Exit code 1 on any error.
@@ -66,6 +68,47 @@ def main_window(port):
     return handles[WINDOW]
 
 
+# Slint's key texts (`Key` namespace) for the names a chord may use.
+KEY_TEXT = {
+    "ctrl": "\u0011", "control": "\u0011", "shift": "\u0010", "alt": "\u0012", "meta": "\u0017",
+    "escape": "\u001b", "esc": "\u001b", "return": "\n", "enter": "\n", "tab": "\t", "backspace": "\u0008",
+    "delete": "\u007f", "space": " ", "up": "\uf700", "down": "\uf701", "left": "\uf702", "right": "\uf703",
+    "home": "\uf729", "end": "\uf72b", "pageup": "\uf72c", "pagedown": "\uf72d", "comma": ",", "period": ".",
+    "plus": "+", "minus": "-",
+}
+MODIFIERS = ("ctrl", "control", "shift", "alt", "meta")
+
+
+def key_text(name):
+    lower = name.lower()
+    if lower in KEY_TEXT:
+        return KEY_TEXT[lower]
+    if lower.startswith("f") and lower[1:].isdigit():
+        return chr(0xF704 + int(lower[1:]) - 1)
+    if len(name) == 1:
+        return name.lower()
+    raise ValueError(f"unknown key {name}")
+
+
+def key(port, chord):
+    """Presses the modifiers, types the key, and releases the modifiers again (also when a step fails)."""
+    window = main_window(port)
+    parts = chord.split("+")
+    mods, last = [p for p in parts[:-1] if p.lower() in MODIFIERS], parts[-1]
+    pressed = []
+    try:
+        for mod in mods:
+            call(port, "dispatch_key_event", {"windowHandle": window, "text": key_text(mod), "eventType": "Press"})
+            pressed.append(mod)
+        call(port, "dispatch_key_event", {"windowHandle": window, "text": key_text(last), "eventType": "PressAndRelease"})
+    finally:
+        for mod in reversed(pressed):
+            try:
+                call(port, "dispatch_key_event", {"windowHandle": window, "text": key_text(mod), "eventType": "Release"})
+            except (OSError, RuntimeError):
+                pass  # the window is gone (the key quit the app): nothing is held anywhere
+
+
 def find(port, element_id):
     window = main_window(port)
     found = first(call(port, "find_elements_by_id", {"windowHandle": window, "elementsId": element_id}))
@@ -107,6 +150,8 @@ def main(argv):
         if not handles:
             raise RuntimeError(f"no element {rest[0]}")
         print(json.dumps(call(port, "click_element", {"elementHandle": handles[0]})))
+    elif command == "key":
+        key(port, rest[0])
     elif command == "shot":
         window = main_window(port)
         for block in call(port, "take_screenshot", {"windowHandle": window, "imageMimeType": "image/png"}):

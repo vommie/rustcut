@@ -7,8 +7,9 @@ export global Power {
     in property <string> text;
     callback abort();
 
-    // The close question is open.
+    // The close question is open; `ask-done`: the queue answered it and RustCut quits by itself soon (Q-P3).
     in property <bool> asking;
+    in property <bool> ask-done;
     in property <string> ask-text;
     callback keep();
     callback quit-when-done();

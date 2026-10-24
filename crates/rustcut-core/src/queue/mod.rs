@@ -168,6 +168,9 @@ pub enum QueueCommand {
     },
     SetPaused(bool),
     SetPauseAfterCurrent(bool),
+    /// The user wants to quit (RustCut's close question is open): no new job starts while it is on, the running ones
+    /// go on; off lets the queue go on. Not stored, not part of `ProcessingState`.
+    HoldStarts(bool),
     SetWorkers(u8),
     SetWhenDone(WhenDone),
     Snapshot {
