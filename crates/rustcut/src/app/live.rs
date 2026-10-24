@@ -18,6 +18,7 @@ use crate::ui::export::ExportBridge;
 use crate::ui::filters::FiltersBridge;
 use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::player::PlayerBridge;
+use crate::ui::power::PowerBridge;
 use crate::ui::probe::ProbeBridge;
 use crate::ui::render_settings::RenderSettingsBridge;
 use crate::ui::tags::TagsBridge;
@@ -44,6 +45,7 @@ pub struct Parts {
     pub runtime: tokio::runtime::Handle,
     /// Starts (`true`) or stops listening for a second start.
     pub instance: Box<dyn Fn(bool)>,
+    pub power: Weak<PowerBridge>,
 }
 
 /// The hold time and the tooltips of the main window.
@@ -140,6 +142,18 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
             .is_err()
     {
         tracing::warn!("[Settings] The RustView link has stopped; the change applies at the next start");
+    }
+    let power = |s: &Settings| {
+        (
+            s.desktop.clone(),
+            s.queue.when_done_countdown_secs,
+            s.general.confirm_quit_while_rendering,
+        )
+    };
+    if power(before) != power(after)
+        && let Some(p) = p.power.upgrade()
+    {
+        p.apply_settings(after);
     }
     if before.advanced.log_level != after.advanced.log_level {
         p.log.apply(&after.advanced.log_level);

@@ -1,0 +1,55 @@
+// The banner above the video while RustCut counts down to quit, suspend or power off after the queue is done (user
+// decision Q-P2): what will happen and when, and the way to abort it (also Escape).
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { IconButton } from "controls.slint";
+import { Power } from "power_types.slint";
+
+export component PowerBanner inherits Rectangle {
+    background: Theme.accent.with-alpha(0.16);
+    height: Power.counting ? 34px : 0;
+    clip: true;
+
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.accent.with-alpha(0.45);
+    }
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 8px;
+        spacing: 8px;
+
+        VerticalLayout {
+            alignment: center;
+
+            AppIcon {
+                icon: IconId.when-done;
+                size: IconSize.md;
+                color: Theme.accent;
+            }
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: Power.text;
+            color: Theme.text;
+            font-weight: 600;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        VerticalLayout {
+            alignment: center;
+
+            IconButton {
+                text: "Abort";
+                tooltip: "Stay: nothing happens";
+                shortcut: "Esc";
+                clicked => { Power.abort(); }
+            }
+        }
+    }
+}

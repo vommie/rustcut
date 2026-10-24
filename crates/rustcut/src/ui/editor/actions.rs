@@ -87,6 +87,9 @@ impl Editor {
                 return true;
             }
         }
+        if is_key(press.text, Key::Escape) && self.escape.borrow().as_ref().is_some_and(|hook| hook()) {
+            return true;
+        }
         if self.probe_playing.get() && is_key(press.text, Key::Escape) {
             if let Some(probe) = self.probe.borrow().upgrade() {
                 probe.back();
@@ -126,7 +129,7 @@ impl Editor {
                     export.save();
                 }
             }
-            Action::Quit => window.invoke_quit(),
+            Action::Quit => window.invoke_request_quit(),
             Action::OpenSettings => window.invoke_open_settings(),
             Action::TogglePause => self.with_player(|p| p.toggle_pause()),
             Action::ShuttleReverse => self.with_player(|p| p.shuttle(ShuttleKey::Reverse)),

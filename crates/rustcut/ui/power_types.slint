@@ -1,0 +1,16 @@
+// The countdown after the queue is done and the question when RustCut is closed while it renders (src/ui/power/ fills
+// `Power`; user decisions Q-P1, Q-P2).
+
+export global Power {
+    // The countdown runs: the banner above the video shows `text`, Escape or its button aborts.
+    in property <bool> counting;
+    in property <string> text;
+    callback abort();
+
+    // The close question is open.
+    in property <bool> asking;
+    in property <string> ask-text;
+    callback keep();
+    callback quit-when-done();
+    callback quit-now();
+}

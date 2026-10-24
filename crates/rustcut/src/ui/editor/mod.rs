@@ -72,6 +72,8 @@ pub struct Editor {
     probe: RefCell<Weak<ProbeBridge>>,
     /// The Tag & Rate panel (Escape ends the editing of a job's tags).
     tags: RefCell<Weak<TagsBridge>>,
+    /// Escape goes here first (the power bridge aborts its countdown; `true` = taken).
+    escape: RefCell<Option<Box<dyn Fn() -> bool>>>,
     /// The player shows the probe render: the timeline, the marks and the sections wait (user decision Q-E1).
     probe_playing: Cell<bool>,
     /// The export panel that saves jobs (set after it is installed; it needs the editor first).
@@ -123,6 +125,7 @@ impl Editor {
             }),
             probe: RefCell::new(Weak::new()),
             tags: RefCell::new(Weak::new()),
+            escape: RefCell::new(None),
             probe_playing: Cell::new(false),
             export: RefCell::new(Weak::new()),
             queue: RefCell::new(Weak::new()),
@@ -160,6 +163,11 @@ impl Editor {
             st.drag = None;
         }
         self.publish();
+    }
+
+    /// Escape asks `hook` first (the countdown after the queue is done).
+    pub fn set_escape_hook(&self, hook: impl Fn() -> bool + 'static) {
+        *self.escape.borrow_mut() = Some(Box::new(hook));
     }
 
     /// Connects the Tag & Rate panel: Escape cancels the editing of a job's tags.

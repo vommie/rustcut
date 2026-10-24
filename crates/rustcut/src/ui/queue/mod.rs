@@ -23,7 +23,7 @@ use az::CheckedAs as _;
 use parking_lot::Mutex;
 use rustcut_core::job::{JobId, JobStateKind};
 use rustcut_core::naming::QueuedTarget;
-use rustcut_core::queue::{JobProgress, JobSummary, QueueCommand, QueueHandle, QueueService};
+use rustcut_core::queue::{JobProgress, JobSummary, QueueCommand, QueueEvent, QueueHandle, QueueService};
 use rustcut_core::render::RenderProfile;
 use rustcut_core::settings::QueuePanelState;
 use slint::{ComponentHandle as _, ModelRc, VecModel};
@@ -60,6 +60,18 @@ thread_local! {
 struct Shared {
     view: QueueView,
     ended: bool,
+    /// The queue reported that it is done (finished, failed) since the last refresh.
+    done: Option<(u32, u32)>,
+}
+
+/// How busy the queue is (the desktop integration: sleep lock, taskbar, close warning).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct QueueStatus {
+    /// Jobs rendering now (not paused).
+    pub rendering: usize,
+    /// Jobs waiting, rendering or paused.
+    pub open: usize,
+    pub overall: Option<Overall>,
 }
 
 /// What the panel arranged (UI thread).
@@ -94,6 +106,10 @@ pub struct QueueHooks {
     pub reveal: Option<Box<dyn Fn(PanelId)>>,
     /// After every refresh (the Job and Logs panels follow the current job).
     pub refreshed: Option<Box<dyn Fn()>>,
+    /// After every refresh, how busy the queue is.
+    pub status: Option<Box<dyn Fn(QueueStatus)>>,
+    /// The last waiting job ended (finished, failed): the "when done" action follows.
+    pub done: Option<Box<dyn Fn(u32, u32)>>,
     pub profiles: Option<ProfilesHook>,
     pub profile: Option<ProfileHook>,
 }
@@ -356,6 +372,23 @@ impl QueueBridge {
         if let Some(hook) = self.hooks.borrow().refreshed.as_ref() {
             hook();
         }
+        let (done, status) = {
+            let mut shared = self.shared.lock();
+            (shared.done.take(), status_of(&shared.view))
+        };
+        if let Some(hook) = self.hooks.borrow().status.as_ref() {
+            hook(status);
+        }
+        if let Some((finished, failed)) = done
+            && let Some(hook) = self.hooks.borrow().done.as_ref()
+        {
+            hook(finished, failed);
+        }
+    }
+
+    /// How busy the queue is now.
+    pub fn status(&self) -> QueueStatus {
+        status_of(&self.shared.lock().view)
     }
 
     fn send(&self, command: QueueCommand) {
@@ -412,6 +445,9 @@ async fn follow(service: QueueService, shared: Arc<Mutex<Shared>>, ui: UiDispatc
             match events.recv().await {
                 Ok(event) => {
                     let mut s = shared.lock();
+                    if let QueueEvent::Done { finished, failed } = &event {
+                        s.done = Some((*finished, *failed));
+                    }
                     if s.view.apply(event, now()) {
                         s.ended = true;
                     }
@@ -438,5 +474,21 @@ async fn follow(service: QueueService, shared: Arc<Mutex<Shared>>, ui: UiDispatc
                 refresh(&ui);
             });
         }
+    }
+}
+
+fn status_of(view: &QueueView) -> QueueStatus {
+    let kinds = || view.rows.iter().map(|r| r.state.kind());
+    QueueStatus {
+        rendering: kinds().filter(|k| *k == JobStateKind::Rendering).count(),
+        open: kinds()
+            .filter(|k| {
+                matches!(
+                    k,
+                    JobStateKind::Waiting | JobStateKind::Rendering | JobStateKind::Paused
+                )
+            })
+            .count(),
+        overall: view.overall(),
     }
 }

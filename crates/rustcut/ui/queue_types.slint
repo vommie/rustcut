@@ -62,6 +62,9 @@ export global Queue {
     in property <string> overall-text;
     in property <bool> paused;
     in property <bool> pause-after;
+    // What happens when the queue is done (0 nothing, 1 notify, 2 quit, 3 suspend, 4 power off) and its tooltip.
+    in property <int> when-done;
+    in property <string> when-done-tip;
     // What the toolbar can do with the selection (tooltips with the number of jobs).
     in property <int> selected-count;
     in property <bool> can-edit;
@@ -100,6 +103,8 @@ export global Queue {
     callback clear-filter();
     callback toggle-paused();
     callback toggle-pause-after();
+    // The "when done" menu below the button (window coordinates).
+    callback when-done-menu(length, length);
     callback cancel();
     callback remove();
     callback retry();
