@@ -111,6 +111,8 @@ impl DockBridge {
     fn update(&self, change: impl FnOnce(&mut DockLayout)) {
         change(&mut self.state.borrow_mut().layout);
         self.publish();
+        // A folded card or a moved panel may have taken a bubble's field away: the bubbles look again at once.
+        crate::ui::notices::layout_changed();
     }
 
     fn publish(&self) {

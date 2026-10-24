@@ -69,10 +69,26 @@ pub(super) fn connect(bridge: &Rc<RenderSettingsBridge>, window: &MainWindow) {
         let result = b.state.borrow_mut().type_text(row, &text);
         match result {
             Ok(changed) => {
+                b.text_done(row);
                 b.edited(changed);
                 true
             }
-            Err(_not_a_value) => false,
+            Err(_not_a_value) => {
+                b.text_refused(row, &text);
+                false
+            }
+        }
+    });
+    let this = Rc::downgrade(bridge);
+    rs.on_text_typed(move |key, text| {
+        if let (Some(b), Some(row)) = (this.upgrade(), Row::from_key(&key)) {
+            b.text_typed(row, &text);
+        }
+    });
+    let this = Rc::downgrade(bridge);
+    rs.on_text_canceled(move |key| {
+        if let (Some(b), Some(row)) = (this.upgrade(), Row::from_key(&key)) {
+            b.text_done(row);
         }
     });
     let this = Rc::downgrade(bridge);

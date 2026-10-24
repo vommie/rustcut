@@ -57,11 +57,9 @@ export global Export {
     in property <string> counter;
     in property <bool> auto-increment;
     in property <bool> clear-sections;
-    // The file the job writes, and what the live check found: 0 free, 1 a hint, 2 a conflict, 3 an error.
+    // The file the job writes and its whole path (the live check shows as a bubble at the name or the folder, M6.5c).
     in property <string> file-name;
-    in property <int> check-level;
-    in property <string> check-text;
-    in property <string> check-tooltip;
+    in property <string> file-tooltip;
     in property <bool> can-save;
     in property <string> save-tooltip;
     in property <string> key-save;
@@ -117,6 +115,8 @@ export global Export {
     in property <int> dialog-selected;
     in property <string> dialog-typed;
     in property <bool> dialog-can-confirm;
+    // Only looking at the target folder's files (the name check's bubble): no choices, the button closes.
+    in property <bool> dialog-browse;
     in property <string> dialog-confirm-text;
 
     // The question before a job without tags or rating is saved (modal; user decision Q-G1).

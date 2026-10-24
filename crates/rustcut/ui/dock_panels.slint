@@ -4,6 +4,7 @@ import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Dock, DockCardView } from "dock_types.slint";
 import { Jump } from "jump.slint";
+import { BubbleLayer } from "bubble.slint";
 import { MediaInfoPanelView } from "media_info_panel.slint";
 import { SectionsCardBody } from "sections_card.slint";
 import { FiltersCardBody } from "filters_card.slint";
@@ -74,9 +75,11 @@ component DockCard inherits Rectangle {
     }
 }
 
-/// Cards stacked from the top.
+/// Cards stacked from the top, with the bubbles of their inputs over them (M6.5c).
 component CardStack inherits Rectangle {
     in property <[DockCardView]> cards;
+    // The panel's key: the bubble layer draws this area's bubbles.
+    in property <string> area;
 
     // A jump mark reached a row in these cards: it scrolls into view (`jump.slint`).
     property <int> jump: Jump.target-serial;
@@ -99,6 +102,14 @@ component CardStack inherits Rectangle {
             }
         }
     }
+
+    BubbleLayer {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        area: root.area;
+    }
 }
 
 /// The content of the panel `key`.
@@ -107,9 +118,11 @@ export component DockPanelContent inherits Rectangle {
 
     if root.key == "export": CardStack {
         cards: Dock.export-cards;
+        area: "export";
     }
     if root.key == "render-settings": CardStack {
         cards: Dock.render-cards;
+        area: "render-settings";
     }
     if root.key == "queue": QueuePanel { }
     if root.key == "tag-rate": TagRatePanel { }

@@ -1,0 +1,290 @@
+// Bubbles at an input (M6.5c, user decision Q-N10): a closable message anchored at the element it is about (a field
+// whose text is refused, the export card's name, a section row, a Codecs option), drawn like a tooltip with the
+// level's colored stripe (look A). An element embeds a `BubbleAnchor` with its key; a `BubbleLayer` over each scroll
+// area (the dock's card stacks, the Settings page) draws the bubbles of that area at their anchors, so they follow
+// scrolling, stay inside the panel and go with it. src/ui/notices/bubbles/ fills `Bubbles` and decides what shows:
+// a bubble stays until its problem is gone, × hides it until its words change, a click does what its link says. The
+// mouse wheel over a bubble makes it more or less opaque while it shows; the setting gives the start.
+//
+// Anchors report their place while they have a bubble: when they appear, when they move and whenever the epoch
+// changes. A layer moves the epoch on while bubbles exist, so a bubble whose anchor is gone (its card folded, its row
+// removed) is not drawn: it shows only where an anchor reported in the current epoch.
+
+import { AppIcon, IconId } from "icons.slint";
+import { NoticeLook } from "notice_types.slint";
+import { TipArrow } from "tooltip_layer.slint";
+import { TipPlacement, TipRect, TipSide, TooltipLogic, TooltipSettings } from "tooltip.slint";
+
+export struct BubbleView {
+    // Stable while the bubble shows (its words change in place).
+    id: int,
+    // The scroll area that draws it: "export", "render-settings" (the dock panels' keys) or "settings".
+    area: string,
+    // 0 info, 1 success, 2 warning, 3 error.
+    level: int,
+    title: string,
+    text: string,
+    // What a click on it does ("Show the files"); empty = a click does nothing.
+    link: string,
+    // Where its anchor is (window coordinates) and in which epoch the anchor reported it.
+    anchor: TipRect,
+    seen: int,
+}
+
+export global Bubbles {
+    in property <[BubbleView]> items;
+    // Changes when the set of anchors that have a bubble changes (every anchor asks `wanted` again).
+    in property <int> revision;
+    in-out property <int> epoch;
+    // How opaque a bubble starts (the setting, 0.2..1).
+    in property <float> opacity: 1;
+
+    // Whether the anchor `key` has a bubble now (pure; `revision` makes the bindings ask again).
+    pure callback wanted(/* key */ string, /* revision */ int) -> bool;
+    // An anchor with a bubble is at `place` (window coordinates) in `epoch`.
+    callback moved(/* key */ string, /* place */ TipRect, /* epoch */ int);
+    callback clicked(/* id */ int);
+    callback closed(/* id */ int);
+}
+
+/// Where a bubble can stand: embedded in the element it is about (fills it, takes no input).
+export component BubbleAnchor inherits Rectangle {
+    in property <string> key;
+
+    property <bool> wanted: root.key != "" && Bubbles.wanted(root.key, Bubbles.revision);
+    // Followed only while the anchor has a bubble, so the other anchors track nothing.
+    property <TipRect> place: root.wanted ? {
+        x: root.absolute-position.x,
+        y: root.absolute-position.y,
+        width: root.width,
+        height: root.height,
+    } : { };
+    property <int> epoch: root.wanted ? Bubbles.epoch : -1;
+
+    x: 0;
+    y: 0;
+    width: 100%;
+    height: 100%;
+
+    function report() {
+        if root.wanted {
+            Bubbles.moved(root.key, root.place, Bubbles.epoch);
+        }
+    }
+
+    init => {
+        root.report();
+    }
+    changed place => {
+        root.report();
+    }
+    changed epoch => {
+        root.report();
+    }
+}
+
+/// One bubble: the stripe of its level, its symbol, title, text and link, the ×.
+component BubbleCard inherits Rectangle {
+    in property <BubbleView> bubble;
+    // Its anchor reported in this epoch and lies in the area.
+    in property <bool> shown;
+    // The area (the layer) it is placed in.
+    in property <length> area-width;
+    in property <length> area-height;
+    in property <length> area-x;
+    in property <length> area-y;
+
+    // The mouse wheel's opacity, starting at the setting's (Q-N10).
+    property <float> start-opacity: Bubbles.opacity;
+    property <float> alpha: Bubbles.opacity;
+    changed start-opacity => {
+        root.alpha = root.start-opacity;
+    }
+
+    property <length> pad: 8px;
+    property <length> stripe: 3px;
+    property <length> close-size: 16px;
+    property <length> max-text: Math.max(60px, Math.min(280px, root.area-width - 12px - 2 * root.pad - root.stripe
+        - 20px - root.close-size - 8px));
+    property <length> text-w: Math.max(40px, Math.min(root.max-text, measure.preferred-width));
+
+    property <TipRect> anchor: {
+        x: root.bubble.anchor.x - root.area-x,
+        y: root.bubble.anchor.y - root.area-y,
+        width: root.bubble.anchor.width,
+        height: root.bubble.anchor.height,
+    };
+    // The anchor is scrolled out of the area: no bubble pointing at nothing.
+    property <bool> inside: root.anchor.y + root.anchor.height > 0 && root.anchor.y < root.area-height
+        && root.anchor.x + root.anchor.width > 0 && root.anchor.x < root.area-width;
+    property <TipPlacement> placement: TooltipLogic.place(root.anchor, root.width, root.height, root.area-width,
+        root.area-height, false);
+    property <bool> active: root.shown && root.inside;
+    property <color> level-color: NoticeLook.color(root.bubble.level);
+
+    x: root.placement.x;
+    y: root.placement.y;
+    width: root.stripe + 20px + root.text-w + root.close-size + 2 * root.pad + 8px;
+    height: content.preferred-height;
+    visible: root.active;
+    opacity: root.active ? root.alpha : 0;
+    animate opacity { duration: 110ms; easing: ease-out; }
+
+    background: TooltipSettings.background;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: root.level-color.with-alpha(0.55);
+    drop-shadow-blur: 10px;
+    drop-shadow-color: #00000099;
+    drop-shadow-offset-y: 2px;
+
+    // The natural width of the words (nothing wraps here).
+    measure := VerticalLayout {
+        visible: false;
+        x: 0;
+        y: 0;
+
+        Text {
+            text: root.bubble.title;
+            font-size: TooltipSettings.font-size;
+            font-weight: 700;
+        }
+
+        Text {
+            text: root.bubble.text;
+            font-size: TooltipSettings.small-font-size;
+        }
+
+        Text {
+            text: root.bubble.link;
+            font-size: TooltipSettings.small-font-size;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: root.bubble.link != "" ? MouseCursor.pointer : MouseCursor.default;
+        clicked => {
+            if root.bubble.link != "" {
+                Bubbles.clicked(root.bubble.id);
+            }
+        }
+        scroll-event(event) => {
+            if event.delta-y == 0 {
+                return reject;
+            }
+            root.alpha = Math.clamp(root.alpha + (event.delta-y > 0 ? 0.1 : -0.1), 0.2, 1.0);
+            accept
+        }
+    }
+
+    TipArrow {
+        side: root.placement.side;
+        arrow: root.placement.arrow;
+        fill: TooltipSettings.background;
+        stroke: root.level-color.with-alpha(0.55);
+        bubble-width: root.width;
+        bubble-height: root.height;
+    }
+
+    // The level's stripe along the left edge.
+    Rectangle {
+        x: 1px;
+        y: 1px;
+        width: root.stripe;
+        height: parent.height - 2px;
+        border-top-left-radius: 5px;
+        border-bottom-left-radius: 5px;
+        background: root.level-color;
+    }
+
+    content := HorizontalLayout {
+        padding-left: root.stripe + root.pad;
+        padding-right: 4px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+        spacing: 6px;
+
+        VerticalLayout {
+            alignment: start;
+            padding-top: 1px;
+
+            AppIcon {
+                icon: NoticeLook.icon(root.bubble.level);
+                size: 14px;
+                color: root.level-color;
+            }
+        }
+
+        VerticalLayout {
+            spacing: 2px;
+            alignment: start;
+
+            if root.bubble.title != "": Text {
+                width: root.text-w;
+                text: root.bubble.title;
+                font-size: TooltipSettings.font-size;
+                font-weight: 700;
+                color: TooltipSettings.text;
+                wrap: word-wrap;
+            }
+
+            if root.bubble.text != "": Text {
+                width: root.text-w;
+                text: root.bubble.text;
+                font-size: TooltipSettings.small-font-size;
+                color: TooltipSettings.muted;
+                wrap: word-wrap;
+            }
+
+            if root.bubble.link != "": Text {
+                width: root.text-w;
+                text: root.bubble.link + " ›";
+                font-size: TooltipSettings.small-font-size;
+                color: touch.has-hover ? TooltipSettings.text : NoticeLook.color(0);
+                wrap: word-wrap;
+            }
+        }
+
+        close := Rectangle {
+            width: root.close-size;
+            height: root.close-size;
+            border-radius: 3px;
+            background: close-touch.has-hover ? #ffffff1a : transparent;
+
+            AppIcon {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                icon: IconId.close;
+                size: 12px;
+                color: close-touch.has-hover ? TooltipSettings.text : TooltipSettings.muted;
+            }
+
+            close-touch := TouchArea {
+                clicked => { Bubbles.closed(root.bubble.id); }
+            }
+        }
+    }
+}
+
+/// Draws the bubbles of `area` over a scroll area (fills it; only the bubbles take input).
+export component BubbleLayer inherits Rectangle {
+    in property <string> area;
+
+    // While bubbles exist the anchors report again now and then: a bubble whose anchor is gone stops showing.
+    Timer {
+        interval: 250ms;
+        running: Bubbles.items.length > 0;
+        triggered => {
+            Bubbles.epoch += 1;
+        }
+    }
+
+    for bubble in Bubbles.items: BubbleCard {
+        bubble: bubble;
+        shown: bubble.area == root.area && bubble.seen == Bubbles.epoch;
+        area-width: root.width;
+        area-height: root.height;
+        area-x: root.absolute-position.x;
+        area-y: root.absolute-position.y;
+    }
+}

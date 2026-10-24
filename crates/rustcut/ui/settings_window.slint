@@ -12,6 +12,7 @@ import { SettingsCard } from "settings_card.slint";
 import { SettingsRow } from "settings_row.slint";
 import { SettingsUi } from "settings_types.slint";
 import { Jump } from "jump.slint";
+import { BubbleLayer } from "bubble.slint";
 import { SettingsFolders } from "settings_folders.slint";
 import { SettingsProfiles } from "settings_profiles.slint";
 import { SettingsHotkeys } from "settings_hotkeys.slint";
@@ -105,45 +106,59 @@ export component SettingsWindow inherits Window {
                     }
                 }
 
-                scroll := ScrollView {
+                // The page, with the bubbles of its fields over it (M6.5c; not scrolled with it).
+                Rectangle {
                     vertical-stretch: 1;
 
-                    // A jump mark reached a row of this page: it scrolls into view (`jump.slint`).
-                    property <int> jump: Jump.target-serial;
-                    changed jump => {
-                        if Jump.inside(self.absolute-position.x, self.width, self.absolute-position.y + self.content-y, self.content-height) {
-                            self.content-y = Jump.scroll-to(self.absolute-position.y + self.content-y, self.content-y, self.visible-height, self.content-height);
-                        }
-                    }
+                    scroll := ScrollView {
+                        width: parent.width;
+                        height: parent.height;
 
-                    page := VerticalLayout {
-                        padding: 16px;
-                        spacing: 16px;
-                        alignment: start;
-
-                        // The Messages page shows its cards on its first tab.
-                        if SettingsUi.special != 5: VerticalLayout {
-                            spacing: 16px;
-
-                            for card in SettingsUi.cards: SettingsCard {
-                                title: card.title;
-                                description: card.description;
-
-                                for option in card.rows: SettingsRow {
-                                    option: option;
-                                }
+                        // A jump mark reached a row of this page: it scrolls into view (`jump.slint`).
+                        property <int> jump: Jump.target-serial;
+                        changed jump => {
+                            if Jump.inside(self.absolute-position.x, self.width, self.absolute-position.y + self.content-y, self.content-height) {
+                                self.content-y = Jump.scroll-to(self.absolute-position.y + self.content-y, self.content-y, self.visible-height, self.content-height);
                             }
                         }
 
-                        if SettingsUi.special == 1: SettingsFolders { }
+                        page := VerticalLayout {
+                            padding: 16px;
+                            spacing: 16px;
+                            alignment: start;
 
-                        if SettingsUi.special == 2: SettingsProfiles { }
+                            // The Messages page shows its cards on its first tab.
+                            if SettingsUi.special != 5: VerticalLayout {
+                                spacing: 16px;
 
-                        if SettingsUi.special == 3: SettingsHotkeys { }
+                                for card in SettingsUi.cards: SettingsCard {
+                                    title: card.title;
+                                    description: card.description;
 
-                        if SettingsUi.special == 4: SettingsAbout { }
+                                    for option in card.rows: SettingsRow {
+                                        option: option;
+                                    }
+                                }
+                            }
 
-                        if SettingsUi.special == 5: SettingsMessages { }
+                            if SettingsUi.special == 1: SettingsFolders { }
+
+                            if SettingsUi.special == 2: SettingsProfiles { }
+
+                            if SettingsUi.special == 3: SettingsHotkeys { }
+
+                            if SettingsUi.special == 4: SettingsAbout { }
+
+                            if SettingsUi.special == 5: SettingsMessages { }
+                        }
+                    }
+
+                    BubbleLayer {
+                        x: 0;
+                        y: 0;
+                        width: scroll.visible-width;
+                        height: parent.height;
+                        area: "settings";
                     }
                 }
 

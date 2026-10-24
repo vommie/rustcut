@@ -5,6 +5,8 @@
 //! Nothing here touches the drive on the UI thread: the folder is read on the runtime (`scan_folder`), the results come
 //! back through `slint::spawn_local` and count only for the folder they were read for.
 
+mod browse;
+mod bubbles;
 mod check;
 mod dialog;
 #[cfg(test)]
@@ -27,7 +29,7 @@ use rustcut_core::settings::{AutoSection, ConflictDialogSettings, ExportPanelSta
 use rustcut_core::time::Timestamp;
 use slint::ComponentHandle as _;
 
-pub use check::{CardCheck, CardInput, Level as CheckLevel, card_check};
+pub use check::{At, CardCheck, CardInput, Level as CheckLevel, card_check};
 pub use dialog::{Choice, ConflictDialog, DialogInput, DialogOption, Outcome, Tab, silent_outcome};
 pub use metadata::{MetadataFacts, Missing, missing};
 pub use state::{ExportDraft, ExportState, JobFacts, MAX_COUNTER, SOURCE_FOLDER, codec_label};
@@ -60,6 +62,7 @@ pub struct ExportParts<'a> {
 }
 
 pub struct ExportBridge {
+    me: Weak<Self>,
     window: slint::Weak<MainWindow>,
     runtime: tokio::runtime::Handle,
     writer: SettingsWriter,
@@ -94,6 +97,8 @@ pub struct ExportBridge {
     refresh: Cell<bool>,
     /// The job problem the banner shows (M6.5).
     shown_problem: RefCell<Option<JobProblem>>,
+    /// The check's bubble as it was posted last (M6.5c).
+    shown_check: RefCell<Option<bubbles::CheckBubble>>,
 }
 
 /// The key of the banner about the job problem.
@@ -122,7 +127,8 @@ impl ExportBridge {
         panel: &ExportPanelState,
         writer: SettingsWriter,
     ) -> Rc<Self> {
-        let bridge = Rc::new(Self {
+        let bridge = Rc::new_cyclic(|me| Self {
+            me: Weak::clone(me),
             window: window.as_weak(),
             runtime,
             writer,
@@ -147,6 +153,7 @@ impl ExportBridge {
             previews: RefCell::new(DialogPreviews::default()),
             refresh: Cell::new(false),
             shown_problem: RefCell::new(None),
+            shown_check: RefCell::new(None),
         });
         connect(&bridge, window);
         save::connect_dialog(&bridge, window);
@@ -321,15 +328,21 @@ impl ExportBridge {
         e.set_counter(format!("{:02}", st.counter).into());
         e.set_auto_increment(st.auto_increment);
         e.set_clear_sections(st.clear_sections);
+        e.set_file_tooltip(
+            folder
+                .as_deref()
+                .zip(file.as_ref().and_then(|f| f.as_ref().ok()))
+                .map(|(f, (_, name))| f.join(name).display().to_string())
+                .unwrap_or_default()
+                .into(),
+        );
         e.set_file_name(
             file.and_then(Result::ok)
                 .map(|(_, name)| name)
                 .unwrap_or_default()
                 .into(),
         );
-        e.set_check_level(line.level as i32);
-        e.set_check_text(line.text.as_str().into());
-        e.set_check_tooltip(line.tooltip.as_str().into());
+        self.show_check(&line);
         // What keeps the job itself from being saved: the banner names it, Save's tooltip too.
         self.show_job_problem(job.as_ref());
         let saving = self.saving.get();

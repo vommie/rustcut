@@ -5,7 +5,7 @@
 import { Theme } from "styles.slint";
 import { IconId, IconSize } from "icons.slint";
 import { ChoiceButton, FieldIcon, IconButton, NumberField, Switch } from "controls.slint";
-import { TooltipArea } from "tooltip.slint";
+import { TipRow, TooltipArea } from "tooltip.slint";
 
 export struct FilterRowView {
     kind: string,
@@ -34,6 +34,8 @@ export global Filters {
     in property <string> interlace-hint;
     in property <int> interlace-level;
     in property <string> interlace-detail;
+    // What ffmpeg's idet counted (the note's tooltip).
+    in property <[TipRow]> interlace-rows;
 
     // Top, right, bottom, left as seen in the output.
     in property <[string]> crop-edges: ["0", "0", "0", "0"];
@@ -523,7 +525,9 @@ component FilterRow inherits Rectangle {
             }
 
             if root.item.kind == "deinterlace" && Filters.interlace-level > 0: TooltipArea {
+                title: "Interlace check";
                 text: Filters.interlace-detail;
+                rows: Filters.interlace-rows;
                 horizontal-stretch: 1;
 
                 Text {

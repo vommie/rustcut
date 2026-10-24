@@ -188,6 +188,24 @@ impl Default for HistorySettings {
     }
 }
 
+/// The bubbles at an input (M6.5c, user decision Q-N10).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BubbleSettings {
+    /// How opaque a bubble starts, in percent (the mouse wheel over it changes it while it shows).
+    pub opacity: u8,
+}
+
+impl BubbleSettings {
+    pub const OPACITY: RangeInclusive<u8> = 20..=100;
+}
+
+impl Default for BubbleSettings {
+    fn default() -> Self {
+        Self { opacity: 100 }
+    }
+}
+
 /// Desktop notifications (moved here from `desktop.notifications` in settings version 2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -232,6 +250,7 @@ pub struct NoticeSettings {
     pub toasts: ToastSettings,
     pub banners: BannerSettings,
     pub history: HistorySettings,
+    pub bubbles: BubbleSettings,
     pub desktop: DesktopNoticeSettings,
     /// Changed places by kind id (`job_failed = { place = "banner", desktop = false }`); the app's catalog owns the ids,
     /// the defaults and which places a kind allows. Entries of unknown kinds are kept (a newer version's).
@@ -264,6 +283,11 @@ impl NoticeSettings {
                 *secs = ToastSettings::MAX_SECS;
                 notes.push(format!("notices.toasts.{name} limited to {}", ToastSettings::MAX_SECS));
             }
+        }
+        let opacity = &mut self.bubbles.opacity;
+        if !BubbleSettings::OPACITY.contains(opacity) {
+            *opacity = (*opacity).clamp(*BubbleSettings::OPACITY.start(), *BubbleSettings::OPACITY.end());
+            notes.push("notices.bubbles.opacity brought into range".to_owned());
         }
         let before = self.kinds.len();
         self.kinds.retain(|_, route| !route.is_default());
@@ -370,6 +394,18 @@ mod tests {
         let mut notes = Vec::new();
         read.sanitize(&mut notes);
         assert_eq!(read.toasts.max_visible, 5);
+    }
+
+    #[test]
+    fn bubbles_default_to_opaque_and_stay_in_range() {
+        // A 0.0.26 file has no [bubbles].
+        let read: NoticeSettings = toml::from_str("[toasts]\nmax_visible = 4\n").unwrap();
+        assert_eq!(read.bubbles.opacity, 100);
+        let mut read: NoticeSettings = toml::from_str("[bubbles]\nopacity = 5\n").unwrap();
+        let mut notes = Vec::new();
+        read.sanitize(&mut notes);
+        assert_eq!(read.bubbles.opacity, 20);
+        assert_eq!(notes, ["notices.bubbles.opacity brought into range"]);
     }
 
     #[test]

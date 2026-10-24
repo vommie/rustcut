@@ -77,6 +77,50 @@ component HoldBadge inherits Rectangle {
     }
 }
 
+/// The arrow of a bubble pointing at its element (placement.rs: 7 px out, 14 px wide): a filled triangle that also
+/// covers the bubble's border under its base, and its two outer edges. Placed inside the bubble's rectangle.
+export component TipArrow inherits Rectangle {
+    in property <TipSide> side;
+    // The arrow's center along the edge that faces the element.
+    in property <length> arrow;
+    in property <brush> fill;
+    in property <brush> stroke;
+    // The size of the bubble it belongs to.
+    in property <length> bubble-width;
+    in property <length> bubble-height;
+
+    property <bool> across: root.side == TipSide.below || root.side == TipSide.above;
+    visible: root.side != TipSide.over;
+    width: self.across ? 14px : 9px;
+    height: self.across ? 9px : 14px;
+    x: self.across ? root.arrow - 7px : root.side == TipSide.right ? -7px : root.bubble-width - 2px;
+    y: !self.across ? root.arrow - 7px : root.side == TipSide.below ? -7px : root.bubble-height - 2px;
+
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: root.across ? 14 : 9;
+        viewbox-height: root.across ? 9 : 14;
+        commands: root.side == TipSide.below ? "M 0 7.5 L 7 0.5 L 14 7.5 L 14 9 L 0 9 Z"
+            : root.side == TipSide.above ? "M 0 1.5 L 7 8.5 L 14 1.5 L 14 0 L 0 0 Z"
+            : root.side == TipSide.right ? "M 7.5 0 L 0.5 7 L 7.5 14 L 9 14 L 9 0 Z"
+            : "M 1.5 0 L 8.5 7 L 1.5 14 L 0 14 L 0 0 Z";
+        fill: root.fill;
+    }
+
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: root.across ? 14 : 9;
+        viewbox-height: root.across ? 9 : 14;
+        commands: root.side == TipSide.below ? "M 0 7.5 L 7 0.5 L 14 7.5"
+            : root.side == TipSide.above ? "M 0 1.5 L 7 8.5 L 14 1.5"
+            : root.side == TipSide.right ? "M 7.5 0 L 0.5 7 L 7.5 14" : "M 1.5 0 L 8.5 7 L 1.5 14";
+        stroke: root.stroke;
+        stroke-width: 1px;
+    }
+}
+
 export component TooltipLayer inherits Rectangle {
     property <bool> active: GlobalTooltip.is-visible && (TooltipSettings.enabled || GlobalTooltip.tip.forced);
     property <TipKeys> keys: TooltipLogic.key-caps(GlobalTooltip.tip.shortcut);
@@ -240,39 +284,14 @@ export component TooltipLayer inherits Rectangle {
         animate opacity { duration: root.active ? 110ms : 80ms; easing: ease-out; }
         animate x, y { duration: GlobalTooltip.glide ? 90ms : 0ms; easing: ease-out; }
 
-        // The arrow points at the element (placement.rs: 7 px out, 14 px wide): a filled triangle that also covers the
-        // bubble's border under its base, and its two outer edges.
-        arrow := Rectangle {
-            property <bool> across: root.side == TipSide.below || root.side == TipSide.above;
-            visible: root.side != TipSide.over;
-            width: self.across ? 14px : 9px;
-            height: self.across ? 9px : 14px;
-            x: self.across ? root.placement.arrow - 7px : root.side == TipSide.right ? -7px : parent.width - 2px;
-            y: !self.across ? root.placement.arrow - 7px : root.side == TipSide.below ? -7px : parent.height - 2px;
-
-            Path {
-                width: 100%;
-                height: 100%;
-                viewbox-width: arrow.across ? 14 : 9;
-                viewbox-height: arrow.across ? 9 : 14;
-                commands: root.side == TipSide.below ? "M 0 7.5 L 7 0.5 L 14 7.5 L 14 9 L 0 9 Z"
-                    : root.side == TipSide.above ? "M 0 1.5 L 7 8.5 L 14 1.5 L 14 0 L 0 0 Z"
-                    : root.side == TipSide.right ? "M 7.5 0 L 0.5 7 L 7.5 14 L 9 14 L 9 0 Z"
-                    : "M 1.5 0 L 8.5 7 L 1.5 14 L 0 14 L 0 0 Z";
-                fill: TooltipSettings.background;
-            }
-
-            Path {
-                width: 100%;
-                height: 100%;
-                viewbox-width: arrow.across ? 14 : 9;
-                viewbox-height: arrow.across ? 9 : 14;
-                commands: root.side == TipSide.below ? "M 0 7.5 L 7 0.5 L 14 7.5"
-                    : root.side == TipSide.above ? "M 0 1.5 L 7 8.5 L 14 1.5"
-                    : root.side == TipSide.right ? "M 7.5 0 L 0.5 7 L 7.5 14" : "M 1.5 0 L 8.5 7 L 1.5 14";
-                stroke: TooltipSettings.border;
-                stroke-width: 1px;
-            }
+        // The arrow points at the element (placement.rs: 7 px out, 14 px wide).
+        TipArrow {
+            side: root.side;
+            arrow: root.placement.arrow;
+            fill: TooltipSettings.background;
+            stroke: TooltipSettings.border;
+            bubble-width: bubble.width;
+            bubble-height: bubble.height;
         }
 
         content := VerticalLayout {

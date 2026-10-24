@@ -1,5 +1,6 @@
-//! The card's live check of the target in words: one line under the file name (a free name, a hint, a conflict that
-//! Save will ask about, or why the job cannot be saved) and its tooltip.
+//! The card's live check of the target in words (a free name, a hint, a conflict that Save will ask about, or why the
+//! job cannot be saved) and where its bubble stands (M6.5c, Q-N10: at the name field or the folder choice; a conflict
+//! and similar names lead to the files).
 
 use std::path::Path;
 
@@ -15,20 +16,41 @@ pub enum Level {
     Error = 3,
 }
 
+/// The input a check is about: its bubble stands there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum At {
+    Name,
+    Folder,
+}
+
+/// How many similar names a bubble lists before "and N more".
+const LISTED: usize = 3;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardCheck {
     pub level: Level,
     pub text: String,
-    pub tooltip: String,
+    pub detail: String,
+    /// Where its bubble stands (`None` = no bubble: a free name, no video, the folder is being read).
+    pub at: Option<At>,
+    /// A click on the bubble shows the target folder's files (the conflict dialog to look).
+    pub browse: bool,
 }
 
 impl CardCheck {
-    fn new(level: Level, text: impl Into<String>, tooltip: impl Into<String>) -> Self {
+    fn new(level: Level, text: impl Into<String>, detail: impl Into<String>, at: Option<At>) -> Self {
         Self {
             level,
             text: text.into(),
-            tooltip: tooltip.into(),
+            detail: detail.into(),
+            at,
+            browse: false,
         }
+    }
+
+    const fn browsing(mut self) -> Self {
+        self.browse = true;
+        self
     }
 
     pub const fn can_save(&self) -> bool {
@@ -51,27 +73,38 @@ pub struct CardInput<'a> {
 
 pub fn card_check(input: &CardInput<'_>) -> CardCheck {
     let Some(source) = input.source else {
-        return CardCheck::new(Level::Error, "Open a video first", "");
+        return CardCheck::new(Level::Error, "Open a video first", "", None);
     };
     let Some(folder) = input.folder else {
-        return CardCheck::new(Level::Error, "No target folder", "");
+        return CardCheck::new(Level::Error, "No target folder", "", Some(At::Folder));
     };
     let file = match input.file {
         Ok((_, file)) => file,
-        Err(e) => return CardCheck::new(Level::Error, format!("The name cannot be used: {e}"), ""),
+        Err(e) => return CardCheck::new(Level::Error, "The name cannot be used", e.to_string(), Some(At::Name)),
     };
     let target = folder.join(file);
     if same_path(source, &target) {
-        return CardCheck::new(Level::Error, "This is the source file", target.display().to_string());
+        return CardCheck::new(
+            Level::Error,
+            "This is the source file",
+            target.display().to_string(),
+            Some(At::Name),
+        );
     }
     let Some(scan) = input.scan else {
-        return CardCheck::new(Level::Hint, "Checking the folder...", folder.display().to_string());
+        return CardCheck::new(
+            Level::Hint,
+            "Checking the folder...",
+            folder.display().to_string(),
+            None,
+        );
     };
     if !scan.readable {
         return CardCheck::new(
             Level::Error,
             "The folder does not exist or cannot be read",
             folder.display().to_string(),
+            Some(At::Folder),
         );
     }
     let exists = scan.names.contains(file).then_some(rustcut_core::naming::ExistingFile {
@@ -86,55 +119,47 @@ pub fn card_check(input: &CardInput<'_>) -> CardCheck {
         queue: input.queue,
         warnings: input.warnings,
     });
-    let similar_tooltip = || {
-        if found.similar.is_empty() {
-            folder.display().to_string()
-        } else {
-            format!(
-                "Files in {} starting with \"{}\":\n{}",
-                folder.display(),
-                input.base.trim(),
-                found.similar.join("\n")
-            )
-        }
-    };
+    let asks = "Save asks what to do.";
     if found.exists.is_some() {
-        return CardCheck::new(
-            Level::Conflict,
-            "The file exists: Save asks what to do",
-            similar_tooltip(),
-        );
+        return CardCheck::new(Level::Conflict, "The file exists", asks, Some(At::Name)).browsing();
     }
     match found.queued.as_slice() {
         [] => {}
         [one] => {
             return CardCheck::new(
                 Level::Conflict,
-                format!("Job {} writes this file too: Save asks", one.id),
-                similar_tooltip(),
-            );
+                format!("Job {} writes this file too", one.id),
+                asks,
+                Some(At::Name),
+            )
+            .browsing();
         }
         many => {
             return CardCheck::new(
                 Level::Conflict,
-                format!("{} queued jobs write this file: Save asks", many.len()),
-                similar_tooltip(),
-            );
+                format!("{} queued jobs write this file", many.len()),
+                asks,
+                Some(At::Name),
+            )
+            .browsing();
         }
     }
-    match found.similar.len() {
-        0 => CardCheck::new(Level::Free, "Free", folder.display().to_string()),
-        1 => CardCheck::new(
-            Level::Hint,
-            "1 file in the folder has a similar name",
-            similar_tooltip(),
-        ),
-        n => CardCheck::new(
-            Level::Hint,
-            format!("{n} files in the folder have similar names"),
-            similar_tooltip(),
-        ),
+    let title = match found.similar.len() {
+        0 => return CardCheck::new(Level::Free, "Free", folder.display().to_string(), None),
+        1 => "1 file in the folder has a similar name".to_owned(),
+        n => format!("{n} files in the folder have similar names"),
+    };
+    let mut names = found
+        .similar
+        .iter()
+        .take(LISTED)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
+    if found.similar.len() > LISTED {
+        names = format!("{names} and {} more", found.similar.len() - LISTED);
     }
+    CardCheck::new(Level::Hint, title, names, Some(At::Name)).browsing()
 }
 
 #[cfg(test)]
@@ -172,25 +197,25 @@ mod tests {
         };
         let line = card_check(&input("Clip - 01.mkv"));
         assert_eq!(
-            (line.level, line.text.as_str()),
-            (Level::Conflict, "The file exists: Save asks what to do")
+            (line.level, line.text.as_str(), line.at, line.browse),
+            (Level::Conflict, "The file exists", Some(At::Name), true)
         );
-        assert!(line.tooltip.contains("clip.mp4"));
-        assert_eq!(
-            card_check(&input("Clip - 02.mkv")).text,
-            "Job #9 writes this file too: Save asks"
-        );
+        assert_eq!(card_check(&input("Clip - 02.mkv")).text, "Job #9 writes this file too");
         let hint = card_check(&input("Clip - 03.mkv"));
         assert_eq!(
-            (hint.level, hint.text.as_str()),
-            (Level::Hint, "2 files in the folder have similar names")
+            (hint.level, hint.text.as_str(), hint.detail.as_str()),
+            (
+                Level::Hint,
+                "2 files in the folder have similar names",
+                "Clip - 01.mkv, clip.mp4"
+            )
         );
-        assert!(hint.can_save());
+        assert!(hint.can_save() && hint.browse);
         let free = card_check(&CardInput {
             base: "Other",
             ..input("Other.mkv")
         });
-        assert_eq!(free.level, Level::Free);
+        assert_eq!((free.level, free.at), (Level::Free, None));
         let same = card_check(&CardInput {
             folder: Some(Path::new("/in")),
             ..input("Clip.mkv")
@@ -204,13 +229,11 @@ mod tests {
             .can_save()
         );
         let missing = FolderScan::default();
-        assert!(
-            !card_check(&CardInput {
-                scan: Some(&missing),
-                ..input("a.mkv")
-            })
-            .can_save()
-        );
+        let unreadable = card_check(&CardInput {
+            scan: Some(&missing),
+            ..input("a.mkv")
+        });
+        assert!(!unreadable.can_save() && unreadable.at == Some(At::Folder));
         assert_eq!(
             card_check(&CardInput {
                 scan: None,

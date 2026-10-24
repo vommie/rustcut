@@ -9,6 +9,7 @@ import { Shortcuts } from "shortcuts.slint";
 import { ChoiceButton, FieldIcon, IconButton, NumberField, Switch } from "controls.slint";
 import { TooltipArea, TooltipHost } from "tooltip.slint";
 import { Export } from "export_types.slint";
+import { BubbleAnchor } from "bubble.slint";
 
 /// The name: shows the text, a click turns it into a field whose every edit updates the file name at once.
 component NameField inherits Rectangle {
@@ -28,6 +29,11 @@ component NameField inherits Rectangle {
 
     host := TooltipHost {
         text: "Name of the output (the naming template adds the counter)";
+    }
+
+    // The live check of the target (M6.5c).
+    BubbleAnchor {
+        key: "export.name";
     }
 
     if !root.editing: Text {
@@ -176,6 +182,7 @@ export component FinalizeCardBody inherits VerticalLayout {
             items: Export.folders;
             current: Export.folder-index;
             tooltip: Export.folder-path;
+            bubble: "export.folder";
             selected(index) => { Export.select-folder(index); }
         }
 
@@ -202,7 +209,7 @@ export component FinalizeCardBody inherits VerticalLayout {
             tooltip: "Name";
         }
 
-        NameField {
+        name-field := NameField {
             text: Export.name;
             enabled: Export.has-source;
             edited(text) => { Export.name-edited(text); }
@@ -252,45 +259,18 @@ export component FinalizeCardBody inherits VerticalLayout {
 
         TooltipArea {
             horizontal-stretch: 1;
-            min-height: 34px;
-            text: Export.check-tooltip;
+            min-height: 30px;
+            text: Export.file-tooltip;
 
-            VerticalLayout {
-                alignment: center;
-                spacing: 1px;
-
-                Text {
-                    text: Export.file-name == "" ? "No file name yet" : Export.file-name;
-                    color: Export.file-name == "" ? Theme.status-deleted : Theme.text;
-                    font-size: 12px;
-                    font-weight: 600;
-                    overflow: elide;
-                }
-
-                HorizontalLayout {
-                    spacing: 4px;
-
-                    AppIcon {
-                        y: (parent.height - self.height) / 2;
-                        visible: Export.check-text != "";
-                        icon: Export.check-level == 0 ? IconId.status-ok
-                            : Export.check-level == 1 ? IconId.panel-media-info
-                            : Export.check-level == 2 ? IconId.status-warning : IconId.status-error;
-                        size: IconSize.xs;
-                        color: Export.check-level == 0 ? Theme.status-ok
-                            : Export.check-level == 1 ? Theme.text-muted
-                            : Export.check-level == 2 ? Theme.accent : Theme.status-corrupt;
-                    }
-
-                    Text {
-                        horizontal-stretch: 1;
-                        text: Export.check-text;
-                        color: Export.check-level == 3 ? Theme.status-corrupt
-                            : Export.check-level == 2 ? Theme.accent : Theme.text-muted;
-                        font-size: 11px;
-                        overflow: elide;
-                    }
-                }
+            Text {
+                width: parent.width;
+                height: parent.height;
+                text: Export.file-name == "" ? "No file name yet" : Export.file-name;
+                color: Export.file-name == "" ? Theme.status-deleted : Theme.text;
+                font-size: 12px;
+                font-weight: 600;
+                vertical-alignment: center;
+                overflow: elide;
             }
         }
 

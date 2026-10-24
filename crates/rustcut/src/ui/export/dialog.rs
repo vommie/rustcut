@@ -93,6 +93,8 @@ pub struct ConflictDialog {
     pub series: Vec<SeriesFile>,
     /// Other files whose names start with the card's name (not in the series, not the target).
     pub others: Vec<String>,
+    /// Only shows the files (the name check's bubble): no choices, one button that closes.
+    pub browse: bool,
     /// The free name listed first: the next number, or "(n)" (no counter, or chosen in the settings).
     primary_free: Choice,
     container: Container,
@@ -142,6 +144,7 @@ impl ConflictDialog {
             typed: input.stem.to_owned(),
             series,
             others,
+            browse: false,
             primary_free: Choice::NextNumber,
             container,
             scan: input.scan,
@@ -151,6 +154,15 @@ impl ConflictDialog {
         dialog.update_rename();
         dialog.selected = dialog.preselected(input.settings.preselect);
         dialog
+    }
+
+    /// The dialog to look at the target folder: the same tabs without the choices.
+    #[must_use]
+    pub fn browsing(mut self) -> Self {
+        self.browse = true;
+        self.options.clear();
+        self.selected = 0;
+        self
     }
 
     fn taken(&self) -> Taken<'_> {
@@ -442,6 +454,9 @@ impl ConflictDialog {
     /// The text of the confirm button (without the file name, which the chosen row shows: a long name would crowd
     /// the button, user request 2026-10-24).
     pub fn confirm_text(&self) -> &'static str {
+        if self.browse {
+            return "Close";
+        }
         match self.current() {
             Some(o) if o.enabled && o.choice == Choice::Overwrite => "Overwrite",
             Some(o) if o.enabled && o.choice == Choice::RemoveQueued => "Remove and save",

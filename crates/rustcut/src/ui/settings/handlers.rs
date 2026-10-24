@@ -12,6 +12,7 @@ use super::hotkeys::{self, Recorded};
 use super::page::Page;
 use super::{SettingsBridge, catalog, folders, hotkey_view};
 use crate::ui::keymap::{Action, Chord, KeyPress, Keymap};
+use crate::ui::notices::{self, Area, Notice, TYPING};
 use crate::ui::render_settings::state::Row;
 use crate::util::model::{sync, sync_with};
 use crate::{OptionRowView, ProfileItemView, RenderIssueView, SettingsUi};
@@ -22,6 +23,7 @@ impl SettingsBridge {
             self.hotkeys.borrow_mut().cancel();
             self.page.set(page);
             self.publish();
+            notices::layout_changed();
         }
     }
 
@@ -41,7 +43,10 @@ impl SettingsBridge {
         if page == Page::Messages {
             self.reset_kinds();
         }
-        self.errors.borrow_mut().clear();
+        let refused: Vec<String> = std::mem::take(&mut *self.errors.borrow_mut()).into_keys().collect();
+        for key in refused {
+            notices::clear(&bubble_key(&key));
+        }
         tracing::info!(page = page.id(), "[Settings] Page reset to its defaults");
         self.publish();
     }
@@ -51,21 +56,54 @@ impl SettingsBridge {
         let Some(field) = catalog::field(key) else {
             return Ok(());
         };
+        let typed = matches!(edit, Edit::Type(_));
         let mut result = Ok(false);
         self.update(|s| result = field.apply(s, edit));
         match &result {
             Ok(changed) => {
-                self.errors.borrow_mut().remove(key);
+                if self.errors.borrow_mut().remove(key).is_some() {
+                    notices::clear(&bubble_key(key));
+                }
                 if *changed {
                     tracing::info!(option = key, "[Settings] Changed");
                 }
             }
             Err(reason) => {
                 self.errors.borrow_mut().insert(key.to_owned(), reason.clone());
+                if typed {
+                    post_refused(key, reason, std::time::Duration::ZERO);
+                }
             }
         }
         self.publish();
         result.map(|_| ())
+    }
+
+    /// The field of `key` with a refused text was typed in: checked again after the typing grace time (M6.5c).
+    pub(super) fn text_typed(&self, key: &str, text: &str) {
+        if !self.errors.borrow().contains_key(key) {
+            return;
+        }
+        let Some(field) = catalog::field(key) else { return };
+        let mut copy = self.writer.current();
+        match field.apply(&mut copy, Edit::Type(text.to_owned())) {
+            Ok(_) => {
+                self.errors.borrow_mut().remove(key);
+                notices::clear_soon(&bubble_key(key), TYPING);
+            }
+            Err(reason) => {
+                post_refused(key, &reason, TYPING);
+                self.errors.borrow_mut().insert(key.to_owned(), reason);
+            }
+        }
+    }
+
+    /// The field of `key` closed without keeping a value: its refused text is gone.
+    pub(super) fn text_canceled(&self, key: &str) {
+        if self.errors.borrow_mut().remove(key).is_some() {
+            notices::clear(&bubble_key(key));
+            self.publish();
+        }
     }
 
     /// The browse button of a path option: the portal's dialog, then the path as if typed.
@@ -430,4 +468,18 @@ fn option_row(r: &crate::ui::render_settings::view::RowView) -> OptionRowView {
         enabled: r.enabled,
         mark: r.mark as i32,
     }
+}
+
+/// The bubble of a refused text of the option `key` (at its field, `settings_row.slint`).
+fn bubble_key(key: &str) -> String {
+    format!("settings-value:{key}")
+}
+
+fn post_refused(key: &str, reason: &str, grace: std::time::Duration) {
+    notices::post(
+        Notice::new(notices::Kind::ValueInvalid, reason)
+            .key(bubble_key(key))
+            .at(Area::Settings, [format!("settings:{key}")])
+            .grace(grace),
+    );
 }

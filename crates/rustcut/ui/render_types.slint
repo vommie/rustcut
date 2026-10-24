@@ -1,6 +1,6 @@
 // The data of the Render Settings panel (src/ui/render_settings/ fills `RenderSettings`) and of the probe render
-// (src/ui/probe/ fills `Probe`): the profile with its working copy, the option rows of the simple and the expert view,
-// the issues, and the probe's progress and playback.
+// (src/ui/probe/ fills `Probe`): the profile with its working copy, the option rows of the simple and the expert view
+// (their issues show as bubbles at the rows, M6.5c), and the probe's progress and playback.
 
 // One option row. kind: 0 choice, 1 number field, 2 switch, 3 text field, 4 slider; mark: 0 none, 1 warning, 2 error.
 export struct OptionRowView {
@@ -19,6 +19,7 @@ export struct OptionRowView {
     mark: int,
 }
 
+// An issue of a profile (the Settings window's profile editor lists them; the Codecs panel shows bubbles).
 export struct RenderIssueView {
     error: bool,
     text: string,
@@ -32,7 +33,6 @@ export global RenderSettings {
     in property <bool> modified;
     // The selected profile is the user's own (it can be saved into, renamed and deleted).
     in property <bool> user-profile;
-    in property <[RenderIssueView]> issues;
     // The real encoder's check in a few words, and whether it is running.
     in property <string> check-text;
     in property <bool> check-running;
@@ -58,6 +58,9 @@ export global RenderSettings {
     // A typed value; false keeps the field open and marked.
     callback type-text(/* key */ string, /* text */ string) -> bool;
     callback step(/* key */ string, /* steps */ int);
+    // A field with a refused text is typed in again, or closed without keeping it (its bubble, M6.5c).
+    callback text-typed(/* key */ string, /* text */ string);
+    callback text-canceled(/* key */ string);
 }
 
 export global Probe {

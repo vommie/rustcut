@@ -10,7 +10,7 @@ import { TooltipArea } from "tooltip.slint";
 import { OptionRow } from "render_option_row.slint";
 import { PlayerSeekBar } from "player_seek_bar.slint";
 import { Shortcuts } from "shortcuts.slint";
-import { OptionRowView, Probe, RenderIssueView, RenderSettings } from "render_types.slint";
+import { OptionRowView, Probe, RenderSettings } from "render_types.slint";
 import { Playback } from "player_types.slint";
 
 /// A stack of option rows.
@@ -24,11 +24,14 @@ component OptionRows inherits VerticalLayout {
     for item in root.rows: OptionRow {
         option: item;
         jump-prefix: "codecs:";
+        bubble-prefix: "codecs:";
         choose(key, index) => { RenderSettings.choose(key, index); }
         slide(key, position) => { RenderSettings.slide(key, position); }
         toggle(key) => { RenderSettings.toggle(key); }
         type-text(key, text) => { return RenderSettings.type-text(key, text); }
         step(key, steps) => { RenderSettings.step(key, steps); }
+        text-typed(key, text) => { RenderSettings.text-typed(key, text); }
+        text-canceled(key) => { RenderSettings.text-canceled(key); }
     }
 }
 
@@ -127,6 +130,8 @@ export component RenderProfileBody inherits VerticalLayout {
             items: RenderSettings.profiles;
             current: RenderSettings.profile-index;
             tooltip: RenderSettings.profile-tooltip;
+            // The issues of options whose card is folded (M6.5c).
+            bubble: "codecs:profile";
             selected(index) => {
                 root.naming = 0;
                 RenderSettings.select-profile(index);
@@ -213,29 +218,6 @@ export component RenderProfileBody inherits VerticalLayout {
                 root.naming = 0;
                 Shortcuts.release-focus();
             }
-        }
-    }
-
-    for issue in RenderSettings.issues: HorizontalLayout {
-        spacing: 6px;
-
-        VerticalLayout {
-            alignment: start;
-            padding-top: 1px;
-
-            AppIcon {
-                icon: issue.error ? IconId.status-error : IconId.status-warning;
-                size: IconSize.sm;
-                color: issue.error ? Theme.status-corrupt : Theme.accent;
-            }
-        }
-
-        Text {
-            horizontal-stretch: 1;
-            text: issue.text;
-            color: Theme.text;
-            font-size: 11px;
-            wrap: word-wrap;
         }
     }
 

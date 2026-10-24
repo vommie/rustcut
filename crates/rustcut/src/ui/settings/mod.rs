@@ -306,6 +306,7 @@ impl SettingsBridge {
         ));
         Self::apply_look(&window, &self.writer.current());
         crate::ui::tooltip::install(&window);
+        notices::attach_settings(&window);
         Ok(window)
     }
 

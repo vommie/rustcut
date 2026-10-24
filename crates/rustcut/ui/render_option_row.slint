@@ -8,6 +8,7 @@ import { TooltipArea } from "tooltip.slint";
 import { PlayerSeekBar } from "player_seek_bar.slint";
 import { OptionRowView } from "render_types.slint";
 import { JumpFlash } from "jump.slint";
+import { BubbleAnchor } from "bubble.slint";
 
 /// The name of an option, explained by its tooltip; colored when the option has an issue.
 component RowLabel inherits TooltipArea {
@@ -33,11 +34,16 @@ export component OptionRow inherits Rectangle {
     in property <OptionRowView> option;
     // The owner's prefix of the row's jump mark ("codecs:"; empty = no jump leads here), see `jump.slint`.
     in property <string> jump-prefix;
+    // The owner's prefix of the row's bubble (its issues, a refused value; empty = none), see `bubble.slint`.
+    in property <string> bubble-prefix;
     callback choose(/* key */ string, /* index */ int);
     callback slide(/* key */ string, /* position */ int);
     callback toggle(/* key */ string);
     callback type-text(/* key */ string, /* text */ string) -> bool;
     callback step(/* key */ string, /* steps */ int);
+    // A field with a refused text is typed in again, or closed without keeping it.
+    callback text-typed(/* key */ string, /* text */ string);
+    callback text-canceled(/* key */ string);
 
     min-height: row.min-height;
     preferred-height: row.preferred-height;
@@ -79,6 +85,8 @@ export component OptionRow inherits Rectangle {
             enabled: root.option.enabled;
             committed(text) => { return root.type-text(root.option.key, text); }
             stepped(steps) => { root.step(root.option.key, steps); }
+            typed(text) => { root.text-typed(root.option.key, text); }
+            canceled => { root.text-canceled(root.option.key); }
         }
 
         if root.option.kind == 2: VerticalLayout {
@@ -99,6 +107,8 @@ export component OptionRow inherits Rectangle {
             enabled: root.option.enabled;
             alignment: left;
             committed(text) => { return root.type-text(root.option.key, text); }
+            typed(text) => { root.text-typed(root.option.key, text); }
+            canceled => { root.text-canceled(root.option.key); }
         }
 
         if root.option.kind == 4: VerticalLayout {
@@ -134,5 +144,9 @@ export component OptionRow inherits Rectangle {
 
     JumpFlash {
         key: root.jump-prefix == "" ? "" : root.jump-prefix + root.option.key;
+    }
+
+    BubbleAnchor {
+        key: root.bubble-prefix == "" ? "" : root.bubble-prefix + root.option.key;
     }
 }

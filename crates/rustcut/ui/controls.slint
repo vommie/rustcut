@@ -7,6 +7,7 @@ import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Shortcuts } from "shortcuts.slint";
 import { TipRow, TooltipHost } from "tooltip.slint";
 import { HoldConfirm, HoldLogic, HoldRing } from "hold.slint";
+import { BubbleAnchor } from "bubble.slint";
 
 /// A button showing an icon (or a very short text), explained by its tooltip. `checked` draws it pressed in. With
 /// `hold` it deletes or discards something and acts only when held (hold.slint, user decision Q-Q4); its tooltip says so.
@@ -97,6 +98,9 @@ export component IconButton inherits Rectangle {
         vertical-alignment: center;
         height: parent.height;
     }
+
+    // A `BubbleAnchor` that explains the button's result (the Messages page's test).
+    @children
 }
 
 /// An icon that labels a field, with a tooltip.
@@ -140,8 +144,14 @@ export component NumberField inherits Rectangle {
     in property <bool> enabled: true;
     // Numbers sit on the right; free text (codec parameters) on the left.
     in property <TextHorizontalAlignment> alignment: right;
+    // The key of the bubble that explains a refused text (`bubble.slint`; empty = none).
+    in property <string> bubble;
     callback committed(string) -> bool;
     callback stepped(/* steps */ int);
+    // The text changed while the field is open (the owner checks it again after a refusal).
+    callback typed(string);
+    // The field closed without keeping a value (Escape, or left with a refused text).
+    callback canceled();
 
     property <bool> editing;
     property <bool> invalid;
@@ -169,11 +179,18 @@ export component NumberField inherits Rectangle {
         }
         root.editing = false;
         root.invalid = false;
+        if !keep {
+            root.canceled();
+        }
         Shortcuts.release-focus();
     }
 
     host := TooltipHost {
         text: root.tooltip;
+    }
+
+    BubbleAnchor {
+        key: root.bubble;
     }
 
     if !root.editing: Text {
@@ -224,7 +241,10 @@ export component NumberField inherits Rectangle {
         selection-background-color: Theme.primary.with-alpha(0.4);
 
         accepted => { root.finish(true); }
-        edited => { root.invalid = false; }
+        edited => {
+            root.invalid = false;
+            root.typed(self.text);
+        }
 
         key-pressed(event) => {
             if event.text == Key.Escape {
@@ -239,6 +259,7 @@ export component NumberField inherits Rectangle {
             if !self.has-focus && root.editing {
                 if !root.committed(self.text) {
                     root.invalid = false;
+                    root.canceled();
                 }
                 root.editing = false;
             }
@@ -256,6 +277,8 @@ export component ChoiceButton inherits Rectangle {
     in property <[TipRow]> tip-rows;
     in property <bool> enabled: true;
     in property <IconId> icon: IconId.none;
+    // The key of the bubble about this choice (`bubble.slint`; empty = none).
+    in property <string> bubble;
     callback selected(int);
 
     height: 24px;
@@ -274,6 +297,10 @@ export component ChoiceButton inherits Rectangle {
         text: root.tooltip;
         title: root.tip-title;
         rows: root.tip-rows;
+    }
+
+    BubbleAnchor {
+        key: root.bubble;
     }
 
     touch := TouchArea {

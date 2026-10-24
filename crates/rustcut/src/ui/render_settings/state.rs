@@ -193,43 +193,30 @@ impl PanelState {
 
     /// A typed value of a field row. `Err` keeps the field open and marked (the text is not a value).
     pub fn type_text(&mut self, row: Row, text: &str) -> Result<bool, NotAValue> {
-        let text = text.trim();
         let before = self.selection.working.clone();
-        let v = &mut self.selection.working.video;
+        apply_text(&mut self.selection.working.video, row, text)?;
+        Ok(self.selection.working != before)
+    }
+
+    /// Whether `text` would be a value of `row` (nothing changes; the bubble of a refused text, M6.5c).
+    pub fn check_text(&self, row: Row, text: &str) -> Result<(), NotAValue> {
+        apply_text(&mut self.selection.working.video.clone(), row, text)
+    }
+
+    /// What `row` takes, in words (the bubble of a refused text).
+    pub fn expected(&self, row: Row) -> String {
+        let v = &self.selection.working.video;
         match row {
             Row::RateValue => {
-                let value: u32 = text.parse().ok().ok_or(NotAValue)?;
-                v.rate_control = rate_with_value(v.encoder, v.rate_control, value).ok_or(NotAValue)?;
+                let (_, _, min, max) = rate_value(v.encoder, v.rate_control);
+                format!("Type a whole number from {min} to {max}.")
             }
-            Row::Level => {
-                if !text.is_empty() && !text.chars().all(|c| c.is_ascii_digit() || c == '.') {
-                    return Err(NotAValue);
-                }
-                v.level = (!text.is_empty()).then(|| text.to_owned());
-            }
-            Row::Keyint => {
-                v.keyint = if text.is_empty() {
-                    None
-                } else {
-                    Some(text.parse::<u32>().ok().filter(|k| *k > 0).ok_or(NotAValue)?)
-                };
-            }
-            Row::FilmGrain => {
-                v.film_grain = if text.is_empty() {
-                    None
-                } else {
-                    Some(
-                        text.parse::<u8>()
-                            .ok()
-                            .filter(|g| *g <= MAX_FILM_GRAIN)
-                            .ok_or(NotAValue)?,
-                    )
-                };
-            }
-            Row::CodecParams => v.codec_params = parse_params(text)?,
-            _ => return Err(NotAValue),
+            Row::Level => "Type a level such as 4.1, or leave it empty.".to_owned(),
+            Row::Keyint => "Type a whole number above 0, or leave it empty.".to_owned(),
+            Row::FilmGrain => format!("Type a whole number from 0 to {MAX_FILM_GRAIN}, or leave it empty."),
+            Row::CodecParams => "Type key=value pairs joined by \":\", for example aq-mode=3:psy-rd=1.0.".to_owned(),
+            _ => "This field takes no text.".to_owned(),
         }
-        Ok(self.selection.working != before)
     }
 
     /// The mouse wheel over a number row: `steps` up (positive) or down.
@@ -288,6 +275,45 @@ pub fn rate_value(encoder: VideoEncoder, rc: RateControl) -> (u32, i64, u32, u32
 }
 
 /// The rate control with a new number, when the number is in its range.
+/// Puts the typed `text` of `row` into `v`; `Err` when it is no value of the row.
+fn apply_text(v: &mut rustcut_core::render::VideoSettings, row: Row, text: &str) -> Result<(), NotAValue> {
+    let text = text.trim();
+    match row {
+        Row::RateValue => {
+            let value: u32 = text.parse().ok().ok_or(NotAValue)?;
+            v.rate_control = rate_with_value(v.encoder, v.rate_control, value).ok_or(NotAValue)?;
+        }
+        Row::Level => {
+            if !text.is_empty() && !text.chars().all(|c| c.is_ascii_digit() || c == '.') {
+                return Err(NotAValue);
+            }
+            v.level = (!text.is_empty()).then(|| text.to_owned());
+        }
+        Row::Keyint => {
+            v.keyint = if text.is_empty() {
+                None
+            } else {
+                Some(text.parse::<u32>().ok().filter(|k| *k > 0).ok_or(NotAValue)?)
+            };
+        }
+        Row::FilmGrain => {
+            v.film_grain = if text.is_empty() {
+                None
+            } else {
+                Some(
+                    text.parse::<u8>()
+                        .ok()
+                        .filter(|g| *g <= MAX_FILM_GRAIN)
+                        .ok_or(NotAValue)?,
+                )
+            };
+        }
+        Row::CodecParams => v.codec_params = parse_params(text)?,
+        _ => return Err(NotAValue),
+    }
+    Ok(())
+}
+
 fn rate_with_value(encoder: VideoEncoder, rc: RateControl, value: u32) -> Option<RateControl> {
     let (_, _, min, max) = rate_value(encoder, rc);
     if !(min..=max).contains(&value) {

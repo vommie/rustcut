@@ -39,6 +39,10 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     let t = this.clone();
     ui.on_type_text(move |key, text| with(&t, |b| b.edit(&key, Edit::Type(text.into())).is_ok()));
     let t = this.clone();
+    ui.on_text_typed(move |key, text| with(&t, |b| b.text_typed(&key, &text)));
+    let t = this.clone();
+    ui.on_text_canceled(move |key| with(&t, |b| b.text_canceled(&key)));
+    let t = this.clone();
     ui.on_step(move |key, steps| {
         with(&t, |b| b.edit(&key, Edit::Step(steps)).is_ok());
     });

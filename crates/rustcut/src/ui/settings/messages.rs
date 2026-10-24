@@ -112,7 +112,8 @@ pub fn test_note(route: Route) -> String {
             NoticePlace::Toast => "Shown as a toast".to_owned(),
             NoticePlace::Banner => "Shown as a banner over the video".to_owned(),
             NoticePlace::Status => "Shown in the status line".to_owned(),
-            NoticePlace::Bubble | NoticePlace::Dialog | NoticePlace::Nothing => {
+            NoticePlace::Bubble => "Shown as a bubble (here at the test button; usually at its field)".to_owned(),
+            NoticePlace::Dialog | NoticePlace::Nothing => {
                 "Not shown in the window: its place is \"Nothing\"".to_owned()
             }
         }
@@ -145,6 +146,7 @@ fn view(row: &KindRow) -> MessageKindView {
         place_index: i32::try_from(row.places.iter().position(|p| *p == row.place).unwrap_or(0)).unwrap_or(0),
         locked: info.critical,
         desktop: row.desktop,
+        desktop_allowed: info.place != NoticePlace::Bubble,
         mutable: notices::can_mute(row.kind),
         muted: row.muted,
         tested: row.tested.as_str().into(),
