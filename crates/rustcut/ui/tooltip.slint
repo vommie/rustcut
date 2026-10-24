@@ -39,6 +39,80 @@ export global GlobalTooltip {
     }
 }
 
+/// One line of a rich tooltip: a label and its value.
+export struct TipRow {
+    label: string,
+    value: string,
+}
+
+/// The rich bubble (M5.4): a title, rows of label and value and a note, for the details behind an "i". The tooltip
+/// overhaul (M5.5) builds on it. It shows even with tooltips switched off: an "i" is there only for it.
+export global RichTooltip {
+    in-out property <bool> is-visible: false;
+    in-out property <string> title;
+    in-out property <[TipRow]> rows;
+    in-out property <string> note;
+    in-out property <length> pos-x;
+    in-out property <length> pos-y;
+
+    public function show(title: string, rows: [TipRow], note: string, x: length, y: length) {
+        root.title = title;
+        root.rows = rows;
+        root.note = note;
+        root.pos-x = x;
+        root.pos-y = y;
+        root.is-visible = true;
+    }
+
+    public function hide() {
+        root.is-visible = false;
+    }
+}
+
+/// An area that shows a rich tooltip below itself while the pointer rests on it (after `delay`); a press hides it.
+export component RichTooltipArea inherits Rectangle {
+    in property <string> title;
+    in property <[TipRow]> rows;
+    in property <string> note;
+    in property <duration> delay: 150ms;
+    out property <bool> has-hover: touch.has-hover;
+
+    timer := Timer {
+        interval: root.delay;
+        running: false;
+        triggered => {
+            self.running = false;
+            if touch.has-hover {
+                RichTooltip.show(root.title, root.rows, root.note, root.absolute-position.x,
+                    root.absolute-position.y + root.height + 4px);
+            }
+        }
+    }
+
+    touch := TouchArea {
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                timer.running = false;
+                RichTooltip.hide();
+            } else if event.kind == PointerEventKind.move && !timer.running && !RichTooltip.is-visible {
+                // The area appeared under a resting pointer (no hover change): the first move starts it.
+                timer.running = true;
+            }
+        }
+    }
+
+    changed has-hover => {
+        if self.has-hover {
+            timer.running = true;
+        } else {
+            timer.running = false;
+            RichTooltip.hide();
+        }
+    }
+
+    @children
+}
+
 /// Embedded in an element: shows `text` (and the key `shortcut`) below the element after the hover delay.
 export component TooltipHost inherits Rectangle {
     in property <string> text;
@@ -127,7 +201,7 @@ export component TooltipLayer inherits Rectangle {
     property <length> bubble-w: bubble-layout.preferred-width;
     property <length> bubble-h: Math.max(bubble-layout.preferred-height, wrapped.preferred-height + 2 * TooltipSettings.padding-v);
 
-    visible: root.active;
+    visible: root.active || RichTooltip.is-visible;
     background: transparent;
 
     measure := Text {
@@ -149,6 +223,7 @@ export component TooltipLayer inherits Rectangle {
     property <length> want-y: GlobalTooltip.pos-y - root.absolute-position.y;
 
     Rectangle {
+        visible: root.active;
         x: Math.max(8px, Math.min(root.width - root.bubble-w - 8px, root.want-x));
         y: root.want-y + root.bubble-h + 8px > root.height
             ? Math.max(8px, root.want-y - root.bubble-h - 34px)
@@ -200,6 +275,71 @@ export component TooltipLayer inherits Rectangle {
                         vertical-alignment: center;
                     }
                 }
+            }
+        }
+    }
+
+    // The rich bubble (RichTooltip): kept inside the window, above the element when there is no room below.
+    property <length> rich-x: RichTooltip.pos-x - root.absolute-position.x;
+    property <length> rich-y: RichTooltip.pos-y - root.absolute-position.y;
+
+    if RichTooltip.is-visible: Rectangle {
+        width: Math.min(340px, rich-layout.preferred-width);
+        height: rich-layout.preferred-height;
+        x: Math.max(8px, Math.min(root.width - self.width - 8px, root.rich-x));
+        y: root.rich-y + self.height + 8px > root.height ? Math.max(8px, root.rich-y - self.height - 34px) : root.rich-y;
+        background: TooltipSettings.background;
+        border-radius: 6px;
+        border-width: 1px;
+        border-color: TooltipSettings.border;
+        drop-shadow-blur: 12px;
+        drop-shadow-color: #000000aa;
+        drop-shadow-offset-y: 3px;
+
+        rich-layout := VerticalLayout {
+            padding-left: 10px;
+            padding-right: 10px;
+            padding-top: 7px;
+            padding-bottom: 8px;
+            spacing: 3px;
+
+            Text {
+                text: RichTooltip.title;
+                font-size: TooltipSettings.font-size;
+                font-weight: 700;
+                color: TooltipSettings.text;
+                overflow: elide;
+            }
+
+            Rectangle {
+                height: 1px;
+                background: TooltipSettings.border;
+            }
+
+            for tip in RichTooltip.rows: HorizontalLayout {
+                spacing: 10px;
+
+                Text {
+                    width: 64px;
+                    text: tip.label;
+                    font-size: 11px;
+                    color: #a6adc8;
+                }
+
+                Text {
+                    horizontal-stretch: 1;
+                    text: tip.value;
+                    font-size: 11px;
+                    color: TooltipSettings.text;
+                    wrap: word-wrap;
+                }
+            }
+
+            if RichTooltip.note != "": Text {
+                text: RichTooltip.note;
+                font-size: 11px;
+                color: TooltipSettings.shortcut-color;
+                wrap: word-wrap;
             }
         }
     }

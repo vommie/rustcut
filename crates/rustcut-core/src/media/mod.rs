@@ -5,6 +5,7 @@
 
 mod detect;
 mod ffprobe;
+mod formats;
 mod model;
 mod preview;
 mod probe;
@@ -17,6 +18,7 @@ pub use detect::{
     parse_idet,
 };
 pub use ffprobe::{DecodeError, decode, decode_timing};
+pub use formats::{VIDEO_FORMATS, is_video_file, video_extensions};
 pub use model::{
     AudioStream, ColorInfo, Container, FieldOrder, FrameRateMode, FrameTiming, MediaInfo, Ratio, Stream, StreamKind,
     VideoStream,

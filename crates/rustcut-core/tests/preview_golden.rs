@@ -161,3 +161,21 @@ fn a_missing_ffmpeg_is_a_problem_not_an_error() {
         preview.problem
     );
 }
+
+#[test]
+fn every_video_format_rustcut_lists_is_read_by_the_installed_ffmpeg() {
+    let out = std::process::Command::new("ffmpeg")
+        .args(["-hide_banner", "-demuxers"])
+        .output()
+        .expect("ffmpeg must be installed (sudo pacman -S ffmpeg)");
+    let text = String::from_utf8_lossy(&out.stdout);
+    // Lines like " D  matroska,webm    Matroska / WebM": the names are the second column, comma-separated.
+    let demuxers: Vec<&str> = text
+        .lines()
+        .filter_map(|l| l.split_whitespace().nth(1))
+        .flat_map(|names| names.split(','))
+        .collect();
+    for (ext, demuxer) in rustcut_core::media::VIDEO_FORMATS {
+        assert!(demuxers.contains(demuxer), ".{ext}: ffmpeg has no demuxer {demuxer}");
+    }
+}

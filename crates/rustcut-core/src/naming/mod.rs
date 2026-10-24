@@ -8,7 +8,7 @@ mod variant;
 
 pub use conflict::{
     CheckInput, Conflicts, ExistingFile, FolderScan, MAX_SCANNED, MAX_SIMILAR, QueuedTarget, Taken, TypedNameError,
-    check, existing_file, free_variant, next_free_counter, scan_folder, typed_stem,
+    check, existing_file, free_variant, next_free_counter, next_free_counter_except, scan_folder, typed_stem,
 };
 pub use series::{SeriesFile, series};
 pub use template::{DEFAULT_TEMPLATE, NameContext, NameError, render_stem, used_variables};

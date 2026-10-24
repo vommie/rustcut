@@ -110,6 +110,11 @@ clear_sections = { tabler = "eraser", doc = "Clear the section list after each s
 existing_file = { tabler = "file", doc = "The target file exists" }
 reveal_file = { tabler = "folder-search", doc = "Show the file in the file manager" }
 play_file = { tabler = "player-play", doc = "Play the file in the default player" }
+details = { tabler = "info-circle", doc = "Details of a file (hover shows them)" }
+preview_loading = { tabler = "movie", doc = "A picture of a video is being made" }
+preview_none = { tabler = "photo-off", doc = "A video without a picture" }
+preview_audio = { tabler = "music", doc = "A file with sound only" }
+preview_failed = { tabler = "file-alert", doc = "A file that cannot be read" }
 
 # Queue (M2.6)
 queue_pause = { tabler = "player-pause", doc = "Pause processing (running renders stop where they are)" }

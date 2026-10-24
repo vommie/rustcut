@@ -1,6 +1,7 @@
 // The question before a queued job replaces the editor's draft (src/ui/editing/; setting `editor.draft_on_load = "ask"`,
 // user decision Q-Q3): replace it, keep it for later (it comes back when the editing ends), or cancel (Escape).
 
+import { DialogFrame, DialogState } from "dialog_frame.slint";
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { DialogButton } from "export_dialog.slint";
@@ -27,20 +28,20 @@ export component JobLoadDialog inherits Rectangle {
             accept
         }
 
-        card := Rectangle {
-            width: Math.min(460px, root.width - 40px);
-            height: Math.min(content.preferred-height, root.height - 40px);
-            x: (root.width - self.width) / 2;
-            y: (root.height - self.height) / 2;
-            border-radius: 8px;
-            background: Theme.surface-variant;
-            border-width: 1px;
-            border-color: Theme.border;
-            drop-shadow-blur: 24px;
-            drop-shadow-color: #00000080;
-            clip: true;
+        // Resizable; never smaller than its content, extra height stays free below it.
+        card := DialogFrame {
+            area-width: root.width;
+            area-height: root.height;
+            default-width: 460px;
+            default-height: content.preferred-height;
+            least-width: 360px;
+            least-height: content.preferred-height;
+            stored-width <=> DialogState.job-load-width;
+            stored-height <=> DialogState.job-load-height;
 
             content := VerticalLayout {
+                y: 0;
+                height: self.preferred-height;
                 padding: 16px;
                 spacing: 12px;
 

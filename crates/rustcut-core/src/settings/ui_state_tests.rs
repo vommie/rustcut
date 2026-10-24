@@ -298,3 +298,34 @@ fn the_log_source_round_trips_and_unknown_sources_read_as_the_job() {
         assert_eq!((read.logs.source, read.logs.search.as_str()), (LogSource::Job, "x"));
     }
 }
+
+#[test]
+fn dialog_sizes_round_trip_and_old_files_load() {
+    use crate::settings::{DialogSize, DialogUiState};
+    let dir = tempfile::tempdir().unwrap();
+    // 0.0.19 wrote no `[dialogs]`.
+    std::fs::write(
+        dir.path().join("ui-state.toml"),
+        "version = 1\n[window]\nwidth = 1000\n",
+    )
+    .unwrap();
+    let loaded = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+    assert_eq!(loaded.dialogs, DialogUiState::default());
+    assert!(!dir.path().join("b").exists(), "no migration, no backup");
+
+    let mut state = UiState::default();
+    state.dialogs.sizes.insert(
+        "conflict".into(),
+        Some(DialogSize {
+            width: 720,
+            height: 560,
+        }),
+    );
+    state.dialogs.conflict_others_folded = true;
+    save(dir.path(), &state).unwrap();
+    let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+    assert_eq!(read.dialogs, state.dialogs);
+    std::fs::write(dir.path().join("ui-state.toml"), "version = 1\ndialogs = 3\n").unwrap();
+    let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+    assert_eq!(read.dialogs, DialogUiState::default(), "unreadable = missing");
+}

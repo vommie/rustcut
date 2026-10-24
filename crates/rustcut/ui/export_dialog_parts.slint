@@ -1,0 +1,475 @@
+// The parts of the conflict dialog (export_dialog.slint): footer buttons, a choice row, the tab bar, the picture of a
+// file with its placeholders and details, and the rows of the "Similar files" list (user decision Q-X6).
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { Shortcuts } from "shortcuts.slint";
+import { RichTooltipArea, TooltipArea } from "tooltip.slint";
+import { IconButton } from "controls.slint";
+import { CollapsiblePanel } from "collapsible_panel.slint";
+import { ConflictOptionView, Export, PreviewView } from "export_types.slint";
+
+/// A text button of a dialog's footer.
+export component DialogButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 30px;
+    min-width: 84px;
+    preferred-width: label.preferred-width + 28px;
+    horizontal-stretch: 0;
+    border-radius: 5px;
+    background: !root.enabled ? Theme.surface-variant
+        : root.primary ? (touch.pressed ? Theme.primary.darker(0.2) : touch.has-hover ? Theme.primary.brighter(0.1) : Theme.primary)
+        : (touch.pressed ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : Theme.surface);
+    border-width: 1px;
+    border-color: root.primary && root.enabled ? Theme.primary : Theme.border;
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+
+    label := Text {
+        text: root.text;
+        color: !root.enabled ? Theme.status-deleted : root.primary ? Theme.background : Theme.text;
+        font-size: 12px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+}
+
+/// A choice: the radio mark, its key, the title, the file name it leads to and a line about it.
+export component OptionRow inherits Rectangle {
+    in property <ConflictOptionView> option;
+    in property <bool> selected;
+    in property <string> typed;
+    callback picked();
+    callback confirmed();
+    callback typed-changed(string);
+
+    property <bool> usable: root.option.enabled || root.option.typed;
+
+    min-height: 40px;
+    border-radius: 5px;
+    background: root.selected ? Theme.primary.with-alpha(0.14) : touch.has-hover && root.usable ? Theme.surface-hover : transparent;
+    border-width: 1px;
+    border-color: root.selected ? Theme.primary : transparent;
+
+    touch := TouchArea {
+        enabled: root.usable;
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.picked(); }
+        double-clicked => {
+            root.picked();
+            root.confirmed();
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+        spacing: 8px;
+
+        // Radio mark.
+        Rectangle {
+            y: 3px;
+            width: 14px;
+            height: 14px;
+            border-radius: 7px;
+            border-width: 1.5px;
+            border-color: root.selected ? Theme.primary : root.usable ? Theme.text-muted : Theme.status-deleted;
+
+            Rectangle {
+                visible: root.selected;
+                width: 6px;
+                height: 6px;
+                border-radius: 3px;
+                background: Theme.primary;
+            }
+        }
+
+        // The key that picks it.
+        Rectangle {
+            y: 1px;
+            width: 16px;
+            height: 17px;
+            border-radius: 3px;
+            background: Theme.surface-selected.with-alpha(0.6);
+
+            Text {
+                text: root.option.key + 1;
+                color: Theme.text-muted;
+                font-size: 10px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 2px;
+
+            HorizontalLayout {
+                spacing: 10px;
+
+                Text {
+                    min-width: 120px;
+                    horizontal-stretch: 0;
+                    text: root.option.title;
+                    color: !root.usable ? Theme.status-deleted : root.option.destructive ? Theme.accent : Theme.text;
+                    font-size: 12px;
+                    font-weight: 600;
+                    vertical-alignment: center;
+                }
+
+                if !root.option.typed: Text {
+                    horizontal-stretch: 1;
+                    text: root.option.file;
+                    color: root.usable ? Theme.primary : Theme.status-deleted;
+                    font-size: 12px;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+
+                if root.option.typed: Rectangle {
+                    horizontal-stretch: 1;
+                    height: 22px;
+                    border-radius: 3px;
+                    background: Theme.background;
+                    border-width: 1px;
+                    border-color: input.has-focus ? Theme.primary : Theme.border;
+
+                    input := TextInput {
+                        x: 5px;
+                        width: parent.width - 10px;
+                        height: parent.height;
+                        single-line: true;
+                        text: root.typed;
+                        color: Theme.text;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        selection-background-color: Theme.primary.with-alpha(0.4);
+
+                        edited => { root.typed-changed(self.text); }
+                        accepted => { root.confirmed(); }
+                        key-pressed(event) => {
+                            if event.text == Key.Escape {
+                                Export.dialog-cancel();
+                                return accept;
+                            }
+                            reject
+                        }
+                        changed has-focus => {
+                            Shortcuts.editing-changed(self.has-focus);
+                            if self.has-focus {
+                                root.picked();
+                            }
+                        }
+                    }
+                }
+            }
+
+            Text {
+                text: root.option.typed && root.option.file != "" ? root.option.file + ": " + root.option.detail : root.option.detail;
+                color: root.option.typed && !root.option.enabled ? Theme.accent : Theme.text-muted;
+                font-size: 11px;
+                wrap: word-wrap;
+            }
+        }
+    }
+}
+
+/// The dialog's tabs: a click shows one; the shown tab is underlined.
+export component DialogTabs inherits Rectangle {
+    in property <[string]> titles;
+    in property <int> current;
+    callback picked(int);
+
+    height: 28px;
+
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.border;
+    }
+
+    HorizontalLayout {
+        alignment: start;
+        spacing: 2px;
+
+        for title[i] in root.titles: Rectangle {
+            width: label.preferred-width + 22px;
+            border-radius: 4px;
+            background: tab.has-hover && i != root.current ? Theme.surface-hover : transparent;
+
+            label := Text {
+                x: 10px;
+                text: title;
+                color: i == root.current ? Theme.text : Theme.text-muted;
+                font-size: 12px;
+                font-weight: i == root.current ? 700 : 500;
+                horizontal-alignment: left;
+                vertical-alignment: center;
+            }
+
+            Rectangle {
+                visible: i == root.current;
+                y: parent.height - 2px;
+                height: 2px;
+                background: Theme.primary;
+            }
+
+            tab := TouchArea {
+                mouse-cursor: MouseCursor.pointer;
+                clicked => { root.picked(i); }
+            }
+        }
+    }
+}
+
+/// The picture of a file (16:9) with its placeholder while it is made, an icon and a short reason when there is none,
+/// the series number, and an "i" in the top right corner whose tooltip has the details. A click plays the file.
+export component PreviewPicture inherits Rectangle {
+    in property <PreviewView> preview;
+    callback play();
+
+    property <bool> loading: root.preview.state == 0;
+
+    height: self.width * 9 / 16;
+    border-radius: 5px;
+    clip: true;
+    background: root.preview.state == 1 ? #000000 : Theme.surface;
+    // Hover: a primary border and a play badge (a click plays the file); the target keeps its accent border.
+    border-width: root.preview.is-target || touch.has-hover ? 2px : 1px;
+    border-color: touch.has-hover ? Theme.primary : root.preview.is-target ? Theme.accent : Theme.border;
+
+    if root.preview.state == 1: Image {
+        width: parent.width;
+        height: parent.height;
+        source: root.preview.picture;
+        image-fit: contain;
+    }
+
+    // Placeholder: a calmly pulsing film while the picture is made.
+    if root.loading: AppIcon {
+        icon: IconId.preview-loading;
+        size: Math.min(IconSize.xl, root.height * 0.4);
+        color: Theme.text-muted.with-alpha(0.3 + 0.25 * (1 + Math.sin(animation-tick() / 1000ms * 360deg)) / 2);
+    }
+
+    if root.preview.state >= 2: VerticalLayout {
+        alignment: center;
+        spacing: 3px;
+        padding: 6px;
+
+        HorizontalLayout {
+            alignment: center;
+
+            AppIcon {
+                icon: root.preview.state == 3 ? IconId.preview-failed
+                    : root.preview.note == "Audio only" ? IconId.preview-audio : IconId.preview-none;
+                size: Math.min(IconSize.xl, root.height * 0.3);
+                color: root.preview.state == 3 ? Theme.status-corrupt : Theme.text-muted;
+            }
+        }
+
+        Text {
+            text: root.preview.note;
+            color: Theme.text-muted;
+            font-size: 10px;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+            overflow: elide;
+            max-height: root.height * 0.45;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.play(); }
+    }
+
+    if touch.has-hover: Rectangle {
+        width: Math.min(30px, root.height * 0.5);
+        height: self.width;
+        border-radius: self.width / 2;
+        background: #11111bc8;
+        border-width: 1px;
+        border-color: Theme.primary;
+
+        AppIcon {
+            icon: IconId.play-file;
+            size: Math.min(IconSize.md, parent.width * 0.55);
+            color: Theme.primary;
+        }
+    }
+
+    // The series number.
+    if root.preview.counter != "": Rectangle {
+        x: 4px;
+        y: parent.height - self.height - 4px;
+        width: number.preferred-width + 8px;
+        height: 16px;
+        border-radius: 3px;
+        background: #11111bd0;
+
+        number := Text {
+            text: root.preview.counter;
+            color: root.preview.is-target ? Theme.accent : Theme.text;
+            font-size: 10px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+
+    // The details.
+    if root.preview.tip-rows.length > 0: RichTooltipArea {
+        x: parent.width - self.width - 3px;
+        y: 3px;
+        width: 20px;
+        height: 20px;
+        title: root.preview.name;
+        rows: root.preview.tip-rows;
+        note: "";
+
+        Rectangle {
+            border-radius: 10px;
+            background: self.has-hover-in ? Theme.primary.with-alpha(0.9) : #11111bc0;
+            property <bool> has-hover-in: parent.has-hover;
+
+            AppIcon {
+                icon: IconId.details;
+                size: IconSize.sm;
+                color: parent.has-hover-in ? Theme.background : Theme.text;
+            }
+        }
+    }
+}
+
+/// A row of the "Similar files" list: a file with its picture, its name, what it is and when it was changed, and buttons
+/// to play it or show it in the file manager.
+export component PreviewRow inherits Rectangle {
+    in property <PreviewView> preview;
+    in property <length> picture-width;
+
+    height: root.picture-width * 9 / 16 + 8px;
+    border-radius: 5px;
+    background: row-touch.has-hover ? Theme.surface-hover : transparent;
+
+    // Hover shows the row; a double click plays the file (the picture and the buttons act on one click).
+    row-touch := TouchArea {
+        double-clicked => { Export.dialog-open-file(root.preview.group, root.preview.index, false); }
+    }
+
+    HorizontalLayout {
+        padding-top: 4px;
+        padding-bottom: 4px;
+        padding-left: 4px;
+        padding-right: 6px;
+        spacing: 10px;
+
+        PreviewPicture {
+            width: root.picture-width;
+            preview: root.preview;
+            play => { Export.dialog-open-file(root.preview.group, root.preview.index, false); }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 2px;
+
+            HorizontalLayout {
+                spacing: 6px;
+
+                TooltipArea {
+                    text: root.preview.name;
+                    height: 16px;
+                    horizontal-stretch: 1;
+
+                    Text {
+                        width: parent.width;
+                        text: root.preview.name;
+                        color: root.preview.is-target ? Theme.accent : Theme.text;
+                        font-size: 12px;
+                        font-weight: 600;
+                        overflow: elide;
+                    }
+                }
+
+                if root.preview.is-target: Rectangle {
+                    width: tag.preferred-width + 10px;
+                    height: 16px;
+                    border-radius: 3px;
+                    background: Theme.accent.with-alpha(0.18);
+
+                    tag := Text {
+                        text: "This name";
+                        color: Theme.accent;
+                        font-size: 10px;
+                        font-weight: 600;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            Text {
+                text: root.preview.facts;
+                color: Theme.text-muted;
+                font-size: 11px;
+                overflow: elide;
+            }
+
+            if root.preview.date != "": Text {
+                text: "Modified " + root.preview.date;
+                color: Theme.text-muted;
+                font-size: 11px;
+            }
+        }
+
+        IconButton {
+            y: (parent.height - self.height) / 2;
+            icon: IconId.play-file;
+            tooltip: "Play in the default player";
+            clicked => { Export.dialog-open-file(root.preview.group, root.preview.index, false); }
+        }
+
+        IconButton {
+            y: (parent.height - self.height) / 2;
+            icon: IconId.reveal-file;
+            tooltip: "Show in the file manager";
+            clicked => { Export.dialog-open-file(root.preview.group, root.preview.index, true); }
+        }
+    }
+}
+
+/// A group of the "Similar files" list (RustView's collapsible panel: title, count, fold with a click; the app keeps the
+/// folded state).
+export component SimilarGroup inherits CollapsiblePanel {
+    in property <[PreviewView]> files;
+    in property <length> picture-width;
+
+    header-height: 26px;
+    body-height: rows.preferred-height;
+
+    rows := VerticalLayout {
+        padding: 4px;
+        spacing: 2px;
+
+        for file in root.files: PreviewRow {
+            preview: file;
+            picture-width: root.picture-width;
+        }
+    }
+}

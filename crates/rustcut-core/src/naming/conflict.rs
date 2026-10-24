@@ -185,7 +185,20 @@ pub fn next_free_counter(
     taken: &Taken<'_>,
     stem_for: impl Fn(u32) -> Result<String, NameError>,
 ) -> Option<(u32, String)> {
+    next_free_counter_except(counter, container, taken, &[], stem_for)
+}
+
+/// [`next_free_counter`] that also passes over the numbers in `used` (the name's numbered series in other formats:
+/// "Clip - 02.mp4" makes 02 taken for an MKV job too, so a series never gets the same number twice).
+pub fn next_free_counter_except(
+    counter: u32,
+    container: Container,
+    taken: &Taken<'_>,
+    used: &[u32],
+    stem_for: impl Fn(u32) -> Result<String, NameError>,
+) -> Option<(u32, String)> {
     (counter.saturating_add(1)..counter.saturating_add(MAX_COUNTER_TRIES))
+        .filter(|n| !used.contains(n))
         .map(|n| stem_for(n).map(|stem| (n, stem)))
         .find(|candidate| match candidate {
             Ok((_, stem)) => taken.stem_free(stem, container),
@@ -321,6 +334,11 @@ mod tests {
         assert_eq!(
             next_free_counter(1, Container::Mkv, &taken, |_| Err(NameError::Empty)),
             None
+        );
+        assert_eq!(
+            next_free_counter_except(1, Container::Mkv, &taken, &[4, 5, 7], stem_for),
+            Some((6, "Clip - 06".into())),
+            "04 and 05 exist in other formats"
         );
     }
 

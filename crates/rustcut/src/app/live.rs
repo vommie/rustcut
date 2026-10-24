@@ -82,7 +82,10 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
     }
     if (before.export != after.export
         || before.warnings != after.warnings
-        || before.editor.auto_section != after.editor.auto_section)
+        || before.editor.auto_section != after.editor.auto_section
+        || before.dialogs != after.dialogs
+        || before.advanced.ffmpeg != after.advanced.ffmpeg
+        || before.advanced.ffprobe != after.advanced.ffprobe)
         && let Some(export) = p.export.upgrade()
     {
         export.settings_changed(after);

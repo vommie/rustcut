@@ -2,6 +2,7 @@
 //! tests walk them). The pages with their own editors add those below their cards (`Page::special`).
 
 mod app;
+mod dialogs;
 mod editing;
 mod work;
 
@@ -29,6 +30,7 @@ pub fn cards(page: Page) -> &'static [Card] {
         Page::Queue => work::QUEUE,
         Page::RustView => work::RUSTVIEW,
         Page::Warnings => app::WARNINGS,
+        Page::Dialogs => dialogs::DIALOGS,
         Page::Desktop => app::DESKTOP,
         Page::Appearance => app::APPEARANCE,
         Page::Advanced => app::ADVANCED,

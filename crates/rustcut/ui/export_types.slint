@@ -1,8 +1,12 @@
 // The data of the Job Finalization card and of the conflict dialog (src/ui/export/ fills `Export` and handles its
 // callbacks). The queue panel's global is in queue_types.slint.
 
+import { TipRow } from "tooltip.slint";
+
 // One way out of a target conflict. `file` is the name it leads to; `destructive` replaces or removes something.
 export struct ConflictOptionView {
+    // The index of the choice among all of the dialog's choices (key = index + 1); the tab shows only its own.
+    key: int,
     title: string,
     file: string,
     detail: string,
@@ -10,6 +14,27 @@ export struct ConflictOptionView {
     destructive: bool,
     // The choice whose file name is typed in the dialog.
     typed: bool,
+}
+
+// A file of the conflict dialog with its preview (src/ui/export/previews.rs). `state`: 0 loading, 1 picture,
+// 2 no picture (`note` says why), 3 not readable.
+export struct PreviewView {
+    // 1 = the series, 2 = the other names (0 = the existing file); `index` within the group.
+    group: int,
+    index: int,
+    name: string,
+    // The number in the series ("07"), empty for other names.
+    counter: string,
+    // The target file itself.
+    is-target: bool,
+    state: int,
+    picture: image,
+    // "812 MB · 4:12 · 1920×1080", "812 MB · 4:12", "2026-10-20 14:32".
+    facts: string,
+    short: string,
+    date: string,
+    note: string,
+    tip-rows: [TipRow],
 }
 
 // A queued job that writes the same file.
@@ -67,16 +92,30 @@ export global Export {
     in property <string> dialog-title;
     in property <string> dialog-file;
     in property <string> dialog-folder;
-    in property <string> dialog-exists;
+    // The whole target path, and what follows the folder in it ("/Clip - 01.mkv"): the folder is cut when it is long,
+    // never the file name.
+    in property <string> dialog-path;
+    in property <string> dialog-file-tail;
+    in property <bool> dialog-has-existing;
+    // The tabs (user decision Q-X6): titles with counts, the shown one and what it is (0 decision, 1 other name,
+    // 2 similar files, 3 queue).
+    in property <[string]> dialog-tabs;
+    in property <int> dialog-tab;
+    in property <int> dialog-tab-kind;
+    in property <[ConflictOptionView]> dialog-tab-options;
     in property <string> dialog-jobs-title;
     in property <[ConflictJobView]> dialog-jobs;
-    in property <string> dialog-similar;
-    in property <string> dialog-similar-tooltip;
-    in property <[ConflictOptionView]> dialog-options;
+    // The existing file and the "Similar files" groups (the numbered series, the other similar names) with their
+    // previews.
+    in property <PreviewView> dialog-existing;
+    in property <[PreviewView]> dialog-series;
+    in property <[PreviewView]> dialog-others;
+    in property <string> dialog-others-title;
+    // "Reading 12 of 40 files" while previews are read, else empty.
+    in property <string> dialog-previews-progress;
+    in property <int> dialog-tile-width: 112;
     in property <int> dialog-selected;
     in property <string> dialog-typed;
-    in property <string> dialog-dont-ask-text;
-    in property <bool> dialog-dont-ask;
     in property <bool> dialog-can-confirm;
     in property <string> dialog-confirm-text;
 
@@ -94,9 +133,11 @@ export global Export {
     callback dialog-select(int);
     callback dialog-step(int);
     callback dialog-type(string);
-    callback dialog-toggle-dont-ask();
     callback dialog-confirm();
     callback dialog-cancel();
-    callback dialog-play-existing();
-    callback dialog-reveal();
+    callback dialog-set-tab(int);
+    callback dialog-cycle-tab(int);
+    // A file of the dialog: `group` 0 = the existing file, 1 = the series, 2 = the other names; played in the default
+    // player or (`reveal`) shown in the file manager.
+    callback dialog-open-file(int, int, bool);
 }

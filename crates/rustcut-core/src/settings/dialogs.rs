@@ -111,12 +111,12 @@ pub enum TileSize {
 }
 
 impl TileSize {
-    /// The width of a tile in logical pixels (16:9 pictures).
+    /// The width of a picture in the list in logical pixels (16:9).
     pub const fn width(self) -> u32 {
         match self {
-            Self::Small => 112,
-            Self::Medium => 144,
-            Self::Large => 192,
+            Self::Small => 80,
+            Self::Medium => 112,
+            Self::Large => 160,
         }
     }
 }
