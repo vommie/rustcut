@@ -1,6 +1,6 @@
 //! The sync actor against a real RustView (`rustview api`) and a **test** library: never the user's library. The test
-//! runs only through `scripts/rustview-live-test.sh` (it is ignored otherwise, because RustView is not a build
-//! dependency): the script names the binary (`RUSTCUT_RUSTVIEW_BIN`) and optionally a library to start from
+//! runs only through `rc-testenv test rustview` (it is ignored otherwise, because RustView is not a build
+//! dependency): the tool names the binary (`RUSTCUT_RUSTVIEW_BIN`) and optionally a library to start from
 //! (`RUSTCUT_RUSTVIEW_LIBRARY`, a `library.lmdb` folder that is copied, never opened in place). Every `rustview` child
 //! gets `XDG_DATA_HOME`/`XDG_CONFIG_HOME` in a temporary folder, which is where RustView keeps its library.
 #![allow(
@@ -36,7 +36,7 @@ impl Env {
     fn new() -> Self {
         let binary = std::env::var_os("RUSTCUT_RUSTVIEW_BIN")
             .map(PathBuf::from)
-            .expect("RUSTCUT_RUSTVIEW_BIN names the rustview binary (run scripts/rustview-live-test.sh)");
+            .expect("RUSTCUT_RUSTVIEW_BIN names the rustview binary (run rc-testenv test rustview)");
         let home = tempfile::tempdir().unwrap();
         let data = home.path().join("data");
         let config = home.path().join("config");
@@ -108,7 +108,7 @@ fn cleanup(sync: &rustcut_core::rustview::SyncService, id: i64) {
 }
 
 #[tokio::test]
-#[ignore = "needs a RustView binary and a test library: scripts/rustview-live-test.sh"]
+#[ignore = "needs a RustView binary and a test library: rc-testenv test rustview"]
 async fn the_sync_actor_keeps_a_real_rustview_library_in_step() {
     let env = Env::new();
     let client = env.client();

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Talks to the Slint MCP server of a running RustCut (debug builds have the default `slint-mcp` feature; the app listens
-when started with SLINT_MCP_PORT, e.g. by `scripts/session.sh --mcp PORT`). Standard library only.
+when started with SLINT_MCP_PORT, as `rc-testenv session` does). Standard library only.
 
     scripts/mcp.py [--port P] tools                     list the server's tools
     scripts/mcp.py [--port P] call TOOL [JSON]          call a tool, print its result
@@ -10,6 +10,7 @@ when started with SLINT_MCP_PORT, e.g. by `scripts/session.sh --mcp PORT`). Stan
     scripts/mcp.py [--port P] shot FILE                 PNG screenshot of the main window (as Slint renders it)
     scripts/mcp.py [--port P] key CHORD                 a key or chord (`ctrl+s`, `Escape`, `shift+Right`) delivered
                                                         inside the app: nothing reaches other windows, nothing stays held
+    scripts/mcp.py [--port P] type TEXT                 text typed inside the app, one character after the other
 
 `--window N` (after `--port`) acts on the N-th open window instead of the first (the Settings window once it is open).
 The port defaults to $SLINT_MCP_PORT, then 9315. Exit code 1 on any error.
@@ -109,6 +110,12 @@ def key(port, chord):
                 pass  # the window is gone (the key quit the app): nothing is held anywhere
 
 
+def type_text(port, text):
+    window = main_window(port)
+    for char in text:
+        call(port, "dispatch_key_event", {"windowHandle": window, "text": char, "eventType": "PressAndRelease"})
+
+
 def find(port, element_id):
     window = main_window(port)
     found = first(call(port, "find_elements_by_id", {"windowHandle": window, "elementsId": element_id}))
@@ -152,6 +159,8 @@ def main(argv):
         print(json.dumps(call(port, "click_element", {"elementHandle": handles[0]})))
     elif command == "key":
         key(port, rest[0])
+    elif command == "type":
+        type_text(port, rest[0])
     elif command == "shot":
         window = main_window(port)
         for block in call(port, "take_screenshot", {"windowHandle": window, "imageMimeType": "image/png"}):
