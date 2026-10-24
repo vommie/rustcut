@@ -4,7 +4,7 @@
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Shortcuts } from "shortcuts.slint";
-import { RichTooltipArea, TooltipArea } from "tooltip.slint";
+import { TooltipArea } from "tooltip.slint";
 import { IconButton } from "controls.slint";
 import { CollapsiblePanel } from "collapsible_panel.slint";
 import { ConflictOptionView, Export, PreviewView } from "export_types.slint";
@@ -333,14 +333,15 @@ export component PreviewPicture inherits Rectangle {
     }
 
     // The details.
-    if root.preview.tip-rows.length > 0: RichTooltipArea {
+    if root.preview.tip-rows.length > 0: TooltipArea {
         x: parent.width - self.width - 3px;
         y: 3px;
         width: 20px;
         height: 20px;
         title: root.preview.name;
         rows: root.preview.tip-rows;
-        note: "";
+        forced: true;
+        delay: 150ms;
 
         Rectangle {
             border-radius: 10px;

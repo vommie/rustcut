@@ -8,6 +8,11 @@ export global Playback {
     in property <bool> has-video;
     in property <bool> paused: true;
     in property <bool> muted;
+    // The keys of the transport buttons for their tooltips (the keymap's labels, src/ui/editor/).
+    in property <string> key-toggle-pause;
+    in property <string> key-frame-back;
+    in property <string> key-frame-forward;
+    in property <string> key-toggle-mute;
     // Volume in percent (0-150).
     in property <int> volume: 100;
     // Current and total time as H:MM:SS.mmm.

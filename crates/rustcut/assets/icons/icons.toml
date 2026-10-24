@@ -167,3 +167,10 @@ profile_default_set = { tabler = "star", style = "filled", doc = "The profile ne
 
 # --- Power and quitting ----------------------------------------------------------------------------------------------
 when_done = { tabler = "power", doc = "What happens when the queue is done (nothing, notify, quit, suspend, power off)" }
+
+# --- Tooltips ------------------------------------------------------------------------------------------------------
+key_left = { tabler = "arrow-left", doc = "The Left arrow key on a key cap" }
+key_right = { tabler = "arrow-right", doc = "The Right arrow key on a key cap" }
+key_up = { tabler = "arrow-up", doc = "The Up arrow key on a key cap" }
+key_down = { tabler = "arrow-down", doc = "The Down arrow key on a key cap" }
+tip_hold = { tabler = "hand-click", doc = "A button that acts only when held (in its tooltip)" }

@@ -189,7 +189,7 @@ pub(super) fn publish_toolbar(q: &Queue<'_>, selected: &[JobSummary], visible: &
     q.set_cancel_tooltip(
         if cancel > 0 {
             format!(
-                "Hold to cancel {} (a running render stops, an existing target stays)",
+                "Cancel {} (a running render stops, an existing target stays)",
                 jobs(cancel)
             )
         } else {
@@ -201,10 +201,7 @@ pub(super) fn publish_toolbar(q: &Queue<'_>, selected: &[JobSummary], visible: &
     q.set_can_remove(remove > 0);
     q.set_remove_tooltip(
         if remove > 0 {
-            format!(
-                "Hold to remove {} from the queue (output and source files stay)",
-                jobs(remove)
-            )
+            format!("Remove {} from the queue (output and source files stay)", jobs(remove))
         } else {
             "Remove the selected jobs (not while they render)".to_owned()
         }
@@ -251,8 +248,8 @@ pub(super) fn publish_toolbar(q: &Queue<'_>, selected: &[JobSummary], visible: &
     q.set_remove_finished_tooltip(
         match finished {
             0 => "Remove the finished jobs (there are none)".to_owned(),
-            1 => "Hold to remove the finished job from the queue (its file stays)".to_owned(),
-            n => format!("Hold to remove the {n} finished jobs from the queue (their files stay)"),
+            1 => "Remove the finished job from the queue (its file stays)".to_owned(),
+            n => format!("Remove the {n} finished jobs from the queue (their files stay)"),
         }
         .into(),
     );

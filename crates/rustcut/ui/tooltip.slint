@@ -1,157 +1,250 @@
-// Tooltips, ported from RustView (crates/rustview/ui/tooltips.slint and global_tooltip_layer.slint): a host inside each
-// element starts a hover timer and fills `GlobalTooltip`; one `TooltipLayer` on top of the main window draws the bubble
-// (no popup window, so it never grabs the pointer). RustCut drops RustView's native-window cut-outs (the video is a Slint
-// image here) and its busy reasons.
+// RustCut's tooltips (M5.5, user decisions Q-H1..Q-H4): one bubble per window, drawn by `TooltipLayer`
+// (tooltip_layer.slint) on top of everything (no popup window, so it never grabs the pointer). An element embeds a
+// `TooltipHost` (or wraps its children in a `TooltipArea`): it waits for the hover delay and hands its `Tip` and its
+// rectangle to `GlobalTooltip`. A tip is a text (one line while it is short, wrapped when it is long), optionally a
+// bold title, rows of label and value with section headings, a note, the hold badge of a held button and the keys as
+// key caps on their own line. `TooltipLogic` (Rust, `src/ui/tooltip/`) turns the key text into caps and places the
+// bubble. Started from RustView's port (crates/rustview/ui/tooltips.slint and global_tooltip_layer.slint); the copied
+// components (node_button, search_field, tag_history_item) call the host with RustView's names (`on-hover-enter`, ...).
 
-import { Theme } from "styles.slint";
+import { IconId } from "icons.slint";
 
 export global TooltipSettings {
     in-out property <bool> enabled: true;
     in-out property <duration> delay: 600ms;
-    out property <color> background: #181825f2;
+    // After a tooltip closed, the next one within this time shows at once (moving along a row of buttons, Q-H4).
+    out property <duration> warm-up: 700ms;
+    out property <color> background: #181825f4;
     out property <color> border: #45475acc;
     out property <color> text: #cdd6f4;
-    out property <color> shortcut-color: #f9e2af;
+    out property <color> muted: #a6adc8;
+    out property <color> accent: #f9e2af;
     out property <length> font-size: 12px;
+    out property <length> small-font-size: 11px;
     out property <length> padding-h: 9px;
-    out property <length> padding-v: 5px;
+    out property <length> padding-v: 6px;
     out property <length> max-width: 320px;
 }
 
-/// What the bubble shows and where (window coordinates).
-export global GlobalTooltip {
-    in-out property <bool> is-visible: false;
-    in-out property <string> text;
-    in-out property <string> shortcut;
-    in-out property <length> pos-x;
-    in-out property <length> pos-y;
-
-    public function show(text: string, shortcut: string, x: length, y: length) {
-        root.text = text;
-        root.shortcut = shortcut;
-        root.pos-x = x;
-        root.pos-y = y;
-        root.is-visible = true;
-    }
-
-    public function hide() {
-        root.is-visible = false;
-    }
-}
-
-/// One line of a rich tooltip: a label and its value.
+/// One line of a rich tooltip: a label and its value, or (`heading`) the title of the rows below it.
 export struct TipRow {
     label: string,
     value: string,
+    heading: bool,
 }
 
-/// The rich bubble (M5.4): a title, rows of label and value and a note, for the details behind an "i". The tooltip
-/// overhaul (M5.5) builds on it. It shows even with tooltips switched off: an "i" is there only for it.
-export global RichTooltip {
-    in-out property <bool> is-visible: false;
-    in-out property <string> title;
-    in-out property <[TipRow]> rows;
-    in-out property <string> note;
-    in-out property <length> pos-x;
-    in-out property <length> pos-y;
+/// What a tooltip shows.
+export struct Tip {
+    title: string,
+    text: string,
+    // The keys as `Chord::label` writes them, several joined by " or " (src/ui/tooltip/keys.rs).
+    shortcut: string,
+    rows: [TipRow],
+    note: string,
+    // The element acts only when held: the bubble shows the hold badge (hold.slint).
+    hold: bool,
+    // Shows even with tooltips switched off (an "i" is there only for its tooltip, D-X1).
+    forced: bool,
+    // A row of a menu: the bubble goes beside it first, so it never covers the other rows.
+    beside: bool,
+}
 
-    public function show(title: string, rows: [TipRow], note: string, x: length, y: length) {
-        root.title = title;
-        root.rows = rows;
-        root.note = note;
-        root.pos-x = x;
-        root.pos-y = y;
+/// A rectangle in window coordinates.
+export struct TipRect {
+    x: length,
+    y: length,
+    width: length,
+    height: length,
+}
+
+/// One key cap: a key's short name or a symbol; `alternative` = another chord of the action starts here ("or").
+export struct TipKey {
+    text: string,
+    icon: IconId,
+    alternative: bool,
+}
+
+/// The caps of a shortcut text; `keys` is false for a text that is no key (shown as a plain chip).
+export struct TipKeys {
+    caps: [TipKey],
+    keys: bool,
+    alternatives: bool,
+}
+
+/// The side of the element the bubble is on.
+export enum TipSide { below, above, right, left, over }
+
+/// Where the bubble goes (layer coordinates); `arrow` is the arrow's center along the edge that faces the element.
+export struct TipPlacement {
+    x: length,
+    y: length,
+    side: TipSide,
+    arrow: length,
+}
+
+/// Rust's side (src/ui/tooltip/): the key caps and the placement, pure functions with tests.
+export global TooltipLogic {
+    pure callback key-caps(/* shortcut */ string) -> TipKeys;
+    pure callback place(/* element */ TipRect, /* bubble width */ length, /* bubble height */ length,
+        /* area width */ length, /* area height */ length, /* beside first */ bool) -> TipPlacement;
+}
+
+/// What the bubble shows and for which element.
+export global GlobalTooltip {
+    in-out property <bool> is-visible: false;
+    in-out property <Tip> tip;
+    in-out property <TipRect> anchor;
+    // Counts the shows: a host knows whether the bubble is still its own.
+    in-out property <int> serial;
+    // A tooltip closed a moment ago: the next one skips the delay (the layer cools it down).
+    in-out property <bool> warm;
+    // The previous bubble was still fading out: the new one glides from its place.
+    in-out property <bool> recent;
+    in-out property <bool> glide;
+
+    public function show(tip: Tip, anchor: TipRect) -> int {
+        root.glide = root.is-visible || root.recent;
+        root.tip = tip;
+        root.anchor = anchor;
+        root.serial += 1;
         root.is-visible = true;
+        root.warm = true;
+        return root.serial;
     }
 
+    /// A shown tip changed (another text under the pointer, the element moved).
+    public function update(serial: int, tip: Tip, anchor: TipRect) {
+        if serial == root.serial && root.is-visible {
+            root.glide = true;
+            root.tip = tip;
+            root.anchor = anchor;
+        }
+    }
+
+    /// The pointer left: the next tooltip close by shows at once.
     public function hide() {
         root.is-visible = false;
     }
+
+    /// A press or a closed dialog: the next tooltip waits for the delay again.
+    public function hide-cold() {
+        root.is-visible = false;
+        root.warm = false;
+    }
 }
 
-/// An area that shows a rich tooltip below itself while the pointer rests on it (after `delay`); a press hides it.
-export component RichTooltipArea inherits Rectangle {
-    in property <string> title;
-    in property <[TipRow]> rows;
-    in property <string> note;
-    in property <duration> delay: 150ms;
-    out property <bool> has-hover: touch.has-hover;
-
-    timer := Timer {
-        interval: root.delay;
-        running: false;
-        triggered => {
-            self.running = false;
-            if touch.has-hover {
-                RichTooltip.show(root.title, root.rows, root.note, root.absolute-position.x,
-                    root.absolute-position.y + root.height + 4px);
-            }
-        }
-    }
-
-    touch := TouchArea {
-        pointer-event(event) => {
-            if event.kind == PointerEventKind.down {
-                timer.running = false;
-                RichTooltip.hide();
-            } else if event.kind == PointerEventKind.move && !timer.running && !RichTooltip.is-visible {
-                // The area appeared under a resting pointer (no hover change): the first move starts it.
-                timer.running = true;
-            }
-        }
-    }
-
-    changed has-hover => {
-        if self.has-hover {
-            timer.running = true;
-        } else {
-            timer.running = false;
-            RichTooltip.hide();
-        }
-    }
-
-    @children
-}
-
-/// Embedded in an element: shows `text` (and the key `shortcut`) below the element after the hover delay.
+/// Embedded in an element: shows its tip next to the element after the hover delay (at once while another tooltip
+/// just closed). The element's touch area calls `enter()`/`leave()` (or RustView's names) and `press()` on a press.
 export component TooltipHost inherits Rectangle {
     in property <string> text;
     in property <string> shortcut;
+    in property <string> title;
+    in property <[TipRow]> rows;
+    in property <string> note;
+    in property <bool> hold;
+    in property <bool> forced;
+    in property <bool> beside;
+    in property <duration> delay: TooltipSettings.delay;
 
     property <bool> is-hovered;
+    property <int> shown-serial: -1;
+    property <bool> mine: GlobalTooltip.is-visible && GlobalTooltip.serial == root.shown-serial;
+    property <bool> wanted: (TooltipSettings.enabled || root.forced)
+        && (root.text != "" || root.title != "" || root.rows.length > 0);
+    property <Tip> tip: {
+        title: root.title,
+        text: root.text,
+        shortcut: root.shortcut,
+        rows: root.rows,
+        note: root.note,
+        hold: root.hold,
+        forced: root.forced,
+        beside: root.beside,
+    };
+    // Followed only while the bubble is this host's, so the other hosts track nothing.
+    property <Tip> shown-tip: root.mine ? root.tip : { };
+    property <TipRect> shown-rect: root.mine ? root.rect() : { };
 
     x: 0;
     y: 0;
     width: 100%;
     height: 100%;
 
+    function rect() -> TipRect {
+        return {
+            x: root.absolute-position.x,
+            y: root.absolute-position.y,
+            width: root.width,
+            height: root.height,
+        };
+    }
+
     timer := Timer {
-        interval: TooltipSettings.delay;
+        interval: root.delay;
         running: false;
         triggered => {
             self.running = false;
-            if root.is-hovered && TooltipSettings.enabled && root.text != "" {
-                GlobalTooltip.show(root.text, root.shortcut, root.absolute-position.x,
-                    root.absolute-position.y + root.height + 4px);
+            if root.is-hovered {
+                root.reveal();
             }
+        }
+    }
+
+    /// Shows the tip now (a short click on a held button explains it).
+    public function reveal() {
+        if root.wanted {
+            root.shown-serial = GlobalTooltip.show(root.tip, root.rect());
         }
     }
 
     public function enter() {
         root.is-hovered = true;
-        if TooltipSettings.enabled && root.text != "" {
-            timer.running = true;
+        if !root.wanted {
+            return;
+        }
+        if GlobalTooltip.warm {
+            timer.running = false;
+            root.reveal();
+        } else {
+            timer.start();
         }
     }
 
     public function leave() {
         root.is-hovered = false;
         timer.running = false;
-        GlobalTooltip.hide();
+        if root.mine {
+            GlobalTooltip.hide();
+        }
     }
 
-    // RustView's names, used by the copied components (node_button, search_field, tag_history_item). The bubble sits
-    // below the element, so the pointer position is not needed.
+    public function press() {
+        root.is-hovered = false;
+        timer.running = false;
+        if root.mine {
+            GlobalTooltip.hide-cold();
+        }
+    }
+
+    // The bubble follows a tip that changes under the pointer and an element that moves.
+    changed shown-tip => {
+        if root.mine {
+            GlobalTooltip.update(root.shown-serial, root.tip, root.rect());
+        }
+    }
+    changed shown-rect => {
+        if root.mine {
+            GlobalTooltip.update(root.shown-serial, root.tip, root.rect());
+        }
+    }
+    changed wanted => {
+        if !root.wanted && root.mine {
+            GlobalTooltip.hide();
+        }
+    }
+
+    // RustView's names, used by the copied components (node_button, search_field, tag_history_item). The bubble is
+    // placed by the element's rectangle, so the pointer position is not needed.
     public function on-hover-enter(mouse-x: length, mouse-y: length) {
         root.enter();
     }
@@ -163,184 +256,50 @@ export component TooltipHost inherits Rectangle {
     public function on-mouse-move(mouse-x: length, mouse-y: length) {}
 }
 
-/// A transparent area with a tooltip over its children (labels, fields).
+/// A transparent area with a tooltip over its children (labels, fields, the "i" of a picture). Its touch area lies
+/// under the children, so they keep their clicks.
 export component TooltipArea inherits Rectangle {
     in property <string> text;
     in property <string> shortcut;
+    in property <string> title;
+    in property <[TipRow]> rows;
+    in property <string> note;
+    in property <bool> forced;
+    in property <duration> delay: TooltipSettings.delay;
+    out property <bool> has-hover: touch.has-hover;
 
     host := TooltipHost {
         text: root.text;
         shortcut: root.shortcut;
+        title: root.title;
+        rows: root.rows;
+        note: root.note;
+        forced: root.forced;
+        delay: root.delay;
     }
 
     touch := TouchArea {
         pointer-event(event) => {
             if event.kind == PointerEventKind.down {
-                host.leave();
+                host.press();
+            } else if event.kind == PointerEventKind.move && self.has-hover && !timer-started {
+                // The area appeared under a resting pointer (no hover change): the first move starts it.
+                timer-started = true;
+                host.enter();
             }
         }
     }
 
+    property <bool> timer-started;
     changed has-hover => {
         if self.has-hover {
+            root.timer-started = true;
             host.enter();
         } else {
+            root.timer-started = false;
             host.leave();
         }
     }
-    out property <bool> has-hover: touch.has-hover && root.text != "";
 
     @children
-}
-
-/// The bubble of `GlobalTooltip`, on the highest level of the window; it stays inside the window.
-export component TooltipLayer inherits Rectangle {
-    property <bool> active: GlobalTooltip.is-visible && TooltipSettings.enabled;
-    property <length> room: root.width - 16px - 2 * TooltipSettings.padding-h - (GlobalTooltip.shortcut != "" ? 60px : 0px);
-    property <length> text-w: Math.max(40px, Math.min(Math.min(TooltipSettings.max-width, root.room), measure.preferred-width));
-    property <length> bubble-w: bubble-layout.preferred-width;
-    property <length> bubble-h: Math.max(bubble-layout.preferred-height, wrapped.preferred-height + 2 * TooltipSettings.padding-v);
-
-    visible: root.active || RichTooltip.is-visible;
-    background: transparent;
-
-    measure := Text {
-        visible: false;
-        text: GlobalTooltip.text;
-        font-size: TooltipSettings.font-size;
-    }
-
-    wrapped := Text {
-        visible: false;
-        width: root.text-w;
-        wrap: word-wrap;
-        text: GlobalTooltip.text;
-        font-size: TooltipSettings.font-size;
-    }
-
-    // The hosts report window coordinates; the layer may start below the menu bar.
-    property <length> want-x: GlobalTooltip.pos-x - root.absolute-position.x;
-    property <length> want-y: GlobalTooltip.pos-y - root.absolute-position.y;
-
-    Rectangle {
-        visible: root.active;
-        x: Math.max(8px, Math.min(root.width - root.bubble-w - 8px, root.want-x));
-        y: root.want-y + root.bubble-h + 8px > root.height
-            ? Math.max(8px, root.want-y - root.bubble-h - 34px)
-            : root.want-y;
-        width: root.bubble-w;
-        height: root.bubble-h;
-        background: TooltipSettings.background;
-        border-radius: 4px;
-        border-width: 1px;
-        border-color: TooltipSettings.border;
-        drop-shadow-blur: 8px;
-        drop-shadow-color: #000000aa;
-        drop-shadow-offset-y: 2px;
-
-        bubble-layout := HorizontalLayout {
-            padding-left: TooltipSettings.padding-h;
-            padding-right: TooltipSettings.padding-h;
-            padding-top: TooltipSettings.padding-v;
-            padding-bottom: TooltipSettings.padding-v;
-            spacing: 6px;
-            alignment: center;
-
-            Text {
-                width: root.text-w;
-                wrap: word-wrap;
-                text: GlobalTooltip.text;
-                font-size: TooltipSettings.font-size;
-                color: TooltipSettings.text;
-                vertical-alignment: center;
-            }
-
-            if GlobalTooltip.shortcut != "": Rectangle {
-                background: #ffffff14;
-                border-radius: 3px;
-                border-width: 1px;
-                border-color: #ffffff22;
-                height: 18px;
-                y: (parent.height - self.height) / 2;
-
-                HorizontalLayout {
-                    padding-left: 5px;
-                    padding-right: 5px;
-
-                    Text {
-                        text: GlobalTooltip.shortcut;
-                        font-size: 10.5px;
-                        font-weight: 700;
-                        color: TooltipSettings.shortcut-color;
-                        vertical-alignment: center;
-                    }
-                }
-            }
-        }
-    }
-
-    // The rich bubble (RichTooltip): kept inside the window, above the element when there is no room below.
-    property <length> rich-x: RichTooltip.pos-x - root.absolute-position.x;
-    property <length> rich-y: RichTooltip.pos-y - root.absolute-position.y;
-
-    if RichTooltip.is-visible: Rectangle {
-        width: Math.min(340px, rich-layout.preferred-width);
-        height: rich-layout.preferred-height;
-        x: Math.max(8px, Math.min(root.width - self.width - 8px, root.rich-x));
-        y: root.rich-y + self.height + 8px > root.height ? Math.max(8px, root.rich-y - self.height - 34px) : root.rich-y;
-        background: TooltipSettings.background;
-        border-radius: 6px;
-        border-width: 1px;
-        border-color: TooltipSettings.border;
-        drop-shadow-blur: 12px;
-        drop-shadow-color: #000000aa;
-        drop-shadow-offset-y: 3px;
-
-        rich-layout := VerticalLayout {
-            padding-left: 10px;
-            padding-right: 10px;
-            padding-top: 7px;
-            padding-bottom: 8px;
-            spacing: 3px;
-
-            Text {
-                text: RichTooltip.title;
-                font-size: TooltipSettings.font-size;
-                font-weight: 700;
-                color: TooltipSettings.text;
-                overflow: elide;
-            }
-
-            Rectangle {
-                height: 1px;
-                background: TooltipSettings.border;
-            }
-
-            for tip in RichTooltip.rows: HorizontalLayout {
-                spacing: 10px;
-
-                Text {
-                    width: 64px;
-                    text: tip.label;
-                    font-size: 11px;
-                    color: #a6adc8;
-                }
-
-                Text {
-                    horizontal-stretch: 1;
-                    text: tip.value;
-                    font-size: 11px;
-                    color: TooltipSettings.text;
-                    wrap: word-wrap;
-                }
-            }
-
-            if RichTooltip.note != "": Text {
-                text: RichTooltip.note;
-                font-size: 11px;
-                color: TooltipSettings.shortcut-color;
-                wrap: word-wrap;
-            }
-        }
-    }
 }

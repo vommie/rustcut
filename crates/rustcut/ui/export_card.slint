@@ -44,7 +44,7 @@ component NameField inherits Rectangle {
         enabled: root.enabled && !root.editing;
         mouse-cursor: MouseCursor.text;
         clicked => {
-            host.leave();
+            host.press();
             input.text = root.text;
             root.editing = true;
             input.focus();
@@ -150,7 +150,7 @@ component EditingBanner inherits Rectangle {
             y: (parent.height - self.height) / 2;
             icon: IconId.close;
             hold: Export.editing-changed;
-            tooltip: Export.editing-changed ? "Hold to stop editing: the changes are dropped, the job stays as it is"
+            tooltip: Export.editing-changed ? "Stop editing: the changes are dropped, the job stays as it is"
                 : "Stop editing (the job stays as it is)";
             clicked => { Export.stop-editing(); }
         }
@@ -188,7 +188,7 @@ export component FinalizeCardBody inherits VerticalLayout {
         IconButton {
             hold: true;
             icon: IconId.folder-remove;
-            tooltip: "Hold to remove this folder from the list (the folder itself stays)";
+            tooltip: "Remove this folder from the list (the folder itself stays)";
             enabled: Export.can-remove-folder;
             clicked => { Export.remove-folder(); }
         }

@@ -140,7 +140,7 @@ export component RenderProfileBody inherits VerticalLayout {
             icon: IconId.profile-reset;
             hold: true;
             enabled: RenderSettings.modified;
-            tooltip: "Hold to drop the changes: back to the saved profile";
+            tooltip: "Drop the changes: back to the saved profile";
             clicked => { RenderSettings.reset-profile(); }
         }
 
@@ -172,7 +172,7 @@ export component RenderProfileBody inherits VerticalLayout {
         if RenderSettings.user-profile: IconButton {
             icon: IconId.profile-delete;
             hold: true;
-            tooltip: "Hold to delete this profile (the settings stay as a modified copy until another profile is chosen)";
+            tooltip: "Delete this profile (the settings stay as a modified copy until another profile is chosen)";
             clicked => {
                 root.naming = 0;
                 RenderSettings.delete-profile();

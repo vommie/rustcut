@@ -5,7 +5,7 @@
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Shortcuts } from "shortcuts.slint";
-import { GlobalTooltip, TooltipHost } from "tooltip.slint";
+import { TipRow, TooltipHost } from "tooltip.slint";
 import { HoldConfirm, HoldLogic, HoldRing } from "hold.slint";
 
 /// A button showing an icon (or a very short text), explained by its tooltip. `checked` draws it pressed in. With
@@ -39,6 +39,7 @@ export component IconButton inherits Rectangle {
     host := TooltipHost {
         text: root.tooltip;
         shortcut: root.shortcut;
+        hold: root.hold && root.enabled;
     }
 
     logic := HoldLogic {
@@ -47,8 +48,7 @@ export component IconButton inherits Rectangle {
         hold: root.hold;
         confirmed => { root.clicked(); }
         short-click => {
-            GlobalTooltip.show(root.tooltip, root.shortcut, root.absolute-position.x,
-                root.absolute-position.y + root.height + 4px);
+            host.reveal();
         }
     }
 
@@ -63,7 +63,7 @@ export component IconButton inherits Rectangle {
         mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
         pointer-event(event) => {
             if event.kind == PointerEventKind.down {
-                host.leave();
+                host.press();
                 logic.pressed-down();
             }
         }
@@ -191,7 +191,7 @@ export component NumberField inherits Rectangle {
         enabled: root.enabled && !root.editing;
         mouse-cursor: MouseCursor.text;
         clicked => {
-            host.leave();
+            host.press();
             root.start-edit();
         }
         scroll-event(event) => {
@@ -251,6 +251,9 @@ export component ChoiceButton inherits Rectangle {
     in property <[string]> items;
     in property <int> current;
     in property <string> tooltip;
+    // A rich tooltip: a title and rows (one per choice, say) above `tooltip`.
+    in property <string> tip-title;
+    in property <[TipRow]> tip-rows;
     in property <bool> enabled: true;
     in property <IconId> icon: IconId.none;
     callback selected(int);
@@ -269,13 +272,15 @@ export component ChoiceButton inherits Rectangle {
 
     host := TooltipHost {
         text: root.tooltip;
+        title: root.tip-title;
+        rows: root.tip-rows;
     }
 
     touch := TouchArea {
         enabled: root.enabled;
         mouse-cursor: MouseCursor.pointer;
         clicked => {
-            host.leave();
+            host.press();
             popup.show();
         }
         changed has-hover => {
@@ -396,7 +401,7 @@ export component Switch inherits Rectangle {
     TouchArea {
         mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
         clicked => {
-            host.leave();
+            host.press();
             if root.enabled {
                 root.toggled();
             }

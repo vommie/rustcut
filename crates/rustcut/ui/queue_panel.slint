@@ -53,7 +53,7 @@ component Chip inherits Rectangle {
 
     touch := TouchArea {
         clicked => {
-            host.leave();
+            host.press();
             Queue.toggle-chip(root.chip.id);
         }
         changed has-hover => {

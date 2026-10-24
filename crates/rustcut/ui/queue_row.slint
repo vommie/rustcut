@@ -162,7 +162,7 @@ export component QueueRow inherits Rectangle {
     touch := TouchArea {
         pointer-event(event) => {
             if event.kind == PointerEventKind.down {
-                host.leave();
+                host.press();
                 if event.button == PointerEventButton.right {
                     if !root.job.selected {
                         Queue.select(root.job.id, false, false);

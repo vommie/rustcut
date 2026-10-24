@@ -165,6 +165,20 @@ impl Keymap {
         pairs
     }
 
+    /// The keys of `action` as its tooltip shows them: every chord, joined by " or " ("" when unbound).
+    pub fn tooltip_keys(&self, action: Action) -> String {
+        self.chords(action)
+            .iter()
+            .map(Chord::label)
+            .collect::<Vec<_>>()
+            .join(crate::ui::tooltip::keys::OR)
+    }
+
+    /// The first key of `action` as a menu row or a hint text shows it ("" when unbound).
+    pub fn first_label(&self, action: Action) -> String {
+        self.chords(action).first().map(Chord::label).unwrap_or_default()
+    }
+
     /// The shortcut of `action`'s menu item: its first chord. While a text field has the keyboard (`editing`), chords
     /// without Control, Alt or Meta are left off, so typing `.` or Space reaches the field instead of the menu.
     pub fn menu_keys(&self, action: Action, editing: bool) -> Keys {

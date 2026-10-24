@@ -32,7 +32,7 @@ use crate::ui::status::{self, Level};
 use crate::ui::tags::TagsBridge;
 use crate::ui::timeline::{Viewport, view};
 use crate::util::model::sync;
-use crate::{Export, MainWindow, SectionRowView, Sections, Shortcuts, Timeline, TimelineBlock, TimelineTick};
+use crate::{Export, MainWindow, Playback, SectionRowView, Sections, Shortcuts, Timeline, TimelineBlock, TimelineTick};
 
 /// Frame rates outside this range are not a frame grid (Matroska's 1000/1 time base, broken headers).
 const PLAUSIBLE_FPS: std::ops::RangeInclusive<f64> = 1.0..=300.0;
@@ -284,14 +284,9 @@ impl Editor {
         self.publish_menu_keys(false);
     }
 
-    /// The first key of `action` as the tooltips show it ("" when unbound).
+    /// The keys of `action` as the tooltips show them ("" when unbound).
     pub fn key_label(&self, action: Action) -> String {
-        self.keymap
-            .borrow()
-            .chords(action)
-            .first()
-            .map(crate::ui::keymap::Chord::label)
-            .unwrap_or_default()
+        self.keymap.borrow().tooltip_keys(action)
     }
 
     /// The zoom to remember in `ui-state.toml`.
@@ -398,14 +393,13 @@ impl Editor {
         sc.set_rotate_right(keys(Action::RotateRight));
         sc.set_mirror_horizontal(keys(Action::MirrorHorizontal));
         sc.set_mirror_vertical(keys(Action::MirrorVertical));
-        let label = |action| {
-            keymap
-                .chords(action)
-                .first()
-                .map(crate::ui::keymap::Chord::label)
-                .unwrap_or_default()
-        };
+        let label = |action| keymap.tooltip_keys(action);
         window.global::<Export<'_>>().set_key_save(label(Action::Save).into());
+        let playback = window.global::<Playback<'_>>();
+        playback.set_key_toggle_pause(label(Action::TogglePause).into());
+        playback.set_key_frame_back(label(Action::FrameBack).into());
+        playback.set_key_frame_forward(label(Action::FrameForward).into());
+        playback.set_key_toggle_mute(label(Action::ToggleMute).into());
         let sections = window.global::<Sections<'_>>();
         sections.set_key_set_start(label(Action::SetStart).into());
         sections.set_key_set_end(label(Action::SetEnd).into());

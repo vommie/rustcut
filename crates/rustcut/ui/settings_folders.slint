@@ -52,7 +52,7 @@ export component SettingsFolders inherits SettingsCard {
         IconButton {
             icon: IconId.folder-remove;
             hold: true;
-            tooltip: "Hold to remove the folder from the list (the folder itself stays)";
+            tooltip: "Remove the folder from the list (the folder itself stays)";
             clicked => { SettingsUi.remove-folder(index); }
         }
     }

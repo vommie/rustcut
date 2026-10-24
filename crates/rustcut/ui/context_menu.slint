@@ -55,7 +55,8 @@ component MenuRow inherits Rectangle {
 
     host := TooltipHost {
         text: root.item.tooltip;
-        shortcut: "";
+        hold: root.item.hold && root.usable;
+        beside: true;
     }
 
     logic := HoldLogic {
@@ -64,8 +65,7 @@ component MenuRow inherits Rectangle {
         hold: root.item.hold;
         confirmed => { root.activated(); }
         short-click => {
-            GlobalTooltip.show(root.item.tooltip, "", root.absolute-position.x + 24px,
-                root.absolute-position.y + root.height + 2px);
+            host.reveal();
         }
     }
 
@@ -136,7 +136,7 @@ component MenuRow inherits Rectangle {
         mouse-cursor: root.usable ? MouseCursor.pointer : MouseCursor.default;
         pointer-event(event) => {
             if event.kind == PointerEventKind.down {
-                host.leave();
+                host.press();
                 logic.pressed-down();
             }
         }
@@ -201,7 +201,7 @@ export component ContextMenuLayer inherits Rectangle {
         root.level = -1;
         root.level-row = -1;
         if self.visible {
-            GlobalTooltip.hide();
+            GlobalTooltip.hide-cold();
             keys.focus();
         }
     }

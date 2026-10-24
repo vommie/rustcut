@@ -115,7 +115,13 @@ component DeinterlaceParams inherits HorizontalLayout {
     ChoiceButton {
         items: Filters.deinterlacers;
         current: Filters.deinterlacer;
-        tooltip: "Deinterlacer: bwdif is motion adaptive and the best all-rounder; yadif is faster and a bit softer; w3fdif is sharp on calm footage; kerndeint is fast.";
+        tip-title: "Deinterlacer";
+        tip-rows: [
+            { label: "bwdif", value: "Motion adaptive, the best all-rounder" },
+            { label: "yadif", value: "Faster and a bit softer" },
+            { label: "w3fdif", value: "Sharp on calm footage" },
+            { label: "kerndeint", value: "Fast" },
+        ];
         selected(index) => { Filters.set-deinterlacer(index); }
     }
 
@@ -317,7 +323,14 @@ component ResizeParams inherits VerticalLayout {
         ChoiceButton {
             items: Filters.algorithms;
             current: Filters.algorithm;
-            tooltip: "Scaling algorithm: bicubic is ffmpeg's balanced default, lanczos the sharpest for shrinking, bilinear the fastest. The output has square pixels.";
+            tip-title: "Scaling algorithm";
+            tooltip: "The output has square pixels.";
+            tip-rows: [
+                { label: "bicubic", value: "ffmpeg's balanced default" },
+                { label: "lanczos", value: "The sharpest for shrinking" },
+                { label: "spline", value: "Sharp, close to lanczos" },
+                { label: "bilinear", value: "The fastest" },
+            ];
             selected(index) => { Filters.set-algorithm(index); }
         }
 
@@ -437,7 +450,11 @@ component DeshakeParams inherits VerticalLayout {
         ChoiceButton {
             items: ["No auto zoom", "Static zoom", "Adaptive zoom"];
             current: Filters.deshake-optzoom;
-            tooltip: "Automatic zoom against moving borders: static picks one zoom for the whole video, adaptive follows the motion.";
+            tip-title: "Automatic zoom against moving borders";
+            tip-rows: [
+                { label: "Static", value: "One zoom for the whole video" },
+                { label: "Adaptive", value: "Follows the motion" },
+            ];
             selected(index) => { Filters.set-deshake-choice(0, index); }
         }
 
@@ -578,7 +595,7 @@ export component FiltersCardBody inherits VerticalLayout {
         IconButton {
             icon: IconId.filter-reset;
             hold: true;
-            tooltip: "Hold to reset every filter (off, default values, default order; the key resets at once)";
+            tooltip: "Reset every filter: off, default values, default order (the key resets at once)";
             shortcut: Filters.key-reset;
             clicked => { Filters.reset(); }
         }

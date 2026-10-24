@@ -128,7 +128,8 @@ pub fn counted(title: &str, count: usize, selected: usize) -> String {
     }
 }
 
-/// The key labels the menu shows next to its entries.
+/// The key labels of the queue: the menu shows the first key next to its entries (`move_top`, `move_bottom`), the
+/// tooltips of the move buttons every key (`move_up`, `move_down`).
 #[derive(Debug, Clone, Default)]
 pub struct MenuKeys {
     pub move_up: String,
@@ -213,11 +214,11 @@ pub fn queue_menu(
         MenuItem::Separator,
         entry(QueueAction::Cancel, "Cancel", Icon::JobCancel)
             .hold()
-            .tooltip("Hold to cancel: a running render stops, an existing target stays")
+            .tooltip("Cancel: a running render stops, an existing target stays")
             .into(),
         entry(QueueAction::Remove, "Remove", Icon::JobRemove)
             .hold()
-            .tooltip("Hold to remove from the queue (output and source files stay)")
+            .tooltip("Remove from the queue (output and source files stay)")
             .into(),
         MenuAction::new(
             QueueAction::RemoveFinished.id(),
@@ -229,7 +230,7 @@ pub fn queue_menu(
         )
         .enabled(finished > 0)
         .hold()
-        .tooltip("Hold to remove every finished job from the queue (their files stay)")
+        .tooltip("Remove every finished job from the queue (their files stay)")
         .into(),
     ]);
     items

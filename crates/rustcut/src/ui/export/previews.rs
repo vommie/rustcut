@@ -337,6 +337,7 @@ fn view(
         .map(|(label, value)| TipRow {
             label: label.into(),
             value: value.into(),
+            heading: false,
         })
         .collect();
     PreviewView {
