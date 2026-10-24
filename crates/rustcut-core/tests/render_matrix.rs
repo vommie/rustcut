@@ -104,7 +104,9 @@ fn check_output(case: &Case, source: &MediaInfo, output: &MediaInfo, bytes: u64)
     {
         for (stream, _) in output.audio_streams() {
             let got = stream.codec.clone().unwrap_or_default();
-            if got != wanted {
+            // MP4 and QuickTime label MPEG audio of every layer as one object type, which ffprobe reads as mp3; the
+            // copied MP2 frames stay MP2 and decode as such.
+            if got != wanted && !(wanted == "mp2" && got == "mp3") {
                 problems.push(format!("audio codec {got}, wanted {wanted}"));
             }
         }

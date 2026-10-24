@@ -199,8 +199,8 @@ fn rate_controls() -> Vec<Case> {
     cases
 }
 
-/// Every container with every audio codec the profile check lets through (an AV1 video in WebM, else x264). The
-/// combinations the check refuses are returned as refusals for the report.
+/// Every container with every encoded audio codec the profile check lets through (an AV1 video in WebM, else x264;
+/// copied audio has its own group). The combinations the check refuses are returned as refusals for the report.
 fn containers() -> (Vec<Case>, Vec<String>) {
     let mut cases = Vec::new();
     let mut refused = Vec::new();
@@ -216,24 +216,90 @@ fn containers() -> (Vec<Case>, Vec<String>) {
             AudioCodec::Mp3,
             AudioCodec::Vorbis,
             AudioCodec::Flac,
-            AudioCodec::Copy,
         ] {
             let profile = fastest(encoder, container, codec);
             let name = format!("{container:?} + {} + {codec:?}", encoder.spec().display_name);
-            let errors: Vec<String> = profile
-                .validate()
-                .into_iter()
-                .filter(|issue| issue.severity == Severity::Error)
-                .map(|issue| issue.message)
-                .collect();
-            if errors.is_empty() {
-                cases.push(case("container", name, "basic_h264_720p.mp4", profile));
-            } else {
-                refused.push(format!("{name}: {}", errors.join("; ")));
+            match errors_of(&profile) {
+                None => cases.push(case("container", name, "basic_h264_720p.mp4", profile)),
+                Some(errors) => refused.push(format!("{name}: {errors}")),
             }
         }
     }
     (cases, refused)
+}
+
+/// Every video encoder family in every container (with the container's usual audio); the combinations the profile
+/// check refuses are returned as refusals for the report.
+fn video_in_containers() -> (Vec<Case>, Vec<String>) {
+    let mut cases = Vec::new();
+    let mut refused = Vec::new();
+    for container in [Container::Mkv, Container::Mp4, Container::Mov, Container::Webm] {
+        let audio = if container == Container::Webm {
+            AudioCodec::Opus
+        } else {
+            AudioCodec::Aac
+        };
+        for encoder in [VideoEncoder::X264, VideoEncoder::X265, VideoEncoder::SvtAv1] {
+            let profile = fastest(encoder, container, audio);
+            let name = format!("{container:?} + {}", encoder.spec().display_name);
+            match errors_of(&profile) {
+                None => cases.push(case("video in container", name, "basic_h264_720p.mp4", profile)),
+                Some(errors) => refused.push(format!("{name}: {errors}")),
+            }
+        }
+    }
+    (cases, refused)
+}
+
+/// The profile check's errors in one line, or `None`.
+fn errors_of(profile: &RenderProfile) -> Option<String> {
+    let errors: Vec<String> = profile
+        .validate()
+        .into_iter()
+        .filter(|issue| issue.severity == Severity::Error)
+        .map(|issue| issue.message)
+        .collect();
+    (!errors.is_empty()).then(|| errors.join("; "))
+}
+
+/// Audio copied unchanged (Q-N6): every source audio codec into every container. A container that takes the codec
+/// (`Container::takes_copied_audio`) must render it with the codec unchanged; the others must be refused before
+/// ffmpeg runs. Copying needs one section: two sections must be refused.
+fn audio_copies() -> Vec<Case> {
+    let sources = [
+        ("basic_h264_720p.mp4", "aac"),
+        ("vp9_opus.webm", "opus"),
+        ("mpeg4_mp3.avi", "mp3"),
+        ("interlaced_pal_576i.mpg", "mp2"),
+        ("prores_422_320x180.mov", "pcm_s16le"),
+    ];
+    let mut cases = Vec::new();
+    for container in [Container::Mkv, Container::Mp4, Container::Webm, Container::Mov] {
+        let encoder = if container == Container::Webm {
+            VideoEncoder::SvtAv1
+        } else {
+            VideoEncoder::X264
+        };
+        for (source, codec) in sources {
+            let profile = fastest(encoder, container, AudioCodec::Copy);
+            let expect = if container.takes_copied_audio(codec) {
+                Expect::Renders
+            } else {
+                Expect::Fails
+            };
+            cases.push(Case {
+                expect,
+                ..case("audio copy", format!("{codec} into {container:?}"), source, profile)
+            });
+        }
+    }
+    let profile = fastest(VideoEncoder::X264, Container::Mkv, AudioCodec::Copy);
+    cases.push(Case {
+        expect: Expect::Fails,
+        sections: vec![(1_000, 2_000), (4_000, 5_000)],
+        ..case("audio copy", "two sections", "basic_h264_720p.mp4", profile)
+    });
+    cases
 }
 
 /// Every filter (and every variant of it) on a source that shows what it does.
@@ -387,11 +453,15 @@ fn filters_with_profiles() -> Vec<Case> {
 
 /// The cases of a run and the container combinations the profile check refused.
 pub fn all(full: bool) -> (Vec<Case>, Vec<String>) {
-    let (container_cases, refused) = containers();
+    let (container_cases, mut refused) = containers();
+    let (video_cases, video_refused) = video_in_containers();
+    refused.extend(video_refused);
     let mut cases = profiles(full);
     cases.extend(encoders());
     cases.extend(rate_controls());
     cases.extend(container_cases);
+    cases.extend(video_cases);
+    cases.extend(audio_copies());
     cases.extend(filters());
     cases.extend(sources());
     if full {
