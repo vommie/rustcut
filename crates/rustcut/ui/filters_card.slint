@@ -152,7 +152,7 @@ component CropField inherits HorizontalLayout {
         tooltip: root.name + " edge as seen in the output (pixels; the wheel changes it by 2)";
     }
 
-    NumberField {
+    value := NumberField {
         text: Filters.crop-edges[root.edge];
         tooltip: root.name + " edge in pixels";
         committed(text) => { return Filters.edit-crop(root.edge, text); }

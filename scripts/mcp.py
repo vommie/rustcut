@@ -7,6 +7,9 @@ when started with SLINT_MCP_PORT, as `rc-testenv session` does). Standard librar
     scripts/mcp.py [--port P] tree [MAX]                element tree of the main window (type, id, label, geometry)
     scripts/mcp.py [--port P] find ID                   handles of the elements with a qualified id (MainWindow::player)
     scripts/mcp.py [--port P] click ID                  left click on the first element with that id
+    scripts/mcp.py [--port P] click-nth ID N [double]   left (or double) click on the N-th element with that id (0 = first)
+    scripts/mcp.py [--port P] click-type TYPE N         left click on the N-th element of a component type (`RatingButton`)
+    scripts/mcp.py [--port P] move X Y                  the pointer to window position X, Y (hover; no button)
     scripts/mcp.py [--port P] shot FILE                 PNG screenshot of the main window (as Slint renders it)
     scripts/mcp.py [--port P] key CHORD                 a key or chord (`ctrl+s`, `Escape`, `shift+Right`) delivered
                                                         inside the app: nothing reaches other windows, nothing stays held
@@ -157,6 +160,43 @@ def main(argv):
         if not handles:
             raise RuntimeError(f"no element {rest[0]}")
         print(json.dumps(call(port, "click_element", {"elementHandle": handles[0]})))
+    elif command == "click-nth":
+        handles = find(port, rest[0])
+        index = int(rest[1])
+        if index >= len(handles):
+            raise RuntimeError(f"only {len(handles)} elements {rest[0]}")
+        arguments = {"elementHandle": handles[index]}
+        if len(rest) > 2 and rest[2] == "double":
+            arguments["action"] = "DoubleClick"
+        print(json.dumps(call(port, "click_element", arguments)))
+    elif command == "click-type":
+        window = main_window(port)
+        props = first(call(port, "get_window_properties", {"windowHandle": window}))
+        found = first(
+            call(
+                port,
+                "query_element_descendants",
+                {
+                    "elementHandle": props["rootElementHandle"],
+                    "queryStack": [{"matchDescendants": True}, {"matchElementTypeName": rest[0]}],
+                    "findAll": True,
+                },
+            )
+        )
+        handles = found.get("elementHandles", []) if isinstance(found, dict) else found
+        # The server may list a handle more than once.
+        unique = []
+        for handle in handles:
+            if handle not in unique:
+                unique.append(handle)
+        index = int(rest[1])
+        if index >= len(unique):
+            raise RuntimeError(f"only {len(unique)} elements of type {rest[0]}")
+        print(json.dumps(call(port, "click_element", {"elementHandle": unique[index]})))
+    elif command == "move":
+        window = main_window(port)
+        position = {"x": float(rest[0]), "y": float(rest[1])}
+        print(json.dumps(call(port, "move_pointer", {"windowHandle": window, "position": position})))
     elif command == "key":
         key(port, rest[0])
     elif command == "type":
