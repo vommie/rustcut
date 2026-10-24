@@ -251,13 +251,16 @@ component TagToolbar inherits HorizontalLayout {
 
 export component TagRatePanel inherits Rectangle {
     // The copied history panel reports its width only when it changes; a width laid out before Rust listened would
-    // never arrive. Once after the panel is created, it is sent here.
+    // never arrive. Once after the panel is created, it is sent here, and so is the tree area's height (see below).
     Timer {
         interval: 100ms;
         running: true;
         triggered => {
             self.running = false;
             TagRate.history-width-changed(history-panel.width);
+            if tree-area.height > 10px {
+                TagRate.tree-height-changed(tree-area.height);
+            }
         }
     }
 
@@ -305,8 +308,16 @@ export component TagRatePanel inherits Rectangle {
         }
 
         // The tree, and what the area says while it has no rows (no tree yet, no tags, no match, all hidden).
-        Rectangle {
+        // The copied list reports its height only when it changes, and it is made only when the tree arrives, after
+        // its height was laid out: the columns were split for no height and every tag got a column of its own (user
+        // report Q-N5). The area, which always exists, reports the height instead; the list's own report stays.
+        tree-area := Rectangle {
             vertical-stretch: 1;
+            changed height => {
+                if self.height > 10px {
+                    TagRate.tree-height-changed(self.height);
+                }
+            }
 
             if TagRate.has-tree: TagTreeList {
                 width: 100%;
