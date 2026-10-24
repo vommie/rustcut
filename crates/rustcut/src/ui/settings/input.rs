@@ -49,6 +49,8 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     let t = this.clone();
     ui.on_pick(move |key| with(&t, |b| b.pick(key.as_str())));
     let t = this.clone();
+    ui.on_pick_color(move |key| with(&t, |b| b.pick_color(key.as_str())));
+    let t = this.clone();
     ui.on_action(move |key| with(&t, |b| b.action(key.as_str())));
 
     let t = this.clone();

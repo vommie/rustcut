@@ -134,6 +134,7 @@ impl ExportBridge {
             let conflicts = check(&CheckInput {
                 target: &target,
                 base: &st.name,
+                source: st.source.as_deref(),
                 scan: &scan,
                 exists: None,
                 queue: &queue,

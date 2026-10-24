@@ -6,6 +6,7 @@ import { Theme } from "styles.slint";
 import { IconId, IconSize } from "icons.slint";
 import { ChoiceButton, FieldIcon, IconButton, NumberField, Switch } from "controls.slint";
 import { TipRow, TooltipArea } from "tooltip.slint";
+import { Playback } from "player_types.slint";
 
 export struct FilterRowView {
     kind: string,
@@ -524,7 +525,8 @@ component FilterRow inherits Rectangle {
                 }
             }
 
-            if root.item.kind == "deinterlace" && Filters.interlace-level > 0: TooltipArea {
+            // Only for a playable video: a file that does not play is never checked (P8).
+            if root.item.kind == "deinterlace" && Filters.interlace-level > 0 && Playback.has-video: TooltipArea {
                 title: "Interlace check";
                 text: Filters.interlace-detail;
                 rows: Filters.interlace-rows;
@@ -541,7 +543,7 @@ component FilterRow inherits Rectangle {
                 }
             }
 
-            if !(root.item.kind == "deinterlace" && Filters.interlace-level > 0): Rectangle { horizontal-stretch: 1; }
+            if !(root.item.kind == "deinterlace" && Filters.interlace-level > 0 && Playback.has-video): Rectangle { horizontal-stretch: 1; }
 
             IconButton {
                 icon: IconId.move-up;

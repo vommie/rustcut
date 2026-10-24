@@ -16,7 +16,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
 use az::CheckedAs as _;
-use rustcut_core::edit::{Section, SectionList};
+use rustcut_core::edit::SectionList;
 use rustcut_core::settings::{AutoSection, EditorSettings, Settings, TimelineState};
 use rustcut_core::time::{FrameRate, Timestamp};
 use slint::{ComponentHandle as _, ModelRc, VecModel};
@@ -77,6 +77,10 @@ pub struct Editor {
     escape: RefCell<Option<Box<dyn Fn() -> bool>>>,
     /// The player shows the probe render: the timeline, the marks and the sections wait (user decision Q-E1).
     probe_playing: Cell<bool>,
+    /// A text field has the keyboard: the menu bar keeps only the keys with Ctrl (or Alt, Meta).
+    menu_editing: Cell<bool>,
+    /// A modal dialog is open: the menu bar keeps only Quit (its other keys would act behind the dialog, P8).
+    menu_modal: Cell<bool>,
     /// The export panel that saves jobs (set after it is installed; it needs the editor first).
     export: RefCell<Weak<ExportBridge>>,
     /// The queue panel (the queue keys move its selected jobs).
@@ -132,6 +136,8 @@ impl Editor {
             tags: RefCell::new(Weak::new()),
             escape: RefCell::new(None),
             probe_playing: Cell::new(false),
+            menu_editing: Cell::new(false),
+            menu_modal: Cell::new(false),
             export: RefCell::new(Weak::new()),
             queue: RefCell::new(Weak::new()),
             warned: Cell::new(false),
@@ -156,7 +162,7 @@ impl Editor {
                 editor.playback_changed(view);
             }
         });
-        editor.publish_menu_keys(false);
+        editor.publish_menu_keys();
         editor.publish();
         editor
     }
@@ -204,21 +210,7 @@ impl Editor {
         if !st.sections.list().is_empty() {
             return Ok(st.sections.list().clone());
         }
-        let section = match auto {
-            AutoSection::Off => {
-                return Err("Add a section first (or switch on the automatic section in the settings).");
-            }
-            AutoSection::WholeVideo => st
-                .sections
-                .duration()
-                .and_then(|d| Section::new(Timestamp::ZERO, d).ok())
-                .ok_or("The video's length is not known yet.")?,
-            AutoSection::CurrentRange => st
-                .sections
-                .current()
-                .map_err(|_none| "Add a section first, or set both marks for the automatic section.")?,
-        };
-        Ok(vec![section].into())
+        Ok(vec![st.sections.auto_section(auto)?].into())
     }
 
     /// How many sections the open video has (the question before a job replaces it).
@@ -284,7 +276,7 @@ impl Editor {
         *self.keymap.borrow_mut() = keymap;
         self.seek_step.set(f64::from(settings.editor.seek_step_secs));
         self.seek_step_long.set(f64::from(settings.editor.seek_step_long_secs));
-        self.publish_menu_keys(false);
+        self.publish_menu_keys();
     }
 
     /// The keys of `action` as the tooltips show them ("" when unbound).
@@ -362,11 +354,30 @@ impl Editor {
     }
 
     /// The menu items' shortcuts; plain keys are left off while a text field has the keyboard.
-    fn publish_menu_keys(&self, editing: bool) {
+    /// A text field got or lost the keyboard.
+    pub(super) fn set_menu_editing(&self, editing: bool) {
+        self.menu_editing.set(editing);
+        self.publish_menu_keys();
+    }
+
+    /// A modal dialog opened or closed.
+    pub(super) fn set_menu_modal(&self, modal: bool) {
+        self.menu_modal.set(modal);
+        self.publish_menu_keys();
+    }
+
+    fn publish_menu_keys(&self) {
         let Some(window) = self.window.upgrade() else { return };
         let sc = window.global::<Shortcuts<'_>>();
         let keymap = self.keymap.borrow();
-        let keys = |action| keymap.menu_keys(action, editing);
+        let (editing, modal) = (self.menu_editing.get(), self.menu_modal.get());
+        let keys = |action| {
+            if modal && action != Action::Quit {
+                slint::Keys::default()
+            } else {
+                keymap.menu_keys(action, editing)
+            }
+        };
         sc.set_open(keys(Action::Open));
         sc.set_save(keys(Action::Save));
         sc.set_quit(keys(Action::Quit));

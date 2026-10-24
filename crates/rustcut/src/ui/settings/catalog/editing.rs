@@ -6,14 +6,12 @@ use rustcut_core::settings::{AutoSection, OnJobLoad, Settings};
 
 use super::Card;
 use crate::ui::settings::field::{Field, Kind, Value, WRONG_VALUE, always, choice, number, switch};
+use crate::util::hex_color;
 
 fn set_background(s: &mut Settings, v: Value) -> Result<(), String> {
-    let text = v.as_text()?;
-    let ok = text.len() == 7 && text.starts_with('#') && text.chars().skip(1).all(|c| c.is_ascii_hexdigit());
-    if !ok {
-        return Err("Type a color as #RRGGBB, for example #000000.".into());
-    }
-    s.player.background = text.to_ascii_lowercase();
+    let rgb =
+        hex_color::parse_rgb(v.as_text()?).ok_or("Choose a color, or type it as #RRGGBB (for example #444444).")?;
+    s.player.background = hex_color::format_rgb(rgb);
     Ok(())
 }
 
@@ -67,8 +65,8 @@ pub static PLAYER: &[Card] = &[
             Field {
                 key: "player.background",
                 label: "Background",
-                help: "The color around the video, as #RRGGBB.",
-                kind: Kind::Text { placeholder: "#000000" },
+                help: "The color around the video. Gray shows where a video's own black borders end.",
+                kind: Kind::Color,
                 live: true,
                 get: |s| Value::Text(s.player.background.clone()),
                 set: set_background,
@@ -128,10 +126,11 @@ pub static EDITOR: &[Card] = &[
         fields: &[choice!(
             "editor.auto_section",
             "Without sections",
-            "What Save does when no section was added: refuse, take the whole video, or take the range between the \
-             current marks.",
+            "What Save does when no section was added: take the range between the marks (the whole video without \
+             marks, like PyCutRv), refuse, always take the whole video, or only the range between the marks.",
             editor.auto_section,
             [
+                (AutoSection::RangeOrWhole, "Marked range, else whole video"),
                 (AutoSection::Off, "Refuse to save"),
                 (AutoSection::WholeVideo, "Whole video"),
                 (AutoSection::CurrentRange, "Current range")

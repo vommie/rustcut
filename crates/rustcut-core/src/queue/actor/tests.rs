@@ -167,23 +167,14 @@ async fn refused_jobs_and_editing_while_paused() {
         ]
     );
     assert!(snap.processing.paused && snap.processing.running.is_empty());
-    let copies = queue
-        .handle
-        .request(|reply| QueueCommand::Duplicate { ids: vec![a], reply })
-        .await
-        .unwrap()
-        .unwrap();
-    let order: Vec<JobId> = snapshot(&queue).await.jobs.iter().map(|r| r.id).collect();
-    assert_eq!(order, vec![c, a, copies[0], b], "a copy follows its original");
     let removed = queue
         .handle
-        .request(|reply| QueueCommand::Remove {
-            ids: vec![c, copies[0]],
-            reply,
-        })
+        .request(|reply| QueueCommand::Remove { ids: vec![c], reply })
         .await
         .unwrap();
-    assert_eq!(removed, Ok(2));
+    assert_eq!(removed, Ok(1));
+    let order: Vec<JobId> = snapshot(&queue).await.jobs.iter().map(|r| r.id).collect();
+    assert_eq!(order, vec![a, b]);
     queue
         .handle
         .request(|reply| QueueCommand::Shutdown { reply })
@@ -362,4 +353,66 @@ async fn a_replaced_store_is_read_again() {
         }
     }
     assert_eq!(added, 2, "the panel learns about the jobs");
+}
+
+#[tokio::test]
+async fn a_finished_job_renders_again_over_its_own_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("queue.sqlite");
+    let (done, failed) = {
+        let mut store = Store::open(&path, &dir.path().join("backups")).unwrap();
+        let done = store
+            .insert_job(&spec_in(dir.path(), "done"), &JobState::Finished)
+            .unwrap()
+            .id;
+        let failed = store
+            .insert_job(
+                &spec_in(dir.path(), "failed"),
+                &JobState::Failed {
+                    reason: "broken".into(),
+                },
+            )
+            .unwrap()
+            .id;
+        (done, failed)
+    };
+    let (store, _thread) = spawn_store(Store::open(&path, &dir.path().join("backups")).unwrap()).unwrap();
+    let (queue, _task) = spawn_queue(
+        &tokio::runtime::Handle::current(),
+        store,
+        env(dir.path()),
+        options(true),
+    );
+    queue
+        .handle
+        .send(QueueCommand::Restart {
+            ids: vec![done, failed],
+            profile: None,
+        })
+        .unwrap();
+    let spec = |id| {
+        let handle = queue.handle.clone();
+        async move {
+            handle
+                .request(|reply| QueueCommand::Spec { id, reply })
+                .await
+                .unwrap()
+                .unwrap()
+        }
+    };
+    assert!(
+        spec(done).await.target.overwrite,
+        "user decision Q-P8: its own file is replaced once verified"
+    );
+    assert!(
+        !spec(failed).await.target.overwrite,
+        "a failed job never overwrites what appeared meanwhile"
+    );
+    let states: Vec<JobState> = snapshot(&queue).await.jobs.into_iter().map(|r| r.state).collect();
+    assert_eq!(states, vec![JobState::Waiting, JobState::Waiting]);
+    queue
+        .handle
+        .request(|reply| QueueCommand::Shutdown { reply })
+        .await
+        .unwrap();
 }

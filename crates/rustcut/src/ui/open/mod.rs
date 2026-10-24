@@ -43,11 +43,12 @@ pub struct FileOpener {
     drops: RefCell<DropTracker>,
 }
 
-/// Where a file opened by RustCut itself starts (a job loaded into the editor, a draft put back).
+/// Where a file opened by RustCut itself starts (a job loaded into the editor: its first section, user decision Q-P8).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StartAt {
     pub position: Timestamp,
-    pub paused: bool,
+    /// `None` = as the auto play setting says.
+    pub paused: Option<bool>,
 }
 
 /// What runs after a file opened by RustCut itself was opened (`true`) or could not be (`false`).
@@ -169,7 +170,7 @@ impl FileOpener {
             filters.file_opening(path);
         }
         let result = match start {
-            Some(at) => player.return_to(path, at.position, at.paused),
+            Some(at) => player.open_at(path, at.position, at.paused),
             None => player.open(path),
         };
         if let Err(e) = result {

@@ -20,6 +20,7 @@ pub enum RowKind {
     Folder = 4,
     File = 5,
     Button = 6,
+    Color = 7,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,6 +101,7 @@ pub fn row(field: &Field, settings: &Settings, errors: &BTreeMap<String, String>
             "",
         ),
         Kind::Button(text) => (RowKind::Button, Vec::new(), "", text),
+        Kind::Color => (RowKind::Color, Vec::new(), "", ""),
     };
     let (checked, index, text) = match value {
         Value::Bool(b) => (b, 0, String::new()),

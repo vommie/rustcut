@@ -127,6 +127,8 @@ pub struct CheckInput<'a> {
     pub target: &'a Path,
     /// The typed name (before the counter), for the similar names.
     pub base: &'a str,
+    /// The video being cut: never one of the similar names (it lies in its own folder; user decision Q-P8).
+    pub source: Option<&'a Path>,
     pub scan: &'a FolderScan,
     pub exists: Option<ExistingFile>,
     pub queue: &'a [QueuedTarget],
@@ -148,11 +150,20 @@ pub fn check(input: &CheckInput<'_>) -> Conflicts {
     };
     let mut similar: Vec<String> = if input.warnings.base_name_in_folder && !input.base.trim().is_empty() {
         let base = input.base.trim().to_lowercase();
+        let folder = input.target.parent();
+        let is_source = |name: &str| {
+            input
+                .source
+                .zip(folder)
+                .is_some_and(|(source, folder)| same_path(&folder.join(name), source))
+        };
         input
             .scan
             .names
             .iter()
-            .filter(|n| n.as_str() != target_name && !n.starts_with('.') && n.to_lowercase().starts_with(&base))
+            .filter(|n| {
+                n.as_str() != target_name && !n.starts_with('.') && n.to_lowercase().starts_with(&base) && !is_source(n)
+            })
             .cloned()
             .collect()
     } else {
@@ -271,6 +282,7 @@ mod tests {
             "clip - 02.mp4",
             ".Clip - 03.rustcut-part.mkv",
             "Other.mkv",
+            "Clip.mp4",
         ]);
         let queue = [
             queued(4, "/out/Clip - 01.mkv", JobStateKind::Waiting),
@@ -282,6 +294,7 @@ mod tests {
         let input = CheckInput {
             target: Path::new("/out/Clip - 01.mkv"),
             base: "Clip",
+            source: Some(Path::new("/out/Clip.mp4")),
             scan: &folder,
             exists: Some(ExistingFile {
                 bytes: 10,
@@ -300,7 +313,16 @@ mod tests {
         assert_eq!(
             found.similar,
             vec!["clip - 02.mp4"],
-            "case-insensitive, the target and hidden files left out"
+            "case-insensitive, the target, hidden files and the source video left out"
+        );
+        let elsewhere = check(&CheckInput {
+            source: Some(Path::new("/videos/Clip.mp4")),
+            ..input
+        });
+        assert_eq!(
+            elsewhere.similar,
+            vec!["Clip.mp4", "clip - 02.mp4"],
+            "a file of the same name next to the target is no source"
         );
         let off = WarningSettings {
             target_exists: false,

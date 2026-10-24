@@ -184,10 +184,14 @@ impl ExportBridge {
         if update && let Some(edit) = &edit {
             queue.retain(|q| q.id != edit.id);
         }
-        let base = self.state.borrow().name.clone();
+        let (base, source) = {
+            let st = self.state.borrow();
+            (st.name.clone(), st.source.clone())
+        };
         let conflicts = check(&CheckInput {
             target: &target,
             base: &base,
+            source: source.as_deref(),
             scan: &scan,
             exists,
             queue: &queue,

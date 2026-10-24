@@ -215,12 +215,6 @@ export component JobPanel inherits Rectangle {
                 tooltip: "Render the job again";
                 clicked => { Job.retry(); }
             }
-
-            IconButton {
-                icon: IconId.job-duplicate;
-                tooltip: "Duplicate the job (the copy waits behind it)";
-                clicked => { Job.duplicate(); }
-            }
         }
 
         Flickable {

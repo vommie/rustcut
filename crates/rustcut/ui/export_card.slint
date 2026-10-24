@@ -10,6 +10,7 @@ import { ChoiceButton, FieldIcon, IconButton, NumberField, Switch } from "contro
 import { TooltipArea, TooltipHost } from "tooltip.slint";
 import { Export } from "export_types.slint";
 import { BubbleAnchor } from "bubble.slint";
+import { Playback } from "player_types.slint";
 
 /// The name: shows the text, a click turns it into a field whose every edit updates the file name at once.
 component NameField inherits Rectangle {
@@ -31,9 +32,9 @@ component NameField inherits Rectangle {
         text: "Name of the output (the naming template adds the counter)";
     }
 
-    // The live check of the target (M6.5c).
+    // The live check of the target (M6.5c); none while the card is dimmed for want of a playable video (M6.5e).
     BubbleAnchor {
-        key: "export.name";
+        key: Playback.has-video ? "export.name" : "";
     }
 
     if !root.editing: Text {
@@ -182,7 +183,7 @@ export component FinalizeCardBody inherits VerticalLayout {
             items: Export.folders;
             current: Export.folder-index;
             tooltip: Export.folder-path;
-            bubble: "export.folder";
+            bubble: Playback.has-video ? "export.folder" : "";
             selected(index) => { Export.select-folder(index); }
         }
 

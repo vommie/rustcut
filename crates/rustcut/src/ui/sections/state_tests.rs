@@ -234,3 +234,35 @@ proptest! {
         }
     }
 }
+
+#[test]
+fn the_automatic_section_of_a_save_without_sections() {
+    use rustcut_core::settings::AutoSection;
+    let whole = Section::new(Timestamp::ZERO, t(100)).unwrap();
+    let range = Section::new(t(4), t(9)).unwrap();
+    let marked = with_marks(4, 9);
+    let mut unmarked = SectionsState::default();
+    unmarked.set_duration(Some(t(100)));
+    let mut one = unmarked.clone();
+    one.set_mark(Bound::Start, t(4));
+
+    // PyCutRv's rule, the default since 0.0.31 (Q-P8): the marked range, without marks the whole video.
+    assert_eq!(AutoSection::default(), AutoSection::RangeOrWhole);
+    assert_eq!(marked.auto_section(AutoSection::RangeOrWhole), Ok(range));
+    assert_eq!(unmarked.auto_section(AutoSection::RangeOrWhole), Ok(whole));
+    assert!(
+        one.auto_section(AutoSection::RangeOrWhole).is_err(),
+        "one mark alone is refused"
+    );
+    // The other ways.
+    assert!(marked.auto_section(AutoSection::Off).is_err());
+    assert_eq!(marked.auto_section(AutoSection::WholeVideo), Ok(whole));
+    assert_eq!(marked.auto_section(AutoSection::CurrentRange), Ok(range));
+    assert!(unmarked.auto_section(AutoSection::CurrentRange).is_err());
+    let mut unknown = SectionsState::default();
+    unknown.set_duration(None);
+    assert!(
+        unknown.auto_section(AutoSection::RangeOrWhole).is_err(),
+        "the length is not known yet"
+    );
+}

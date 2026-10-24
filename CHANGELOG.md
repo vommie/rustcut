@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- A color picker for the colors of the Settings window (0.0.31, taken over from RustView): the Background row shows
+  the color as a swatch; a click opens the picker in its own window over the Settings window (it stays above it),
+  with a saturation/value area, hue slider, hex, RGB and HSV fields, a palette, the original color and "Default".
+  Every change shows at once; Cancel, Escape or closing the window restore the color, OK keeps it.
+- "Without sections" (Settings > Editor & Sections) has PyCutRv's choice "Marked range, else whole video" (0.0.31):
+  Save without a listed section takes the range between the marks, or the whole video when no mark is set.
+
 - A failed job's toast leads to the job (0.0.29): a click shows the queue panel, selects the job, scrolls it into view
   and lets it flash (a filter that hides it is cleared). Saving without a section shows "The job was not saved" with
   a button "Show the sections" that scrolls to the Sections card.
@@ -112,6 +119,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   sidecar" (`[hashing] write_sidecar`, on).
 
 ### Changed
+
+- New defaults like PyCutRv (0.0.31): a gray background around the video (#444444: a video's own black borders stand
+  out), the queue starts paused when jobs are waiting, and Save without sections takes the marked range or the whole
+  video. A `config.toml` that already holds these settings keeps its values (change them in the Settings window).
+- A job loaded into the editor opens at the start of its first section (0.0.31, like PyCutRv).
+- The hint about similar names in the target folder, and the similar files in the dialogs, no longer list the video
+  being cut (0.0.31).
 
 - Cards that need a video (Job Finalization, Filters, Sections, Probe Render) are dimmed and do not react while no
   video is open, instead of saying so in a message (0.0.29); their keys do nothing then. The message kind "Needs an
@@ -494,8 +508,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The queue panel's actions apply to every selected job; its buttons sit below the list.
 - The Sections card's buttons are icons with tooltips (set start/end to the playhead, add, move, delete).
 
+### Removed
+
+- "Duplicate" of a queued job (context menu and Job panel), on the user's decision (0.0.31): load the job into the
+  editor and save it under another name instead.
+
 ### Fixed
 
+- "Render Again" of a finished job failed at once ("exists already and overwriting was not chosen") (0.0.31): the job
+  renders again and replaces its own output once the new render is verified (a failed or canceled job still never
+  overwrites a file).
+- The keys of the menu bar (I, O, Shift+I, the frame steps, ...) acted on the editor behind an open dialog, e.g. the
+  question about missing tags (0.0.31).
+- A file that does not play no longer shows the target name bubble over the dimmed Job Finalization card, nor
+  "checking…" next to Deinterlace (0.0.31).
 - A render no longer goes on after RustCut crashed (0.0.30): when RustCut was killed or crashed while a job rendered,
   ffmpeg went on encoding in the background, and after the next start the same job rendered a second time beside it.
   At start, RustCut now stops the renders of its own interrupted jobs that an earlier RustCut left behind (and those

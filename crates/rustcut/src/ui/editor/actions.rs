@@ -59,7 +59,13 @@ pub(super) fn connect(editor: &Rc<Editor>, window: &MainWindow) {
     let this = Rc::downgrade(editor);
     sc.on_editing_changed(move |editing| {
         if let Some(editor) = this.upgrade() {
-            editor.publish_menu_keys(editing);
+            editor.set_menu_editing(editing);
+        }
+    });
+    let this = Rc::downgrade(editor);
+    sc.on_modal_changed(move |modal| {
+        if let Some(editor) = this.upgrade() {
+            editor.set_menu_modal(modal);
         }
     });
     let window_weak = window.as_weak();

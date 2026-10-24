@@ -191,6 +191,20 @@ impl PlayerBridge {
         )
     }
 
+    /// Opens `path` at `position`, paused or playing (`None`: as the auto play setting says).
+    pub fn open_at(&self, path: &Path, position: Timestamp, paused: Option<bool>) -> Result<(), PlayerError> {
+        self.end_reverse();
+        self.state.lock().opening(path);
+        self.refresh();
+        self.player.open(
+            path,
+            OpenOptions {
+                start: Some(position.as_secs_f64()),
+                play: Some(paused.map_or_else(|| self.auto_play.get(), |paused| !paused)),
+            },
+        )
+    }
+
     /// Shows the probe render `path` instead of the source: from its start, playing, in a loop.
     pub fn open_probe(&self, path: &Path) -> Result<(), PlayerError> {
         self.end_reverse();

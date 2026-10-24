@@ -112,6 +112,8 @@ export global SettingsUi {
     callback step(/* key */ string, /* steps */ int);
     // The browse button of a path row.
     callback pick(/* key */ string);
+    // A color option: open the color picker for it.
+    callback pick-color(/* key */ string);
     // A button row.
     callback action(/* key */ string);
     callback close();

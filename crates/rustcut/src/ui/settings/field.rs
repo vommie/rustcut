@@ -26,6 +26,8 @@ pub enum Kind {
     },
     /// A button with this text; it runs the row's key as an action (open a folder, test the connection).
     Button(&'static str),
+    /// A color as `#rrggbb`: a swatch that opens the color picker (P8); typed text is still taken.
+    Color,
 }
 
 /// A row's value as the row shows it.
@@ -162,7 +164,9 @@ impl Field {
             (Kind::Number { min, max, step, .. }, Edit::Step(steps), Value::Number(n)) => {
                 Value::Number(n.saturating_add(step.saturating_mul(i64::from(steps))).clamp(min, max))
             }
-            (Kind::Text { .. } | Kind::Path { .. }, Edit::Type(text), _) => Value::Text(text.trim().to_owned()),
+            (Kind::Text { .. } | Kind::Path { .. } | Kind::Color, Edit::Type(text), _) => {
+                Value::Text(text.trim().to_owned())
+            }
             _ => return Ok(false),
         };
         if value == before {

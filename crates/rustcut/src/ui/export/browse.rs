@@ -62,10 +62,14 @@ impl ExportBridge {
         {
             queue.retain(|q| q.id != id);
         }
-        let base = self.state.borrow().name.clone();
+        let (base, source) = {
+            let st = self.state.borrow();
+            (st.name.clone(), st.source.clone())
+        };
         let mut conflicts = check(&CheckInput {
             target: &target,
             base: &base,
+            source: source.as_deref(),
             scan: &scan,
             exists,
             queue: &queue,

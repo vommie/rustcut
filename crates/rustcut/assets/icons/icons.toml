@@ -149,7 +149,7 @@ job_tags = { tabler = "tag", doc = "Edit the tags and the rating of the job" }
 panel_job = { tabler = "file-info", doc = "Job panel (the inspector of the queue's current job)" }
 job_edit = { tabler = "edit", doc = "Edit the job in the editor" }
 job_load_new = { tabler = "file-import", doc = "Load the job into the editor as a new job" }
-job_duplicate = { tabler = "copy", doc = "Duplicate the job" }
+job_duplicate = { tabler = "copy", doc = "Duplicate (a render profile in the Settings window)" }
 job_retry_with = { tabler = "repeat", doc = "Render the job again with another profile" }
 move_top = { tabler = "arrow-bar-to-up", doc = "Move to the top" }
 move_bottom = { tabler = "arrow-bar-to-down", doc = "Move to the bottom" }

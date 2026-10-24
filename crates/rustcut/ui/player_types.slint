@@ -31,7 +31,7 @@ export global Playback {
     callback frame-step(/* back */ bool);
     callback toggle-mute();
     callback set-volume(int);
-    // Mouse wheel over the video: volume up (negative delta) or down.
+    // Mouse wheel over the video: one notch (120) changes the volume; a negative delta (wheel down) lowers it.
     callback wheel(/* delta-y */ length);
     callback reload();
 }

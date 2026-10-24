@@ -14,7 +14,7 @@ use rustcut_core::job::JobId;
 use rustcut_core::media::is_video_file;
 use rustcut_core::naming::{
     Conflicts, FolderScan, MAX_SIMILAR, QueuedTarget, SeriesFile, Taken, TypedNameError, file_name, free_variant,
-    next_free_counter_except, series, typed_stem,
+    next_free_counter_except, same_path, series, typed_stem,
 };
 use rustcut_core::render::Container;
 use rustcut_core::settings::{ConflictDialogSettings, ConflictPreselect};
@@ -154,8 +154,16 @@ impl ConflictDialog {
         if !input.settings.show_series {
             series.clear();
         }
+        // The video being cut lies in its own folder: it is no similar name (user decision Q-P8).
+        let source = input
+            .export
+            .source
+            .as_deref()
+            .filter(|s| s.parent().is_some_and(|p| same_path(p, input.folder)))
+            .and_then(Path::file_name)
+            .and_then(|n| n.to_str());
         let others = if input.settings.show_similar {
-            similar_names(&input.scan, &input.export.name, &file, &series)
+            similar_names(&input.scan, &input.export.name, &file, &series, source)
         } else {
             Vec::new()
         };
@@ -507,9 +515,15 @@ impl ConflictDialog {
     }
 }
 
-/// Video files whose names start with `base` (ignoring case), except the target, hidden files and the series; sorted, at
-/// most [`MAX_SIMILAR`].
-fn similar_names(scan: &FolderScan, base: &str, target: &str, series: &[SeriesFile]) -> Vec<String> {
+/// Video files whose names start with `base` (ignoring case), except the target, the source, hidden files and the series;
+/// sorted, at most [`MAX_SIMILAR`].
+fn similar_names(
+    scan: &FolderScan,
+    base: &str,
+    target: &str,
+    series: &[SeriesFile],
+    source: Option<&str>,
+) -> Vec<String> {
     let base = base.trim().to_lowercase();
     if base.is_empty() {
         return Vec::new();
@@ -520,6 +534,7 @@ fn similar_names(scan: &FolderScan, base: &str, target: &str, series: &[SeriesFi
         .iter()
         .filter(|n| {
             n.as_str() != target
+                && Some(n.as_str()) != source
                 && !n.starts_with('.')
                 && is_video_file(n)
                 && !in_series.contains(n.as_str())
