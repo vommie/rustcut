@@ -157,7 +157,10 @@ impl PlaybackState {
 
     pub fn view(&self) -> PlaybackView {
         let failure = self.failure.as_ref();
-        let position = self.playhead();
+        // mpv may report a moment past the duration at the end (a stream that starts late, MPEG-PS): never shown.
+        let position = self
+            .duration
+            .map_or_else(|| self.playhead(), |d| self.playhead().min(d));
         PlaybackView {
             has_file: self.file.is_some(),
             has_video: self.loaded && failure.is_none(),
@@ -255,6 +258,18 @@ mod tests {
         assert_eq!(view.decoder_text, "");
         // Nothing plays until the file is loaded; mpv's pause flag stays as it was (it belongs to the player).
         assert!(view.paused && !s.paused);
+    }
+
+    #[test]
+    fn the_shown_position_never_passes_the_duration() {
+        let mut s = playing();
+        s.apply(&PlayerEvent::Property(Property::Duration(10.0)));
+        s.apply(&PlayerEvent::Property(Property::Position(10.007)));
+        let view = s.view();
+        assert_eq!(
+            (view.position_text.as_str(), view.duration_text.as_str()),
+            ("0:00:10.000", "0:00:10.000")
+        );
     }
 
     #[test]
