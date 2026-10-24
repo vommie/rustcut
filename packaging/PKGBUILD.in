@@ -1,0 +1,77 @@
+# Maintainer: vommie
+# Generated from packaging/PKGBUILD.in by build-package.sh (version, release and checksum are filled in).
+pkgname=rustcut
+pkgver=@VERSION@
+pkgrel=@PKGREL@
+pkgdesc='Local video cutter: mark sections, filter, render through a queue, tag and rate in RustView (Rust, Slint, mpv, FFmpeg)'
+arch=('x86_64')
+url='https://github.com/vommie/rustcut'
+license=('MIT')
+# mpv is the player (libmpv), ffmpeg renders, probes and verifies (Arch's ffmpeg brings x264, x265, SVT-AV1, libaom,
+# rav1e and vid.stab for deshake). namcap calls most of the others "may not be needed" because nothing links them: ffmpeg
+# runs as a process, the windowing layer loads the X11, Wayland and OpenGL libraries at run time, and the D-Bus
+# connections (notifications, taskbar progress, sleep lock, tray) need the session and system buses.
+depends=(
+  'glibc' 'libgcc'
+  'mpv' 'ffmpeg'
+  'fontconfig' 'freetype2'
+  'libxkbcommon' 'libxkbcommon-x11' 'libx11' 'libxcb' 'libxcursor' 'libxi' 'libxrender'
+  'wayland' 'libglvnd' 'dbus'
+  'hicolor-icon-theme'
+)
+makedepends=('cargo')
+optdepends=(
+  'rustview: Tag & Rate, tags and ratings of the rendered clips (package from github.com/vommie/rustview releases)'
+  'xdg-desktop-portal: file and folder dialogs'
+  'xdg-desktop-portal-kde: Plasma file dialogs'
+)
+# makepkg's default LTO flags break the linking of the C parts (the bundled SQLite) with rust-lld.
+options=('!lto')
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('@SHA256@')
+
+# Generated code (Slint's UI, the OpenGL bindings) is compiled from the build folder, whose path would end up in the
+# binary's panic locations: remap it like makepkg's debug option does.
+_rustflags() {
+  export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$srcdir=/usr/src/debug/$pkgname"
+}
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+# Without the default feature `slint-mcp`: a package never contains Slint's MCP debugging server (user decision Q-D1).
+build() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  _rustflags
+  cargo build --frozen --release -p rustcut --no-default-features
+}
+
+# Only with `build-package.sh --check`: the golden tests need the PyCutRv test media (see CLAUDE.md).
+check() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  _rustflags
+  cargo test --frozen --release --workspace --no-default-features
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 "target/release/$pkgname" "$pkgdir/usr/bin/$pkgname"
+  install -Dm644 "packaging/io.github.vommie.rustcut.desktop" "$pkgdir/usr/share/applications/io.github.vommie.rustcut.desktop"
+  sed -e "s/@VERSION@/$pkgver/" -e "s/@DATE@/$(date -u +%F -d "@${SOURCE_DATE_EPOCH:-$(date +%s)}")/" \
+    "packaging/io.github.vommie.rustcut.metainfo.xml" > "$srcdir/io.github.vommie.rustcut.metainfo.xml"
+  install -Dm644 "$srcdir/io.github.vommie.rustcut.metainfo.xml" "$pkgdir/usr/share/metainfo/io.github.vommie.rustcut.metainfo.xml"
+  install -Dm644 "packaging/$pkgname.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/$pkgname.svg"
+  for size in 16 22 24 32 48 64 128 256 512; do
+    install -Dm644 "packaging/icons/$pkgname-$size.png" "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/$pkgname.png"
+  done
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 CHANGELOG.md "$pkgdir/usr/share/doc/$pkgname/CHANGELOG.md"
+}

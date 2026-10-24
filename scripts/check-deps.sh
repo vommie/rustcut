@@ -43,7 +43,7 @@ section "Build tools"
 check required cmd:rustc      rustup  "Rust compiler (see rust-version in Cargo.toml)"
 check required cmd:cargo      rustup  "Cargo"
 check required cmd:cc         gcc     "C compiler/linker for native dependencies (bundled SQLite)"
-check required cmd:clang      clang   "bindgen generates the libmpv bindings with it"
+check optional cmd:clang      clang   "only to regenerate the libmpv bindings (libmpv2-sys ships them pregenerated)"
 check required cmd:pkg-config pkgconf "finds the system libraries"
 check required cmd:git        git     "source control, used to collect the package sources"
 if command -v rustc >/dev/null 2>&1; then
