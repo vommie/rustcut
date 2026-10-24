@@ -6,6 +6,7 @@
 
 mod args;
 mod audio;
+mod audio_copy;
 mod builtin;
 mod capability;
 mod check;
@@ -28,6 +29,7 @@ mod verify;
 
 pub use args::{ArgsError, EncodeContext, VideoPass, audio_args, profile_args, video_args};
 pub use audio::{AudioCodec, AudioSpec};
+pub use audio_copy::{AudioCopyProblem, audio_copy_problem};
 pub use builtin::{DEFAULT_PROFILE_ID, builtin_profiles, is_builtin_id};
 pub use capability::{
     Availability, Capabilities, EncoderStatus, TEST_TIMEOUT, detect_capabilities, has_vidstab, parse_encoder_list,

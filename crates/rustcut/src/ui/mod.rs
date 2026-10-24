@@ -7,6 +7,7 @@ pub mod editor;
 pub mod export;
 pub mod filters;
 pub mod inspector;
+pub mod jump;
 pub mod keymap;
 pub mod logs;
 pub mod media_info;

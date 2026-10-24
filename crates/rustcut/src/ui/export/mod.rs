@@ -11,6 +11,7 @@ mod dialog;
 mod dialog_tests;
 mod dialog_view;
 mod editing;
+mod job_check;
 mod metadata;
 mod previews;
 mod save;
@@ -31,6 +32,7 @@ pub use dialog::{Choice, ConflictDialog, DialogInput, DialogOption, Outcome, Tab
 pub use metadata::{MetadataFacts, Missing, missing};
 pub use state::{ExportDraft, ExportState, JobFacts, MAX_COUNTER, SOURCE_FOLDER, codec_label};
 
+use self::job_check::JobProblem;
 use self::metadata::MetaPending;
 use self::previews::DialogPreviews;
 use self::save::Pending;
@@ -88,6 +90,8 @@ pub struct ExportBridge {
     /// Pictures and descriptions of the dialog's files (shared cache for the run).
     preview_service: PreviewService,
     previews: RefCell<DialogPreviews>,
+    /// A refresh of the card is scheduled (`job_changed`).
+    refresh: Cell<bool>,
 }
 
 /// What the previews run with, from the settings.
@@ -136,6 +140,7 @@ impl ExportBridge {
             dialog_settings: RefCell::new(settings.dialogs.conflict.clone()),
             preview_service: PreviewService::new(preview_options(settings)),
             previews: RefCell::new(DialogPreviews::default()),
+            refresh: Cell::new(false),
         });
         connect(&bridge, window);
         save::connect_dialog(&bridge, window);
@@ -172,6 +177,21 @@ impl ExportBridge {
     pub fn file_opened(&self, path: &Path) {
         self.state.borrow_mut().file_opened(path);
         self.rescan();
+    }
+
+    /// The sections, the render settings or the source's description changed: the card checks the job again once the
+    /// current event is handled (the caller may still hold its own state).
+    pub fn job_changed(&self) {
+        if self.refresh.replace(true) {
+            return;
+        }
+        let bridge = BRIDGE.with(|b| b.borrow().clone());
+        slint::Timer::single_shot(std::time::Duration::ZERO, move || {
+            if let Some(bridge) = bridge.upgrade() {
+                bridge.refresh.set(false);
+                bridge.publish();
+            }
+        });
     }
 
     /// What `ui-state.toml` keeps of the card.
@@ -255,6 +275,7 @@ impl ExportBridge {
         }
         let warnings = self.warnings.borrow();
         let fallback = rustcut_core::naming::NameError::Empty;
+        let job = self.job_problem(facts.as_ref().map_or(0, |f| f.sections));
         let line = card_check(&CardInput {
             source: st.source.as_deref(),
             folder: folder.as_deref(),
@@ -301,8 +322,9 @@ impl ExportBridge {
         e.set_check_level(line.level as i32);
         e.set_check_text(line.text.as_str().into());
         e.set_check_tooltip(line.tooltip.as_str().into());
+        // What keeps the job itself from being saved: Save names it until the notices show it (M6.5).
         let saving = self.saving.get();
-        e.set_can_save(line.can_save() && !saving);
+        e.set_can_save(line.can_save() && job.is_none() && !saving);
         let file_name = e.get_file_name();
         let updates = folder
             .as_deref()
@@ -311,6 +333,8 @@ impl ExportBridge {
         e.set_save_tooltip(
             if saving {
                 "Saving...".to_owned()
+            } else if let Some(job) = &job {
+                format!("Cannot save: {}", job.text)
             } else if !line.can_save() {
                 format!("Cannot save: {}", line.text)
             } else if updates {
@@ -323,6 +347,13 @@ impl ExportBridge {
             .into(),
         );
         self.publish_editing(&e, Some(file_name.as_str()).filter(|f| !f.is_empty()));
+    }
+
+    /// What keeps the job itself from being saved, with the option that solves it.
+    fn job_problem(&self, sections: usize) -> Option<JobProblem> {
+        let profile = self.render.upgrade()?.working_profile();
+        let source = self.media.upgrade().and_then(|m| m.current());
+        job_check::job_problem(&profile, sections, source.as_deref())
     }
 
     fn status(&self, level: Level, message: &str) {

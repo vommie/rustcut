@@ -11,6 +11,7 @@ import { SettingsSidebar } from "settings_sidebar.slint";
 import { SettingsCard } from "settings_card.slint";
 import { SettingsRow } from "settings_row.slint";
 import { SettingsUi } from "settings_types.slint";
+import { Jump } from "jump.slint";
 import { SettingsFolders } from "settings_folders.slint";
 import { SettingsProfiles } from "settings_profiles.slint";
 import { SettingsHotkeys } from "settings_hotkeys.slint";
@@ -103,8 +104,16 @@ export component SettingsWindow inherits Window {
                     }
                 }
 
-                ScrollView {
+                scroll := ScrollView {
                     vertical-stretch: 1;
+
+                    // A jump mark reached a row of this page: it scrolls into view (`jump.slint`).
+                    property <int> jump: Jump.target-serial;
+                    changed jump => {
+                        if Jump.inside(self.absolute-position.x, self.width, self.absolute-position.y + self.content-y, self.content-height) {
+                            self.content-y = Jump.scroll-to(self.absolute-position.y + self.content-y, self.content-y, self.visible-height, self.content-height);
+                        }
+                    }
 
                     page := VerticalLayout {
                         padding: 16px;

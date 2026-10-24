@@ -5,7 +5,10 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use super::{ArgsError, AudioCodec, BitDepth, EncodeContext, EncoderBackend, VideoPass, profile_args, video_args};
+use super::{
+    ArgsError, AudioCodec, AudioCopyProblem, BitDepth, EncodeContext, EncoderBackend, VideoPass, audio_copy_problem,
+    profile_args, video_args,
+};
 use crate::edit::{ChainError, ConcatInput, DeshakePass, LavfiTarget, Section, Size, concat_graph};
 use crate::job::{JobId, JobSpec};
 use crate::media::{MediaInfo, StreamKind};
@@ -119,8 +122,8 @@ pub enum PlanError {
     UnknownSize,
     #[error("the source and the target are the same file")]
     SameFile,
-    #[error("audio cannot be copied when sections are cut and joined; choose an audio codec in the render profile")]
-    AudioCopy,
+    #[error(transparent)]
+    AudioCopy(#[from] AudioCopyProblem),
     #[error("{0} needs a working VAAPI device, and none was found")]
     NoVaapiDevice(&'static str),
     #[error("the filters cannot be rendered: {0}")]
@@ -149,8 +152,10 @@ pub fn plan(input: PlanInput<'_>) -> Result<RenderPlan, PlanError> {
         return Err(PlanError::SameFile);
     }
     let audio_tracks = input.source.audio_streams().count();
-    if audio_tracks > 0 && spec.profile.audio.codec == AudioCodec::Copy {
-        return Err(PlanError::AudioCopy);
+    // Copied audio comes straight from the one input; a graph would need it decoded (Q-N6).
+    let copy_audio = audio_tracks > 0 && spec.profile.audio.codec == AudioCodec::Copy;
+    if copy_audio && let Some(problem) = audio_copy_problem(spec.profile.container, sections.len(), input.source) {
+        return Err(problem.into());
     }
     let encoder = spec.profile.video.encoder.spec();
     let vaapi = match encoder.backend {
@@ -217,7 +222,10 @@ pub fn plan(input: PlanInput<'_>) -> Result<RenderPlan, PlanError> {
         kind: PassKind::Encode,
         args: builder.encoding(
             &builder.encoder_chain(&chain, spec),
-            audio_tracks,
+            Audio {
+                tracks: audio_tracks,
+                copy: copy_audio,
+            },
             input.source,
             &encode,
             &temp,
@@ -256,6 +264,13 @@ fn usable_sections(spec: &JobSpec, source: &MediaInfo) -> Result<(Vec<Section>, 
     }
     let total = sections.iter().fold(Timestamp::ZERO, |acc, s| acc + s.duration());
     Ok((sections, total))
+}
+
+/// The audio of the encoding pass: the source's track count and whether the tracks are copied.
+#[derive(Debug, Clone, Copy)]
+struct Audio {
+    tracks: usize,
+    copy: bool,
 }
 
 /// The argument pieces every pass shares.
@@ -336,21 +351,15 @@ impl Builder<'_> {
         args
     }
 
-    /// The pass that writes `temp`: every audio track, global metadata, track languages and titles, no subtitles or
-    /// chapters (ADR-8), the profile's encoder and muxer arguments.
-    fn encoding(
-        &self,
-        chain: &str,
-        audio_tracks: usize,
-        source: &MediaInfo,
-        encode: &[String],
-        temp: &Path,
-    ) -> Vec<OsString> {
+    /// The pass that writes `temp`: every audio track (joined by the graph, or copied from the one input), global
+    /// metadata, track languages and titles, no subtitles or chapters (ADR-8), the profile's encoder and muxer
+    /// arguments.
+    fn encoding(&self, chain: &str, audio: Audio, source: &MediaInfo, encode: &[String], temp: &Path) -> Vec<OsString> {
         let mut args = self.head();
         let graph = concat_graph(
             ConcatInput {
                 sections: self.sections.len(),
-                audio_tracks,
+                audio_tracks: if audio.copy { 0 } else { audio.tracks },
             },
             chain,
         );
@@ -364,6 +373,10 @@ impl Builder<'_> {
             for label in &graph.audio {
                 args.extend(os(&["-map", &format!("[{label}]")]));
             }
+        }
+        if audio.copy {
+            // The input's own `-ss`/`-to` cut the copied packets.
+            args.extend(os(&["-map", "0:a"]));
         }
         args.extend(os(&FPS_MODE));
         args.extend(os(&["-map_metadata", "0", "-map_chapters", "-1"]));
