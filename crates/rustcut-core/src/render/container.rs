@@ -66,6 +66,17 @@ impl Container {
         Self::ALL.into_iter().find(|c| c.extension().eq_ignore_ascii_case(ext))
     }
 
+    /// Whether this container takes a source audio track of ffprobe's codec `name` unchanged (`AudioCodec::Copy`).
+    /// Matroska takes everything; the rest follows ffmpeg's muxers (checked by the render matrix, M6.2).
+    pub fn takes_copied_audio(self, name: &str) -> bool {
+        match self {
+            Self::Mkv => true,
+            Self::Webm => matches!(name, "opus" | "vorbis"),
+            Self::Mp4 => name != "vorbis" && !name.starts_with("pcm_"),
+            Self::Mov => !matches!(name, "vorbis" | "opus" | "flac"),
+        }
+    }
+
     /// Problems of putting `video` and `audio` into this container (empty = fine).
     pub fn check(self, video: VideoEncoder, audio: AudioCodec) -> Vec<CompatIssue> {
         let mut issues = Vec::new();
@@ -103,7 +114,18 @@ impl Container {
                         format!("{} cannot carry Vorbis audio", self.display_name()),
                     );
                 }
-                if audio == AudioCodec::Opus {
+                // ffmpeg's QuickTime muxer takes Opus and FLAC only in MP4 ("opus only supported in MP4", found
+                // by the render matrix, M6.2).
+                if self == Self::Mov && matches!(audio, AudioCodec::Opus | AudioCodec::Flac) {
+                    push(
+                        Severity::Error,
+                        format!(
+                            "{} cannot carry {} audio; use MP4 or MKV",
+                            self.display_name(),
+                            audio.spec().display_name
+                        ),
+                    );
+                } else if audio == AudioCodec::Opus {
                     push(
                         Severity::Warning,
                         format!(
@@ -111,8 +133,7 @@ impl Container {
                             self.display_name()
                         ),
                     );
-                }
-                if audio == AudioCodec::Flac {
+                } else if audio == AudioCodec::Flac {
                     push(
                         Severity::Warning,
                         format!("FLAC in {} does not play on many devices", self.display_name()),

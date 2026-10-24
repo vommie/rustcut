@@ -1,0 +1,11 @@
+---
+source: crates/rustcut-core/src/render/command/tests.rs
+expression: describe(&plan)
+---
+target: /videos/out/Clip - 01.mkv
+temp: /videos/out/.Clip - 01.rustcut-part.mkv
+expected: Expectation { duration: Timestamp(3000000), audio_streams: 2, size: Size { width: 1920, height: 1080 } }
+transforms: None
+passlog: None
+encode (3000000):
+  ffmpeg -hide_banner -nostats -progress pipe:1 -loglevel level+info -y -ss 1.000000 -to 4.000000 -i file:/videos/in.mp4 -filter_complex [0:v:0]concat=n=1:v=1:a=0[vcat];[vcat]null[vout] -map [vout] -map 0:a -fps_mode:v vfr -map_metadata 0 -map_chapters -1 -metadata:s:a:1 language=deu -metadata:s:a:1 'title=Kommentar: Regie' -c:v libsvtav1 -preset 6 -crf 26 -pix_fmt yuv420p10le -svtav1-params tune=0:film-grain=8:enable-variance-boost=1:variance-boost-strength=2 -c:a copy -f matroska 'file:/videos/out/.Clip - 01.rustcut-part.mkv'

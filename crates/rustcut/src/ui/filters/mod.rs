@@ -120,7 +120,7 @@ impl FiltersBridge {
         filters.set_interpolations(strings(["Bicubic", "Bilinear", "Linear", "None"].into_iter()));
         input::connect(&bridge, window);
         let this = Rc::downgrade(&bridge);
-        crate::ui::media_info::set_probe_hook(move |info| {
+        crate::ui::media_info::add_probe_hook(move |info| {
             if let Some(bridge) = this.upgrade() {
                 bridge.probed(info);
             }

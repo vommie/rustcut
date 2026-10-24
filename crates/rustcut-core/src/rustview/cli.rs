@@ -117,6 +117,13 @@ pub fn decode<T: DeserializeOwned>(code: Option<i32>, stdout: &[u8], stderr: &[u
             })?;
             serde_json::from_value(json).map_err(|e| RustViewError::Decode(e.to_string()))
         }
+        // A launcher script (a wrapper, a container's `rustview`) whose program is missing or not executable ends
+        // like a shell: 127 or 126. That is no answer of RustView, so it counts as "cannot be started".
+        Some(code @ (126 | 127)) => {
+            Err(RustViewError::Unavailable(stderr_reason(stderr).unwrap_or_else(|| {
+                format!("the rustview launcher ended with exit code {code}")
+            })))
+        }
         Some(code) => Err(RustViewError::Api(
             stderr_reason(stderr).unwrap_or_else(|| format!("RustView ended with exit code {code}")),
         )),
@@ -279,6 +286,18 @@ mod tests {
             Err(RustViewError::Decode(_))
         ));
         assert!(decode::<GetMedia>(None, b"", b"").unwrap_err().is_transient());
+        let missing = decode::<TagTree>(
+            Some(127),
+            b"",
+            b"rustview: /usr/bin/rustview: No such file or directory\n",
+        );
+        assert_eq!(
+            missing,
+            Err(RustViewError::Unavailable(
+                "rustview: /usr/bin/rustview: No such file or directory".into()
+            ))
+        );
+        assert!(missing.unwrap_err().is_transient());
     }
 
     #[tokio::test]

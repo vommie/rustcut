@@ -7,6 +7,7 @@ import { IconId } from "icons.slint";
 import { ChoiceButton, IconButton, NumberField } from "controls.slint";
 import { ToggleSwitch } from "toggle_switch.slint";
 import { SettingRowView, SettingsUi } from "settings_types.slint";
+import { JumpFlash } from "jump.slint";
 
 export component SettingsRow inherits Rectangle {
     in property <SettingRowView> option;
@@ -153,5 +154,9 @@ export component SettingsRow inherits Rectangle {
                 clicked => { SettingsUi.action(root.option.key); }
             }
         }
+    }
+
+    JumpFlash {
+        key: "settings:" + root.option.key;
     }
 }

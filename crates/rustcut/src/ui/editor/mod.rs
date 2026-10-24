@@ -502,6 +502,10 @@ impl Editor {
     }
 
     fn publish_sections(&self, window: &MainWindow, st: &State) {
+        // The export card checks the job again (copied audio needs one section, Q-N6).
+        if let Some(export) = self.export.borrow().upgrade() {
+            export.job_changed();
+        }
         let sections = window.global::<Sections<'_>>();
         let s = &st.sections;
         let text = |t: Option<Timestamp>| t.map(|t| t.to_string()).unwrap_or_default();

@@ -52,9 +52,16 @@ pub struct RenderSettingsBridge {
     video: Rc<VecModel<OptionRowView>>,
     audio: Rc<VecModel<OptionRowView>>,
     expert: Rc<VecModel<OptionRowView>>,
+    /// Told after every change of the working copy (the export card checks the job again).
+    changed: RefCell<Option<Box<dyn Fn()>>>,
 }
 
 impl RenderSettingsBridge {
+    /// Installs the function told after every change of the working copy.
+    pub fn set_changed_hook(&self, hook: impl Fn() + 'static) {
+        *self.changed.borrow_mut() = Some(Box::new(hook));
+    }
+
     /// Takes over the Render Settings panel. `encoders` is the capability check started at app start. The app owns the
     /// only strong reference.
     pub fn install(
@@ -95,6 +102,7 @@ impl RenderSettingsBridge {
             video: Rc::new(VecModel::default()),
             audio: Rc::new(VecModel::default()),
             expert: Rc::new(VecModel::default()),
+            changed: RefCell::new(None),
         });
         let rs = window.global::<RenderSettings<'_>>();
         rs.set_profiles(ModelRc::from(Rc::clone(&bridge.profiles)));
@@ -365,6 +373,9 @@ impl RenderSettingsBridge {
         sync(&self.video, panel.video.iter().map(row).collect());
         sync(&self.audio, panel.audio.iter().map(row).collect());
         sync(&self.expert, panel.expert.iter().map(row).collect());
+        if let Some(changed) = self.changed.borrow().as_ref() {
+            changed();
+        }
     }
 }
 

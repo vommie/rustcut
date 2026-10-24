@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Jump marks (0.0.23): a message about an option has a small target button that leads straight to it. The panel or
+  window opens, a folded card unfolds, the option scrolls into view and flashes three times. The Tag & Rate panel's
+  header uses it while RustView cannot be reached (Settings > RustView, the program) or is switched off (the
+  switch).
+
 - New tooltips everywhere (0.0.21): one modern bubble with a small arrow that points at its button. The keys of a
   button sit on their own line under the text as key caps ("Key [Ctrl] [S]"; an action with two keys shows "Keys [,]
   or [PgUp]"; the arrow keys as arrows). Long explanations get a title and rows, e.g. the deinterlacer, the scaling
@@ -39,6 +44,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The Job Finalization card checks the job again at once when the Codecs panel, the sections or the source's
+  description change; an error of the render settings turns Save off with the reason in its tooltip instead of
+  failing at the click (0.0.23).
 - Buttons and menu entries that must be held show a red "Hold 2 s" badge in their tooltip (the time follows the
   setting) instead of a text starting with "Hold to" (0.0.21).
 - The details behind the "i" of the "file exists" dialog use the new tooltip (0.0.21).
@@ -388,6 +396,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Audio "Copy (no re-encode)" works (0.0.23): a job with one section takes the source's audio tracks unchanged.
+  Before, every job with audio failed when it rendered. With several sections, or when the container cannot take the
+  source's audio (e.g. AAC in WebM), Save is off and its tooltip names the reason before the job is saved.
+- QuickTime (.mov) with Opus or FLAC audio is marked as an error in the Codecs panel (ffmpeg refuses it; it was only a
+  warning, and the render failed) (0.0.23).
+- A `rustview` launcher that cannot find its program (exit code 126 or 127, e.g. a wrapper script) shows RustView as
+  unavailable with the reason, instead of as connected without tags (0.0.23).
 - The Tag & Rate panel lays out the tag tree like RustView again (0.0.22): the tags run down a column and a new
   column starts only when the area is full. Before, every tag got a column of its own, so the tags stood side by side
   in one row.

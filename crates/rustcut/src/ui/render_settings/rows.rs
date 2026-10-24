@@ -87,6 +87,20 @@ impl Row {
         }
     }
 
+    /// The card of the Codecs panel that shows the row (the split of `view::panel`).
+    pub const fn card(self) -> &'static str {
+        match self {
+            Self::Encoder | Self::Quality | Self::Speed | Self::Container => "render-video",
+            Self::AudioCodec | Self::AudioBitrate | Self::AudioChannels | Self::AudioSampleRate => "render-audio",
+            _ => "render-expert",
+        }
+    }
+
+    /// The first row that edits `field` (where a jump to an issue of the field leads).
+    pub fn for_field(field: ProfileField) -> Option<Self> {
+        Self::ALL.into_iter().find(|r| r.field() == Some(field))
+    }
+
     pub fn from_key(key: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|r| r.key() == key)
     }

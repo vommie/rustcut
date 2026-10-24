@@ -100,6 +100,14 @@ impl DockBridge {
         self.update(|l| l.reveal(panel));
     }
 
+    /// Shows `panel` with its card `card` unfolded (a jump mark to a row of that card, Q-N6).
+    pub fn show_card(&self, panel: PanelId, card: &str) {
+        self.update(|l| {
+            l.reveal(panel);
+            l.set_card_collapsed(card, false);
+        });
+    }
+
     fn update(&self, change: impl FnOnce(&mut DockLayout)) {
         change(&mut self.state.borrow_mut().layout);
         self.publish();

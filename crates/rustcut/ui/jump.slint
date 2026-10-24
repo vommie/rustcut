@@ -1,0 +1,97 @@
+// Jump marks (user request Q-N6): a message about an option leads the user straight to it. Rust (`src/ui/jump/`) shows
+// the panel, card or window and sets `Jump.key`; the element with that key flashes (`JumpFlash`) and tells its scroll
+// area where it is, and the area (`JumpScroll` logic in `CardStack` and the Settings window) moves it into view. Each
+// window has its own `Jump` global.
+
+import { Theme } from "styles.slint";
+
+export global Jump {
+    // The key of the element to show ("codecs:audio-codec", "settings:rustview.binary"), and a serial that changes with
+    // every jump (the same key twice flashes twice).
+    in-out property <string> key;
+    in-out property <int> serial;
+    // Where the reached element is, in window coordinates; `target-serial` changes once per report.
+    in-out property <length> target-x;
+    in-out property <length> target-y;
+    in-out property <length> target-height;
+    in-out property <int> target-serial;
+
+    // The content offset (`content-y`, at most 0) that shows the reached element inside a scroll area whose content
+    // starts at `area-y` (window coordinates, scrolled) and which shows `visible` of `content` height; `current` when
+    // the element is fully visible already. The element is centered where it can be.
+    public pure function scroll-to(area-y: length, current: length, visible: length, content: length) -> length {
+        // The element's place in the content, independent of the current offset.
+        let top = root.target-y - area-y;
+        if top >= -current && top + root.target-height <= -current + visible {
+            return current;
+        }
+        return Math.max(Math.min(0px, visible - content), Math.min(0px, (visible - root.target-height) / 2 - top));
+    }
+
+    // Whether the reached element lies inside the scroll area at window x `area-x` with `width` whose content starts at
+    // `area-y` (window coordinates, scrolled) and is `content` high.
+    public pure function inside(area-x: length, width: length, area-y: length, content: length) -> bool {
+        return root.target-x >= area-x && root.target-x < area-x + width
+            && root.target-y >= area-y && root.target-y < area-y + content;
+    }
+}
+
+/// The flash over an element a jump can lead to: the last child of the element (a `Rectangle`), with its key. When a
+/// jump reaches it, it reports its place once the layout settled and pulses three times.
+export component JumpFlash inherits Rectangle {
+    in property <string> key;
+
+    property <bool> aimed: root.key != "" && Jump.key == root.key;
+    property <int> serial: Jump.serial;
+    property <int> pulses: 0;
+
+    width: 100%;
+    height: 100%;
+    border-radius: 4px;
+    border-width: 2px;
+    border-color: Theme.primary;
+    background: Theme.primary.with-alpha(0.16);
+    opacity: 0;
+
+    animate opacity { duration: 160ms; easing: ease-in-out; }
+
+    function arm() {
+        if root.aimed {
+            settle.running = true;
+        }
+    }
+
+    init => { root.arm(); }
+    changed serial => { root.arm(); }
+
+    // A panel or card that was just opened lays out its rows after this element was made.
+    settle := Timer {
+        interval: 80ms;
+        running: false;
+        triggered => {
+            self.running = false;
+            Jump.target-x = root.absolute-position.x + 1px;
+            Jump.target-y = root.absolute-position.y;
+            Jump.target-height = root.height;
+            Jump.target-serial += 1;
+            // Done: an element made again later (a card folded and unfolded) does not flash again.
+            Jump.key = "";
+            root.opacity = 1;
+            root.pulses = 5;
+            pulse.running = true;
+        }
+    }
+
+    pulse := Timer {
+        interval: 220ms;
+        running: false;
+        triggered => {
+            root.pulses -= 1;
+            root.opacity = Math.mod(root.pulses, 2) == 1 ? 1 : 0;
+            if root.pulses <= 0 {
+                self.running = false;
+                root.opacity = 0;
+            }
+        }
+    }
+}

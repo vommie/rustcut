@@ -58,6 +58,17 @@ component ConnectionHeader inherits Rectangle {
             overflow: elide;
         }
 
+        // Leads to the setting behind the state (jump mark, Q-N6).
+        if TagRate.connection-jump != "": IconButton {
+            y: (parent.height - self.height) / 2;
+            height: 22px;
+            width: 24px;
+            icon: IconId.jump-to;
+            icon-size: IconSize.sm;
+            tooltip: TagRate.connection-jump;
+            clicked => { TagRate.connection-jump-clicked(); }
+        }
+
         if TagRate.can-retry: IconButton {
             y: (parent.height - self.height) / 2;
             height: 22px;

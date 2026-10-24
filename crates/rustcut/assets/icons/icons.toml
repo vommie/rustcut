@@ -174,3 +174,4 @@ key_right = { tabler = "arrow-right", doc = "The Right arrow key on a key cap" }
 key_up = { tabler = "arrow-up", doc = "The Up arrow key on a key cap" }
 key_down = { tabler = "arrow-down", doc = "The Down arrow key on a key cap" }
 tip_hold = { tabler = "hand-click", doc = "A button that acts only when held (in its tooltip)" }
+jump_to = { tabler = "target-arrow", doc = "Show the option a message is about (jump mark, Q-N6)" }
