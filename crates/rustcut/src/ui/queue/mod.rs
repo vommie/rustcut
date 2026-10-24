@@ -77,6 +77,8 @@ pub struct QueueStatus {
     pub processing_paused: bool,
     /// Jobs waiting, rendering or paused.
     pub open: usize,
+    /// Jobs put on hold.
+    pub held: usize,
     pub overall: Option<Overall>,
 }
 
@@ -516,6 +518,7 @@ fn status_of(view: &QueueView) -> QueueStatus {
                 )
             })
             .count(),
+        held: kinds().filter(|k| *k == JobStateKind::Held).count(),
         overall: view.overall(),
     }
 }

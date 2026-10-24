@@ -33,6 +33,18 @@ pub(super) struct Question {
 impl PowerBridge {
     /// Window close, File > Quit or the Quit key: asks first while a job renders.
     pub(super) fn request_quit(&self) {
+        // A temporary queue with unfinished jobs asks first whatever renders (M6.5d).
+        let loss = self.loss.borrow().as_ref().and_then(|check| check());
+        if let Some(text) = loss
+            && let Some(window) = self.window.upgrade()
+        {
+            let power = window.global::<Power<'_>>();
+            power.set_ask_loss(true);
+            power.set_ask_text(text.into());
+            self.question.open.set(true);
+            self.show_question();
+            return;
+        }
         let status = self.queue.upgrade().map(|q| q.status());
         let ask = status.is_some_and(|s| state::ask_before_quit(&s, self.confirm.get()));
         let Some(window) = self.window.upgrade() else { return };
@@ -61,6 +73,7 @@ impl PowerBridge {
             let power = window.global::<Power<'_>>();
             power.set_asking(false);
             power.set_ask_done(false);
+            power.set_ask_loss(false);
             window.invoke_focus_keys();
         }
     }

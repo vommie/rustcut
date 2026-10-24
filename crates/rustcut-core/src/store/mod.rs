@@ -3,6 +3,7 @@
 
 mod actor;
 mod jobs;
+mod rescue;
 mod schema;
 
 use std::path::{Path, PathBuf};
@@ -11,6 +12,7 @@ use rusqlite::Connection;
 
 pub use actor::{StoreCommand, StoreHandle, spawn_store};
 pub use jobs::{JobRecord, LogLine, LogStream, SpecSlot};
+pub use rescue::{Problem, Rescue, readable, rescue, start_empty};
 pub use schema::SCHEMA_VERSION;
 
 #[derive(Debug, thiserror::Error)]

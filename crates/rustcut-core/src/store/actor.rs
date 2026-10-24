@@ -63,6 +63,12 @@ pub enum StoreCommand {
         limit: usize,
         reply: Answer<Vec<LogLine>>,
     },
+    /// Uses `store` from now on (the old connection is closed): the database dialog rescued the jobs, started empty
+    /// or opened the file again after the temporary queue (M6.5d).
+    Replace {
+        store: Box<Store>,
+        reply: Reply<()>,
+    },
     /// Ends the thread after the commands before it; the reply comes when the connection is closed.
     Shutdown {
         reply: Reply<()>,
@@ -114,6 +120,11 @@ pub fn spawn_store(mut store: Store) -> std::io::Result<(StoreHandle, JoinHandle
                     }
                     StoreCommand::Log { id, limit, reply } => {
                         let _ = reply.send(store.log(id, limit));
+                    }
+                    StoreCommand::Replace { store: next, reply } => {
+                        tracing::info!(path = ?next.path(), "[Store] Database replaced");
+                        store = *next;
+                        let _ = reply.send(());
                     }
                     StoreCommand::Shutdown { reply } => {
                         drop(store);

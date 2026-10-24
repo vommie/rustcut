@@ -105,6 +105,10 @@ export global Queue {
     callback toggle-pause-after();
     // The "when done" menu below the button (window coordinates).
     callback when-done-menu(length, length);
+    // The queue lives only in memory (its database cannot be used, M6.5d): the red line at the top; a click opens the
+    // database dialog again.
+    in property <string> temporary-line;
+    callback temporary-clicked();
     callback cancel();
     callback remove();
     callback retry();

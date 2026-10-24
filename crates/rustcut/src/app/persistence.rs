@@ -1,16 +1,23 @@
 //! Loading settings and UI state at startup and saving the UI state at quit (paths from `--home` or XDG).
 
-use rustcut_core::settings::{AppPaths, LoadOutcome, Settings, UiState, VersionedFile, load, save};
+use std::cell::Cell;
+use std::rc::Rc;
 
-/// What startup loaded; `ui_read_only` keeps a newer version's `ui-state.toml` from being overwritten, and
-/// `settings_read_only` a `config.toml` that is newer or could not be read.
+use rustcut_core::settings::{AppPaths, LoadOutcome, Settings, UiState, VersionedFile, load, save, unknown_keys};
+
+use crate::ui::problems::newer::{File, NewerFile};
+
+/// What startup loaded; `ui_read_only` keeps a newer version's `ui-state.toml` from being overwritten (the dialog
+/// about newer files may lift it), and `settings_read_only` a `config.toml` that is newer or could not be read.
 #[derive(Debug)]
 pub struct Loaded {
     pub paths: AppPaths,
     pub settings: Settings,
     pub ui_state: UiState,
-    pub ui_read_only: bool,
+    pub ui_read_only: Rc<Cell<bool>>,
     pub settings_read_only: bool,
+    /// The files a newer RustCut wrote (the dialog at the start, M6.5d).
+    pub newer: Vec<NewerFile>,
 }
 
 /// Resolves the folders, creates them and loads both files. Never fails: problems are logged and defaults used.
@@ -22,6 +29,13 @@ pub fn load_all(paths: AppPaths) -> Loaded {
     let ui = load_file::<UiState>(&paths);
     let ui_read_only = ui.as_ref().is_some_and(LoadOutcome::is_read_only);
     let settings_read_only = settings.as_ref().is_none_or(LoadOutcome::is_read_only);
+    let newer: Vec<NewerFile> = [
+        settings.as_ref().and_then(|o| newer_file(&paths, File::Settings, o)),
+        ui.as_ref().and_then(|o| newer_file(&paths, File::UiState, o)),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
     if settings
         .as_ref()
         .is_some_and(|o| matches!(o, LoadOutcome::Migrated { .. }))
@@ -36,10 +50,27 @@ pub fn load_all(paths: AppPaths) -> Loaded {
     Loaded {
         settings: settings.map(LoadOutcome::into_value).unwrap_or_default(),
         ui_state: ui.map(LoadOutcome::into_value).unwrap_or_default(),
-        ui_read_only,
+        ui_read_only: Rc::new(Cell::new(ui_read_only)),
         settings_read_only,
+        newer,
         paths,
     }
+}
+
+/// A file a newer RustCut wrote, with the settings this version does not know.
+fn newer_file<T: VersionedFile>(paths: &AppPaths, file: File, outcome: &LoadOutcome<T>) -> Option<NewerFile> {
+    let LoadOutcome::Newer { value, found } = outcome else {
+        return None;
+    };
+    let path = paths.config_dir.join(T::FILE_NAME);
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    Some(NewerFile {
+        file,
+        unknown: unknown_keys(&text, value),
+        path,
+        found: *found,
+        known: T::VERSION,
+    })
 }
 
 /// Writes `config.toml` on the runtime whenever the app changed the settings (the Render Settings panel's profiles, the
@@ -47,18 +78,20 @@ pub fn load_all(paths: AppPaths) -> Loaded {
 /// come quickly. Every bridge changes the one shared copy, so no bridge overwrites another one's change. UI thread only.
 #[derive(Clone)]
 pub struct SettingsWriter {
-    sender: Option<tokio::sync::watch::Sender<Option<Settings>>>,
-    current: std::rc::Rc<std::cell::RefCell<Settings>>,
-    listeners: std::rc::Rc<std::cell::RefCell<Vec<Listener>>>,
+    sender: tokio::sync::watch::Sender<Option<Settings>>,
+    /// `config.toml` is from a newer version or unreadable: nothing is written (until the dialog lifts it).
+    read_only: Rc<Cell<bool>>,
+    current: Rc<std::cell::RefCell<Settings>>,
+    listeners: Rc<std::cell::RefCell<Vec<Listener>>>,
 }
 
 /// Called with the settings before and after a change (UI thread).
-type Listener = std::rc::Rc<dyn Fn(&Settings, &Settings)>;
+type Listener = Rc<dyn Fn(&Settings, &Settings)>;
 
 impl std::fmt::Debug for SettingsWriter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SettingsWriter")
-            .field("read_only", &self.sender.is_none())
+            .field("read_only", &self.read_only.get())
             .field("listeners", &self.listeners.borrow().len())
             .finish_non_exhaustive()
     }
@@ -66,22 +99,15 @@ impl std::fmt::Debug for SettingsWriter {
 
 impl SettingsWriter {
     /// A writer into `config_dir` starting from `settings`; `read_only` (a newer or unreadable file) makes every save a
-    /// logged no-op.
+    /// logged no-op until [`Self::make_writable`].
     pub fn start(
         runtime: &tokio::runtime::Handle,
         config_dir: std::path::PathBuf,
         read_only: bool,
         settings: &Settings,
     ) -> Self {
-        let current = std::rc::Rc::new(std::cell::RefCell::new(settings.clone()));
-        let listeners = std::rc::Rc::default();
-        if read_only {
-            return Self {
-                sender: None,
-                current,
-                listeners,
-            };
-        }
+        let current = Rc::new(std::cell::RefCell::new(settings.clone()));
+        let listeners = Rc::default();
         let (sender, mut receiver) = tokio::sync::watch::channel(None::<Settings>);
         runtime.spawn(async move {
             while receiver.changed().await.is_ok() {
@@ -97,7 +123,8 @@ impl SettingsWriter {
             }
         });
         Self {
-            sender: Some(sender),
+            sender,
+            read_only: Rc::new(Cell::new(read_only)),
             current,
             listeners,
         }
@@ -106,12 +133,18 @@ impl SettingsWriter {
     /// Runs `listener` after every change that changed something, with the settings before and after (the bridges that
     /// apply a setting while RustCut runs). A listener may change the settings itself.
     pub fn subscribe(&self, listener: impl Fn(&Settings, &Settings) + 'static) {
-        self.listeners.borrow_mut().push(std::rc::Rc::new(listener));
+        self.listeners.borrow_mut().push(Rc::new(listener));
     }
 
     /// Whether `config.toml` is written (not a newer or unreadable file).
     pub fn writable(&self) -> bool {
-        self.sender.is_some()
+        !self.read_only.get()
+    }
+
+    /// From now on `config.toml` is written (the newer file was backed up, M6.5d); saves the settings at once.
+    pub fn make_writable(&self) {
+        self.read_only.set(false);
+        self.sender.send_replace(Some(self.current()));
     }
 
     /// Changes the settings with `change` and saves them soon (on the runtime). `false` when `config.toml` must not be
@@ -130,11 +163,11 @@ impl SettingsWriter {
                 listener(&before, &settings);
             }
         }
-        let Some(sender) = &self.sender else {
+        if self.read_only.get() {
             tracing::warn!("[Settings] config.toml is from a newer version or unreadable; not overwritten");
             return false;
-        };
-        sender.send_replace(Some(self.current()));
+        }
+        self.sender.send_replace(Some(self.current()));
         true
     }
 
@@ -166,7 +199,7 @@ fn load_file<T: VersionedFile>(paths: &AppPaths) -> Option<LoadOutcome<T>> {
 
 /// Saves the UI state unless it came from a newer version.
 pub fn save_ui_state(loaded: &Loaded, state: &UiState) {
-    if loaded.ui_read_only {
+    if loaded.ui_read_only.get() {
         tracing::warn!("[Settings] ui-state.toml is from a newer version; not overwritten");
         return;
     }
@@ -219,8 +252,8 @@ mod tests {
             .into_value();
         assert_eq!((read.queue.workers, read.render.nice), (3, 5));
 
-        let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
-        let log = std::rc::Rc::clone(&seen);
+        let seen = Rc::new(std::cell::RefCell::new(Vec::new()));
+        let log = Rc::clone(&seen);
         writer.subscribe(move |before, after| log.borrow_mut().push((before.queue.workers, after.queue.workers)));
         assert!(writer.update(|s| s.queue.workers = 4));
         assert!(
@@ -234,6 +267,19 @@ mod tests {
         assert!(!locked.update(|s| s.queue.workers = 2));
         assert_eq!(locked.current().queue.workers, 2, "the change holds for this run");
         assert!(!other.path().join("config.toml").exists());
+        // The dialog about a newer file lifted it: the settings are saved at once.
+        let clone = locked.clone();
+        locked.make_writable();
+        assert!(clone.writable(), "every copy of the writer follows");
+        runtime.block_on(async {
+            for _ in 0..100 {
+                if other.path().join("config.toml").exists() {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        });
+        assert!(other.path().join("config.toml").exists());
     }
 
     #[test]
@@ -241,13 +287,22 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let paths = AppPaths::below(dir.path());
         std::fs::create_dir_all(&paths.config_dir).unwrap();
-        std::fs::write(paths.config_dir.join("ui-state.toml"), "version = 99\n").unwrap();
+        std::fs::write(
+            paths.config_dir.join("ui-state.toml"),
+            "version = 99\n[future]\nx = 1\n",
+        )
+        .unwrap();
         let loaded = load_all(paths.clone());
-        assert!(loaded.ui_read_only);
+        assert!(loaded.ui_read_only.get());
+        let newer = loaded.newer.first().unwrap();
+        assert_eq!(
+            (newer.file, newer.found, newer.unknown.as_slice()),
+            (File::UiState, 99, &["future".to_owned()][..])
+        );
         save_ui_state(&loaded, &UiState::default());
         assert_eq!(
             std::fs::read_to_string(paths.config_dir.join("ui-state.toml")).unwrap(),
-            "version = 99\n"
+            "version = 99\n[future]\nx = 1\n"
         );
     }
 }

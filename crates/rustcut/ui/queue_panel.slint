@@ -86,6 +86,39 @@ export component QueuePanel inherits Rectangle {
         padding: 6px;
         spacing: 6px;
 
+        if Queue.temporary-line != "": Rectangle {
+            border-radius: 4px;
+            background: temporary-touch.has-hover ? Theme.status-corrupt.with-alpha(0.24)
+                : Theme.status-corrupt.with-alpha(0.16);
+            border-width: 1px;
+            border-color: Theme.status-corrupt.with-alpha(0.7);
+            min-height: temporary-row.min-height;
+
+            temporary-touch := TouchArea {
+                mouse-cursor: MouseCursor.pointer;
+                clicked => { Queue.temporary-clicked(); }
+            }
+
+            temporary-row := HorizontalLayout {
+                padding: 5px;
+                spacing: 6px;
+
+                AppIcon {
+                    icon: IconId.status-error;
+                    size: IconSize.sm;
+                    color: Theme.status-corrupt;
+                }
+
+                Text {
+                    horizontal-stretch: 1;
+                    text: Queue.temporary-line + " Click for the ways out.";
+                    color: Theme.text;
+                    font-size: 11px;
+                    wrap: word-wrap;
+                }
+            }
+        }
+
         // Processing, summary, overall progress.
         HorizontalLayout {
             spacing: 4px;

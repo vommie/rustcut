@@ -49,6 +49,9 @@ impl Actor {
                 let _ = reply.send(self.remove(&ids).await);
             }
             QueueCommand::Cancel { ids } => self.cancel(&ids).await,
+            QueueCommand::Reload { reply } => {
+                let _ = reply.send(self.reload().await);
+            }
             QueueCommand::SetPaused(paused) => {
                 self.model.set_paused(paused);
                 tracing::info!(paused, "[Queue] Processing switched");

@@ -244,6 +244,7 @@ mod tests {
             active: 1,
             processing_paused: false,
             open: 3,
+            held: 0,
             overall: Some(Overall {
                 fraction: 0.416,
                 done: 1,

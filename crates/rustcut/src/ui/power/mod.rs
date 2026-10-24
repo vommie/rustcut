@@ -48,7 +48,12 @@ pub struct PowerBridge {
     /// What the desktop actor was told last.
     rendering: Cell<bool>,
     badge: Cell<Badge>,
+    /// What a quit would lose (a temporary queue's unfinished jobs, M6.5d): the question's text, `None` = nothing.
+    loss: RefCell<Option<LossCheck>>,
 }
+
+/// Tells what quitting now would lose.
+pub type LossCheck = Box<dyn Fn() -> Option<String>>;
 
 impl PowerBridge {
     /// Takes over the "when done" button, the countdown banner and the close question. The app owns the only strong
@@ -78,6 +83,7 @@ impl PowerBridge {
             done_text: RefCell::default(),
             rendering: Cell::new(false),
             badge: Cell::new(Badge::NONE),
+            loss: RefCell::new(None),
         });
         connect(&bridge, window);
         {
@@ -286,6 +292,11 @@ impl PowerBridge {
         if let Err(e) = spawned {
             tracing::error!(error = %e, "[Power] The event loop is gone");
         }
+    }
+
+    /// What a quit would lose: asked before every quit (the database bridge, while the queue is temporary).
+    pub fn set_loss_check(&self, check: LossCheck) {
+        *self.loss.borrow_mut() = Some(check);
     }
 
     fn quit_now(&self) {

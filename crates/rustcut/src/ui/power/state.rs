@@ -137,6 +137,7 @@ mod tests {
             active: rendering,
             processing_paused: false,
             open,
+            held: 0,
             overall: fraction.map(|fraction| Overall {
                 fraction,
                 done: 0,

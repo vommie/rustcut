@@ -14,7 +14,7 @@ struct Sizes {
     set: fn(&DialogState<'_>, f32, f32),
 }
 
-const DIALOGS: [Sizes; 4] = [
+const DIALOGS: [Sizes; 6] = [
     Sizes {
         id: "conflict",
         get: |d| (d.get_conflict_width(), d.get_conflict_height()),
@@ -45,6 +45,22 @@ const DIALOGS: [Sizes; 4] = [
         set: |d, w, h| {
             d.set_quit_width(w);
             d.set_quit_height(h);
+        },
+    },
+    Sizes {
+        id: "newer",
+        get: |d| (d.get_newer_width(), d.get_newer_height()),
+        set: |d, w, h| {
+            d.set_newer_width(w);
+            d.set_newer_height(h);
+        },
+    },
+    Sizes {
+        id: "database",
+        get: |d| (d.get_database_width(), d.get_database_height()),
+        set: |d, w, h| {
+            d.set_database_width(w);
+            d.set_database_height(h);
         },
     },
 ];

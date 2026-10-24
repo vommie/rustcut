@@ -202,6 +202,11 @@ pub enum QueueCommand {
         id: JobId,
         reply: Reply<Result<Box<JobSpec>, QueueError>>,
     },
+    /// Reads every job from the store again, as at the start (the store was replaced, M6.5d); refused while a job
+    /// renders. The answer is the number of jobs.
+    Reload {
+        reply: Reply<Result<usize, QueueError>>,
+    },
     /// Stops rendering jobs (they wait again at the next start) and ends the actor.
     Shutdown {
         reply: Reply<()>,

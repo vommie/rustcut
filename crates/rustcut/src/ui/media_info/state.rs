@@ -56,6 +56,8 @@ pub struct MediaPanelState {
     /// A job of this file was saved before its hash was known: register the hash in RustView once it is (bug 3: only
     /// sources of jobs are registered).
     pub register_hash: bool,
+    /// RustCut opened the file itself (a loaded job): the known-source banner stays away.
+    pub known_quiet: bool,
 }
 
 impl Default for MediaPanelState {
@@ -66,6 +68,7 @@ impl Default for MediaPanelState {
             probe: ProbeStatus::Idle,
             hash: HashStatus::Idle,
             register_hash: false,
+            known_quiet: false,
         }
     }
 }

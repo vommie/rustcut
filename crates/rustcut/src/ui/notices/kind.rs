@@ -82,7 +82,7 @@ pub struct KindInfo {
     pub sample: (&'static str, &'static str),
 }
 
-use NoticePlace::{Banner, Bubble, Nothing, Status, Toast};
+use NoticePlace::{Banner, Bubble, Dialog, Nothing, Status, Toast};
 
 const EVENT: &[NoticePlace] = &[Toast, Banner, Status, Nothing];
 const LOUD: &[NoticePlace] = &[Toast, Banner, Nothing];
@@ -91,6 +91,8 @@ const STATE: &[NoticePlace] = &[Banner, Nothing];
 const FIXED_BANNER: &[NoticePlace] = &[Banner];
 /// At the input a check is about (M6.5c); hints and warnings can be switched off.
 const BUBBLE: &[NoticePlace] = &[Bubble];
+/// A dialog that needs an answer (M6.5d): its place never changes.
+const FIXED_DIALOG: &[NoticePlace] = &[Dialog];
 const BUBBLE_OR_NOT: &[NoticePlace] = &[Bubble, Nothing];
 
 macro_rules! kinds {
@@ -201,6 +203,12 @@ kinds! {
     /// A typed value the option refuses (the Settings window, the Codecs panel; M6.5c).
     ValueInvalid = "value_invalid", "Typed value refused", Settings, Error, Bubble, BUBBLE, desktop false,
         critical false, ("Not a value here", "Type a whole number from 1 to 10.");
+    /// `config.toml` or `ui-state.toml` from a newer RustCut (M6.5d: a dialog with the ways out).
+    SettingsNewer = "settings_newer", "Settings from a newer RustCut", Settings, Error, Dialog, FIXED_DIALOG,
+        desktop true, critical true, ("config.toml is from a newer RustCut", "Format 3; this version knows 2.");
+    /// The newer file was backed up and saved with this version, or reset to its defaults.
+    SettingsReplaced = "settings_replaced", "Newer settings file replaced", Settings, Success, Toast, EVENT,
+        desktop false, critical false, ("config.toml saved with this version", "The copy is in the backup folder.");
     SettingsWindowFailed = "settings_window_failed", "Settings window failed", Settings, Error, Toast, EVENT,
         desktop true, critical false, ("The settings window could not be opened", "No OpenGL context");
     JobFinished = "job_finished", "Job finished", Queue, Success, Nothing, &[Toast, Nothing], desktop false,
@@ -230,8 +238,11 @@ kinds! {
     ClipboardFailed = "clipboard_failed", "Clipboard unusable", Logs, Warning, Toast, EVENT, desktop false,
         critical false, ("The clipboard cannot be used", "");
     /// The queue database cannot be used (M6.5d turns it into a dialog with ways out).
-    DatabaseUnusable = "database_unusable", "Queue database unusable", App, Error, Banner, FIXED_BANNER,
-        desktop true, critical true, ("The queue cannot be saved", "database disk image is malformed");
+    DatabaseUnusable = "database_unusable", "Queue database unusable", App, Error, Dialog, FIXED_DIALOG,
+        desktop true, critical true, ("The queue cannot be opened", "database disk image is malformed");
+    /// A way out of the database dialog worked.
+    DatabaseRepaired = "database_repaired", "Queue database repaired", App, Success, Toast, EVENT, desktop false,
+        critical false, ("2 jobs rescued", "The old file is kept in the backup folder.");
     ToolsMissing = "tools_missing", "ffmpeg or ffprobe missing", App, Error, Banner, FIXED_BANNER, desktop true,
         critical true, ("ffmpeg cannot be started", "No such file or directory: nothing can be rendered.");
 }
@@ -298,6 +309,7 @@ mod tests {
                 "save_failed",
                 "open_failed",
                 "playback_failed",
+                "settings_newer",
                 "database_unusable",
                 "tools_missing"
             ]
