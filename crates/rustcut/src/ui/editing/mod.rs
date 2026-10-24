@@ -23,7 +23,7 @@ use crate::ui::export::ExportBridge;
 use crate::ui::filters::FiltersBridge;
 use crate::ui::inspector::InspectorBridge;
 use crate::ui::notices::{self, Kind, Level, Notice};
-use crate::ui::open::FileOpener;
+use crate::ui::open::{FileOpener, StartAt};
 use crate::ui::queue::QueueBridge;
 use crate::ui::render_settings::RenderSettingsBridge;
 use crate::ui::tags::{Choice, TagsBridge};
@@ -241,12 +241,17 @@ impl JobEditor {
         }
         tracing::info!(job = id.0, "[Queue] Job loaded into the editor");
         let source = spec.source.clone();
+        // The player starts at the job's first section (PyCutRv, user decision Q-P8).
+        let start = spec.sections.sections().next().map(|s| StartAt {
+            position: s.start(),
+            paused: None,
+        });
         *self.session.borrow_mut() = Some(JobEdit::new(id, state, spec));
         self.loading.set(Some(id));
         let weak = BRIDGE.with(|b| b.borrow().clone());
         opener.open_with(
             source,
-            None,
+            start,
             Some(Box::new(move |opened| {
                 if let Some(bridge) = weak.upgrade() {
                     bridge.opened(id, opened);

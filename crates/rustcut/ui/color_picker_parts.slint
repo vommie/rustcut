@@ -1,0 +1,139 @@
+// Copy of RustView's crates/rustview/ui/color_picker.slint (master, 0.4), taken over on the user's request (P8,
+// 2026-10-25) for every color the Settings window offers. Differences: the imports, RustCut's tooltips (`TooltipHost`
+// inside a `TouchArea` instead of RustView's `TooltipArea`), and a `TooltipLayer` in the picker window. Rust side:
+// src/ui/color_picker/ (codec, the window over its parent), src/util/hex_color.rs.
+
+// Part 1 of 3 (split at RustCut's file size limit): the hex codec and the small pieces the picker is built from.
+
+import { Theme } from "styles.slint";
+
+export global ColorCodec {
+    pure callback to-hex(color, bool /* with alpha */) -> string;
+    pure callback is-valid(string, bool /* with alpha */) -> bool;
+    pure callback from-hex(string) -> color;
+}
+
+/// Light and dark squares behind translucent colors.
+export component CheckerPattern inherits Rectangle {
+    in property <length> cell: 6px;
+    property <int> cols: Math.ceil(root.width / root.cell);
+    property <int> rows: Math.ceil(root.height / root.cell);
+
+    clip: true;
+    background: #ffffff;
+
+    for i in root.cols * root.rows : Rectangle {
+        x: Math.mod(i, root.cols) * root.cell;
+        y: Math.floor(i / root.cols) * root.cell;
+        width: root.cell;
+        height: root.cell;
+        background: Math.mod(Math.mod(i, root.cols) + Math.floor(i / root.cols), 2) == 0 ? #ffffff : #c4c4c4;
+    }
+}
+
+/// The round handle of the saturation/value area and of the sliders.
+export component PickerHandle inherits Rectangle {
+    in property <color> fill: transparent;
+    in property <bool> focused: false;
+
+    width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: #0000008c;
+
+    Rectangle {
+        x: 1px;
+        y: 1px;
+        width: 14px;
+        height: 14px;
+        border-radius: 7px;
+        border-width: root.focused ? 3px : 2px;
+        border-color: root.focused ? Theme.primary : #ffffff;
+        background: root.fill;
+    }
+}
+
+/// A small number field in the theme colors (the std spin box is too wide for a row of three). Typing applies the number at
+/// once while it is in range; the arrow keys step by 1 (Shift: 10); `shown` is what the field displays while it has no focus.
+export component ChannelField inherits Rectangle {
+    in property <int> shown: 0;
+    in property <int> minimum: 0;
+    in property <int> maximum: 255;
+    in property <string> unit: "";
+    property <bool> focused: input.has-focus;
+
+    callback edited(int);
+
+    height: 28px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: root.focused ? Theme.primary : Theme.border;
+    background: Theme.surface-variant;
+
+    function step(delta: int) {
+        let next = Math.max(root.minimum, Math.min(root.maximum, Math.round(input.text.to-float()) + delta));
+        input.text = next;
+        root.edited(next);
+    }
+
+    changed shown => {
+        if !root.focused {
+            input.text = root.shown;
+        }
+    }
+    changed focused => {
+        if !root.focused {
+            input.text = root.shown;
+        }
+    }
+    init => {
+        input.text = root.shown;
+    }
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 2px;
+
+        input := TextInput {
+            horizontal-stretch: 1;
+            font-size: 12px;
+            color: Theme.text;
+            vertical-alignment: center;
+            input-type: InputType.number;
+            single-line: true;
+            selection-background-color: Theme.primary;
+            selection-foreground-color: Theme.background;
+
+            edited => {
+                if self.text != "" && self.text.to-float() >= root.minimum && self.text.to-float() <= root.maximum {
+                    root.edited(Math.round(self.text.to-float()));
+                }
+            }
+            accepted => {
+                self.text = root.shown;
+            }
+            key-pressed(event) => {
+                let big = event.modifiers.shift ? 10 : 1;
+                if event.text == Key.UpArrow {
+                    root.step(big);
+                    return accept;
+                }
+                if event.text == Key.DownArrow {
+                    root.step(-big);
+                    return accept;
+                }
+                return reject;
+            }
+        }
+
+        if root.unit != "" : Text {
+            text: root.unit;
+            color: Theme.text-muted;
+            font-size: 11px;
+            vertical-alignment: center;
+        }
+    }
+}
+

@@ -36,6 +36,8 @@ import { MetadataDialog } from "export_metadata_dialog.slint";
 import { TagColumnView, TagHistoryItemModel, TagHistoryRowModel, TagNodeView, TagRate } from "tag_types.slint";
 import { FolderRowView, HotkeyChipView, HotkeyRowView, MessageKindView, ProfileItemView, SettingCardView, SettingRowView, SettingsUi } from "settings_types.slint";
 import { SettingsWindow } from "settings_window.slint";
+import { ColorCodec } from "color_picker.slint";
+import { ColorPickerWindow } from "color_picker_window.slint";
 import { TooltipSettings } from "tooltip.slint";
 import { Power } from "power_types.slint";
 import { QuitDialog } from "power_quit_dialog.slint";
@@ -57,7 +59,7 @@ export {
     TagColumnView, TagHistoryItemModel, TagHistoryRowModel, Job, JobRowView, JobSectionView, Logs, LogLineView, JobLoad,
     ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderRowView,
     ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power, AppTray, Jump, Notices,
-    ToastView, BannerView, HistoryView, MessageKindView, Bubbles, BubbleView, Problems
+    ToastView, BannerView, HistoryView, MessageKindView, Bubbles, BubbleView, Problems, ColorCodec, ColorPickerWindow
 }
 
 export component MainWindow inherits Window {
@@ -106,6 +108,14 @@ export component MainWindow inherits Window {
 
     title: root.window-title;
     icon: @image-url("../assets/app/window-icon.png");
+
+    // A modal dialog covers the window: the menu bar's keys (which Slint gives the menu before any focused element) must
+    // not act on the editor behind it (found by the P8 audit: I, O and Shift+I moved the marks under the save question).
+    property <bool> modal-open: Export.dialog-open || Export.meta-open || Power.asking || Problems.newer-open
+        || Problems.db-open || JobLoad.open;
+    changed modal-open => {
+        Shortcuts.modal-changed(root.modal-open);
+    }
 
     // Gives the keyboard to the key scope (after a text field is done, or a click on the video or the timeline).
     public function focus-keys() {

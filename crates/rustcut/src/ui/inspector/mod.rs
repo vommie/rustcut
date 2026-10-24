@@ -261,7 +261,6 @@ fn connect(bridge: &Rc<InspectorBridge>, window: &MainWindow) {
     j.on_play(bind(QueueAction::Play));
     j.on_reveal(bind(QueueAction::Reveal));
     j.on_retry(bind(QueueAction::Retry));
-    j.on_duplicate(bind(QueueAction::Duplicate));
     j.on_show_log(bind(QueueAction::ShowLog));
     j.on_edit_tags(bind(QueueAction::EditTags));
 }

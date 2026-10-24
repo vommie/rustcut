@@ -433,10 +433,6 @@ impl QueueBridge {
                     tracing::warn!(profile = %id, "[Queue] The profile is gone; nothing requeued");
                 }
             }
-            QueueAction::Duplicate if !ids.is_empty() => {
-                let (reply, _answer) = tokio::sync::oneshot::channel();
-                self.send(QueueCommand::Duplicate { ids, reply });
-            }
             QueueAction::MoveTop if !ids.is_empty() => self.send(QueueCommand::Move {
                 ids,
                 to: MoveTarget::Top,

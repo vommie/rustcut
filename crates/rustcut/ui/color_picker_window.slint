@@ -1,0 +1,209 @@
+// Copy of RustView's crates/rustview/ui/color_picker.slint (master, 0.4), taken over on the user's request (P8,
+// 2026-10-25) for every color the Settings window offers. Differences: the imports, RustCut's tooltips (`TooltipHost`
+// inside a `TouchArea` instead of RustView's `TooltipArea`), and a `TooltipLayer` in the picker window. Rust side:
+// src/ui/color_picker/ (codec, the window over its parent), src/util/hex_color.rs.
+
+// Part 3 of 3: the button that shows a color and the picker in a window of its own.
+
+import { Theme } from "styles.slint";
+import { TooltipHost } from "tooltip.slint";
+import { TooltipLayer } from "tooltip_layer.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { CheckerPattern, ColorCodec } from "color_picker_parts.slint";
+import { ColorPicker } from "color_picker.slint";
+
+/// The button that shows a color; a click is reported and the host opens the picker window.
+export component ColorSwatchButton inherits Rectangle {
+    in property <color> value: #11111b;
+    in property <bool> show-alpha: false;
+    in property <bool> enabled: true;
+    in property <string> tooltip: "";
+    callback clicked();
+
+    width: 132px;
+    height: 28px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: touch.has-hover && root.enabled ? Theme.primary : Theme.border;
+    background: root.enabled ? Theme.surface-variant : Theme.surface;
+
+    host := TooltipHost {
+        text: root.tooltip;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                host.press();
+            }
+        }
+        clicked => {
+            if root.enabled {
+                root.clicked();
+            }
+        }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 6px;
+        spacing: 8px;
+
+        VerticalLayout {
+            alignment: center;
+
+            Rectangle {
+                width: 18px;
+                height: 18px;
+                border-radius: 3px;
+                border-width: 1px;
+                border-color: Theme.border;
+                clip: true;
+
+                if root.show-alpha : CheckerPattern {
+                    cell: 4px;
+                }
+
+                Rectangle {
+                    background: root.enabled ? root.value : Theme.surface-selected;
+                }
+            }
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: ColorCodec.to-hex(root.value, root.show-alpha);
+            color: root.enabled ? Theme.text : Theme.text-muted;
+            font-size: 12px;
+            vertical-alignment: center;
+        }
+
+        VerticalLayout {
+            alignment: center;
+
+            AppIcon {
+                icon: IconId.chevron-right;
+                size: IconSize.md;
+                color: root.enabled ? Theme.text-muted : Theme.surface-selected;
+            }
+        }
+    }
+}
+
+/// The color picker in a window of its own. Every change is reported at once (`edited`), so the host can show it live;
+/// Cancel (or Esc, or closing the window) reports `original` again. Rust centers the window over its parent.
+export component ColorPickerWindow inherits Window {
+    in property <string> dialog-title: "Choose a color";
+    in-out property <color> value: #11111b;
+    in property <color> original: #11111b;
+    in property <bool> show-alpha: false;
+    in property <color> default-color: Colors.transparent;
+
+    callback edited(color);
+    callback accepted();
+    callback cancelled();
+
+    title: root.dialog-title;
+    background: Theme.background;
+    preferred-width: 340px;
+    min-width: 340px;
+    max-width: 340px;
+
+    forward-focus: keys;
+    keys := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.cancelled();
+                return accept;
+            }
+            if event.text == Key.Return {
+                root.accepted();
+                return accept;
+            }
+            return reject;
+        }
+
+        VerticalLayout {
+            padding: 12px;
+            spacing: 10px;
+
+            ColorPicker {
+                value <=> root.value;
+                original: root.original;
+                show-alpha: root.show-alpha;
+                default-color: root.default-color;
+                edited(c) => {
+                    root.edited(c);
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: end;
+
+                Rectangle {
+                    width: 84px;
+                    height: 30px;
+                    border-radius: 4px;
+                    border-width: 1px;
+                    border-color: cancel-touch.has-hover ? Theme.primary : Theme.border;
+                    background: cancel-touch.has-hover ? Theme.surface-hover : Theme.surface-variant;
+
+                    Text {
+                        text: "Cancel";
+                        color: Theme.text;
+                        font-size: 12px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    cancel-touch := TouchArea {
+                        mouse-cursor: MouseCursor.pointer;
+                        clicked => {
+                            root.cancelled();
+                        }
+                    }
+                }
+
+                Rectangle {
+                    width: 84px;
+                    height: 30px;
+                    border-radius: 4px;
+                    background: ok-touch.has-hover ? Theme.primary.brighter(0.15) : Theme.primary;
+
+                    Text {
+                        text: "OK";
+                        color: Theme.background;
+                        font-size: 12px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    ok-touch := TouchArea {
+                        mouse-cursor: MouseCursor.pointer;
+                        clicked => {
+                            root.accepted();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    TooltipLayer {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+    }
+}
+

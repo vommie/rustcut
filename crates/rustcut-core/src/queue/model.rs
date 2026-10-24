@@ -146,16 +146,6 @@ impl Model {
         self.jobs.push(record);
     }
 
-    /// Adds a job right after `after` (at the end when `after` is unknown).
-    pub fn insert_after(&mut self, after: JobId, record: JobRecord) {
-        let at = self
-            .jobs
-            .iter()
-            .position(|j| j.id == after)
-            .map_or(self.jobs.len(), |i| i + 1);
-        self.jobs.insert(at, record);
-    }
-
     /// Replaces the stored row of a job (after the store stamped times or counted an attempt).
     pub fn replace(&mut self, record: JobRecord) {
         if let Some(slot) = self.get_mut(record.id) {

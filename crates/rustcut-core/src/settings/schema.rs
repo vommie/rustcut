@@ -94,7 +94,7 @@ impl Default for PlayerSettings {
         Self {
             auto_play: true,
             hwdec: "auto-copy".into(),
-            background: "#000000".into(),
+            background: "#444444".into(),
             wheel_volume_step: 5,
             mute_last_second: false,
             loudnorm_preview: false,
@@ -107,11 +107,14 @@ impl Default for PlayerSettings {
 #[serde(rename_all = "snake_case")]
 pub enum AutoSection {
     /// Saving without sections is refused.
-    #[default]
     Off,
     WholeVideo,
     /// From the current start mark to the current end mark.
     CurrentRange,
+    /// PyCutRv's behavior and the default since 0.0.31 (user decision Q-P8): the range between the marks when both are
+    /// set, the whole video when none is; one mark alone is refused.
+    #[default]
+    RangeOrWhole,
 }
 
 /// What a queued job loaded into the editor does to the current session (the open video with its sections, marks,
@@ -143,7 +146,7 @@ pub struct EditorSettings {
 impl Default for EditorSettings {
     fn default() -> Self {
         Self {
-            auto_section: AutoSection::Off,
+            auto_section: AutoSection::RangeOrWhole,
             seek_step_secs: 2,
             seek_step_long_secs: 10,
             on_job_load: OnJobLoad::Replace,
@@ -252,7 +255,7 @@ impl Default for QueueSettings {
     fn default() -> Self {
         Self {
             workers: 1,
-            pause_on_start: false,
+            pause_on_start: true,
             when_done: WhenDone::Nothing,
             when_done_countdown_secs: 5,
         }

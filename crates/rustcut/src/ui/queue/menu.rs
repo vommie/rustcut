@@ -24,7 +24,6 @@ pub enum QueueAction {
     Retry,
     /// Render again with the profile of this id (`""` = the Codecs panel's current settings).
     RetryWith(String),
-    Duplicate,
     MoveTop,
     MoveBottom,
     Cancel,
@@ -49,7 +48,6 @@ impl QueueAction {
             Self::Release => "release".into(),
             Self::Retry => "retry".into(),
             Self::RetryWith(profile) => format!("retry_with:{profile}"),
-            Self::Duplicate => "duplicate".into(),
             Self::MoveTop => "top".into(),
             Self::MoveBottom => "bottom".into(),
             Self::Cancel => "cancel".into(),
@@ -73,7 +71,6 @@ impl QueueAction {
             "hold" => Self::Hold,
             "release" => Self::Release,
             "retry" => Self::Retry,
-            "duplicate" => Self::Duplicate,
             "top" => Self::MoveTop,
             "bottom" => Self::MoveBottom,
             "cancel" => Self::Cancel,
@@ -94,7 +91,7 @@ impl QueueAction {
             Self::Release => kind == JobStateKind::Held,
             Self::Cancel => !kind.is_done(),
             Self::Remove => !kind.is_active(),
-            Self::Details | Self::EditTags | Self::Reveal | Self::Duplicate | Self::MoveTop | Self::MoveBottom => true,
+            Self::Details | Self::EditTags | Self::Reveal | Self::MoveTop | Self::MoveBottom => true,
         }
     }
 
@@ -203,7 +200,6 @@ pub fn queue_menu(
             enabled: again > 0,
             items: with,
         },
-        entry(QueueAction::Duplicate, "Duplicate", Icon::JobDuplicate).into(),
         MenuItem::Separator,
         entry(QueueAction::MoveTop, "Move to Top", Icon::MoveTop)
             .shortcut(keys.move_top.as_str())

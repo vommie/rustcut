@@ -32,9 +32,6 @@ impl Actor {
             QueueCommand::Hold { ids } => self.switch(&ids, JobStateKind::Waiting, JobState::Held).await,
             QueueCommand::Release { ids } => self.switch(&ids, JobStateKind::Held, JobState::Waiting).await,
             QueueCommand::Restart { ids, profile } => self.restart(&ids, profile).await,
-            QueueCommand::Duplicate { ids, reply } => {
-                let _ = reply.send(self.duplicate(&ids).await);
-            }
             QueueCommand::Remove { ids, reply } => {
                 let _ = reply.send(self.remove(&ids).await);
             }
@@ -204,54 +201,24 @@ impl Actor {
             if !record.state.kind().is_done() {
                 continue;
             }
-            if let (Some(profile), SpecSlot::Decoded(spec)) = (&profile, &record.spec) {
+            // A finished job renders again over its own output (PyCutRv's reset, user decision Q-P8): the file is
+            // replaced only once the new render is verified; a failed or canceled one never overwrites what appeared.
+            let finished = record.state == JobState::Finished;
+            if let SpecSlot::Decoded(spec) = &record.spec
+                && (profile.is_some() || (finished && !spec.target.overwrite))
+            {
                 let mut spec = spec.clone();
-                spec.profile = (**profile).clone();
+                if let Some(profile) = &profile {
+                    spec.profile = (**profile).clone();
+                }
+                spec.target.overwrite |= finished;
                 if let Err(e) = self.store_spec(id, spec).await {
-                    tracing::warn!(job = id.0, error = %e, "[Queue] New profile not saved; restarting with the old one");
+                    tracing::warn!(job = id.0, error = %e, "[Queue] The changed spec was not saved; restarting with the old one");
                 }
             }
             self.set_state(id, JobState::Waiting, None).await;
         }
         self.kick().await;
-    }
-
-    /// Copies of the jobs, each right after its original.
-    async fn duplicate(&mut self, ids: &[JobId]) -> Result<Vec<JobId>, QueueError> {
-        let originals: Vec<(JobId, Box<JobSpec>)> = self
-            .model
-            .jobs()
-            .iter()
-            .filter(|j| ids.contains(&j.id))
-            .filter_map(|j| match &j.spec {
-                SpecSlot::Decoded(spec) => Some((j.id, spec.clone())),
-                SpecSlot::Unreadable { .. } => None,
-            })
-            .collect();
-        let mut copies = Vec::new();
-        for (original, spec) in originals {
-            let record = self
-                .store_request(|reply| StoreCommand::InsertJob {
-                    spec,
-                    state: JobState::Waiting,
-                    reply,
-                })
-                .await?;
-            let id = record.id;
-            copies.push(id);
-            self.events.publish(QueueEvent::Added(Box::new(summarize(&record))));
-            self.model.insert_after(original, record);
-            self.sync_job(id, SyncPhase::Enqueued);
-        }
-        if !copies.is_empty() {
-            let order = self.model.order();
-            let ids = order.clone();
-            self.store_request(|reply| StoreCommand::SetOrder { ids, reply })
-                .await?;
-            self.events.publish(QueueEvent::Reordered(order));
-            self.kick().await;
-        }
-        Ok(copies)
     }
 
     /// Deletes jobs that do not render, and what their renders may have left behind (never the target, never a

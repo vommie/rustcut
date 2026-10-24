@@ -3,6 +3,7 @@
 //! the timeline and the keys make. Times are limited to the video's duration once it is known.
 
 use rustcut_core::edit::{Section, SectionError, SectionId, SectionList};
+use rustcut_core::settings::AutoSection;
 use rustcut_core::time::Timestamp;
 
 /// One end of a section.
@@ -199,6 +200,29 @@ impl SectionsState {
             return Err(EditError::Empty);
         }
         Section::new(start, end).map_err(|_empty| EditError::Empty)
+    }
+
+    /// The one section a save without listed sections gets (`auto`, PyCutRv's auto section), or why there is none.
+    pub fn auto_section(&self, auto: AutoSection) -> Result<Section, &'static str> {
+        let whole = || {
+            self.duration
+                .and_then(|d| Section::new(Timestamp::ZERO, d).ok())
+                .ok_or("The video's length is not known yet.")
+        };
+        match auto {
+            AutoSection::Off => Err("Add a section first (or switch on the automatic section in the settings)."),
+            AutoSection::WholeVideo => whole(),
+            AutoSection::CurrentRange => self
+                .current()
+                .map_err(|_none| "Add a section first, or set both marks for the automatic section."),
+            AutoSection::RangeOrWhole => match (self.start, self.end) {
+                (None, None) => whole(),
+                (Some(_), Some(_)) => self
+                    .current()
+                    .map_err(|_empty| "Add a section first, or set both marks for the automatic section."),
+                _ => Err("Only one mark is set: set the other one, clear it, or add a section."),
+            },
+        }
     }
 
     /// Appends the current range to the list and selects it. The marks stay (PyCutRv).

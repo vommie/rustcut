@@ -7,10 +7,11 @@ use rustcut_core::render::{DEFAULT_PROFILE_ID, LibraryError};
 use rustcut_core::settings::Settings;
 use slint::{ComponentHandle as _, ModelRc, SharedString, VecModel};
 
-use super::field::{Edit, Kind};
+use super::field::{Edit, Kind, Value};
 use super::hotkeys::{self, Recorded};
 use super::page::Page;
 use super::{SettingsBridge, catalog, folders, hotkey_view};
+use crate::ui::color_picker::{self, PickerRequest};
 use crate::ui::keymap::{Action, Chord, KeyPress, Keymap};
 use crate::ui::notices::{self, Area, Notice, TYPING};
 use crate::ui::render_settings::state::Row;
@@ -126,6 +127,42 @@ impl SettingsBridge {
         if let Err(e) = spawned {
             tracing::error!(error = %e, "[Settings] The event loop is gone; no file dialog");
         }
+    }
+
+    /// A color option: the color picker over the Settings window; every change in it is applied at once, Cancel puts
+    /// the color back (P8).
+    pub(super) fn pick_color(&self, key: &str) {
+        let Some(field) = catalog::field(key) else { return };
+        if !matches!(field.kind, Kind::Color) {
+            return;
+        }
+        let settings = self.writer.current();
+        let text = |s: &Settings| match (field.get)(s) {
+            Value::Text(t) => t,
+            _ => String::new(),
+        };
+        let Some(initial) = color_picker::color_of(&text(&settings)) else {
+            return;
+        };
+        let window = self.window.borrow();
+        let Some(window) = window.as_ref() else { return };
+        let request = PickerRequest {
+            title: format!("{} - RustCut", field.label),
+            initial,
+            default: color_picker::color_of(&text(&Settings::default())),
+            show_alpha: false,
+            tooltips: (
+                settings.appearance.tooltips,
+                i64::from(settings.appearance.tooltip_delay_ms),
+            ),
+        };
+        let weak = Weak::clone(&self.me);
+        let key = key.to_owned();
+        color_picker::open(window, &request, move |color| {
+            if let Some(bridge) = weak.upgrade() {
+                let _ = bridge.edit(&key, Edit::Type(color_picker::hex_of(color)));
+            }
+        });
     }
 
     /// A button option.

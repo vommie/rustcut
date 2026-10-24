@@ -150,10 +150,6 @@ pub enum QueueCommand {
         ids: Vec<JobId>,
         profile: Option<Box<RenderProfile>>,
     },
-    Duplicate {
-        ids: Vec<JobId>,
-        reply: Reply<Result<Vec<JobId>, QueueError>>,
-    },
     /// Deletes jobs that are not rendering (their RustView stubs are cleaned up; source sidecars are never touched).
     Remove {
         ids: Vec<JobId>,

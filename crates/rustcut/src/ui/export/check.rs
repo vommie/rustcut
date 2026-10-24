@@ -114,6 +114,7 @@ pub fn card_check(input: &CardInput<'_>) -> CardCheck {
     let found: Conflicts = check(&CheckInput {
         target: &target,
         base: input.base,
+        source: Some(source),
         scan,
         exists,
         queue: input.queue,

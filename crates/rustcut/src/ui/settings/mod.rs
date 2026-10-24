@@ -225,9 +225,10 @@ impl SettingsBridge {
         }
     }
 
-    /// The window goes away: a key being recorded is dropped, the size is kept.
+    /// The window goes away: a key being recorded is dropped, an open color picker closes, the size is kept.
     fn closing(&self, window: &SettingsWindow) {
         self.hotkeys.borrow_mut().cancel();
+        crate::ui::color_picker::close();
         self.capture_size(window);
         self.publish();
     }
@@ -248,6 +249,7 @@ impl SettingsBridge {
 
     /// Hides the window at quit (the event loop has ended).
     pub fn shut_down(&self) {
+        crate::ui::color_picker::shutdown();
         if let Some(window) = self.window.borrow_mut().take() {
             let _ = window.hide();
         }
@@ -306,6 +308,7 @@ impl SettingsBridge {
         ));
         Self::apply_look(&window, &self.writer.current());
         crate::ui::tooltip::install(&window);
+        crate::ui::color_picker::install(&window);
         notices::attach_settings(&window);
         Ok(window)
     }

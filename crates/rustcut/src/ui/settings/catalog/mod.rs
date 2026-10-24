@@ -79,6 +79,13 @@ mod tests {
                     );
                 }
                 Kind::Text { .. } | Kind::Path { .. } => assert!(matches!(value, Value::Text(_)), "{}", f.key),
+                Kind::Color => {
+                    assert!(
+                        matches!(&value, Value::Text(t) if crate::util::hex_color::parse_rgb(t).is_some()),
+                        "{}",
+                        f.key
+                    );
+                }
                 Kind::Button(_) => assert_eq!(value, Value::None, "{}", f.key),
             }
         }
@@ -108,6 +115,7 @@ mod tests {
                     Edit::Type(if n == max { min } else { max }.to_string())
                 }
                 Kind::Path { .. } => Edit::Type("/usr/bin/true".into()),
+                Kind::Color => Edit::Type("#12ab3c".into()),
                 Kind::Text { .. } | Kind::Button(_) => continue,
             };
             let before = (f.get)(&s);
@@ -155,6 +163,13 @@ mod tests {
         let color = field("player.background").unwrap();
         assert!(color.apply(&mut s, Edit::Type("black".into())).is_err());
         assert_eq!(color.apply(&mut s, Edit::Type("#202030".into())), Ok(true));
+        assert_eq!(color.apply(&mut s, Edit::Type("#ABC".into())), Ok(true));
+        assert_eq!(s.player.background, "#aabbcc", "short forms are stored as #rrggbb");
+        assert_eq!(
+            Settings::default().player.background,
+            "#444444",
+            "PyCutRv's gray (user decision Q-P8)"
+        );
         let level = field("advanced.log_level").unwrap();
         assert!(level.apply(&mut s, Edit::Type("rustcut=loud".into())).is_err());
         assert_eq!(level.apply(&mut s, Edit::Type("rustcut=debug,info".into())), Ok(true));

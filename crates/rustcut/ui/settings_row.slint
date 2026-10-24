@@ -8,6 +8,8 @@ import { ChoiceButton, IconButton, NumberField } from "controls.slint";
 import { ToggleSwitch } from "toggle_switch.slint";
 import { SettingRowView, SettingsUi } from "settings_types.slint";
 import { JumpFlash } from "jump.slint";
+import { ColorCodec } from "color_picker.slint";
+import { ColorSwatchButton } from "color_picker_window.slint";
 
 export component SettingsRow inherits Rectangle {
     in property <SettingRowView> option;
@@ -155,6 +157,14 @@ export component SettingsRow inherits Rectangle {
                 tooltip: root.option.description;
                 enabled: root.option.enabled;
                 clicked => { SettingsUi.action(root.option.key); }
+            }
+
+            // A color (P8): the swatch with its hex code opens the color picker over the Settings window.
+            if root.option.kind == 7: ColorSwatchButton {
+                value: ColorCodec.from-hex(root.option.text);
+                enabled: root.option.enabled;
+                tooltip: "Choose the color";
+                clicked => { SettingsUi.pick-color(root.option.key); }
             }
         }
     }
