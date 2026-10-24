@@ -6,6 +6,8 @@ use std::fmt::Write as _;
 use rustcut_core::rustview::ConnectionState;
 
 use super::state::TagPanel;
+use crate::ui::jump::JumpTarget;
+use crate::ui::settings::page::Page;
 
 /// The header line.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,6 +17,17 @@ pub struct ConnectionView {
     /// 0 = unknown, 1 = connected, 2 = unavailable, 3 = switched off (`TagRate.connection-kind`).
     pub kind: i32,
     pub can_retry: bool,
+    /// The setting behind the state (a jump mark, Q-N6): the program while RustView cannot be reached, the switch while
+    /// the link is off.
+    pub jump: Option<JumpTarget>,
+}
+
+/// An option of Settings > RustView.
+const fn rustview_option(key: &'static str) -> JumpTarget {
+    JumpTarget::Settings {
+        page: Page::RustView,
+        key,
+    }
 }
 
 pub fn connection(state: &ConnectionState) -> ConnectionView {
@@ -25,12 +38,14 @@ pub fn connection(state: &ConnectionState) -> ConnectionView {
             tooltip: "RustCut asks RustView (`rustview api`) for its tags.".into(),
             kind: 0,
             can_retry: false,
+            jump: None,
         },
         ConnectionState::Connected => ConnectionView {
             text: "RustView connected".into(),
             tooltip: "RustCut writes the tags and the rating of its jobs into RustView's library.".into(),
             kind: 1,
             can_retry: false,
+            jump: None,
         },
         ConnectionState::Unavailable { reason, retry_in_secs } => ConnectionView {
             text: format!("RustView unavailable: {reason}"),
@@ -40,6 +55,7 @@ pub fn connection(state: &ConnectionState) -> ConnectionView {
             ),
             kind: 2,
             can_retry: true,
+            jump: Some(rustview_option("rustview.binary")),
         },
         ConnectionState::Disabled => ConnectionView {
             text: "RustView is switched off".into(),
@@ -49,6 +65,7 @@ pub fn connection(state: &ConnectionState) -> ConnectionView {
                     .into(),
             kind: 3,
             can_retry: false,
+            jump: Some(rustview_option("rustview.enabled")),
         },
     }
 }

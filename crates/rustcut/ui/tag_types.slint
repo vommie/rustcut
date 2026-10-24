@@ -43,6 +43,8 @@ export global TagRate {
     /// 0 = unknown/checking, 1 = connected, 2 = unavailable, 3 = switched off.
     in property <int> connection-kind;
     in property <bool> can-retry;
+    // The tooltip of the button that leads to the RustView setting behind the state (empty = none, Q-N6).
+    in property <string> connection-jump;
 
     // What the panel edits: the next job (the draft) or a queued job (user decision Q-G3).
     in property <bool> editing-job;
@@ -76,6 +78,7 @@ export global TagRate {
     in-out property <length> history-height: 96px;
 
     callback retry();
+    callback connection-jump-clicked();
     callback apply-edit();
     callback cancel-edit();
     callback rating-clicked(int);

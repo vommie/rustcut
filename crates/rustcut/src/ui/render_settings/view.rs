@@ -153,6 +153,11 @@ fn sentence(message: &str) -> String {
         .map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
 }
 
+/// The label of a row as the panel shows it (for the rate value: as in quality mode).
+pub fn row_label(row: Row) -> &'static str {
+    option_of(row, RateControl::Quality { value: 0 }).help().label
+}
+
 /// The help entry of a row (the rate value's depends on the mode).
 fn option_of(row: Row, rc: RateControl) -> OptionId {
     match row {

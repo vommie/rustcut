@@ -23,6 +23,7 @@ component OptionRows inherits VerticalLayout {
 
     for item in root.rows: OptionRow {
         option: item;
+        jump-prefix: "codecs:";
         choose(key, index) => { RenderSettings.choose(key, index); }
         slide(key, position) => { RenderSettings.slide(key, position); }
         toggle(key) => { RenderSettings.toggle(key); }

@@ -28,6 +28,7 @@ pub use tree::{
 };
 
 use crate::ui::dispatcher::UiDispatcher;
+use crate::ui::jump::JumpTarget;
 use crate::ui::status::{self, Level};
 use crate::util::model::sync;
 use crate::{MainWindow, TagColumnView, TagHistoryItemModel, TagHistoryRowModel, TagNodeView, TagRate};
@@ -60,6 +61,8 @@ pub struct TagsBridge {
     queue: QueueHandle,
     state: RefCell<TagPanel>,
     connection: RefCell<ConnectionState>,
+    /// The setting the header's jump mark leads to (Q-N6).
+    connection_jump: Cell<Option<JumpTarget>>,
     /// The tree area's height and how many rows fit into one of its columns.
     tree_height: Cell<f32>,
     rows_per_column: Cell<usize>,
@@ -98,6 +101,7 @@ impl TagsBridge {
                 ConnectionState::Disabled
             }),
             tree_height: Cell::new(INITIAL_TREE_HEIGHT),
+            connection_jump: Cell::new(None),
             rows_per_column: Cell::new(1),
             history_width: Cell::new(0.0),
             columns: Rc::new(VecModel::default()),
@@ -330,6 +334,8 @@ impl TagsBridge {
         t.set_connection_tooltip(header.tooltip.into());
         t.set_connection_kind(header.kind);
         t.set_can_retry(header.can_retry);
+        t.set_connection_jump(header.jump.map(JumpTarget::hint).unwrap_or_default().into());
+        self.connection_jump.set(header.jump);
 
         let editing = state.editing.as_ref();
         t.set_editing_job(editing.is_some());
@@ -462,6 +468,11 @@ fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
         }};
     }
     on!(on_retry, |b| b.retry());
+    on!(on_connection_jump_clicked, |b| {
+        if let Some(target) = b.connection_jump.get() {
+            crate::ui::jump::go(target);
+        }
+    });
     on!(on_apply_edit, |b| b.apply_edit());
     on!(on_cancel_edit, |b| b.cancel_edit());
     on!(on_rating_clicked, |b, rating| b.change(|s| s.click_rating(rating)));

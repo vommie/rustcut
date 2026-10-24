@@ -5,7 +5,7 @@ use super::*;
 use crate::edit::{Crop, DeshakeParams, Filter, FilterChain, Mirror, Rotation, SectionList};
 use crate::job::sample_spec;
 use crate::media::{AudioStream, Container as MediaContainer, Stream, VideoStream};
-use crate::render::{RateControl, VideoEncoder};
+use crate::render::{Container, RateControl, VideoEncoder};
 
 fn stream(index: u32, kind: StreamKind) -> Stream {
     Stream {
@@ -133,6 +133,40 @@ fn one_section_one_audio_track() {
 }
 
 #[test]
+fn one_section_copies_every_audio_track_from_its_input() {
+    let mut spec = sample_spec();
+    spec.profile.audio.codec = AudioCodec::Copy;
+    let mut src = source(1920, 1080, 0, 2);
+    for (stream, _) in src
+        .streams
+        .iter_mut()
+        .filter(|s| matches!(s.kind, StreamKind::Audio(_)))
+        .zip(0..)
+    {
+        stream.codec = Some("aac".into());
+    }
+    let plan = build(&spec, &src, &HardwareContext::default()).unwrap();
+    assert_eq!(plan.expected.audio_streams, 2);
+    let args = text(&plan.passes[0].args);
+    assert!(
+        args.contains("concat=n=1:v=1:a=0"),
+        "the graph joins only the video: {args}"
+    );
+    assert!(args.contains("-map 0:a"), "{args}");
+    assert!(args.contains("-c:a copy"), "{args}");
+    insta::assert_snapshot!(describe(&plan));
+
+    spec.profile.container = Container::Webm;
+    assert_eq!(
+        build(&spec, &src, &HardwareContext::default()),
+        Err(PlanError::AudioCopy(AudioCopyProblem::Container {
+            container: "WebM (.webm)",
+            codec: "aac".into(),
+        }))
+    );
+}
+
+#[test]
 fn three_sections_two_tracks_with_filters() {
     let mut spec = sample_spec();
     spec.sections = sections(&[(1_000, 4_000), (30_500, 31_250), (10_000, 12_000)]);
@@ -252,7 +286,11 @@ fn refusals() {
 
     let mut spec = sample_spec();
     spec.profile.audio.codec = AudioCodec::Copy;
-    assert_eq!(build(&spec, &src, &hw), Err(PlanError::AudioCopy));
+    spec.sections = sections(&[(1_000, 2_000), (5_000, 6_000)]);
+    assert_eq!(
+        build(&spec, &src, &hw),
+        Err(PlanError::AudioCopy(AudioCopyProblem::Sections(2)))
+    );
     assert!(
         build(&spec, &source(1920, 1080, 0, 0), &hw).is_ok(),
         "nothing to copy without audio"

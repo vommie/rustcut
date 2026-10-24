@@ -34,18 +34,19 @@ type ProbeHook = Box<dyn Fn(Option<&Arc<MediaInfo>>)>;
 
 thread_local! {
     /// Called on the UI thread whenever the probe of the open file has news (the filters need the picture's size and
-    /// rotation). Results are posted from the runtime as `Send` closures, which cannot carry UI-thread objects.
-    static PROBE_HOOK: RefCell<Option<ProbeHook>> = const { RefCell::new(None) };
+    /// rotation, the export card the audio tracks). Results are posted from the runtime as `Send` closures, which
+    /// cannot carry UI-thread objects.
+    static PROBE_HOOK: RefCell<Vec<ProbeHook>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Installs the function that sees the probe results (UI thread; replaces the previous one).
-pub fn set_probe_hook(hook: impl Fn(Option<&Arc<MediaInfo>>) + 'static) {
-    PROBE_HOOK.with(|h| *h.borrow_mut() = Some(Box::new(hook)));
+/// Adds a function that sees the probe results (UI thread).
+pub fn add_probe_hook(hook: impl Fn(Option<&Arc<MediaInfo>>) + 'static) {
+    PROBE_HOOK.with(|h| h.borrow_mut().push(Box::new(hook)));
 }
 
 fn notify_probe(info: Option<&Arc<MediaInfo>>) {
-    PROBE_HOOK.with(|hook| {
-        if let Some(hook) = hook.borrow().as_ref() {
+    PROBE_HOOK.with(|hooks| {
+        for hook in hooks.borrow().iter() {
             hook(info);
         }
     });

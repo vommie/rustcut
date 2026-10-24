@@ -11,7 +11,6 @@ use rustcut_core::job::{JOB_SPEC_VERSION, JobId, JobMetadata, JobSpec, SourceSum
 use rustcut_core::media::MediaInfo;
 use rustcut_core::naming::{CheckInput, ExistingFile, check, existing_file, file_name, same_path, scan_folder};
 use rustcut_core::queue::{QueueCommand, QueueError};
-use rustcut_core::render::Severity;
 use slint::ComponentHandle as _;
 
 use super::ExportBridge;
@@ -96,12 +95,12 @@ impl ExportBridge {
         let sections = editor.sections_for_save(self.auto_section.get())?;
         let render = self.render.upgrade().ok_or_else(gone)?;
         let profile = render.working_profile();
-        if let Some(issue) = profile.validate().into_iter().find(|i| i.severity == Severity::Error) {
-            return Err(format!("The render settings cannot be used: {}", issue.message));
-        }
         let filters = self.filters.upgrade().ok_or_else(gone)?.chain();
         let media = self.media.upgrade();
         let info = media.as_ref().and_then(|m| m.current());
+        if let Some(problem) = super::job_check::job_problem(&profile, sections.len(), info.as_deref()) {
+            return Err(problem.tooltip);
+        }
         // The Tag & Rate panel's tags and rating; the source hash goes to RustView's hash list. An edited job keeps
         // what the panels have not learned yet (the probe may still run).
         let edited = self

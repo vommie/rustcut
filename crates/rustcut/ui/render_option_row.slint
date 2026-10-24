@@ -7,6 +7,7 @@ import { ChoiceButton, NumberField, Switch } from "controls.slint";
 import { TooltipArea } from "tooltip.slint";
 import { PlayerSeekBar } from "player_seek_bar.slint";
 import { OptionRowView } from "render_types.slint";
+import { JumpFlash } from "jump.slint";
 
 /// The name of an option, explained by its tooltip; colored when the option has an issue.
 component RowLabel inherits TooltipArea {
@@ -28,14 +29,20 @@ component RowLabel inherits TooltipArea {
 }
 
 /// One option: its label on the left, the control on the right.
-export component OptionRow inherits HorizontalLayout {
+export component OptionRow inherits Rectangle {
     in property <OptionRowView> option;
+    // The owner's prefix of the row's jump mark ("codecs:"; empty = no jump leads here), see `jump.slint`.
+    in property <string> jump-prefix;
     callback choose(/* key */ string, /* index */ int);
     callback slide(/* key */ string, /* position */ int);
     callback toggle(/* key */ string);
     callback type-text(/* key */ string, /* text */ string) -> bool;
     callback step(/* key */ string, /* steps */ int);
 
+    min-height: row.min-height;
+    preferred-height: row.preferred-height;
+
+    row := HorizontalLayout {
     spacing: 6px;
     min-height: root.option.kind == 4 ? 38px : 24px;
 
@@ -123,5 +130,9 @@ export component OptionRow inherits HorizontalLayout {
             }
         }
     }
-}
+    }
 
+    JumpFlash {
+        key: root.jump-prefix == "" ? "" : root.jump-prefix + root.option.key;
+    }
+}

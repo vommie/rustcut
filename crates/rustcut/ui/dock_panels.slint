@@ -3,6 +3,7 @@
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Dock, DockCardView } from "dock_types.slint";
+import { Jump } from "jump.slint";
 import { MediaInfoPanelView } from "media_info_panel.slint";
 import { SectionsCardBody } from "sections_card.slint";
 import { FiltersCardBody } from "filters_card.slint";
@@ -77,7 +78,15 @@ component DockCard inherits Rectangle {
 component CardStack inherits Rectangle {
     in property <[DockCardView]> cards;
 
-    Flickable {
+    // A jump mark reached a row in these cards: it scrolls into view (`jump.slint`).
+    property <int> jump: Jump.target-serial;
+    changed jump => {
+        if Jump.inside(flick.absolute-position.x, flick.width, flick.absolute-position.y + flick.content-y, flick.content-height) {
+            flick.content-y = Jump.scroll-to(flick.absolute-position.y + flick.content-y, flick.content-y, flick.height, flick.content-height);
+        }
+    }
+
+    flick := Flickable {
         content-height: stack.preferred-height;
 
         stack := VerticalLayout {

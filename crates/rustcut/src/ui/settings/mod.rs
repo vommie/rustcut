@@ -200,6 +200,14 @@ impl SettingsBridge {
         tracing::debug!(page = self.page.get().id(), "[Settings] Window shown");
     }
 
+    /// Shows the window on `page` and lets the option with the element key `key` flash (a jump mark, Q-N6).
+    pub fn show_option(&self, page: Page, key: &str) {
+        self.open(Some(page));
+        if let Some(window) = self.window.borrow().as_ref() {
+            crate::ui::jump::flash(&window.global::<crate::Jump<'_>>(), key);
+        }
+    }
+
     /// Hides the window and remembers its size.
     pub fn close(&self) {
         let window = self.window.borrow();

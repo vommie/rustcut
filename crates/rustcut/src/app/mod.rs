@@ -41,6 +41,7 @@ use crate::ui::editor::Editor;
 use crate::ui::export::{ExportBridge, ExportParts};
 use crate::ui::filters::FiltersBridge;
 use crate::ui::inspector::InspectorBridge;
+use crate::ui::jump::JumpBridge;
 use crate::ui::keymap::{Action, Keymap};
 use crate::ui::logs::LogsBridge;
 use crate::ui::media_info::MediaInfoBridge;
@@ -292,6 +293,21 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         writer.clone(),
     );
     editor.set_export(&export);
+    // The card checks the job again when the render settings or the source's description change (Q-N6).
+    {
+        let weak = Rc::downgrade(&export);
+        render.set_changed_hook(move || {
+            if let Some(export) = weak.upgrade() {
+                export.job_changed();
+            }
+        });
+        let weak = Rc::downgrade(&export);
+        crate::ui::media_info::add_probe_hook(move |_| {
+            if let Some(export) = weak.upgrade() {
+                export.job_changed();
+            }
+        });
+    }
     let opener = FileOpener::install(
         &main,
         &OpenerParts {
@@ -381,6 +397,8 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         loaded.paths.clone(),
         &loaded.ui_state.settings,
     );
+    // Jump marks lead from messages to the options (Q-N6); held until the event loop ends.
+    let _jump = JumpBridge::install(&main, &dock, &settings_window);
     {
         let mut hooks = settings_window.hooks();
         let sync_handle = sync.handle.clone();
