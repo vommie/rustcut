@@ -5,7 +5,7 @@
 use std::rc::Weak;
 
 use rustcut_core::queue::{QueueCommand, QueueHandle};
-use rustcut_core::render::RenderEnv;
+use rustcut_core::render::{RenderEnv, spawn_capability_check};
 use rustcut_core::rustview::{SyncCommand, SyncHandle};
 use rustcut_core::settings::{AppPaths, RustViewSettings, Settings};
 use slint::ComponentHandle as _;
@@ -16,7 +16,9 @@ use crate::ui::editing::JobEditor;
 use crate::ui::editor::Editor;
 use crate::ui::export::ExportBridge;
 use crate::ui::filters::FiltersBridge;
+use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::player::PlayerBridge;
+use crate::ui::probe::ProbeBridge;
 use crate::ui::render_settings::RenderSettingsBridge;
 use crate::ui::tags::TagsBridge;
 use crate::{HoldConfirm, MainWindow, TooltipSettings};
@@ -34,9 +36,14 @@ pub struct Parts {
     pub queue: QueueHandle,
     pub sync: SyncHandle,
     pub paths: AppPaths,
-    /// The renders' environment as started (the programs stay those of the start).
+    /// The renders' environment as started (its hardware until the capability check knows better).
     pub env: RenderEnv,
     pub log: LevelSetter,
+    pub media: Weak<MediaInfoBridge>,
+    pub probe: Weak<ProbeBridge>,
+    pub runtime: tokio::runtime::Handle,
+    /// Starts (`true`) or stops listening for a second start.
+    pub instance: Box<dyn Fn(bool)>,
 }
 
 /// The hold time and the tooltips of the main window.
@@ -67,7 +74,7 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
     if before.player != after.player
         && let Some(player) = p.player.upgrade()
     {
-        player.apply_settings(&after.player);
+        player.apply_settings(&before.player, &after.player);
     }
     if (before.export != after.export
         || before.warnings != after.warnings
@@ -91,20 +98,31 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
     {
         render.profiles_changed(&after.render.profiles);
     }
+    let programs = |s: &Settings| (s.advanced.ffmpeg.clone(), s.advanced.ffprobe.clone());
+    let changed_programs = programs(before) != programs(after);
+    if changed_programs {
+        programs_changed(p, after);
+    }
     let process = |s: &Settings| (s.render.nice, s.render.idle_io, s.render.stall_timeout_secs);
-    if process(before) != process(after) {
+    if changed_programs || process(before) != process(after) {
         let hardware = p
             .render
             .upgrade()
             .and_then(|r| r.capabilities())
             .map_or_else(|| p.env.hardware.clone(), |c| c.hardware.clone());
-        let fresh = RenderEnv::new(after, &p.paths, hardware);
-        let env = RenderEnv {
-            ffmpeg: p.env.ffmpeg.clone(),
-            probe: p.env.probe.clone(),
-            ..fresh
-        };
+        let env = RenderEnv::new(after, &p.paths, hardware);
+        if let Some(probe) = p.probe.upgrade() {
+            probe.set_env(env.clone());
+        }
         send_queue(&p.queue, QueueCommand::SetRenderEnv(Box::new(env)));
+    }
+    if before.warnings.known_source != after.warnings.known_source
+        && let Some(media) = p.media.upgrade()
+    {
+        media.set_known_source(after.warnings.known_source);
+    }
+    if before.general.single_instance != after.general.single_instance {
+        (p.instance)(after.general.single_instance);
     }
     if before.queue.workers != after.queue.workers {
         send_queue(&p.queue, QueueCommand::SetWorkers(after.queue.workers));
@@ -125,6 +143,29 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
     }
     if before.advanced.log_level != after.advanced.log_level {
         p.log.apply(&after.advanced.log_level);
+    }
+    if before.advanced.log_keep_days != after.advanced.log_keep_days {
+        p.log.reopen(&p.paths.log_dir(), after.advanced.log_keep_days);
+    }
+}
+
+/// Another ffmpeg or ffprobe: the media probe, auto-crop and the interlace check use it for the next file, and the
+/// encoders are checked again with the new ffmpeg (the Codecs panel and the profile editor follow).
+fn programs_changed(p: &Parts, after: &Settings) {
+    tracing::info!("[Settings] Programs changed; checking the encoders again");
+    if let Some(media) = p.media.upgrade() {
+        media.set_ffprobe(after.advanced.ffprobe.clone());
+    }
+    if let Some(filters) = p.filters.upgrade() {
+        filters.set_ffmpeg(after.advanced.ffmpeg.clone());
+    }
+    if let Some(render) = p.render.upgrade() {
+        let ffmpeg = after
+            .advanced
+            .ffmpeg
+            .clone()
+            .unwrap_or_else(|| std::path::PathBuf::from("ffmpeg"));
+        render.set_ffmpeg(ffmpeg, spawn_capability_check(&p.runtime, after.advanced.ffmpeg.clone()));
     }
 }
 

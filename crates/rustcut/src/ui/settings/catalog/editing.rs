@@ -55,7 +55,7 @@ pub static PLAYER: &[Card] = &[
                 help: "mpv's hwdec: auto-copy (default), auto, no, vaapi, nvdec, vulkan. Without a GPU, mpv decodes in \
                        software.",
                 kind: Kind::Text { placeholder: "auto-copy" },
-                live: false,
+                live: true,
                 get: |s| Value::Text(s.player.hwdec.clone()),
                 set: set_hwdec,
                 enabled: always,
@@ -66,7 +66,7 @@ pub static PLAYER: &[Card] = &[
                 label: "Background",
                 help: "The color around the video, as #RRGGBB.",
                 kind: Kind::Text { placeholder: "#000000" },
-                live: false,
+                live: true,
                 get: |s| Value::Text(s.player.background.clone()),
                 set: set_background,
                 enabled: always,

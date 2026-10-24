@@ -195,6 +195,16 @@ impl Player {
         self.command(Command::SetAudio(audio))
     }
 
+    /// Changes the hardware decoding (`hwdec`); mpv reinitializes the decoder of a playing file.
+    pub fn set_hwdec(&self, hwdec: &str) -> Result<(), PlayerError> {
+        self.command(Command::SetHwdec(hwdec.to_owned()))
+    }
+
+    /// Changes the color around the video (`#RRGGBB`).
+    pub fn set_background(&self, color: &str) -> Result<(), PlayerError> {
+        self.command(Command::SetBackground(color.to_owned()))
+    }
+
     fn command(&self, command: Command) -> Result<(), PlayerError> {
         self.handle
             .commands

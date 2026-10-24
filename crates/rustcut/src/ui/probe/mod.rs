@@ -67,7 +67,7 @@ pub struct ProbeBridge {
     filters: Weak<FiltersBridge>,
     render: Weak<RenderSettingsBridge>,
     /// The jobs' render environment (the probe's work folders replace its own).
-    env: RenderEnv,
+    env: RefCell<RenderEnv>,
     folder: PathBuf,
     seconds: Cell<u16>,
     exact: Cell<bool>,
@@ -89,6 +89,11 @@ pub struct Parts<'a> {
 }
 
 impl ProbeBridge {
+    /// The programs and the priority of the next probe render (changed in the Settings window).
+    pub fn set_env(&self, env: RenderEnv) {
+        *self.env.borrow_mut() = env;
+    }
+
     /// Takes over the probe card and the banner. The app owns the only strong reference.
     pub fn install(
         window: &MainWindow,
@@ -107,7 +112,7 @@ impl ProbeBridge {
             editor: Rc::downgrade(parts.editor),
             filters: Rc::downgrade(parts.filters),
             render: Rc::downgrade(parts.render),
-            env,
+            env: RefCell::new(env),
             folder,
             seconds: Cell::new(saved.seconds.clamp(*PROBE_SECS.start(), *PROBE_SECS.end())),
             exact: Cell::new(saved.exact),
@@ -217,7 +222,7 @@ impl ProbeBridge {
             folder: &self.folder,
         })
         .ok_or_else(|| "The video's length is not known yet.".to_owned())?;
-        let mut env = self.env.clone();
+        let mut env = self.env.borrow().clone();
         if let Some(caps) = &caps {
             env.hardware = caps.hardware.clone();
         }

@@ -15,7 +15,7 @@ pub static GENERAL: &[Card] = &[
             "A second start hands its files to the running RustCut instead of opening another window.",
             general.single_instance
         )
-        .next_start()],
+        ],
     },
     Card {
         title: "Deleting and discarding",
@@ -114,7 +114,7 @@ pub static WARNINGS: &[Card] = &[
              banner when RustView knows it from an earlier cut. Off: nothing is read.",
             warnings.known_source
         )
-        .next_start()],
+        ],
     },
 ];
 
@@ -257,7 +257,7 @@ pub static ADVANCED: &[Card] = &[
                 "ffmpeg (from PATH)",
                 folder: false
             )
-            .next_start(),
+            ,
             path_field!(
                 "advanced.ffprobe",
                 "ffprobe",
@@ -266,7 +266,7 @@ pub static ADVANCED: &[Card] = &[
                 "ffprobe (from PATH)",
                 folder: false
             )
-            .next_start(),
+            ,
         ],
     },
     Card {
@@ -294,7 +294,7 @@ pub static ADVANCED: &[Card] = &[
                 1,
                 "days"
             )
-            .next_start(),
+            ,
             Field::button(
                 "open.logs",
                 "Log folder",

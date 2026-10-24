@@ -26,7 +26,7 @@ pub static QUEUE: &[Card] = &[
                 "When jobs are waiting at start, the queue starts paused instead of rendering at once.",
                 queue.pause_on_start
             )
-            .next_start(),
+            ,
         ],
     },
     Card {
@@ -47,7 +47,7 @@ pub static QUEUE: &[Card] = &[
                     (WhenDone::PowerOff, "Power off")
                 ]
             )
-            .next_start(),
+            ,
             number!(
                 "queue.when_done_countdown_secs",
                 "Countdown",

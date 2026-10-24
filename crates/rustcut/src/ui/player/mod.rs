@@ -149,17 +149,29 @@ impl PlayerBridge {
         Ok(bridge)
     }
 
-    /// The player settings changed in the Settings window: auto play and the wheel step hold from now on, the preview
-    /// audio filters change at once (hardware decoding and the background need a new start).
-    pub fn apply_settings(&self, settings: &PlayerSettings) {
+    /// The player settings changed in the Settings window: auto play and the wheel step hold from now on; the preview
+    /// audio filters, the hardware decoding and the background change at once.
+    pub fn apply_settings(&self, before: &PlayerSettings, settings: &PlayerSettings) {
         self.auto_play.set(settings.auto_play);
         self.wheel_step.set(settings.wheel_volume_step);
-        let audio = AudioOptions {
-            mute_last_second: settings.mute_last_second,
-            loudnorm: settings.loudnorm_preview,
+        let audio = |s: &PlayerSettings| AudioOptions {
+            mute_last_second: s.mute_last_second,
+            loudnorm: s.loudnorm_preview,
         };
-        if let Err(e) = self.player.set_audio(audio) {
+        if audio(before) != audio(settings)
+            && let Err(e) = self.player.set_audio(audio(settings))
+        {
             tracing::warn!(error = %e, "[Player] The preview audio filters could not be changed");
+        }
+        if before.hwdec != settings.hwdec
+            && let Err(e) = self.player.set_hwdec(&settings.hwdec)
+        {
+            tracing::warn!(error = %e, "[Player] The hardware decoding could not be changed");
+        }
+        if before.background != settings.background
+            && let Err(e) = self.player.set_background(&settings.background)
+        {
+            tracing::warn!(error = %e, "[Player] The background could not be changed");
         }
     }
 

@@ -42,6 +42,10 @@ pub(crate) enum Command {
     /// Play the file in a loop (the probe render) or once.
     SetLoop(bool),
     SetAudio(AudioOptions),
+    /// Hardware decoding (`hwdec`; mpv reinitializes the decoder of a playing file).
+    SetHwdec(String),
+    /// The color around the video (`#RRGGBB`); other text is ignored.
+    SetBackground(String),
     /// The preview's video filters.
     SetVideoFilter(VideoFilter),
     /// The loaded file's duration in seconds (from the event thread; the end mute needs it).
@@ -141,6 +145,12 @@ impl Session {
             Command::SetAudio(audio) => {
                 self.audio = audio;
                 self.audio_ops()
+            }
+            Command::SetHwdec(value) => vec![Op::Text("hwdec", value)],
+            Command::SetBackground(color) if options::is_color(&color) => vec![Op::Text("background-color", color)],
+            Command::SetBackground(color) => {
+                tracing::warn!(color = %color, "[Player] The background is not a #RRGGBB color; unchanged");
+                Vec::new()
             }
             Command::SetVideoFilter(filter) => self.video_ops(filter),
             Command::SetPaused(paused) => vec![Op::Flag("pause", paused)],
@@ -399,6 +409,20 @@ mod tests {
             s.handle(Command::SetLoop(false)),
             vec![Op::Text("loop-file", "no".to_owned())]
         );
+    }
+
+    #[test]
+    fn decoding_and_background_change_while_running() {
+        let mut s = Session::new(PreviewQuality::Auto, AudioOptions::default());
+        assert_eq!(
+            s.handle(Command::SetHwdec("no".into())),
+            vec![Op::Text("hwdec", "no".to_owned())]
+        );
+        assert_eq!(
+            s.handle(Command::SetBackground("#102030".into())),
+            vec![Op::Text("background-color", "#102030".to_owned())]
+        );
+        assert!(s.handle(Command::SetBackground("red".into())).is_empty());
     }
 
     #[test]

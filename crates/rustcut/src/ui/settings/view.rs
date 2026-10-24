@@ -146,8 +146,13 @@ mod tests {
         let queue = cards(Page::Queue, &settings, &errors, &Paths);
         let workers = queue.first().and_then(|c| c.rows.first()).unwrap();
         assert_eq!((workers.kind, workers.text.as_str(), workers.enabled), (RowKind::Number, "2", true));
-        let start = queue.first().and_then(|c| c.rows.get(1)).unwrap();
-        assert!(start.description.ends_with("Applies at the next start."), "{}", start.description);
+        let tray = cards(Page::Desktop, &settings, &errors, &Paths)
+            .iter()
+            .flat_map(|c| c.rows.clone())
+            .find(|r| r.key == "desktop.tray.enabled")
+            .unwrap();
+        assert!(tray.description.ends_with("Applies at the next start."), "{}", tray.description);
+        assert!(!workers.description.contains("next start"));
         let countdown = queue.get(1).and_then(|c| c.rows.get(1)).unwrap();
         assert_eq!(countdown.error, "Type a whole number.");
 

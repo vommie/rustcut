@@ -302,7 +302,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Settings changed in the Settings window apply while RustCut runs where they can: hold time, tooltips, keys, seek
   steps, auto play, wheel step, preview audio filters, the export card's folders, template and warnings, the
   automatic section, filter defaults, the draft rule when a job is edited, render profiles, ffmpeg's priority and
-  stall limit, the number of jobs at the same time, the RustView link and the tag history size, and the log level.
+  stall limit, the number of jobs at the same time, the RustView link and the tag history size, the log level and
+  how long log files are kept, hardware decoding and the background color of the player (also while a video plays),
+  the ffmpeg and ffprobe programs (the encoders are checked again), the known-source warning, and "One window" (a
+  second start opens its own window as soon as it is off). Only the tray icon still needs a new start.
 - Closing the main window quits RustCut even while the Settings window is open.
 - The Render Settings panel's tab is called "Codecs" (shorter; your layout keeps its place).
 - The queue panel's actions apply to every selected job; its buttons sit below the list.

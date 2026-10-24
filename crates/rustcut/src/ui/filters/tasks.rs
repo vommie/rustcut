@@ -16,7 +16,7 @@ impl FiltersBridge {
     pub(super) fn check_interlace(&self, source: Source) {
         let Some(file) = self.file.borrow().clone() else { return };
         self.state.borrow_mut().interlace = InterlaceHint::Checking;
-        let options = self.detect.clone();
+        let options = self.detect.borrow().clone();
         let task = self
             .runtime
             .spawn(async move { detect_interlace(&file, source.duration, &options).await });
@@ -66,7 +66,7 @@ impl FiltersBridge {
         };
         self.state.borrow_mut().auto_crop_running = true;
         self.publish_card();
-        let options = self.detect.clone();
+        let options = self.detect.borrow().clone();
         let task = self
             .runtime
             .spawn(async move { detect_crop(&file, frame, duration, &prefix, &options).await });

@@ -42,7 +42,7 @@ pub struct RenderSettingsBridge {
     /// The settings as last written (the user's profiles change in it).
     settings: RefCell<Settings>,
     writer: SettingsWriter,
-    ffmpeg: PathBuf,
+    ffmpeg: RefCell<PathBuf>,
     /// Where the check writes its few frames.
     check_dir: PathBuf,
     check_timer: slint::Timer,
@@ -80,11 +80,13 @@ impl RenderSettingsBridge {
             state: RefCell::new(PanelState::new(library, selection)),
             settings: RefCell::new(settings.clone()),
             writer,
-            ffmpeg: settings
-                .advanced
-                .ffmpeg
-                .clone()
-                .unwrap_or_else(|| PathBuf::from("ffmpeg")),
+            ffmpeg: RefCell::new(
+                settings
+                    .advanced
+                    .ffmpeg
+                    .clone()
+                    .unwrap_or_else(|| PathBuf::from("ffmpeg")),
+            ),
             check_dir: cache_dir.join("check"),
             check_timer: slint::Timer::default(),
             check_task: RefCell::new(None),
@@ -165,6 +167,16 @@ impl RenderSettingsBridge {
             state.selection.follow(&state.library);
         }
         self.settings.borrow_mut().render.profiles = user.to_vec();
+        self.changed(false);
+    }
+
+    /// Another ffmpeg (the Settings window): the encoders are checked again with it (`encoders` is the new check) and
+    /// the settings check uses it.
+    pub fn set_ffmpeg(&self, ffmpeg: PathBuf, encoders: watch::Receiver<Option<Arc<Capabilities>>>) {
+        *self.ffmpeg.borrow_mut() = ffmpeg;
+        self.state.borrow_mut().encoders = Encoders::Checking;
+        self.state.borrow_mut().check = None;
+        self.watch_encoders(encoders);
         self.changed(false);
     }
 
@@ -273,7 +285,7 @@ impl RenderSettingsBridge {
             };
             (st.profile().clone(), hardware)
         };
-        let (ffmpeg, dir) = (self.ffmpeg.clone(), self.check_dir.clone());
+        let (ffmpeg, dir) = (self.ffmpeg.borrow().clone(), self.check_dir.clone());
         let checked = profile.clone();
         let task = self
             .runtime

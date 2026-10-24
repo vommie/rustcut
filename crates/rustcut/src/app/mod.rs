@@ -317,6 +317,25 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             }
         }));
     }
+    // The single-instance socket: listening while `general.single_instance` is on (also switched while running).
+    let server = Rc::new(std::cell::RefCell::new(
+        single_instance
+            .then(|| listen(&socket, runtime.handle(), &ui, &main.as_weak()))
+            .flatten(),
+    ));
+    let instance: Box<dyn Fn(bool)> = {
+        let (server, runtime, ui, main) = (Rc::clone(&server), runtime.handle().clone(), ui.clone(), main.as_weak());
+        Box::new(move |on| {
+            let mut server = server.borrow_mut();
+            if !on {
+                if server.take().is_some() {
+                    tracing::info!("[Instance] No longer listening: a second start opens its own window");
+                }
+            } else if server.is_none() {
+                *server = listen(&socket, &runtime, &ui, &main);
+            }
+        })
+    };
     tags.set_history_size(loaded.settings.rustview.tag_history_size);
     let settings_window = SettingsBridge::install(
         &main,
@@ -350,9 +369,12 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             paths: loaded.paths.clone(),
             env: RenderEnv::new(&loaded.settings, &loaded.paths, HardwareContext::default()),
             log: log.level_setter(),
+            media: Rc::downgrade(&media),
+            probe: Rc::downgrade(&probe),
+            runtime: runtime.handle().clone(),
+            instance,
         },
     );
-    let server = single_instance.then(|| listen(&socket, &runtime, &ui, &main)).flatten();
     shutdown::watch_signals(runtime.handle(), ui, main.as_weak());
 
     if let Some(problem) = store_problem {
@@ -387,7 +409,8 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     settings_window.save_into(&mut ui_state.settings);
     persistence::save_ui_state(&loaded, &ui_state);
     settings_window.shut_down();
-    drop(server);
+    // Stop listening now (the settings' listener holds the holder until the end of `run`).
+    drop(server.borrow_mut().take());
     drop(settings_window);
     drop(editing);
     drop(opener);

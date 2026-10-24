@@ -10,7 +10,6 @@ use rustcut_core::render::{HardwareContext, RenderEnv};
 use rustcut_core::rustview::{SyncCommand, SyncService};
 use rustcut_core::settings::{AppPaths, Settings};
 use rustcut_core::store::{Store, StoreCommand, StoreHandle, spawn_store};
-use slint::ComponentHandle as _;
 
 use super::{AppError, Cli, persistence};
 use crate::MainWindow;
@@ -60,13 +59,13 @@ pub(super) fn forward(socket: &std::path::Path, cli: &Cli) -> bool {
 /// Listens for a second start; its files open in this window. `None` (logged) when the socket cannot be used.
 pub(super) fn listen(
     socket: &std::path::Path,
-    runtime: &tokio::runtime::Runtime,
+    runtime: &tokio::runtime::Handle,
     ui: &UiDispatcher,
-    main: &MainWindow,
+    main: &slint::Weak<MainWindow>,
 ) -> Option<instance::Server> {
     let ui = ui.clone();
-    let main = main.as_weak();
-    let served = instance::serve(socket, runtime.handle(), move |request| {
+    let main = main.clone();
+    let served = instance::serve(socket, runtime, move |request| {
         if let Request::Open { files } = request {
             let main = main.clone();
             ui.post(move || {
