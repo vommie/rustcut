@@ -178,12 +178,7 @@ impl TagsBridge {
         self.state.borrow().name(id).map(str::to_owned)
     }
 
-    /// The draft's tags and rating as they are (a draft set aside while a job is edited).
-    pub fn draft(&self) -> Choice {
-        self.state.borrow().draft.clone()
-    }
-
-    /// A job loaded into the editor, or a draft put back: its tags and rating become the draft.
+    /// A job loaded into the editor: its tags and rating become the panel's choice.
     pub fn load_draft(&self, choice: Choice) {
         self.state.borrow_mut().load_draft(choice);
         self.publish();
@@ -493,6 +488,10 @@ fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
             crate::ui::jump::go(target);
         }
     });
+    on!(on_open_settings, |_b| crate::ui::jump::go(JumpTarget::Settings {
+        page: crate::ui::settings::page::Page::RustView,
+        key: "rustview.enabled",
+    }));
     on!(on_apply_edit, |b| b.apply_edit());
     on!(on_cancel_edit, |b| b.cancel_edit());
     on!(on_rating_clicked, |b, rating| b.change(|s| s.click_rating(rating)));

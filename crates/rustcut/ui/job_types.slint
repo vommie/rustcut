@@ -1,6 +1,6 @@
 // The data of the Job panel (the inspector of the queue's current job; src/ui/inspector/ fills `Job`), of the Logs
 // panel (the job's stored log; src/ui/logs/ fills `Logs`) and of the question before a job replaces the editor's
-// draft (src/ui/editing/ fills `JobLoad`; setting `editor.draft_on_load = "ask"`).
+// open video (src/ui/editing/ fills `JobLoad`; setting `editor.on_job_load = "ask"`).
 
 // One label/value row of a section; tone 0 normal, 1 muted, 2 error.
 export struct JobRowView {
@@ -81,6 +81,5 @@ export global JobLoad {
     in property <string> title;
     in property <string> text;
     callback replace();
-    callback set-aside();
     callback cancel();
 }

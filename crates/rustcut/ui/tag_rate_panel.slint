@@ -16,9 +16,13 @@ import { TagTreeList } from "tag_tree.slint";
 import { TagHistoryPanel } from "tag_history_panel.slint";
 import { ResizerBar } from "resizer_bar.slint";
 
-/// RustView's state and the Retry button.
+/// RustView's state and the Retry button: one slim line while RustView is connected or being reached; while it is
+/// unavailable or switched off a small card with RustView's gray symbol, the reason below it and a button to the
+/// RustView settings (M6.5e, user request Q-N8 #35).
 component ConnectionHeader inherits Rectangle {
-    height: 26px;
+    property <bool> card: TagRate.connection-kind == 2 || TagRate.connection-kind == 3;
+
+    height: root.card ? block.preferred-height : 26px;
     border-radius: 4px;
     background: Theme.surface-variant;
 
@@ -36,7 +40,7 @@ component ConnectionHeader inherits Rectangle {
         }
     }
 
-    HorizontalLayout {
+    if !root.card: HorizontalLayout {
         padding-left: 6px;
         padding-right: 2px;
         spacing: 6px;
@@ -45,38 +49,74 @@ component ConnectionHeader inherits Rectangle {
             y: (parent.height - self.height) / 2;
             icon: TagRate.connection-kind == 1 ? IconId.rustview-connected : IconId.rustview-unavailable;
             size: IconSize.sm;
-            color: TagRate.connection-kind == 1 ? Theme.status-ok
-                : TagRate.connection-kind == 2 ? Theme.status-corrupt : Theme.text-muted;
+            color: TagRate.connection-kind == 1 ? Theme.status-ok : Theme.text-muted;
         }
 
         Text {
             text: TagRate.connection-text;
             font-size: 11px;
-            color: TagRate.connection-kind == 2 ? Theme.status-corrupt : Theme.text-muted;
+            color: Theme.text-muted;
             vertical-alignment: center;
             horizontal-stretch: 1;
             overflow: elide;
         }
+    }
 
-        // Leads to the setting behind the state (jump mark, Q-N6).
-        if TagRate.connection-jump != "": IconButton {
-            y: (parent.height - self.height) / 2;
-            height: 22px;
-            width: 24px;
-            icon: IconId.jump-to;
-            icon-size: IconSize.sm;
-            tooltip: TagRate.connection-jump;
-            clicked => { TagRate.connection-jump-clicked(); }
+    block := VerticalLayout {
+        visible: root.card;
+        padding: 10px;
+        spacing: 6px;
+        alignment: center;
+
+        HorizontalLayout {
+            alignment: center;
+
+            AppIcon {
+                icon: IconId.rustview-app;
+                size: 30px;
+                color: Theme.status-deleted;
+            }
         }
 
-        if TagRate.can-retry: IconButton {
-            y: (parent.height - self.height) / 2;
-            height: 22px;
-            width: 24px;
-            icon: IconId.reload;
-            icon-size: IconSize.sm;
-            tooltip: "Try to reach RustView now";
-            clicked => { TagRate.retry(); }
+        Text {
+            text: TagRate.connection-text;
+            font-size: 12px;
+            font-weight: 600;
+            color: TagRate.connection-kind == 2 ? Theme.status-corrupt : Theme.text-muted;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+
+        if TagRate.connection-tooltip != "": Text {
+            text: TagRate.connection-tooltip;
+            font-size: 11px;
+            color: Theme.text-muted;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+
+        HorizontalLayout {
+            alignment: center;
+            spacing: 6px;
+
+            // The RustView settings, at the option behind the state when there is one (jump mark, Q-N6).
+            IconButton {
+                icon: IconId.open-settings;
+                tooltip: TagRate.connection-jump != "" ? TagRate.connection-jump : "Open the RustView settings";
+                clicked => {
+                    if TagRate.connection-jump != "" {
+                        TagRate.connection-jump-clicked();
+                    } else {
+                        TagRate.open-settings();
+                    }
+                }
+            }
+
+            if TagRate.can-retry: IconButton {
+                icon: IconId.reload;
+                tooltip: "Try to reach RustView now";
+                clicked => { TagRate.retry(); }
+            }
         }
     }
 }

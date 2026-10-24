@@ -24,8 +24,8 @@ pub use notices::{
 };
 pub use paths::AppPaths;
 pub use schema::{
-    AdvancedSettings, AppearanceSettings, AutoSection, DesktopSettings, DraftOnLoad, EditorSettings, ExportSettings,
-    FilterDefaults, GeneralSettings, HashingSettings, PlayerSettings, QueueSettings, RenderSettings, RustViewSettings,
+    AdvancedSettings, AppearanceSettings, AutoSection, DesktopSettings, EditorSettings, ExportSettings, FilterDefaults,
+    GeneralSettings, HashingSettings, OnJobLoad, PlayerSettings, QueueSettings, RenderSettings, RustViewSettings,
     Settings, TargetFolder, TraySettings, WarningSettings, WhenDone, WriteTiming,
 };
 pub use ui_state::{

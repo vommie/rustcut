@@ -4,7 +4,8 @@ use super::schema::*;
 use crate::render::DEFAULT_PROFILE_ID;
 use crate::settings::{LoadOutcome, VersionedFile as _, load, save};
 
-/// A version 1 file (every release before the notice system) loads through the one migration to version 2 without notes.
+/// A version 1 file (every release before the notice system) loads through the migrations to the current version
+/// without notes.
 fn clean_v1(outcome: &LoadOutcome<Settings>) -> bool {
     matches!(outcome, LoadOutcome::Migrated { from: 1, notes, .. } if notes.is_empty())
 }
@@ -163,7 +164,7 @@ fn sanitizing_repairs_bad_values() {
 }
 
 #[test]
-fn hold_time_and_draft_on_load_have_defaults_and_are_tolerant() {
+fn hold_time_and_job_load_have_defaults_and_are_tolerant() {
     // A file of 0.0.12 has neither: the defaults fill in (2 s, replace), nothing is migrated.
     let dir = tempfile::tempdir().unwrap();
     let old = "version = 1\n[general]\nsingle_instance = false\n[editor]\nauto_section = \"whole_video\"\n";
@@ -173,24 +174,24 @@ fn hold_time_and_draft_on_load_have_defaults_and_are_tolerant() {
     let value = outcome.into_value();
     assert_eq!(value.general.hold_to_confirm_ms, 2_000);
     assert!(!value.general.single_instance);
-    assert_eq!(value.editor.draft_on_load, DraftOnLoad::Replace);
+    assert_eq!(value.editor.on_job_load, OnJobLoad::Replace);
     assert_eq!(value.editor.auto_section, AutoSection::WholeVideo);
 
     // A value of a later version reads as the default; the rest of the section stays.
-    let text = "version = 1\n[editor]\nseek_step_secs = 4\ndraft_on_load = \"teleport\"\n";
+    let text = "version = 3\n[editor]\nseek_step_secs = 4\non_job_load = \"teleport\"\n";
     std::fs::write(dir.path().join("config.toml"), text).unwrap();
     let value = load::<Settings>(dir.path(), &dir.path().join("b"))
         .unwrap()
         .into_value();
-    assert_eq!(value.editor.draft_on_load, DraftOnLoad::Replace);
+    assert_eq!(value.editor.on_job_load, OnJobLoad::Replace);
     assert_eq!(value.editor.seek_step_secs, 4);
 
     let mut settings = Settings::default();
-    settings.editor.draft_on_load = DraftOnLoad::SetAside;
+    settings.editor.on_job_load = OnJobLoad::Ask;
     settings.general.hold_to_confirm_ms = 0;
     save(dir.path(), &settings).unwrap();
     let text = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
-    assert!(text.contains("draft_on_load = \"set_aside\""), "{text}");
+    assert!(text.contains("on_job_load = \"ask\""), "{text}");
     let read = load::<Settings>(dir.path(), &dir.path().join("b"))
         .unwrap()
         .into_value();
@@ -332,9 +333,54 @@ fn a_file_of_0_0_24_moves_its_notice_options_with_a_backup() {
     );
     save(dir.path(), &value).unwrap();
     let text = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
-    assert!(text.starts_with("version = 2"), "{text}");
+    assert!(text.starts_with("version = 3"), "{text}");
     assert!(
         !text.contains("[desktop.notifications]") && !text.contains("known_source = false"),
         "{text}"
     );
+}
+
+#[test]
+fn a_file_of_0_0_28_loads_its_job_without_a_draft() {
+    // Settings version 2: "set aside" reads as "ask", the key is renamed, the old file is backed up first.
+    let dir = tempfile::tempdir().unwrap();
+    for (stored, read) in [
+        ("set_aside", OnJobLoad::Ask),
+        ("ask", OnJobLoad::Ask),
+        ("replace", OnJobLoad::Replace),
+        ("teleport", OnJobLoad::Replace),
+    ] {
+        let old = format!("version = 2\n[editor]\nseek_step_secs = 5\ndraft_on_load = \"{stored}\"\n");
+        std::fs::write(dir.path().join("config.toml"), &old).unwrap();
+        let outcome = load::<Settings>(dir.path(), &dir.path().join("b")).unwrap();
+        let LoadOutcome::Migrated {
+            value,
+            from: 2,
+            backup,
+            notes,
+        } = outcome
+        else {
+            panic!("{outcome:?}")
+        };
+        assert!(notes.is_empty(), "{notes:?}");
+        assert_eq!(
+            std::fs::read_to_string(&backup).unwrap(),
+            old,
+            "the old file is backed up first"
+        );
+        assert_eq!(
+            (value.editor.on_job_load, value.editor.seek_step_secs),
+            (read, 5),
+            "{stored}"
+        );
+        save(dir.path(), &value).unwrap();
+        let text = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
+        assert!(text.starts_with("version = 3") && !text.contains("draft"), "{text}");
+    }
+    // Without the key nothing changes but the version.
+    std::fs::write(dir.path().join("config.toml"), "version = 2\n[queue]\nworkers = 2\n").unwrap();
+    let value = load::<Settings>(dir.path(), &dir.path().join("b"))
+        .unwrap()
+        .into_value();
+    assert_eq!((value.editor.on_job_load, value.queue.workers), (OnJobLoad::Replace, 2));
 }

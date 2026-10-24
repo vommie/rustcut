@@ -377,7 +377,6 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &ui,
         runtime.handle().clone(),
         &EditingParts {
-            player: &player,
             editor: &editor,
             filters: &filters,
             render: &render,
@@ -387,7 +386,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             inspector: &inspector,
             opener: &opener,
         },
-        loaded.settings.editor.draft_on_load,
+        loaded.settings.editor.on_job_load,
     );
     export.set_editing(&editing);
     opener.set_editing(&editing);
@@ -449,7 +448,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &loaded.ui_state.settings,
     );
     // Jump marks lead from messages to the options (Q-N6); held until the event loop ends.
-    let _jump = JumpBridge::install(&main, &dock, &settings_window);
+    let _jump = JumpBridge::install(&main, &dock, &settings_window, &queue);
     {
         let mut hooks = settings_window.hooks();
         let sync_handle = sync.handle.clone();

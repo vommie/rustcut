@@ -1,5 +1,5 @@
-// The question before a queued job replaces the editor's draft (src/ui/editing/; setting `editor.draft_on_load = "ask"`,
-// user decision Q-Q3): replace it, keep it for later (it comes back when the editing ends), or cancel (Escape).
+// The question before a queued job replaces the open video with its sections (src/ui/editing/; setting
+// `editor.on_job_load = "ask"`, user decisions Q-Q3, Q-N10): replace it or cancel (Escape).
 
 import { DialogFrame, DialogState } from "dialog_frame.slint";
 import { Theme } from "styles.slint";
@@ -82,11 +82,6 @@ export component JobLoadDialog inherits Rectangle {
                     DialogButton {
                         text: "Cancel";
                         clicked => { JobLoad.cancel(); }
-                    }
-
-                    DialogButton {
-                        text: "Keep for later";
-                        clicked => { JobLoad.set-aside(); }
                     }
 
                     DialogButton {

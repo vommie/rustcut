@@ -114,18 +114,16 @@ pub enum AutoSection {
     CurrentRange,
 }
 
-/// What happens to the editor's draft (the open video with its sections, marks, filters, settings, name and tags)
-/// when a queued job is loaded into the editor (user decision Q-Q3).
+/// What a queued job loaded into the editor does to the current session (the open video with its sections, marks,
+/// filters, settings, name and tags; user decisions Q-Q3 and Q-N10: there is no draft to set aside, settings version 3).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum DraftOnLoad {
+pub enum OnJobLoad {
     /// The job replaces it without asking (PyCutRv).
     #[default]
     Replace,
-    /// Ask first when the draft has sections or marks.
+    /// Ask first when the session has sections or marks.
     Ask,
-    /// Keep it aside and restore it when the editing of the job ends.
-    SetAside,
 }
 
 #[serde_as]
@@ -139,7 +137,7 @@ pub struct EditorSettings {
     pub seek_step_long_secs: u16,
     /// A value this version does not know reads as the default.
     #[serde_as(as = "DefaultOnError")]
-    pub draft_on_load: DraftOnLoad,
+    pub on_job_load: OnJobLoad,
 }
 
 impl Default for EditorSettings {
@@ -148,7 +146,7 @@ impl Default for EditorSettings {
             auto_section: AutoSection::Off,
             seek_step_secs: 2,
             seek_step_long_secs: 10,
-            draft_on_load: DraftOnLoad::Replace,
+            on_job_load: OnJobLoad::Replace,
         }
     }
 }
@@ -420,16 +418,45 @@ impl Default for AdvancedSettings {
     }
 }
 
+/// Settings version 2 -> 3 (M6.5e, user decision Q-N10): `editor.draft_on_load` became `editor.on_job_load`, and
+/// "set aside" is gone: a stored `set_aside` reads as `ask` (the session is never dropped without the user's word).
+fn migrate_job_load(table: &mut toml::Table) -> Result<(), String> {
+    let Some(editor) = table.get_mut("editor") else {
+        return Ok(());
+    };
+    let editor = editor
+        .as_table_mut()
+        .ok_or_else(|| "editor is not a table".to_owned())?;
+    let Some(old) = editor.remove("draft_on_load") else {
+        return Ok(());
+    };
+    let value = match old.as_str() {
+        Some("set_aside" | "ask") => "ask",
+        Some("replace") => "replace",
+        // A value no version wrote: the default (replace) takes its place.
+        _ => return Ok(()),
+    };
+    editor.insert("on_job_load".to_owned(), toml::Value::String(value.to_owned()));
+    Ok(())
+}
+
 impl VersionedFile for Settings {
     const FILE_NAME: &'static str = "config.toml";
-    const VERSION: u32 = 2;
+    const VERSION: u32 = 3;
 
     fn steps() -> &'static [MigrationStep] {
-        &[MigrationStep {
-            from: 1,
-            reason: "move-notice-options",
-            apply: migrate_notice_options,
-        }]
+        &[
+            MigrationStep {
+                from: 1,
+                reason: "move-notice-options",
+                apply: migrate_notice_options,
+            },
+            MigrationStep {
+                from: 2,
+                reason: "job-load-without-draft",
+                apply: migrate_job_load,
+            },
+        ]
     }
 
     fn sanitize(&mut self) -> Vec<String> {

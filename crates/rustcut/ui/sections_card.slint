@@ -9,6 +9,7 @@ import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Shortcuts } from "shortcuts.slint";
 import { IconButton } from "controls.slint";
 import { BubbleAnchor } from "bubble.slint";
+import { JumpFlash } from "jump.slint";
 
 export struct SectionRowView {
     number: int,
@@ -215,6 +216,11 @@ component SectionRowItem inherits Rectangle {
     // The overlap of this section with an earlier one (M6.5c).
     BubbleAnchor {
         key: "sections.row." + root.index;
+    }
+
+    // A refused save leads to this section (M6.5e).
+    JumpFlash {
+        key: "sections:" + root.index;
     }
 
     HorizontalLayout {

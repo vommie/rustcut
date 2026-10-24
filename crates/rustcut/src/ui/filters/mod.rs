@@ -247,11 +247,9 @@ impl FiltersBridge {
         match session {
             Some(CropMode::Edit) => self.end_crop(true),
             Some(CropMode::Quick) | None => {
+                // Without a video the card is closed (the state manager, M6.5e) and its key does nothing.
                 if !self.state.borrow_mut().begin_crop(CropMode::Edit) {
-                    Self::tell(Notice::new(
-                        Kind::NoVideo,
-                        "The crop can be edited once a video is open",
-                    ));
+                    tracing::debug!("[Filters] No video: the crop is not edited");
                 }
                 self.publish();
             }

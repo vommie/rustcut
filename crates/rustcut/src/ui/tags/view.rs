@@ -105,9 +105,8 @@ pub fn tag_names(panel: &TagPanel, ids: &[u32]) -> String {
 pub fn empty_text(panel: &TagPanel, state: &ConnectionState) -> String {
     if !panel.has_tree() {
         return match state {
-            ConnectionState::Disabled => {
-                "RustView is switched off: no tags to choose. The rating is kept with the job."
-            }
+            // The card above says that RustView is off (one place per information).
+            ConnectionState::Disabled => "No tags to choose. The rating is kept with the job.",
             ConnectionState::Unavailable { .. } => "RustView's tags appear here once it answers.",
             ConnectionState::Unknown | ConnectionState::Connected => "Loading RustView's tags...",
         }

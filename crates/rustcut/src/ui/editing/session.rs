@@ -1,31 +1,11 @@
-//! A queued job loaded into the editor, without Slint (user decisions Q-Q2, Q-Q3): which job it is, what its target was,
-//! whether saving can update it (a waiting or held job whose target file stays the same) or makes a new job, whether
-//! RustCut held it for the editing, and the draft that was set aside meanwhile.
+//! A queued job loaded into the editor, without Slint (user decisions Q-Q2, Q-Q3, Q-N10): which job it is, what its
+//! target was, whether saving can update it (a waiting or held job whose target file stays the same) or makes a new
+//! job, and whether RustCut held it for the editing.
 
 use std::path::{Path, PathBuf};
 
-use rustcut_core::edit::FilterChain;
 use rustcut_core::job::{JobId, JobSpec, JobStateKind};
 use rustcut_core::naming::same_path;
-use rustcut_core::render::Selection;
-use rustcut_core::time::Timestamp;
-
-use crate::ui::export::ExportDraft;
-use crate::ui::sections::SectionsDraft;
-use crate::ui::tags::Choice;
-
-/// Everything the editor held before a job was loaded (restored when the editing ends).
-#[derive(Debug, Clone)]
-pub struct Draft {
-    pub source: PathBuf,
-    pub position: Timestamp,
-    pub paused: bool,
-    pub sections: SectionsDraft,
-    pub filters: FilterChain,
-    pub render: Selection,
-    pub export: ExportDraft,
-    pub tags: Choice,
-}
 
 #[derive(Debug, Clone)]
 pub struct JobEdit {
@@ -40,7 +20,6 @@ pub struct JobEdit {
     pub updatable: bool,
     /// RustCut held it for the editing (it was waiting): it waits again when the editing ends.
     pub release: bool,
-    pub set_aside: Option<Box<Draft>>,
 }
 
 /// What a save while a job is edited does.
@@ -52,7 +31,7 @@ pub enum SaveAs {
 
 impl JobEdit {
     /// Starts the editing of job `id` that is in `state`.
-    pub fn new(id: JobId, state: JobStateKind, spec: Box<JobSpec>, set_aside: Option<Box<Draft>>) -> Self {
+    pub fn new(id: JobId, state: JobStateKind, spec: Box<JobSpec>) -> Self {
         let target = spec.target_path();
         Self {
             id,
@@ -65,7 +44,6 @@ impl JobEdit {
             spec,
             updatable: matches!(state, JobStateKind::Waiting | JobStateKind::Held),
             release: state == JobStateKind::Waiting,
-            set_aside,
         }
     }
 
@@ -93,9 +71,9 @@ impl JobEdit {
 mod tests {
     use std::path::PathBuf;
 
-    use rustcut_core::edit::{CropAspect, Filter, FilterKind, Rotation, Section};
+    use rustcut_core::edit::{CropAspect, Filter, FilterChain, FilterKind, Rotation, Section};
     use rustcut_core::job::{JOB_SPEC_VERSION, JobMetadata, TargetNaming, TargetSpec};
-    use rustcut_core::render::{DEFAULT_PROFILE_ID, ProfileLibrary, RateControl};
+    use rustcut_core::render::{DEFAULT_PROFILE_ID, ProfileLibrary, RateControl, Selection};
     use rustcut_core::settings::{ExportPanelState, ExportSettings, FilterDefaults, TagPanelState, TargetFolder};
     use rustcut_core::time::Timestamp;
 
@@ -103,7 +81,7 @@ mod tests {
     use crate::ui::export::{ExportState, JobFacts};
     use crate::ui::filters::state::FiltersState;
     use crate::ui::sections::SectionsState;
-    use crate::ui::tags::TagPanel;
+    use crate::ui::tags::{Choice, TagPanel};
 
     fn waiting_job() -> JobSpec {
         let s = |a, b| Section::new(Timestamp::from_secs(a), Timestamp::from_secs(b)).unwrap();
@@ -205,7 +183,7 @@ mod tests {
         };
         assert_eq!(saved, job);
 
-        let edit = JobEdit::new(JobId(4), JobStateKind::Waiting, Box::new(job.clone()), None);
+        let edit = JobEdit::new(JobId(4), JobStateKind::Waiting, Box::new(job.clone()));
         assert_eq!(edit.save_as(&saved.target_path(), false), SaveAs::Update(JobId(4)));
         assert!(edit.release);
         assert_eq!(edit.banner(), "Editing job #4: Beach - 04.mkv");
@@ -224,7 +202,7 @@ mod tests {
     #[test]
     fn done_and_held_jobs() {
         let job = Box::new(waiting_job());
-        let done = JobEdit::new(JobId(1), JobStateKind::Finished, job.clone(), None);
+        let done = JobEdit::new(JobId(1), JobStateKind::Finished, job.clone());
         assert_eq!(
             done.save_as(&job.target_path(), false),
             SaveAs::New,
@@ -232,7 +210,7 @@ mod tests {
         );
         assert!(!done.release);
         assert!(done.banner().starts_with("Job #1 loaded as a new job"));
-        let held = JobEdit::new(JobId(2), JobStateKind::Held, job.clone(), None);
+        let held = JobEdit::new(JobId(2), JobStateKind::Held, job.clone());
         assert_eq!(held.save_as(&job.target_path(), false), SaveAs::Update(JobId(2)));
         assert!(!held.release, "it was held by the user: it stays held");
     }

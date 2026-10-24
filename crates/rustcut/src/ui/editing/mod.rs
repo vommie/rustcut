@@ -1,8 +1,8 @@
-//! A queued job loaded into the editor (M4.1, user decisions Q-Q2, Q-Q3): the job's spec is read on the runtime, a
-//! waiting job is held meanwhile, the editor's draft is replaced, set aside or asked about (`editor.draft_on_load`),
-//! the job's source opens, and its sections, filters, render settings, target and tags fill the panels. The export's
-//! Save then updates the job (same target file) or makes a new one (`session.rs`); the editing ends there, with "Stop
-//! editing" or when the user opens another file, and a draft set aside comes back.
+//! A queued job loaded into the editor (M4.1, user decisions Q-Q2, Q-Q3, Q-N10): the job's spec is read on the runtime,
+//! a waiting job is held meanwhile, the current session is replaced or asked about first (`editor.on_job_load`), the
+//! job's source opens, and its sections, filters, render settings, target and tags fill the panels. The export's Save
+//! then updates the job (same target file) or makes a new one (`session.rs`); the editing ends there, with "Stop
+//! editing" or when the user opens another file. The queue highlights the job while it is edited.
 
 mod session;
 
@@ -12,10 +12,10 @@ use std::rc::{Rc, Weak};
 
 use rustcut_core::job::{JobId, JobSpec, JobStateKind};
 use rustcut_core::queue::{QueueCommand, QueueError, QueueHandle};
-use rustcut_core::settings::DraftOnLoad;
+use rustcut_core::settings::OnJobLoad;
 use slint::ComponentHandle as _;
 
-pub use session::{Draft, JobEdit, SaveAs};
+pub use session::{JobEdit, SaveAs};
 
 use crate::ui::dispatcher::UiDispatcher;
 use crate::ui::editor::Editor;
@@ -23,8 +23,7 @@ use crate::ui::export::ExportBridge;
 use crate::ui::filters::FiltersBridge;
 use crate::ui::inspector::InspectorBridge;
 use crate::ui::notices::{self, Kind, Level, Notice};
-use crate::ui::open::{FileOpener, StartAt};
-use crate::ui::player::PlayerBridge;
+use crate::ui::open::FileOpener;
 use crate::ui::queue::QueueBridge;
 use crate::ui::render_settings::RenderSettingsBridge;
 use crate::ui::tags::{Choice, TagsBridge};
@@ -36,7 +35,6 @@ thread_local! {
 
 /// The parts a loaded job fills.
 pub struct EditingParts<'a> {
-    pub player: &'a Rc<PlayerBridge>,
     pub editor: &'a Rc<Editor>,
     pub filters: &'a Rc<FiltersBridge>,
     pub render: &'a Rc<RenderSettingsBridge>,
@@ -70,8 +68,7 @@ pub struct JobEditor {
     ui: UiDispatcher,
     runtime: tokio::runtime::Handle,
     handle: QueueHandle,
-    mode: Cell<DraftOnLoad>,
-    player: Weak<PlayerBridge>,
+    mode: Cell<OnJobLoad>,
     editor: Weak<Editor>,
     filters: Weak<FiltersBridge>,
     render: Weak<RenderSettingsBridge>,
@@ -93,7 +90,7 @@ impl JobEditor {
         ui: &UiDispatcher,
         runtime: tokio::runtime::Handle,
         parts: &EditingParts<'_>,
-        mode: DraftOnLoad,
+        mode: OnJobLoad,
     ) -> Rc<Self> {
         let bridge = Rc::new(Self {
             window: window.as_weak(),
@@ -101,7 +98,6 @@ impl JobEditor {
             runtime,
             handle: parts.queue.handle().clone(),
             mode: Cell::new(mode),
-            player: Rc::downgrade(parts.player),
             editor: Rc::downgrade(parts.editor),
             filters: Rc::downgrade(parts.filters),
             render: Rc::downgrade(parts.render),
@@ -137,18 +133,12 @@ impl JobEditor {
 
     /// The card's banner text, when a job is edited.
     pub fn banner(&self) -> Option<String> {
-        self.session.borrow().as_ref().map(|s| {
-            let mut text = s.banner();
-            if s.set_aside.is_some() {
-                text.push_str(" · your draft comes back afterwards");
-            }
-            text
-        })
+        self.session.borrow().as_ref().map(JobEdit::banner)
     }
 
     /// "Edit in the editor" or "Load as a new job" of job `id`: reads its spec on the runtime first.
-    /// What happens to the draft at the next load (`editor.draft_on_load`, changed in the Settings window).
-    pub fn set_draft_on_load(&self, mode: DraftOnLoad) {
+    /// What happens to the current session at the next load (`editor.on_job_load`, changed in the Settings window).
+    pub fn set_on_job_load(&self, mode: OnJobLoad) {
         self.mode.set(mode);
     }
 
@@ -202,15 +192,14 @@ impl JobEditor {
         let editing = self.session.borrow().is_some();
         let has_work = self.editor.upgrade().is_some_and(|e| e.has_work());
         match self.mode.get() {
-            DraftOnLoad::Ask if has_work && !editing => self.ask(Asking { id, state, spec }),
-            DraftOnLoad::SetAside => self.begin(id, state, spec, true),
-            DraftOnLoad::Replace | DraftOnLoad::Ask => self.begin(id, state, spec, false),
+            OnJobLoad::Ask if has_work && !editing => self.ask(Asking { id, state, spec }),
+            OnJobLoad::Replace | OnJobLoad::Ask => self.begin(id, state, spec),
         }
     }
 
     fn ask(&self, asking: Asking) {
         let Some(window) = self.window.upgrade() else { return };
-        let sections = self.editor.upgrade().map_or(0, |e| e.sections_draft().list.len());
+        let sections = self.editor.upgrade().map_or(0, |e| e.section_count());
         let j = window.global::<JobLoad<'_>>();
         j.set_title(format!("Load job {} into the editor?", asking.id).into());
         j.set_text(
@@ -225,7 +214,7 @@ impl JobEditor {
         j.set_open(true);
     }
 
-    fn answered(&self, set_aside: Option<bool>) {
+    fn answered(&self, replace: bool) {
         if let Some(window) = self.window.upgrade() {
             window.global::<JobLoad<'_>>().set_open(false);
             window.invoke_focus_keys();
@@ -233,31 +222,26 @@ impl JobEditor {
         let Some(asking) = self.asking.borrow_mut().take() else {
             return;
         };
-        match set_aside {
-            Some(aside) => self.begin(asking.id, asking.state, asking.spec, aside),
-            None => Self::tell(Level::Info, "The job was not loaded; the editor keeps its draft."),
+        if replace {
+            self.begin(asking.id, asking.state, asking.spec);
+        } else {
+            Self::tell(Level::Info, "The job was not loaded; the editor keeps the open video.");
         }
     }
 
-    /// Holds a waiting job, sets the draft aside when asked to, and opens the job's source.
-    fn begin(&self, id: JobId, state: JobStateKind, spec: Box<JobSpec>, set_aside: bool) {
+    /// Holds a waiting job and opens the job's source.
+    fn begin(&self, id: JobId, state: JobStateKind, spec: Box<JobSpec>) {
         let Some(opener) = self.opener.upgrade() else { return };
-        // Another job was edited: it is left as it is, and a draft set aside for it stays aside.
-        let carried = self.session.borrow_mut().take().and_then(|previous| {
+        // Another job was edited: it is left as it is.
+        if let Some(previous) = self.session.borrow_mut().take() {
             self.release(&previous);
-            previous.set_aside
-        });
-        let draft = carried.or_else(|| if set_aside { self.capture() } else { None });
+        }
         if state == JobStateKind::Waiting && self.handle.send(QueueCommand::Hold { ids: vec![id] }).is_err() {
             tracing::warn!("[Queue] The queue engine has stopped; the job is not held");
         }
-        tracing::info!(
-            job = id.0,
-            set_aside = draft.is_some(),
-            "[Queue] Job loaded into the editor"
-        );
+        tracing::info!(job = id.0, "[Queue] Job loaded into the editor");
         let source = spec.source.clone();
-        *self.session.borrow_mut() = Some(JobEdit::new(id, state, spec, draft));
+        *self.session.borrow_mut() = Some(JobEdit::new(id, state, spec));
         self.loading.set(Some(id));
         let weak = BRIDGE.with(|b| b.borrow().clone());
         opener.open_with(
@@ -288,7 +272,7 @@ impl JobEditor {
                 Level::Error,
                 &format!("Job {id} cannot be edited: its source does not open."),
             );
-            self.end(true);
+            self.end();
             return;
         }
         if let Some(editor) = self.editor.upgrade() {
@@ -322,7 +306,7 @@ impl JobEditor {
 
     /// The export saved the edited job (updated, or as a new job): the editing ends.
     pub fn job_saved(&self) {
-        self.end(true);
+        self.end();
     }
 
     /// "Stop editing": the job stays as it is.
@@ -330,11 +314,10 @@ impl JobEditor {
         if let Some(id) = self.session.borrow().as_ref().map(|s| s.id) {
             Self::tell(Level::Info, &format!("Stopped editing job {id}; it stays as it was."));
         }
-        self.end(true);
+        self.end();
     }
 
-    /// The user opened another file: the editing ends there, and a draft set aside is dropped (its video would replace
-    /// the file just opened).
+    /// The user opened another file: the editing ends there.
     pub fn user_opened(&self, path: &Path) {
         let Some(edit) = self.session.borrow_mut().take() else {
             return;
@@ -342,24 +325,15 @@ impl JobEditor {
         self.release(&edit);
         self.mark(None);
         tracing::info!(job = edit.id.0, file = %path.display(), "[Queue] Editing ended: another file was opened");
-        if edit.set_aside.is_some() {
-            Self::tell(
-                Level::Warning,
-                &format!("Editing of job {} ended; the draft set aside was dropped.", edit.id),
-            );
-        }
     }
 
-    /// Ends the editing: the job waits again when RustCut held it, and a draft set aside comes back (`restore`).
-    fn end(&self, restore: bool) {
+    /// Ends the editing: the job waits again when RustCut held it.
+    fn end(&self) {
         let Some(edit) = self.session.borrow_mut().take() else {
             return;
         };
         self.release(&edit);
         self.mark(None);
-        if let (true, Some(draft)) = (restore, edit.set_aside) {
-            self.put_back(*draft);
-        }
     }
 
     fn release(&self, edit: &JobEdit) {
@@ -384,62 +358,6 @@ impl JobEditor {
         }
     }
 
-    /// The editor's draft as it is (nothing when no video is open).
-    fn capture(&self) -> Option<Box<Draft>> {
-        let player = self.player.upgrade()?;
-        let source = player.current_file()?;
-        Some(Box::new(Draft {
-            source,
-            position: player.position(),
-            paused: player.is_paused(),
-            sections: self.editor.upgrade()?.sections_draft(),
-            filters: self.filters.upgrade()?.chain(),
-            render: self.render.upgrade()?.selection(),
-            export: self.export.upgrade()?.draft_state(),
-            tags: self.tags.upgrade()?.draft(),
-        }))
-    }
-
-    /// Opens the draft's video where it was and puts its panels back.
-    fn put_back(&self, draft: Draft) {
-        let Some(opener) = self.opener.upgrade() else { return };
-        let start = StartAt {
-            position: draft.position,
-            paused: draft.paused,
-        };
-        let weak = BRIDGE.with(|b| b.borrow().clone());
-        opener.open_with(
-            draft.source.clone(),
-            Some(start),
-            Some(Box::new(move |opened| {
-                let Some(bridge) = weak.upgrade() else { return };
-                if !opened {
-                    Self::tell(
-                        Level::Warning,
-                        "The draft set aside could not be restored: its video does not open.",
-                    );
-                    return;
-                }
-                if let Some(editor) = bridge.editor.upgrade() {
-                    editor.put_sections(draft.sections);
-                }
-                if let Some(filters) = bridge.filters.upgrade() {
-                    filters.load_chain(draft.filters);
-                }
-                if let Some(render) = bridge.render.upgrade() {
-                    render.put_selection(draft.render);
-                }
-                if let Some(tags) = bridge.tags.upgrade() {
-                    tags.load_draft(draft.tags);
-                }
-                if let Some(export) = bridge.export.upgrade() {
-                    export.put_draft_state(draft.export);
-                }
-                tracing::info!("[Queue] The draft set aside is back in the editor");
-            })),
-        );
-    }
-
     /// Loading and editing say nothing by default (Q-N8 #33/#34: the job is highlighted instead); a job that cannot be
     /// loaded is an error toast.
     fn tell(level: Level, message: &str) {
@@ -458,19 +376,13 @@ fn connect(bridge: &Rc<JobEditor>, window: &MainWindow) {
     let weak = Rc::downgrade(bridge);
     j.on_replace(move || {
         if let Some(b) = weak.upgrade() {
-            b.answered(Some(false));
-        }
-    });
-    let weak = Rc::downgrade(bridge);
-    j.on_set_aside(move || {
-        if let Some(b) = weak.upgrade() {
-            b.answered(Some(true));
+            b.answered(true);
         }
     });
     let weak = Rc::downgrade(bridge);
     j.on_cancel(move || {
         if let Some(b) = weak.upgrade() {
-            b.answered(None);
+            b.answered(false);
         }
     });
 }

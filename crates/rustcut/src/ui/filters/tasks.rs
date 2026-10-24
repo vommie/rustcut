@@ -89,10 +89,8 @@ impl FiltersBridge {
             }
         };
         let Some((file, duration, frame, prefix)) = job else {
-            Self::tell(Notice::new(
-                Kind::NoVideo,
-                "Black borders can be detected once a video is open",
-            ));
+            // Without a video the card is closed (the state manager, M6.5e) and its key does nothing.
+            tracing::debug!("[Filters] No video: no black border detection");
             return;
         };
         self.state.borrow_mut().auto_crop_running = true;

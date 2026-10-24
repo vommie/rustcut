@@ -3,7 +3,8 @@
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Dock, DockCardView } from "dock_types.slint";
-import { Jump } from "jump.slint";
+import { Playback } from "player_types.slint";
+import { Jump, JumpFlash } from "jump.slint";
 import { BubbleLayer } from "bubble.slint";
 import { MediaInfoPanelView } from "media_info_panel.slint";
 import { SectionsCardBody } from "sections_card.slint";
@@ -18,6 +19,9 @@ import { RenderAudioBody, RenderExpertBody, RenderProbeBody, RenderProfileBody, 
 /// A collapsible card inside a panel (its state is part of the dock layout).
 component DockCard inherits Rectangle {
     in property <DockCardView> card;
+
+    // The state manager (M6.5e): without a video the card's body is dimmed and takes no input (its header still folds).
+    property <bool> gated: root.card.needs-video && !Playback.has-video;
 
     border-radius: 6px;
     background: Theme.surface-variant;
@@ -57,21 +61,54 @@ component DockCard inherits Rectangle {
             }
         }
 
-        if !root.card.collapsed && root.card.id == "sections": SectionsCardBody { }
+        if !root.card.collapsed && root.card.id == "sections": SectionsCardBody {
+            opacity: root.gated ? 0.4 : 1;
+        }
 
-        if !root.card.collapsed && root.card.id == "filters": FiltersCardBody { }
+        if !root.card.collapsed && root.card.id == "filters": FiltersCardBody {
+            opacity: root.gated ? 0.4 : 1;
+        }
 
-        if !root.card.collapsed && root.card.id == "render-profile": RenderProfileBody { }
+        if !root.card.collapsed && root.card.id == "render-profile": RenderProfileBody {
+            opacity: root.gated ? 0.4 : 1;
+        }
 
-        if !root.card.collapsed && root.card.id == "render-video": RenderVideoBody { }
+        if !root.card.collapsed && root.card.id == "render-video": RenderVideoBody {
+            opacity: root.gated ? 0.4 : 1;
+        }
 
-        if !root.card.collapsed && root.card.id == "render-audio": RenderAudioBody { }
+        if !root.card.collapsed && root.card.id == "render-audio": RenderAudioBody {
+            opacity: root.gated ? 0.4 : 1;
+        }
 
-        if !root.card.collapsed && root.card.id == "render-expert": RenderExpertBody { }
+        if !root.card.collapsed && root.card.id == "render-expert": RenderExpertBody {
+            opacity: root.gated ? 0.4 : 1;
+        }
 
-        if !root.card.collapsed && root.card.id == "render-probe": RenderProbeBody { }
+        if !root.card.collapsed && root.card.id == "render-probe": RenderProbeBody {
+            opacity: root.gated ? 0.4 : 1;
+        }
 
-        if !root.card.collapsed && root.card.id == "finalize": FinalizeCardBody { }
+        if !root.card.collapsed && root.card.id == "finalize": FinalizeCardBody {
+            opacity: root.gated ? 0.4 : 1;
+        }
+    }
+
+    // A message leads to the whole card ("export:sections", M6.5e).
+    JumpFlash {
+        key: "export:" + root.card.id;
+    }
+
+    // Over the dimmed body: no click, no hover, no wheel reaches its controls.
+    if root.gated && !root.card.collapsed: Rectangle {
+        y: header.height;
+        height: parent.height - header.height;
+
+        // No message (Q-N8 #21): the dimmed card says it by itself.
+        TouchArea {
+            mouse-cursor: MouseCursor.not-allowed;
+            scroll-event(event) => { reject }
+        }
     }
 }
 

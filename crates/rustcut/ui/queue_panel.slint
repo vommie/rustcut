@@ -12,6 +12,7 @@ import { SearchField } from "search_field.slint";
 import { Export } from "export_types.slint";
 import { Queue, QueueChipView } from "queue_types.slint";
 import { QueueColors, QueueHeader, QueueRow } from "queue_row.slint";
+import { Jump } from "jump.slint";
 
 component Chip inherits Rectangle {
     in property <QueueChipView> chip;
@@ -222,6 +223,14 @@ export component QueuePanel inherits Rectangle {
             flick := Flickable {
                 content-height: list.preferred-height;
 
+                // A jump mark reached a job of this list: it scrolls into view (`jump.slint`).
+                property <int> jump: Jump.target-serial;
+                changed jump => {
+                    if Jump.inside(self.absolute-position.x, self.width, self.absolute-position.y + self.content-y, self.content-height) {
+                        self.content-y = Jump.scroll-to(self.absolute-position.y + self.content-y, self.content-y, self.height, self.content-height);
+                    }
+                }
+
                 list := VerticalLayout {
                     alignment: start;
                     spacing: 2px;
@@ -310,7 +319,7 @@ export component QueuePanel inherits Rectangle {
                 clicked => { Queue.toggle-hold(); }
             }
 
-            IconButton {
+            edit-button := IconButton {
                 icon: IconId.job-edit;
                 enabled: Queue.can-edit;
                 tooltip: "Edit the job in the editor (it is held meanwhile)";

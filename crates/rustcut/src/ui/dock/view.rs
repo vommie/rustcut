@@ -30,6 +30,14 @@ const RENDER_CARDS: [(&str, &str); 5] = [
     ("render-probe", "Probe Render"),
 ];
 
+/// Cards whose every control needs an open video (M6.5e, user request Q-N8 #21: disabled instead of a message).
+pub const fn needs_video(card: &str) -> bool {
+    matches!(
+        card.as_bytes(),
+        b"finalize" | b"filters" | b"sections" | b"render-probe"
+    )
+}
+
 /// The tab being dragged, as far as the rows need it.
 #[derive(Debug, Clone, Copy)]
 pub struct DraggedTab {
@@ -155,6 +163,7 @@ pub fn export_cards(layout: &DockLayout) -> Vec<DockCardView> {
             title: SharedString::from(*title),
             collapsed: layout.collapsed_cards.contains(*id),
             note: SharedString::from(*note),
+            needs_video: needs_video(id),
         })
         .collect()
 }
@@ -167,6 +176,7 @@ pub fn render_cards(layout: &DockLayout) -> Vec<DockCardView> {
             title: SharedString::from(*title),
             collapsed: layout.collapsed_cards.contains(*id),
             note: SharedString::new(),
+            needs_video: needs_video(id),
         })
         .collect()
 }

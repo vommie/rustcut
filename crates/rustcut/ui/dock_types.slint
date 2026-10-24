@@ -53,6 +53,8 @@ export struct DockCardView {
     title: string,
     collapsed: bool,
     note: string,
+    // Usable only while a video is open (the state manager, M6.5e): dimmed and closed to input without one.
+    needs-video: bool,
 }
 
 /// Sizes shared with Rust (`src/ui/dock/plan.rs`, `metrics`), set by Rust at startup.

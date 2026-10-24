@@ -2,7 +2,7 @@
 
 use rustcut_core::edit::{Deinterlacer, DeshakeCrop, DeshakeInterpolation, DeshakeParams};
 use rustcut_core::naming::{NameContext, render_stem};
-use rustcut_core::settings::{AutoSection, DraftOnLoad, Settings};
+use rustcut_core::settings::{AutoSection, OnJobLoad, Settings};
 
 use super::Card;
 use crate::ui::settings::field::{Field, Kind, Value, WRONG_VALUE, always, choice, number, switch};
@@ -142,16 +142,12 @@ pub static EDITOR: &[Card] = &[
         title: "Editing a queued job",
         description: "",
         fields: &[choice!(
-            "editor.draft_on_load",
+            "editor.on_job_load",
             "The current video",
             "What happens to the open video, its sections, filters and tags when a queued job is loaded into the \
-             editor.",
-            editor.draft_on_load,
-            [
-                (DraftOnLoad::Replace, "Replace it"),
-                (DraftOnLoad::Ask, "Ask first"),
-                (DraftOnLoad::SetAside, "Set it aside")
-            ]
+             editor: replaced at once, or a question first while it has sections or marks.",
+            editor.on_job_load,
+            [(OnJobLoad::Replace, "Replace it"), (OnJobLoad::Ask, "Ask first")]
         )],
     },
 ];

@@ -245,6 +245,30 @@ impl QueueBridge {
         self.refresh();
     }
 
+    /// A jump mark leads to job `id` (a failed job's toast): it becomes the only selected and the current job; a
+    /// filter that hides it is cleared so its row can show.
+    pub fn show_job(&self, id: JobId) {
+        {
+            let mut ui = self.ui.borrow_mut();
+            ui.selection.click(id);
+        }
+        let hidden = {
+            let ui = self.ui.borrow();
+            ui.filter.is_active()
+                && self
+                    .shared
+                    .lock()
+                    .view
+                    .row(id)
+                    .is_some_and(|row| !ui.filter.matches(row))
+        };
+        if hidden {
+            tracing::info!(job = id.0, "[Queue] The filter hid the job a message leads to; cleared");
+            self.ui.borrow_mut().filter.clear();
+        }
+        self.refresh();
+    }
+
     /// The job loaded into the editor (its row is marked), or none.
     pub fn set_editing(&self, id: Option<JobId>) {
         self.editing.set(id);

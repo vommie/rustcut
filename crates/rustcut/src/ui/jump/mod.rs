@@ -12,6 +12,7 @@ use slint::ComponentHandle as _;
 pub use target::JumpTarget;
 
 use crate::ui::dock::{DockBridge, PanelId};
+use crate::ui::queue::QueueBridge;
 use crate::ui::settings::SettingsBridge;
 use crate::{Jump, MainWindow};
 
@@ -37,18 +38,31 @@ pub struct JumpBridge {
     window: slint::Weak<MainWindow>,
     dock: Weak<DockBridge>,
     settings: Weak<SettingsBridge>,
+    queue: Weak<QueueBridge>,
 }
 
 impl JumpBridge {
     /// Makes [`go`] work; the app owns the only strong reference.
-    pub fn install(window: &MainWindow, dock: &Rc<DockBridge>, settings: &Rc<SettingsBridge>) -> Rc<Self> {
+    pub fn install(
+        window: &MainWindow,
+        dock: &Rc<DockBridge>,
+        settings: &Rc<SettingsBridge>,
+        queue: &Rc<QueueBridge>,
+    ) -> Rc<Self> {
         let bridge = Rc::new(Self {
             window: window.as_weak(),
             dock: Rc::downgrade(dock),
             settings: Rc::downgrade(settings),
+            queue: Rc::downgrade(queue),
         });
         BRIDGE.with(|b| *b.borrow_mut() = Rc::downgrade(&bridge));
         bridge
+    }
+
+    fn flash(&self, key: &str) {
+        if let Some(window) = self.window.upgrade() {
+            flash(&window.global::<Jump<'_>>(), key);
+        }
     }
 
     fn go(&self, target: JumpTarget) {
@@ -59,14 +73,27 @@ impl JumpBridge {
                 if let Some(dock) = self.dock.upgrade() {
                     dock.show_card(PanelId::RenderSettings, row.card());
                 }
-                if let Some(window) = self.window.upgrade() {
-                    flash(&window.global::<Jump<'_>>(), &key);
-                }
+                self.flash(&key);
             }
             JumpTarget::Settings { page, .. } => {
                 if let Some(settings) = self.settings.upgrade() {
                     settings.show_option(page, &key);
                 }
+            }
+            JumpTarget::QueueJob(id) => {
+                if let Some(dock) = self.dock.upgrade() {
+                    dock.reveal(PanelId::Queue);
+                }
+                if let Some(queue) = self.queue.upgrade() {
+                    queue.show_job(id);
+                }
+                self.flash(&key);
+            }
+            JumpTarget::Sections | JumpTarget::SectionRow(_) => {
+                if let Some(dock) = self.dock.upgrade() {
+                    dock.show_card(PanelId::Export, "sections");
+                }
+                self.flash(&key);
             }
         }
     }
