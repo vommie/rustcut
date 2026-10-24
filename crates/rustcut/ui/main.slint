@@ -138,6 +138,7 @@ export component MainWindow inherits Window {
 
             MenuItem {
                 title: "Open...";
+                enabled: !root.modal-open;
                 shortcut: Shortcuts.open;
                 activated => { root.open-file(); }
             }
@@ -145,7 +146,7 @@ export component MainWindow inherits Window {
             MenuItem {
                 title: "Save Job";
                 shortcut: Shortcuts.save;
-                enabled: Export.can-save && !Export.dialog-open && !Export.meta-open;
+                enabled: !root.modal-open && (Export.can-save && !Export.dialog-open && !Export.meta-open);
                 activated => { Export.save(); }
             }
 
@@ -153,6 +154,7 @@ export component MainWindow inherits Window {
 
             MenuItem {
                 title: "Settings...";
+                enabled: !root.modal-open;
                 shortcut: Shortcuts.settings;
                 activated => { root.open-settings(); }
             }
@@ -172,21 +174,21 @@ export component MainWindow inherits Window {
             MenuItem {
                 title: Playback.paused ? "Play" : "Pause";
                 shortcut: Shortcuts.toggle-pause;
-                enabled: Playback.has-file;
+                enabled: !root.modal-open && (Playback.has-file);
                 activated => { Playback.toggle-pause(); }
             }
 
             MenuItem {
                 title: "Previous Frame";
                 shortcut: Shortcuts.frame-back;
-                enabled: Playback.has-video;
+                enabled: !root.modal-open && (Playback.has-video);
                 activated => { Playback.frame-step(true); }
             }
 
             MenuItem {
                 title: "Next Frame";
                 shortcut: Shortcuts.frame-forward;
-                enabled: Playback.has-video;
+                enabled: !root.modal-open && (Playback.has-video);
                 activated => { Playback.frame-step(false); }
             }
 
@@ -194,6 +196,7 @@ export component MainWindow inherits Window {
 
             MenuItem {
                 title: Playback.muted ? "Unmute" : "Mute";
+                enabled: !root.modal-open;
                 shortcut: Shortcuts.toggle-mute;
                 activated => { Playback.toggle-mute(); }
             }
@@ -201,7 +204,7 @@ export component MainWindow inherits Window {
             MenuItem {
                 title: "Reload";
                 shortcut: Shortcuts.reload;
-                enabled: Playback.has-file;
+                enabled: !root.modal-open && (Playback.has-file);
                 activated => { Playback.reload(); }
             }
         }
@@ -212,21 +215,21 @@ export component MainWindow inherits Window {
             MenuItem {
                 title: "Set Start";
                 shortcut: Shortcuts.set-start;
-                enabled: Playback.has-video;
+                enabled: !root.modal-open && (Playback.has-video);
                 activated => { Shortcuts.run("set_start"); }
             }
 
             MenuItem {
                 title: "Set End";
                 shortcut: Shortcuts.set-end;
-                enabled: Playback.has-video;
+                enabled: !root.modal-open && (Playback.has-video);
                 activated => { Shortcuts.run("set_end"); }
             }
 
             MenuItem {
                 title: "Add Section";
                 shortcut: Shortcuts.add-section;
-                enabled: Sections.can-add;
+                enabled: !root.modal-open && (Sections.can-add);
                 activated => { Shortcuts.run("add_section"); }
             }
 
@@ -235,28 +238,28 @@ export component MainWindow inherits Window {
             MenuItem {
                 title: "Go to Start";
                 shortcut: Shortcuts.go-to-start;
-                enabled: Playback.has-video && Sections.mark-start != "";
+                enabled: !root.modal-open && (Playback.has-video && Sections.mark-start != "");
                 activated => { Shortcuts.run("go_to_start"); }
             }
 
             MenuItem {
                 title: "Go to End";
                 shortcut: Shortcuts.go-to-end;
-                enabled: Playback.has-video && Sections.mark-end != "";
+                enabled: !root.modal-open && (Playback.has-video && Sections.mark-end != "");
                 activated => { Shortcuts.run("go_to_end"); }
             }
 
             MenuItem {
                 title: "Previous Cut Point";
                 shortcut: Shortcuts.previous-cut;
-                enabled: Playback.has-video;
+                enabled: !root.modal-open && (Playback.has-video);
                 activated => { Shortcuts.run("previous_cut"); }
             }
 
             MenuItem {
                 title: "Next Cut Point";
                 shortcut: Shortcuts.next-cut;
-                enabled: Playback.has-video;
+                enabled: !root.modal-open && (Playback.has-video);
                 activated => { Shortcuts.run("next_cut"); }
             }
         }
@@ -266,12 +269,14 @@ export component MainWindow inherits Window {
 
             MenuItem {
                 title: Filters.preview ? "Show Video Without Filters" : "Show Filters in the Player";
+                enabled: !root.modal-open;
                 shortcut: Shortcuts.filter-preview;
                 activated => { Shortcuts.run("toggle_filter_preview"); }
             }
 
             MenuItem {
                 title: Filters.keep ? "Do Not Keep Filters" : "Keep Filters for the Next Video";
+                enabled: !root.modal-open;
                 shortcut: Shortcuts.filter-keep;
                 activated => { Shortcuts.run("toggle_keep_filters"); }
             }
@@ -281,14 +286,14 @@ export component MainWindow inherits Window {
             MenuItem {
                 title: Filters.crop-editing ? "Finish Crop Editing" : "Edit Crop on the Video";
                 shortcut: Shortcuts.crop-edit;
-                enabled: Filters.can-edit-crop;
+                enabled: !root.modal-open && (Filters.can-edit-crop);
                 activated => { Shortcuts.run("crop_edit"); }
             }
 
             MenuItem {
                 title: "Detect Black Borders";
                 shortcut: Shortcuts.auto-crop;
-                enabled: Filters.has-media && !Filters.auto-crop-running;
+                enabled: !root.modal-open && (Filters.has-media && !Filters.auto-crop-running);
                 activated => { Shortcuts.run("auto_crop"); }
             }
 
@@ -296,24 +301,28 @@ export component MainWindow inherits Window {
 
             MenuItem {
                 title: "Rotate Left";
+                enabled: !root.modal-open;
                 shortcut: Shortcuts.rotate-left;
                 activated => { Shortcuts.run("rotate_left"); }
             }
 
             MenuItem {
                 title: "Rotate Right";
+                enabled: !root.modal-open;
                 shortcut: Shortcuts.rotate-right;
                 activated => { Shortcuts.run("rotate_right"); }
             }
 
             MenuItem {
                 title: "Mirror Left and Right";
+                enabled: !root.modal-open;
                 shortcut: Shortcuts.mirror-horizontal;
                 activated => { Shortcuts.run("mirror_horizontal"); }
             }
 
             MenuItem {
                 title: "Mirror Top and Bottom";
+                enabled: !root.modal-open;
                 shortcut: Shortcuts.mirror-vertical;
                 activated => { Shortcuts.run("mirror_vertical"); }
             }
@@ -322,6 +331,7 @@ export component MainWindow inherits Window {
 
             MenuItem {
                 title: "Reset Filters";
+                enabled: !root.modal-open;
                 shortcut: Shortcuts.filter-reset;
                 activated => { Shortcuts.run("reset_filters"); }
             }
@@ -331,13 +341,13 @@ export component MainWindow inherits Window {
             MenuItem {
                 title: "Probe Render";
                 shortcut: Shortcuts.probe-render;
-                enabled: (Playback.has-video || Probe.playing) && !Probe.running;
+                enabled: !root.modal-open && ((Playback.has-video || Probe.playing) && !Probe.running);
                 activated => { Shortcuts.run("probe_render"); }
             }
 
             MenuItem {
                 title: "Back to the Source";
-                enabled: Probe.playing;
+                enabled: !root.modal-open && (Probe.playing);
                 activated => { Probe.back(); }
             }
         }
@@ -347,13 +357,13 @@ export component MainWindow inherits Window {
 
             MenuItem {
                 title: Dock.left-collapsed ? "Expand Left Sidebar" : "Collapse Left Sidebar";
-                enabled: Dock.left-shown;
+                enabled: !root.modal-open && (Dock.left-shown);
                 activated => { Dock.toggle-sidebar(0); }
             }
 
             MenuItem {
                 title: Dock.right-collapsed ? "Expand Right Sidebar" : "Collapse Right Sidebar";
-                enabled: Dock.right-shown;
+                enabled: !root.modal-open && (Dock.right-shown);
                 activated => { Dock.toggle-sidebar(1); }
             }
 
@@ -362,21 +372,21 @@ export component MainWindow inherits Window {
             MenuItem {
                 title: "Zoom Timeline In";
                 shortcut: Shortcuts.zoom-in;
-                enabled: Timeline.active;
+                enabled: !root.modal-open && (Timeline.active);
                 activated => { Shortcuts.run("zoom_in"); }
             }
 
             MenuItem {
                 title: "Zoom Timeline Out";
                 shortcut: Shortcuts.zoom-out;
-                enabled: Timeline.active && Timeline.zoomed;
+                enabled: !root.modal-open && (Timeline.active && Timeline.zoomed);
                 activated => { Shortcuts.run("zoom_out"); }
             }
 
             MenuItem {
                 title: "Fit Timeline";
                 shortcut: Shortcuts.zoom-fit;
-                enabled: Timeline.active && Timeline.zoomed;
+                enabled: !root.modal-open && (Timeline.active && Timeline.zoomed);
                 activated => { Shortcuts.run("zoom_fit"); }
             }
 
@@ -384,6 +394,7 @@ export component MainWindow inherits Window {
 
             MenuItem {
                 title: "Reset Layout";
+                enabled: !root.modal-open;
                 activated => { Dock.reset-layout(); }
             }
         }
@@ -393,16 +404,19 @@ export component MainWindow inherits Window {
 
             MenuItem {
                 title: "Open Settings Folder";
+                enabled: !root.modal-open;
                 activated => { root.open-folder("config"); }
             }
 
             MenuItem {
                 title: "Open Data Folder";
+                enabled: !root.modal-open;
                 activated => { root.open-folder("data"); }
             }
 
             MenuItem {
                 title: "Open Log Folder";
+                enabled: !root.modal-open;
                 activated => { root.open-folder("logs"); }
             }
 
@@ -410,6 +424,7 @@ export component MainWindow inherits Window {
 
             MenuItem {
                 title: "About RustCut";
+                enabled: !root.modal-open;
                 activated => { root.open-settings-page("about"); }
             }
         }

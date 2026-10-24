@@ -519,7 +519,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   renders again and replaces its own output once the new render is verified (a failed or canceled job still never
   overwrites a file).
 - The keys of the menu bar (I, O, Shift+I, the frame steps, ...) acted on the editor behind an open dialog, e.g. the
-  question about missing tags (0.0.31).
+  question about missing tags (0.0.31). Since 0.0.32 the menu entries are also off while a dialog is open (Quit
+  stays).
+- The time under the video no longer shows a moment past the video's length at its end (e.g. 0:00:10.007 /
+  0:00:10.000 on an MPEG program stream) (0.0.32).
 - A file that does not play no longer shows the target name bubble over the dimmed Job Finalization card, nor
   "checking…" next to Deinterlace (0.0.31).
 - A render no longer goes on after RustCut crashed (0.0.30): when RustCut was killed or crashed while a job rendered,
