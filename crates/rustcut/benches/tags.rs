@@ -14,7 +14,18 @@ use rustcut_core::rustview::TagItem;
 
 /// `count` tags: 50 roots, each with children, grandchildren and great-grandchildren (four levels like a real library).
 fn tags(count: u32) -> Vec<TagItem> {
-    let words = ["Nature", "Travel", "People", "Family", "Mountains", "Water", "City", "Night", "Winter", "Summer"];
+    let words = [
+        "Nature",
+        "Travel",
+        "People",
+        "Family",
+        "Mountains",
+        "Water",
+        "City",
+        "Night",
+        "Winter",
+        "Summer",
+    ];
     (1..=count)
         .map(|id| {
             let parent_id = match id {
@@ -33,7 +44,12 @@ fn tags(count: u32) -> Vec<TagItem> {
         .collect()
 }
 
-fn flatten(nodes: &[rustcut::ui::tags::TagTreeNode], expanded: &HashSet<u32>, filter: &str, regex: Option<&Regex>) -> Vec<TagNodeView> {
+fn flatten(
+    nodes: &[rustcut::ui::tags::TagTreeNode],
+    expanded: &HashSet<u32>,
+    filter: &str,
+    regex: Option<&Regex>,
+) -> Vec<TagNodeView> {
     let empty = HashSet::new();
     let ctx = TagFlattenContext {
         expanded_set: expanded,
@@ -54,14 +70,26 @@ fn tag_tree(c: &mut Criterion) {
     let nodes = TagTreeBuilder::build_hierarchy(&all);
     let every: HashSet<u32> = all.iter().map(|t| t.id).collect();
     let none = HashSet::new();
-    let regex = Regex::new("(?i)^(water|night) 4").unwrap();
+    // The panel passes the typed pattern as the text and its compiled form (filtering needs a text).
+    let pattern = "(?i)^(water|night) 4";
+    let regex = Regex::new(pattern).unwrap();
 
     let mut group = c.benchmark_group("tag_tree_5000");
-    group.bench_function("build_hierarchy", |b| b.iter(|| TagTreeBuilder::build_hierarchy(black_box(&all))));
-    group.bench_function("flatten_collapsed", |b| b.iter(|| flatten(black_box(&nodes), &none, "", None)));
-    group.bench_function("flatten_expanded", |b| b.iter(|| flatten(black_box(&nodes), &every, "", None)));
-    group.bench_function("flatten_filter", |b| b.iter(|| flatten(black_box(&nodes), &none, "water 4", None)));
-    group.bench_function("flatten_regex", |b| b.iter(|| flatten(black_box(&nodes), &none, "", Some(&regex))));
+    group.bench_function("build_hierarchy", |b| {
+        b.iter(|| TagTreeBuilder::build_hierarchy(black_box(&all)));
+    });
+    group.bench_function("flatten_collapsed", |b| {
+        b.iter(|| flatten(black_box(&nodes), &none, "", None));
+    });
+    group.bench_function("flatten_expanded", |b| {
+        b.iter(|| flatten(black_box(&nodes), &every, "", None));
+    });
+    group.bench_function("flatten_filter", |b| {
+        b.iter(|| flatten(black_box(&nodes), &none, "water 4", None));
+    });
+    group.bench_function("flatten_regex", |b| {
+        b.iter(|| flatten(black_box(&nodes), &none, pattern, Some(&regex)));
+    });
     let rows = flatten(&nodes, &every, "", None);
     for height in [200.0_f32, 450.0, 900.0] {
         group.bench_with_input(BenchmarkId::new("columns", height), &height, |b, h| {

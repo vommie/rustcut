@@ -7,7 +7,7 @@ use std::hint::black_box;
 use std::path::PathBuf;
 
 use criterion::{BatchSize, Criterion, Throughput, criterion_group, criterion_main};
-use rustcut_core::edit::{Section, SectionList};
+use rustcut_core::edit::{FilterChain, Section, SectionList};
 use rustcut_core::job::{JobId, JobMetadata, JobSpec, JobState, TargetSpec};
 use rustcut_core::queue::{Model, summarize};
 use rustcut_core::render::builtin_profiles;
@@ -25,7 +25,7 @@ fn spec(n: usize) -> JobSpec {
         source: PathBuf::from(format!("/media/videos/source {}.mkv", n % 40)),
         source_info: None,
         sections,
-        filters: Default::default(),
+        filters: FilterChain::default(),
         profile: builtin_profiles().into_iter().next().unwrap(),
         target: TargetSpec {
             folder: PathBuf::from("/media/out"),
@@ -76,7 +76,9 @@ fn queue(c: &mut Criterion) {
                 (jobs, model.processing())
             });
         });
-        group.bench_function(format!("schedule_{count}_jobs"), |b| b.iter(|| black_box(&model).schedule()));
+        group.bench_function(format!("schedule_{count}_jobs"), |b| {
+            b.iter(|| black_box(&model).schedule());
+        });
     }
     group.finish();
 }
@@ -112,14 +114,28 @@ fn store(c: &mut Criterion) {
     let dir = tempfile::tempdir().unwrap();
     let mut filled = Store::open(&dir.path().join("queue.sqlite"), &dir.path().join("backups")).unwrap();
     insert_jobs(&mut filled, 1_000);
-    group.bench_function("read_1000_jobs_file_wal", |b| b.iter(|| black_box(&filled).jobs().unwrap()));
+    group.bench_function("read_1000_jobs_file_wal", |b| {
+        b.iter(|| black_box(&filled).jobs().unwrap());
+    });
     let lines: Vec<String> = (0..1_000)
-        .map(|i| format!("frame={i} fps=24.9 q=28.0 size={}kB time=00:00:{:02}.00 bitrate=1834.2kbits/s", i * 9, i % 60))
+        .map(|i| {
+            format!(
+                "frame={i} fps=24.9 q=28.0 size={}kB time=00:00:{:02}.00 bitrate=1834.2kbits/s",
+                i * 9,
+                i % 60
+            )
+        })
         .collect();
     group.bench_function("append_1000_log_lines_file_wal", |b| {
-        b.iter(|| filled.append_log(JobId(1), LogStream::Ffmpeg, black_box(&lines)).unwrap());
+        b.iter(|| {
+            filled
+                .append_log(JobId(1), LogStream::Ffmpeg, black_box(&lines))
+                .unwrap();
+        });
     });
-    group.bench_function("read_2000_log_lines_file_wal", |b| b.iter(|| black_box(&filled).log(JobId(1), 2_000).unwrap()));
+    group.bench_function("read_2000_log_lines_file_wal", |b| {
+        b.iter(|| black_box(&filled).log(JobId(1), 2_000).unwrap());
+    });
     group.finish();
 }
 

@@ -50,11 +50,17 @@ fn full_chain() -> FilterChain {
     chain
 }
 
+/// `sections` sections spread over the first 7 s of the 8 s fixture (sections past the end would be dropped).
 fn spec(sections: usize) -> JobSpec {
+    let step = 7_000 / i64::try_from(sections).unwrap();
     let list: SectionList = (0..sections)
         .map(|i| {
-            let start = i64::try_from(i).unwrap() * 3_000;
-            Section::new(Timestamp::from_millis(start), Timestamp::from_millis(start + 2_000)).unwrap()
+            let start = i64::try_from(i).unwrap() * step;
+            Section::new(
+                Timestamp::from_millis(start),
+                Timestamp::from_millis(start + step * 2 / 3),
+            )
+            .unwrap()
         })
         .collect::<Vec<_>>()
         .into();
@@ -89,7 +95,9 @@ fn lavfi(c: &mut Criterion) {
             })
         });
     });
-    group.bench_function("preview_every_filter", |b| b.iter(|| black_box(&chain).preview_filter(90)));
+    group.bench_function("preview_every_filter", |b| {
+        b.iter(|| black_box(&chain).preview_filter(90));
+    });
     group.finish();
 }
 
@@ -103,6 +111,14 @@ fn command(c: &mut Criterion) {
     let mut group = c.benchmark_group("command_plan");
     for sections in [1, 10, 100] {
         let job = spec(sections);
+        let planned = plan(PlanInput {
+            job: JobId(1),
+            spec: &job,
+            source: &source,
+            dirs: &dirs,
+            hardware: &hardware,
+        });
+        assert!(planned.is_ok(), "{sections} sections: {planned:?}");
         group.bench_function(format!("{sections}_sections_every_filter"), |b| {
             b.iter(|| {
                 plan(PlanInput {
@@ -162,7 +178,9 @@ fn progress(c: &mut Criterion) {
 
 fn probe_json(c: &mut Criterion) {
     let mut group = c.benchmark_group("ffprobe_decode");
-    group.bench_function("multi_audio_2tracks", |b| b.iter(|| decode(black_box(MULTI_AUDIO_JSON))));
+    group.bench_function("multi_audio_2tracks", |b| {
+        b.iter(|| decode(black_box(MULTI_AUDIO_JSON)));
+    });
     group.bench_function("hd_h264_1080p", |b| b.iter(|| decode(black_box(HD_JSON))));
     group.finish();
 }

@@ -38,7 +38,11 @@ fn md5(c: &mut Criterion) {
                     .await
                     .unwrap()
                     .unwrap();
-                service.handle.request(|reply| HashCommand::Shutdown { reply }).await.unwrap();
+                service
+                    .handle
+                    .request(|reply| HashCommand::Shutdown { reply })
+                    .await
+                    .unwrap();
                 task.await.unwrap();
                 md5
             })
