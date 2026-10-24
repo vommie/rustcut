@@ -1,0 +1,126 @@
+// The notice system's data (M6.5, user decisions Q-N8 and Q-N10), set from src/ui/notices/: the toasts in the order
+// they are drawn, the banner over the video, the bell with the last messages. Levels: 0 info, 1 success, 2 warning,
+// 3 error.
+
+import { Theme } from "styles.slint";
+import { IconId } from "icons.slint";
+
+export struct ToastView {
+    id: int,
+    level: int,
+    title: string,
+    detail: string,
+    // "15:42".
+    time: string,
+    // How often it came ("×3" from 2 on).
+    count: int,
+    // 0..1 for a running task, -1 none.
+    progress: float,
+    // The line under it: the share of its time left when it was published (-1 = it stays), whether it runs down now
+    // (not while the pointer rests on it) and in how many milliseconds; `timer` changes when its time starts again.
+    remaining: float,
+    running: bool,
+    left-ms: int,
+    timer: int,
+    // Up to three buttons ("" = none).
+    action-1: string,
+    action-2: string,
+    action-3: string,
+    // A click on it leads to the cause.
+    clickable: bool,
+    // "Don't show again" is offered (hints and confirmations).
+    mutable: bool,
+    // Fading out.
+    leaving: bool,
+    // The deck: 0 in front, 1.. behind it.
+    depth: int,
+}
+
+export struct BannerView {
+    level: int,
+    title: string,
+    detail: string,
+    action-1: string,
+    action-2: string,
+    action-3: string,
+    clickable: bool,
+    progress: float,
+    // "since 15:40".
+    since: string,
+}
+
+export struct HistoryView {
+    time: string,
+    level: int,
+    title: string,
+    detail: string,
+}
+
+export global NoticeLook {
+    // The color and the symbol of a level.
+    public pure function color(level: int) -> color {
+        return level == 3 ? Theme.status-corrupt : level == 2 ? Theme.accent : level == 1 ? Theme.status-ok
+            : Theme.primary;
+    }
+    public pure function icon(level: int) -> IconId {
+        return level == 3 ? IconId.status-error : level == 2 ? IconId.status-warning : level == 1 ? IconId.status-ok
+            : IconId.notice-info;
+    }
+}
+
+export global Notices {
+    // ---- Toasts (settings: position 0 video top right, 1 video top center, 2 video bottom right, 3 video bottom
+    // center, 4 window top right, 5 window bottom right; stacking 0 some, 1 all, 2 pager, 3 deck, 4 summary;
+    // animation 0 slide, 1 fade, 2 drop, 3 none).
+    in property <[ToastView]> toasts;
+    in property <int> position: 4;
+    in property <int> stacking;
+    in property <int> animation;
+    in property <int> max-visible: 3;
+    // "+2 more" (some, deck).
+    in property <int> more;
+    // "+N more" opened, the deck fanned out, the summary opened.
+    in property <bool> expanded;
+    // The pager: the shown card and how many (count 0 = no pager).
+    in property <int> page;
+    in property <int> pages;
+    // The summary card ("5 messages: 1 error, 2 warnings"); level = the worst.
+    in property <bool> summary;
+    in property <string> summary-text;
+    in property <int> summary-level;
+
+    callback toast-clicked(int);
+    callback toast-closed(int);
+    callback toast-action(int, int);
+    callback toast-hover(int, bool);
+    // A right click: the context menu at a window position.
+    callback toast-menu(int, length, length);
+    callback toast-mute(int);
+    callback set-expanded(bool);
+    callback page-toasts(int);
+
+    // ---- The banner over the video (one at a time; animation 0 curtain, 1 fade, 2 none).
+    in property <bool> has-banner;
+    in property <BannerView> banner;
+    in property <int> banner-index;
+    in property <int> banner-count;
+    in property <int> banner-animation;
+    // Changes when a new error banner should light up once.
+    in property <int> banner-pulse;
+    callback banner-closed();
+    callback banner-clicked();
+    callback banner-action(int);
+    callback page-banners(int);
+
+    // ---- The bell in the menu bar.
+    in property <bool> bell;
+    // The number on it (0 = none) and the color of the worst unread one.
+    in property <int> unread;
+    in property <int> unread-level;
+    in property <[HistoryView]> recent;
+    // All messages of the session.
+    in property <int> total;
+    in-out property <bool> bell-open;
+    callback bell-toggled();
+    callback show-all();
+}

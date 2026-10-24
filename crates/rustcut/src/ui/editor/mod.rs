@@ -24,11 +24,11 @@ use crate::ui::export::ExportBridge;
 use crate::ui::filters::{FilterKeys, FiltersBridge};
 use crate::ui::keymap::{Action, Keymap};
 use crate::ui::media_info::MediaInfoBridge;
+use crate::ui::notices::{self, Kind, Notice};
 use crate::ui::player::{self, PlaybackView, PlayerBridge};
 use crate::ui::probe::ProbeBridge;
 use crate::ui::queue::QueueBridge;
 use crate::ui::sections::{Bound, Edge, SectionsDraft, SectionsState};
-use crate::ui::status::{self, Level};
 use crate::ui::tags::TagsBridge;
 use crate::ui::timeline::{Viewport, view};
 use crate::util::model::sync;
@@ -257,7 +257,9 @@ impl Editor {
     /// Whether an edit must wait because the probe render plays (says so in the status line).
     fn probe_blocks(&self) -> bool {
         if self.probe_playing.get() {
-            self.status(Level::Info, "The probe render is playing: Esc returns to the source.");
+            notices::post(
+                Notice::new(Kind::ProbeLocked, "The probe render is playing").detail("Esc returns to the source."),
+            );
         }
         self.probe_playing.get()
     }
@@ -337,17 +339,17 @@ impl Editor {
             .find(|r| PLAUSIBLE_FPS.contains(&r.as_f64()))
     }
 
-    fn status(&self, level: Level, message: &str) {
-        self.warned.set(level == Level::Warning);
-        if let Some(window) = self.window.upgrade() {
-            status::show(&window, level, message);
-        }
+    /// A refused edit says why; the next refusal replaces it (one message, not a pile).
+    fn refused(&self, why: String) {
+        tracing::info!(why, "[Editor] Refused");
+        self.warned.set(true);
+        notices::post(Notice::new(Kind::SectionRefused, why).key(Kind::SectionRefused.id()));
     }
 
     /// An edit was accepted: a warning about an earlier refused one is no longer true.
     fn edit_accepted(&self) {
-        if self.warned.get() {
-            self.status(Level::Info, "Ready");
+        if self.warned.replace(false) {
+            notices::clear_kind(Kind::SectionRefused);
         }
     }
 

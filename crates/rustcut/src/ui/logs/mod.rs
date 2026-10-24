@@ -1,9 +1,10 @@
-//! The Logs panel's bridge (M4.1, user decision Q-Q1; M4.3): one of three logs, filtered by the search and "errors
-//! only" (`lines.rs`, kept in `UiState.logs` with the chosen log) and copied to the clipboard on its own thread:
+//! The Logs panel's bridge (M4.1, user decision Q-Q1; M4.3; M6.5): one of four logs, filtered by the search and
+//! "errors only" (`lines.rs`, kept in `UiState.logs` with the chosen log) and copied to the clipboard on its own thread:
 //! - the stored log of the queue's current job, read on the runtime (`QueueCommand::Log`) when the job changes or a
 //!   render of it ends (the log of a running render is stored when the render ends);
 //! - RustCut's own log of this run (`app::log_book`, the lines the log file gets), shown again while it grows;
-//! - its RustView part (the link and the Tag & Rate panel).
+//! - its RustView part (the link and the Tag & Rate panel);
+//! - the messages of this session (`ui::notices`' history; the bell's "Show all" opens it).
 
 mod lines;
 
@@ -16,12 +17,12 @@ use rustcut_core::settings::{LogPanelState, LogSource};
 use rustcut_core::store::LogLine;
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 
-pub use lines::{LineLevel, ShownLine, book_shown, level, shown, summary, to_text};
+pub use lines::{LineLevel, ShownLine, book_shown, level, messages_shown, shown, summary, to_text};
 
 use crate::app::log_book::LogBook;
 use crate::ui::dispatcher::UiDispatcher;
+use crate::ui::notices::{self, Kind, Notice};
 use crate::ui::queue::{QueueBridge, file_label};
-use crate::ui::status::{self, Level};
 use crate::util::clipboard;
 use crate::util::model::sync;
 use crate::{LogLineView, Logs, MainWindow};
@@ -69,6 +70,8 @@ pub struct LogsBridge {
     book: LogBook,
     book_shown: Cell<u64>,
     book_timer: slint::Timer,
+    /// The number of the newest message as last shown (`LogSource::Messages`).
+    messages_shown: Cell<u64>,
 }
 
 impl LogsBridge {
@@ -94,6 +97,7 @@ impl LogsBridge {
             book,
             book_shown: Cell::new(0),
             book_timer: slint::Timer::default(),
+            messages_shown: Cell::new(0),
         });
         BRIDGE.with(|b| *b.borrow_mut() = Rc::downgrade(&bridge));
         let l = window.global::<Logs<'_>>();
@@ -107,6 +111,16 @@ impl LogsBridge {
 
     fn source(&self) -> LogSource {
         self.state.borrow().source
+    }
+
+    /// A message's "Show log": RustCut's own log of this run.
+    pub fn show_app_log(self: &Rc<Self>) {
+        self.select_source(LogSource::App);
+    }
+
+    /// The bell's "Show all": the messages of this session.
+    pub fn show_messages(self: &Rc<Self>) {
+        self.select_source(LogSource::Messages);
     }
 
     /// Shows `source` from now on.
@@ -127,10 +141,15 @@ impl LogsBridge {
         } else {
             let weak = Rc::downgrade(self);
             self.book_timer.start(slint::TimerMode::Repeated, BOOK_POLL, move || {
-                if let Some(b) = weak.upgrade()
-                    && b.book.latest() != b.book_shown.get()
-                {
-                    b.publish();
+                if let Some(b) = weak.upgrade() {
+                    let grown = if b.source() == LogSource::Messages {
+                        notices::history_seq() != b.messages_shown.get()
+                    } else {
+                        b.book.latest() != b.book_shown.get()
+                    };
+                    if grown {
+                        b.publish();
+                    }
                 }
             });
         }
@@ -140,6 +159,7 @@ impl LogsBridge {
                 LogSource::Job => 0,
                 LogSource::App => 1,
                 LogSource::RustView => 2,
+                LogSource::Messages => 3,
             });
             match source {
                 LogSource::Job => {}
@@ -151,6 +171,11 @@ impl LogsBridge {
                 LogSource::RustView => {
                     l.set_has_job(true);
                     l.set_title("RustView link · this run".into());
+                    l.set_note("".into());
+                }
+                LogSource::Messages => {
+                    l.set_has_job(true);
+                    l.set_title("Messages · this session".into());
                     l.set_note("".into());
                 }
             }
@@ -260,6 +285,12 @@ impl LogsBridge {
             let lines = self.lines.borrow();
             return (shown(&lines, &st.search, st.errors_only), lines.len());
         }
+        if st.source == LogSource::Messages {
+            let (seq, entries) = notices::history_since(0);
+            self.messages_shown.set(seq);
+            let total = entries.len();
+            return (messages_shown(&entries, &st.search, st.errors_only), total);
+        }
         let lines = self.book.lines();
         self.book_shown.set(lines.last().map_or(0, |l| l.seq));
         let total = book_shown(&lines, st.source, "", false).len();
@@ -288,12 +319,12 @@ impl LogsBridge {
 
     fn copy(&self) {
         let text = to_text(&self.current().0);
-        let Some(window) = self.window.upgrade() else { return };
         let lines = text.lines().count();
         if clipboard::copy(text) {
-            status::show(&window, Level::Success, &format!("{lines} log lines copied."));
+            notices::post(Notice::new(Kind::LogCopied, format!("{lines} log lines copied")));
         } else {
-            status::show(&window, Level::Warning, "The clipboard cannot be used.");
+            tracing::warn!("[Logs] The clipboard cannot be used");
+            notices::post(Notice::new(Kind::ClipboardFailed, "The clipboard cannot be used"));
         }
     }
 }
@@ -332,6 +363,7 @@ fn connect(bridge: &Rc<LogsBridge>, window: &MainWindow) {
             b.select_source(match index {
                 1 => LogSource::App,
                 2 => LogSource::RustView,
+                3 => LogSource::Messages,
                 _ => LogSource::Job,
             });
         }

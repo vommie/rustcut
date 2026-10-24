@@ -30,8 +30,8 @@ use self::profiles::ProfilesPage;
 use crate::app::SettingsWriter;
 use crate::app::window::to_dimension;
 use crate::ui::keymap::Keymap;
+use crate::ui::notices::{self, Kind, Notice};
 use crate::ui::render_settings::state::Encoders;
-use crate::ui::status::{self, Level};
 use crate::util::model::{sync, sync_with};
 use crate::{
     FolderRowView, HoldConfirm, HotkeyChipView, HotkeyRowView, MainWindow, OptionRowView, ProfileItemView,
@@ -66,7 +66,6 @@ struct Models {
 
 pub struct SettingsBridge {
     me: Weak<Self>,
-    main: slint::Weak<MainWindow>,
     window: RefCell<Option<SettingsWindow>>,
     writer: SettingsWriter,
     runtime: tokio::runtime::Handle,
@@ -100,7 +99,6 @@ impl SettingsBridge {
         let page = Page::from_id(&state.page).unwrap_or(Page::General);
         let bridge = Rc::new_cyclic(|me| Self {
             me: Weak::clone(me),
-            main: main.as_weak(),
             window: RefCell::new(None),
             writer: writer.clone(),
             runtime,
@@ -174,13 +172,10 @@ impl SettingsBridge {
                 Ok(window) => *self.window.borrow_mut() = Some(window),
                 Err(e) => {
                     tracing::error!(error = %e, "[Settings] The settings window could not be opened");
-                    if let Some(main) = self.main.upgrade() {
-                        status::show(
-                            &main,
-                            Level::Error,
-                            &format!("The settings window could not be opened: {e}"),
-                        );
-                    }
+                    notices::post(
+                        Notice::new(Kind::SettingsWindowFailed, "The settings window could not be opened")
+                            .detail(e.to_string()),
+                    );
                     return;
                 }
             }

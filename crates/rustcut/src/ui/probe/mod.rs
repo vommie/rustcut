@@ -21,9 +21,9 @@ use tokio::sync::{mpsc, watch};
 
 use crate::ui::editor::Editor;
 use crate::ui::filters::FiltersBridge;
+use crate::ui::notices::{self, Kind, Level, Notice};
 use crate::ui::player::PlayerBridge;
 use crate::ui::render_settings::RenderSettingsBridge;
-use crate::ui::status::{self, Level};
 use crate::{MainWindow, Probe};
 
 /// What the render task reports to the UI thread.
@@ -78,6 +78,8 @@ pub struct ProbeBridge {
     playing: RefCell<Option<Source>>,
     status: RefCell<(String, bool)>,
     progress: Cell<f32>,
+    /// The probe-playing banner is shown (posted only when this changes).
+    shown_playing: Cell<bool>,
 }
 
 /// The bridges a probe needs.
@@ -122,6 +124,7 @@ impl ProbeBridge {
             playing: RefCell::new(None),
             status: RefCell::new((String::new(), false)),
             progress: Cell::new(0.0),
+            shown_playing: Cell::new(false),
         });
         let probe = window.global::<Probe<'_>>();
         let help = |id: rustcut_core::render::OptionId| id.help().tooltip;
@@ -150,6 +153,7 @@ impl ProbeBridge {
         self.generation.set(self.generation.get().wrapping_add(1));
         if let Some(run) = self.running.borrow_mut().take() {
             run.control.send_replace(Control::Cancel);
+            notices::clear(PROGRESS);
         }
         if self.playing.borrow_mut().take().is_some() {
             self.leave_probe_mode();
@@ -168,9 +172,12 @@ impl ProbeBridge {
             Ok(()) => {}
             Err(message) => {
                 self.set_status(message.clone(), true);
-                if let Some(window) = self.window.upgrade() {
-                    status::show(&window, Level::Warning, &message);
-                }
+                tracing::info!(why = %message, "[Render] No probe render");
+                notices::post(
+                    Notice::new(Kind::ProbeFailed, "The probe render cannot start")
+                        .detail(message)
+                        .level(Level::Warning),
+                );
             }
         }
         self.publish();
@@ -327,11 +334,26 @@ impl ProbeBridge {
                             path: file.path,
                             banner: text::banner(run.window.0, run.window.1, &run.profile),
                         });
-                        self.set_status(summary, false);
+                        self.set_status(summary.clone(), false);
+                        notices::post(
+                            Notice::new(Kind::ProbeRender, "Probe render ready")
+                                .detail(summary)
+                                .level(Level::Success)
+                                .key(PROGRESS),
+                        );
                         self.play();
                     }
-                    Err((true, _)) => self.set_status("Probe render stopped".to_owned(), false),
-                    Err((false, reason)) => self.set_status(format!("Probe render failed: {reason}"), true),
+                    Err((true, _)) => {
+                        notices::clear(PROGRESS);
+                        self.set_status("Probe render stopped".to_owned(), false);
+                    }
+                    Err((false, reason)) => {
+                        notices::clear(PROGRESS);
+                        notices::post(
+                            Notice::new(Kind::ProbeFailed, "The probe render failed").detail(reason.as_str()),
+                        );
+                        self.set_status(format!("Probe render failed: {reason}"), true);
+                    }
                 }
             }
         }
@@ -415,8 +437,62 @@ impl ProbeBridge {
         probe.set_banner(finished.as_ref().map(|f| f.banner.as_str()).unwrap_or_default().into());
         probe.set_seconds(self.seconds.get().to_string().into());
         probe.set_exact(self.exact.get());
+        drop(finished);
+        self.publish_notices();
+    }
+
+    /// The running probe's progress (a toast by default, Q-N10; the card always shows it too) and the banner with the
+    /// way back while the probe plays.
+    fn publish_notices(&self) {
+        if let Some(run) = self.running.borrow().as_ref() {
+            let weak = Weak::clone(&self.me);
+            notices::post(
+                Notice::new(Kind::ProbeRender, "Probe render")
+                    .detail(format!(
+                        "{} · {}",
+                        text::span(run.window.0, run.window.1),
+                        self.status.borrow().0
+                    ))
+                    .live(PROGRESS)
+                    .progress(self.progress.get())
+                    .action_keep("Stop", move || {
+                        if let Some(b) = weak.upgrade() {
+                            b.cancel();
+                        }
+                    }),
+            );
+        }
+        let playing = self.playing.borrow().is_some();
+        if playing == self.shown_playing.replace(playing) {
+            return;
+        }
+        if playing {
+            let title = self
+                .finished
+                .borrow()
+                .as_ref()
+                .map(|f| f.banner.clone())
+                .unwrap_or_default();
+            let weak = Weak::clone(&self.me);
+            notices::post(
+                Notice::new(Kind::ProbePlaying, title)
+                    .detail("The player shows the probe in a loop; the timeline and the marks wait.")
+                    .live(PLAYING)
+                    .action("Back to the source", move || {
+                        if let Some(b) = weak.upgrade() {
+                            b.back();
+                        }
+                    }),
+            );
+        } else {
+            notices::clear(PLAYING);
+        }
     }
 }
+
+/// The keys of the probe's live notices.
+const PROGRESS: &str = "probe_render";
+const PLAYING: &str = "probe_playing";
 
 fn connect(bridge: &Rc<ProbeBridge>, probe: &Probe<'_>) {
     let this = Rc::downgrade(bridge);

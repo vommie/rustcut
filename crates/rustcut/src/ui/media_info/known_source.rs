@@ -1,15 +1,16 @@
 //! The known-source banner (parity: PyCutRv's known-source warning, without its modal box and without registering the
-//! hash on open, bug 3). The bridge clears the banner when a file opens; once the open file's MD5 is known and
-//! `warnings.known_source` is on, [`lookup`] asks RustView (`check-hash` through the sync actor, on the runtime) and the
-//! bridge shows the [`view`] of the answer with [`show`] if that file is still open.
+//! hash on open, bug 3). The bridge clears the banner when a file opens; once the open file's MD5 is known and the
+//! known-source notice is not routed to "nothing" (`[notices.kinds.known_source]`), [`lookup`] asks RustView
+//! (`check-hash` through the sync actor, on the runtime) and the bridge shows the [`view`] of the answer with [`show`]
+//! if that file is still open.
 
 use std::path::Path;
 
 use rustcut_core::naming::same_path;
 use rustcut_core::rustview::{HashCheck, SyncCommand, SyncHandle};
-use slint::{ComponentHandle as _, ModelRc, SharedString, VecModel};
+use rustcut_core::settings::{NoticePlace, Settings};
 
-use crate::{KnownSource, MainWindow};
+use crate::ui::notices::{self, Kind, Level, Notice};
 
 /// Library files listed in the banner; the detail line gives the full count.
 const LISTED_FILES: usize = 3;
@@ -56,18 +57,23 @@ pub fn view(check: &HashCheck, source: &Path) -> Option<KnownSourceView> {
     })
 }
 
-/// Shows `view` in the banner, or hides it (UI thread).
-pub fn show(window: &MainWindow, view: Option<&KnownSourceView>) {
-    let banner = window.global::<KnownSource<'_>>();
+/// Whether the check runs at all: RustCut reads the source's MD5 only while the known-source notice shows somewhere.
+pub fn wanted(settings: &Settings) -> bool {
+    notices::route(Kind::KnownSource, Level::Warning, &settings.notices).place != NoticePlace::Nothing
+}
+
+/// Shows `view` as the known-source notice (a banner by default, M6.5), or ends it (UI thread).
+pub fn show(view: Option<&KnownSourceView>) {
     match view {
         Some(view) => {
-            banner.set_title(view.title.as_str().into());
-            banner.set_detail(view.detail.as_str().into());
-            let files: Vec<SharedString> = view.files.iter().map(|f| f.as_str().into()).collect();
-            banner.set_files(ModelRc::new(VecModel::from(files)));
-            banner.set_shown(true);
+            let mut detail = view.detail.clone();
+            for file in &view.files {
+                detail.push('\n');
+                detail.push_str(file);
+            }
+            notices::post(Notice::new(Kind::KnownSource, view.title.as_str()).detail(detail));
         }
-        None => banner.set_shown(false),
+        None => notices::clear_kind(Kind::KnownSource),
     }
 }
 

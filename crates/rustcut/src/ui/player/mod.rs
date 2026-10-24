@@ -29,6 +29,7 @@ pub use shuttle::ShuttleKey;
 pub use state::{PlaybackState, PlaybackView};
 
 use crate::ui::dispatcher::{CoalesceKey, UiDispatcher, rate};
+use crate::ui::notices::{self, Kind, Notice};
 use crate::{MainWindow, Playback, Status};
 
 /// The one coalesced update of the playback view.
@@ -371,6 +372,7 @@ fn show(window: &MainWindow, view: &PlaybackView) {
     playback.set_speed_text(view.speed_text.as_str().into());
     playback.set_error_title(view.error_title.as_str().into());
     playback.set_error_detail(view.error_detail.as_str().into());
+    show_failure(window, view);
     window
         .global::<Status<'_>>()
         .set_decoder(view.decoder_text.as_str().into());
@@ -379,6 +381,34 @@ fn show(window: &MainWindow, view: &PlaybackView) {
             hook(view);
         }
     });
+}
+
+thread_local! {
+    /// The failure the banner shows ("" = none), so it is posted once per failure.
+    static SHOWN_FAILURE: RefCell<String> = const { RefCell::new(String::new()) };
+}
+
+/// A file that does not play: a banner with Reload and the way to the log (Q-N8 #13); it goes when a file plays.
+fn show_failure(window: &MainWindow, view: &PlaybackView) {
+    let key = format!("{}\n{}", view.error_title, view.error_detail);
+    if SHOWN_FAILURE.with(|s| s.replace(key.clone())) == key {
+        return;
+    }
+    if view.error_title.is_empty() {
+        notices::clear_kind(Kind::PlaybackFailed);
+        return;
+    }
+    let weak = window.as_weak();
+    notices::post(
+        Notice::new(Kind::PlaybackFailed, view.error_title.as_str())
+            .detail(view.error_detail.as_str())
+            .action("Reload", move || {
+                if let Some(window) = weak.upgrade() {
+                    window.global::<Playback<'_>>().invoke_reload();
+                }
+            })
+            .action("Show log", notices::show_app_log),
+    );
 }
 
 /// The video area's size in physical pixels.

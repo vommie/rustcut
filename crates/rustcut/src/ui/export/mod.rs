@@ -41,10 +41,10 @@ use crate::ui::editing::JobEditor;
 use crate::ui::editor::Editor;
 use crate::ui::filters::FiltersBridge;
 use crate::ui::media_info::MediaInfoBridge;
+use crate::ui::notices::{self, Kind, Level, Notice};
 use crate::ui::player::PlayerBridge;
 use crate::ui::queue::QueueBridge;
 use crate::ui::render_settings::RenderSettingsBridge;
-use crate::ui::status::{self, Level};
 use crate::ui::tags::TagsBridge;
 use crate::{Export, MainWindow};
 
@@ -92,7 +92,12 @@ pub struct ExportBridge {
     previews: RefCell<DialogPreviews>,
     /// A refresh of the card is scheduled (`job_changed`).
     refresh: Cell<bool>,
+    /// The job problem the banner shows (M6.5).
+    shown_problem: RefCell<Option<JobProblem>>,
 }
+
+/// The key of the banner about the job problem.
+const SAVE_BLOCKED: &str = "save_blocked";
 
 /// What the previews run with, from the settings.
 fn preview_options(settings: &Settings) -> PreviewOptions {
@@ -141,6 +146,7 @@ impl ExportBridge {
             preview_service: PreviewService::new(preview_options(settings)),
             previews: RefCell::new(DialogPreviews::default()),
             refresh: Cell::new(false),
+            shown_problem: RefCell::new(None),
         });
         connect(&bridge, window);
         save::connect_dialog(&bridge, window);
@@ -182,6 +188,8 @@ impl ExportBridge {
     /// The sections, the render settings or the source's description changed: the card checks the job again once the
     /// current event is handled (the caller may still hold its own state).
     pub fn job_changed(&self) {
+        // A "not saved yet" banner of an earlier Save is out of date now.
+        notices::clear_kind(Kind::SaveRefused);
         if self.refresh.replace(true) {
             return;
         }
@@ -322,7 +330,8 @@ impl ExportBridge {
         e.set_check_level(line.level as i32);
         e.set_check_text(line.text.as_str().into());
         e.set_check_tooltip(line.tooltip.as_str().into());
-        // What keeps the job itself from being saved: Save names it until the notices show it (M6.5).
+        // What keeps the job itself from being saved: the banner names it, Save's tooltip too.
+        self.show_job_problem(job.as_ref());
         let saving = self.saving.get();
         e.set_can_save(line.can_save() && job.is_none() && !saving);
         let file_name = e.get_file_name();
@@ -356,14 +365,36 @@ impl ExportBridge {
         job_check::job_problem(&profile, sections, source.as_deref())
     }
 
-    fn status(&self, level: Level, message: &str) {
-        if level == Level::Error {
-            tracing::warn!(message, "[Export] Not saved");
+    fn tell(notice: Notice) {
+        if notice.level == Level::Error {
+            tracing::warn!(message = %notice.text(), "[Export] Not saved");
         } else {
-            tracing::info!(message, "[Export]");
+            tracing::info!(message = %notice.text(), "[Export]");
         }
-        if let Some(window) = self.window.upgrade() {
-            status::show(&window, level, message);
+        notices::post(notice);
+    }
+
+    /// The job itself cannot be saved (Q-N8 #5): a banner over the video names it and leads to the option, while a
+    /// video is open; it goes when the problem is solved.
+    fn show_job_problem(&self, problem: Option<&JobProblem>) {
+        let problem = problem.filter(|_| self.state.borrow().source.is_some());
+        if self.shown_problem.borrow().as_ref() == problem {
+            return;
+        }
+        self.shown_problem.replace(problem.cloned());
+        match problem {
+            Some(problem) => {
+                tracing::info!(problem = %problem.text, "[Export] The job cannot be saved");
+                let jump = problem.jump;
+                notices::post(
+                    Notice::new(Kind::SaveBlocked, problem.text.as_str())
+                        .detail(problem.tooltip.as_str())
+                        .key(SAVE_BLOCKED)
+                        .jump(jump)
+                        .action("Show the option", move || crate::ui::jump::go(jump)),
+                );
+            }
+            None => notices::clear(SAVE_BLOCKED),
         }
     }
 
@@ -371,9 +402,9 @@ impl ExportBridge {
     fn store_folders(&self) {
         let folders = self.state.borrow().folders.clone();
         if !self.writer.update(|s| s.export.target_folders = folders) {
-            self.status(
-                Level::Warning,
-                "config.toml is from a newer RustCut: the folder list is not saved.",
+            Self::tell(
+                Notice::new(Kind::SettingsReadOnly, "The folder list is not saved")
+                    .detail("config.toml is from a newer RustCut."),
             );
         }
     }

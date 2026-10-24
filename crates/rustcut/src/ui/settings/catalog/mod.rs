@@ -165,11 +165,17 @@ mod tests {
     #[test]
     fn sub_options_wait_for_their_switch() {
         let mut s = Settings::default();
-        s.desktop.notifications.enabled = false;
-        let finished = field("desktop.notifications.job_finished").unwrap();
+        s.notices.desktop.enabled = false;
+        let finished = field("notices.kinds.job_finished.desktop").unwrap();
         assert!(finished.indent);
         assert_eq!(finished.apply(&mut s, Edit::Toggle), Ok(false));
-        s.desktop.notifications.enabled = true;
+        s.notices.desktop.enabled = true;
         assert_eq!(finished.apply(&mut s, Edit::Toggle), Ok(true));
+        assert_eq!(s.notices.kinds.get("job_finished").and_then(|r| r.desktop), Some(true));
+        let known = field("notices.kinds.known_source.place").unwrap();
+        assert_eq!(known.apply(&mut s, Edit::Toggle), Ok(true));
+        assert!(s.notices.kinds.contains_key("known_source"));
+        assert_eq!(known.apply(&mut s, Edit::Toggle), Ok(true));
+        assert!(!s.notices.kinds.contains_key("known_source"), "back to the default");
     }
 }

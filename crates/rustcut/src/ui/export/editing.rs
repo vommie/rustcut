@@ -15,7 +15,7 @@ use super::save::Draft;
 use super::state::{ExportDraft, JobFacts};
 use crate::Export;
 use crate::ui::editing::{JobEditor, SaveAs};
-use crate::ui::status::Level;
+use crate::ui::notices::{self, Kind, Notice};
 
 impl ExportBridge {
     /// Connects the editing of queued jobs.
@@ -137,14 +137,15 @@ impl ExportBridge {
             bridge.saving.set(false);
             match result {
                 Ok(()) => {
-                    bridge.status(Level::Success, &format!("Job {id} updated: {file}"));
+                    notices::clear_kind(Kind::SaveFailed);
+                    Self::tell(Notice::new(Kind::JobUpdated, format!("Job {id} updated")).detail(file));
                     if let Some(editing) = bridge.editing.borrow().upgrade() {
                         editing.job_saved();
                     }
                 }
-                Err(e) => bridge.status(
-                    Level::Error,
-                    &format!("Job {id} was not updated: {e}. \"Save as new\" keeps the changes as a new job."),
+                Err(e) => Self::tell(
+                    Notice::new(Kind::SaveFailed, format!("Job {id} was not updated"))
+                        .detail(format!("{e}. \"Save as new\" keeps the changes as a new job.")),
                 ),
             }
             bridge.rescan();

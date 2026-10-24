@@ -99,6 +99,8 @@ export component PlayerView inherits Rectangle {
         }
     }
 
+    // A file that does not play: the banner over the video says why (with Reload and the log, M6.5); here the
+    // video area keeps the big way back (a click or F5).
     if Playback.error-title != "": Rectangle {
         background: #11111be6;
 
@@ -109,7 +111,7 @@ export component PlayerView inherits Rectangle {
 
         VerticalLayout {
             alignment: center;
-            spacing: 8px;
+            spacing: 10px;
             padding: 24px;
 
             HorizontalLayout {
@@ -120,24 +122,6 @@ export component PlayerView inherits Rectangle {
                     color: Theme.status-corrupt;
                 }
             }
-
-            Text {
-                text: Playback.error-title;
-                color: Theme.text;
-                font-size: 16px;
-                font-weight: 600;
-                horizontal-alignment: center;
-                wrap: word-wrap;
-            }
-
-            if Playback.error-detail != "": Text {
-                text: Playback.error-detail;
-                color: Theme.text-muted;
-                horizontal-alignment: center;
-                wrap: word-wrap;
-            }
-
-            Rectangle { height: 6px; }
 
             HorizontalLayout {
                 alignment: center;

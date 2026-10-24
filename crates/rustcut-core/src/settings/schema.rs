@@ -9,7 +9,8 @@ use serde_with::formats::PreferMany;
 use serde_with::{DefaultOnError, OneOrMany, VecSkipError, serde_as};
 
 use super::dialogs::DialogSettings;
-use super::file::VersionedFile;
+use super::file::{MigrationStep, VersionedFile};
+use super::notices::{NoticeSettings, migrate_notice_options};
 use crate::edit::{Deinterlacer, DeshakeParams};
 use crate::naming::DEFAULT_TEMPLATE;
 use crate::render::{DEFAULT_PROFILE_ID, RenderProfile, is_builtin_id};
@@ -34,6 +35,8 @@ pub struct Settings {
     pub dialogs: DialogSettings,
     /// The MD5 of sources (0.0.20).
     pub hashing: HashingSettings,
+    /// How messages appear (settings version 2, M6.5).
+    pub notices: NoticeSettings,
     /// Key bindings by action id (`set_start = ["I", "Home"]`); a missing action keeps its default, an empty list unbinds
     /// it. Owned, validated and sanitized by the app's keymap (key names are Slint's); the core only stores it. A value
     /// that is neither a string nor a list of strings reads as missing, so a typo never resets the other settings.
@@ -328,7 +331,6 @@ pub struct WarningSettings {
     pub base_name_in_folder: bool,
     pub no_tags: bool,
     pub no_rating: bool,
-    pub known_source: bool,
 }
 
 impl Default for WarningSettings {
@@ -339,30 +341,6 @@ impl Default for WarningSettings {
             base_name_in_folder: true,
             no_tags: true,
             no_rating: true,
-            known_source: true,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct NotificationSettings {
-    pub enabled: bool,
-    pub job_finished: bool,
-    pub job_failed: bool,
-    pub queue_done: bool,
-    /// Seconds a notification stays (0 = until dismissed).
-    pub timeout_secs: u16,
-}
-
-impl Default for NotificationSettings {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            job_finished: false,
-            job_failed: true,
-            queue_done: true,
-            timeout_secs: 8,
         }
     }
 }
@@ -378,7 +356,6 @@ pub struct TraySettings {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DesktopSettings {
-    pub notifications: NotificationSettings,
     pub tray: TraySettings,
     /// Queue progress on the taskbar entry (Unity LauncherEntry).
     pub taskbar_progress: bool,
@@ -389,7 +366,6 @@ pub struct DesktopSettings {
 impl Default for DesktopSettings {
     fn default() -> Self {
         Self {
-            notifications: NotificationSettings::default(),
             tray: TraySettings::default(),
             taskbar_progress: true,
             inhibit_sleep: true,
@@ -446,7 +422,15 @@ impl Default for AdvancedSettings {
 
 impl VersionedFile for Settings {
     const FILE_NAME: &'static str = "config.toml";
-    const VERSION: u32 = 1;
+    const VERSION: u32 = 2;
+
+    fn steps() -> &'static [MigrationStep] {
+        &[MigrationStep {
+            from: 1,
+            reason: "move-notice-options",
+            apply: migrate_notice_options,
+        }]
+    }
 
     fn sanitize(&mut self) -> Vec<String> {
         let mut notes = Vec::new();
@@ -541,6 +525,7 @@ impl VersionedFile for Settings {
             self.render.default_profile = DEFAULT_PROFILE_ID.into();
         }
         notes.extend(self.dialogs.conflict.sanitize());
+        self.notices.sanitize(&mut notes);
         notes
     }
 }

@@ -1,10 +1,10 @@
 //! What happens when the queue is done and when RustCut is closed while it renders (P5 M5.1, user decisions Q-P1,
 //! Q-P2): the queue panel's "when done" menu (nothing, notify, quit, suspend, power off; kept in `UiState.queue`), the
-//! countdown banner above the video (and a notification with Abort) before quit, suspend or power off, the close
+//! countdown message with Abort before quit, suspend or power off (`Kind::PowerCountdown`, M6.5), the close
 //! question with three ways, and the desktop actor's sleep lock and taskbar entry following the queue. Pure parts in
 //! `state.rs`.
 
-mod notices;
+mod job_messages;
 mod question;
 pub mod state;
 
@@ -13,25 +13,22 @@ use std::rc::{Rc, Weak};
 use std::time::Duration;
 
 use rustcut_core::queue::QueueCommand;
-use rustcut_core::settings::{NotificationSettings, QueuePanelState, Settings, WhenDone};
+use rustcut_core::settings::{QueuePanelState, Settings, WhenDone};
 use slint::ComponentHandle as _;
 
 use self::state::{CHOICES, Countdown, Tick};
 use crate::desktop::logind::PowerAction;
-use crate::desktop::notify::{self, Note, Style};
 use crate::desktop::service::{DesktopCommand, DesktopHandle};
 use crate::desktop::taskbar::Badge;
 use crate::icons::Icon;
-use crate::ui::dispatcher::UiDispatcher;
 use crate::ui::menu::{ContextMenuBridge, MenuAction, MenuItem};
+use crate::ui::notices::{self, Kind, Level, Notice};
 use crate::ui::queue::{QueueBridge, QueueStatus};
-use crate::ui::status::{self, Level};
 use crate::{MainWindow, Power, Queue};
 
 pub struct PowerBridge {
     me: Weak<Self>,
     window: slint::Weak<MainWindow>,
-    ui: UiDispatcher,
     runtime: tokio::runtime::Handle,
     desktop: DesktopHandle,
     queue: Weak<QueueBridge>,
@@ -43,11 +40,11 @@ pub struct PowerBridge {
     question: question::Question,
     /// The user wanted to quit when the queue got done: quit after the "when done" action (suspend).
     quit_after: Cell<bool>,
-    /// `queue.when_done_countdown_secs`, `general.confirm_quit_while_rendering`, notification timeout.
+    /// `queue.when_done_countdown_secs`, `general.confirm_quit_while_rendering`.
     seconds: Cell<u8>,
     confirm: Cell<bool>,
-    /// `desktop.notifications`.
-    notices: RefCell<NotificationSettings>,
+    /// "3 jobs finished." while the countdown runs.
+    done_text: RefCell<String>,
     /// What the desktop actor was told last.
     rendering: Cell<bool>,
     badge: Cell<Badge>,
@@ -58,21 +55,15 @@ impl PowerBridge {
     /// reference. `when_done` is the choice the queue started with.
     pub fn install(
         window: &MainWindow,
-        parts: (
-            &UiDispatcher,
-            &tokio::runtime::Handle,
-            &Rc<QueueBridge>,
-            &Rc<ContextMenuBridge>,
-        ),
+        parts: (&tokio::runtime::Handle, &Rc<QueueBridge>, &Rc<ContextMenuBridge>),
         desktop: DesktopHandle,
         settings: &Settings,
         when_done: WhenDone,
     ) -> Rc<Self> {
-        let (ui, runtime, queue, menu) = parts;
+        let (runtime, queue, menu) = parts;
         let bridge = Rc::new_cyclic(|me| Self {
             me: Weak::clone(me),
             window: window.as_weak(),
-            ui: ui.clone(),
             runtime: runtime.clone(),
             desktop,
             queue: Rc::downgrade(queue),
@@ -84,7 +75,7 @@ impl PowerBridge {
             quit_after: Cell::new(false),
             seconds: Cell::new(settings.queue.when_done_countdown_secs),
             confirm: Cell::new(settings.general.confirm_quit_while_rendering),
-            notices: RefCell::new(settings.desktop.notifications.clone()),
+            done_text: RefCell::default(),
             rendering: Cell::new(false),
             badge: Cell::new(Badge::NONE),
         });
@@ -118,7 +109,6 @@ impl PowerBridge {
     pub fn apply_settings(&self, settings: &Settings) {
         self.seconds.set(settings.queue.when_done_countdown_secs);
         self.confirm.set(settings.general.confirm_quit_while_rendering);
-        self.notices.replace(settings.desktop.notifications.clone());
         let _ = self.desktop.send(DesktopCommand::Settings {
             inhibit: settings.desktop.inhibit_sleep,
             taskbar: settings.desktop.taskbar_progress,
@@ -188,15 +178,15 @@ impl PowerBridge {
         // The close question was waiting for this: the chosen action (quitting too) or a short countdown to the quit.
         let quit_after = self.question_on_done(choice);
         if matches!(choice, WhenDone::Nothing | WhenDone::Notify) {
-            if let Some(timeout_secs) = self.queue_done_notice(choice == WhenDone::Notify) {
-                self.notify(Note {
-                    style: if failed > 0 { Style::Failed } else { Style::Done },
-                    title: "The queue is done".into(),
-                    body: text,
-                    timeout_secs,
-                    action: None,
-                });
+            let mut notice = Notice::new(Kind::QueueDone, "The queue is done").detail(text);
+            if failed > 0 {
+                notice = notice.level(Level::Warning);
             }
+            // "When done: notify" asked for the desktop notification.
+            if choice == WhenDone::Notify {
+                notice = notice.force_desktop();
+            }
+            notices::post(notice);
             return;
         }
         let Some(countdown) = Countdown::start(choice, u32::from(self.seconds.get())) else {
@@ -204,13 +194,7 @@ impl PowerBridge {
         };
         self.quit_after.set(quit_after);
         self.countdown.set(Some(countdown));
-        self.notify(Note {
-            style: Style::Power,
-            title: countdown.text(),
-            body: text,
-            timeout_secs: u32::from(self.seconds.get()).max(5),
-            action: Some("Abort".into()),
-        });
+        self.done_text.replace(text);
         let weak = Weak::clone(&self.me);
         self.timer
             .start(slint::TimerMode::Repeated, Duration::from_secs(1), move || {
@@ -229,24 +213,40 @@ impl PowerBridge {
         match countdown.tick() {
             Tick::Wait => {
                 self.countdown.set(Some(countdown));
-                self.publish();
+                self.show_countdown(countdown);
             }
             Tick::Fire(action) => {
                 self.timer.stop();
                 self.countdown.set(None);
-                self.publish();
+                notices::clear(COUNTDOWN);
                 self.fire(action);
             }
         }
+    }
+
+    /// The countdown's message: its title stays, the seconds run in the detail; Abort and Escape stop it.
+    fn show_countdown(&self, countdown: Countdown) {
+        let weak = Weak::clone(&self.me);
+        notices::post(
+            Notice::new(Kind::PowerCountdown, countdown.verb())
+                .detail(format!("in {} s · {}", countdown.left, self.done_text.borrow()))
+                .live(COUNTDOWN)
+                .action("Abort", move || {
+                    if let Some(b) = weak.upgrade() {
+                        b.abort();
+                    }
+                })
+                .desktop_secs(u32::from(self.seconds.get()).max(5)),
+        );
     }
 
     fn abort(&self) {
         self.timer.stop();
         if self.countdown.take().is_some() {
             tracing::info!("[Power] Countdown aborted");
-            self.status(Level::Info, "Aborted: nothing happens.");
+            notices::clear(COUNTDOWN);
+            Self::tell(Notice::new(Kind::PowerChoice, "Aborted: nothing happens."));
         }
-        self.publish();
     }
 
     /// Quit, suspend or power off now. The choice goes back to "nothing" first, so it never repeats by surprise.
@@ -267,9 +267,9 @@ impl PowerBridge {
             .send(DesktopCommand::Power { action: power, reply })
             .is_err()
         {
-            self.status(
-                Level::Error,
-                "The desktop service has stopped: the computer was not suspended.",
+            Self::tell(
+                Notice::new(Kind::PowerRefused, "The computer was not suspended")
+                    .detail("The desktop service has stopped."),
             );
             return;
         }
@@ -280,7 +280,7 @@ impl PowerBridge {
             match result {
                 Ok(()) if power == PowerAction::PowerOff || b.quit_after.take() => b.quit_now(),
                 Ok(()) => {}
-                Err(reason) => b.status(Level::Error, &format!("The system refused: {reason}")),
+                Err(reason) => Self::tell(Notice::new(Kind::PowerRefused, "The system refused").detail(reason)),
             }
         });
         if let Err(e) = spawned {
@@ -295,27 +295,9 @@ impl PowerBridge {
         }
     }
 
-    fn notify(&self, note: Note) {
-        let ui = self.ui.clone();
-        // The button runs on a blocking thread; the abort comes back through the dispatcher.
-        let abort: Box<dyn FnOnce() + Send> = Box::new(move || {
-            ui.post(|| {
-                POWER.with(|p| {
-                    if let Some(b) = p.borrow().upgrade() {
-                        b.abort();
-                    }
-                });
-            });
-        });
-        let has_button = note.action.is_some();
-        notify::send(&self.runtime, note, has_button.then_some(abort));
-    }
-
-    fn status(&self, level: Level, message: &str) {
-        tracing::info!("[Power] {message}");
-        if let Some(window) = self.window.upgrade() {
-            status::show(&window, level, message);
-        }
+    fn tell(notice: Notice) {
+        tracing::info!("[Power] {}", notice.text());
+        notices::post(notice);
     }
 
     fn publish(&self) {
@@ -330,15 +312,14 @@ impl PowerBridge {
             )
             .into(),
         );
-        let power = window.global::<Power<'_>>();
-        let countdown = self.countdown.get();
-        power.set_counting(countdown.is_some());
-        power.set_text(countdown.map(|c| c.text()).unwrap_or_default().into());
     }
 }
 
+/// The key of the countdown's live message.
+const COUNTDOWN: &str = "power_countdown";
+
 thread_local! {
-    /// The bridge, for a notification's Abort that comes from another thread through the dispatcher.
+    /// The bridge, for a failed job's "Show log".
     static POWER: RefCell<Weak<PowerBridge>> = const { RefCell::new(Weak::new()) };
 }
 
@@ -354,13 +335,12 @@ fn connect(bridge: &Rc<PowerBridge>, window: &MainWindow) {
     };
     window.on_request_quit(on(PowerBridge::request_quit));
     let power = window.global::<Power<'_>>();
-    power.on_abort(on(PowerBridge::abort));
     power.on_keep(on(PowerBridge::close_question));
     power.on_quit_now(on(PowerBridge::quit_now));
     power.on_quit_when_done(on(|b| {
         b.close_question();
         b.set_when_done(WhenDone::Quit);
-        b.status(Level::Info, "RustCut quits when the queue is done.");
+        PowerBridge::tell(Notice::new(Kind::PowerChoice, "RustCut quits when the queue is done."));
     }));
     let weak = Rc::downgrade(bridge);
     window.global::<Queue<'_>>().on_when_done_menu(move |x, y| {

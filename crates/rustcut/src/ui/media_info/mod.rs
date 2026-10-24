@@ -27,7 +27,7 @@ use tokio::sync::broadcast::error::RecvError;
 pub use state::{HashOrigin, HashStatus, HashView, MediaPanelState, PanelState, ProbeStatus, SectionsView};
 
 use crate::ui::dispatcher::{CoalesceKey, UiDispatcher, rate};
-use crate::{KnownSource, MainWindow, MediaInfoPanel, MediaInfoRow, MediaInfoSection};
+use crate::{MainWindow, MediaInfoPanel, MediaInfoRow, MediaInfoSection};
 
 /// The function that sees the probe result of the open file.
 type ProbeHook = Box<dyn Fn(Option<&Arc<MediaInfo>>)>;
@@ -72,8 +72,8 @@ pub struct MediaInfoBridge {
 }
 
 impl MediaInfoBridge {
-    /// Whether the next opened video is hashed and looked up in RustView (`warnings.known_source`, changed in the
-    /// Settings window).
+    /// Whether the next opened video is hashed and looked up in RustView (the known-source notice is not routed to
+    /// "nothing", changed in the Settings window).
     pub fn set_known_source(&self, on: bool) {
         self.auto_hash.store(on, Ordering::Relaxed);
     }
@@ -100,7 +100,7 @@ impl MediaInfoBridge {
         settings: &Settings,
     ) -> Rc<Self> {
         let state = Arc::new(Mutex::new(MediaPanelState::default()));
-        let known_source = Arc::new(AtomicBool::new(settings.warnings.known_source));
+        let known_source = Arc::new(AtomicBool::new(known_source::wanted(settings)));
         let events_task = runtime
             .spawn(forward_hash_events(
                 hashing.clone(),
@@ -141,12 +141,6 @@ impl MediaInfoBridge {
                 bridge.cancel_hash();
             }
         });
-        let banner = window.as_weak();
-        window.global::<KnownSource<'_>>().on_dismiss(move || {
-            if let Some(window) = banner.upgrade() {
-                known_source::show(&window, None);
-            }
-        });
         bridge.refresh();
         bridge
     }
@@ -161,9 +155,7 @@ impl MediaInfoBridge {
         if let Some(previous) = previous.filter(|p| p != path) {
             self.send_hash(HashCommand::Cancel { path: previous });
         }
-        if let Some(window) = self.window.upgrade() {
-            known_source::show(&window, None);
-        }
+        known_source::show(None);
         if let Some(task) = self.probe_task.borrow_mut().take() {
             task.abort();
         }
@@ -394,15 +386,12 @@ impl Lookup {
             state.generation
         };
         let view = known_source::lookup(sync, path, md5).await;
-        let window = self.window.clone();
         let state = Arc::clone(&self.state);
         self.ui.post(move || {
             if state.lock().generation != generation {
                 return;
             }
-            if let Some(window) = window.upgrade() {
-                known_source::show(&window, view.as_ref());
-            }
+            known_source::show(view.as_ref());
         });
     }
 }

@@ -243,6 +243,8 @@ pub enum LogSource {
     /// The lines of the RustView link and the Tag & Rate panel.
     #[serde(rename = "rustview")]
     RustView,
+    /// The messages of this session (toasts, banners, the status line; M6.5).
+    Messages,
 }
 
 /// The Logs panel's filter.

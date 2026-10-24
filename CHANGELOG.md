@@ -9,6 +9,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- A notice system for every message (0.0.25). **Toasts**: short cards at the top right of the window that leave by
+  themselves (hints and confirmations after 5 s, warnings after 8 s, errors stay until closed). Each shows its symbol,
+  a title, a detail line, its buttons, the time, a line with the time left and "×3" when the same message came again.
+  The pointer on a card stops its time and shows the whole text; a click leads to the cause, × closes it, a right click
+  offers "Copy the text", "Don't show this kind again" (hints and confirmations only, also as a small bell button on
+  the card) and "Close all messages". At most three show at once, the most important first, "+2 more" opens the rest.
+  **Banners**: states that hold lie over the top of the video, full width, tinted in their level's color, with their
+  buttons: "The job cannot be saved" (with a button to the option), "The job was not saved", a file that does not open
+  or play (with "Show log" and "Reload"), "This video was cut before", the probe render that plays (with "Back to the
+  source"), ffmpeg or ffprobe that cannot be started (new; with a button to the programs' settings). Several banners
+  show one at a time with "‹ 1 / 3 ›"; × hides a banner until its state changes; a new error lights up once.
+  **The bell** at the right end of the menu bar counts the unread errors and warnings and lists the last three
+  messages; "Show all" opens the Logs panel's new "Messages" log of this session.
+- The probe render shows its progress in a toast with a Stop button (and in the Probe card as before), then "Probe
+  render ready" with the size.
+- `config.toml` has a `[notices]` section for all of it: the toasts' place (four on the video, two in the window), how
+  several stack (some with "+N more", all, one at a time with a pager, a deck that fans out under the pointer, a
+  summary card), how many show (2-5), their order, their animation and their time per level; the banners' animation
+  (curtain, fade, none) and whether a new error lights up; the bell and what it counts; and for each kind of message
+  where it appears and whether it also goes to the desktop. Errors also go to the desktop while RustCut is not in
+  front. The Settings window's page for all of this follows.
+
 - Jump marks (0.0.23): a message about an option has a small target button that leads straight to it. The panel or
   window opens, a folded card unfolds, the option scrolls into view and flashes three times. The Tag & Rate panel's
   header uses it while RustView cannot be reached (Settings > RustView, the program) or is switched off (the
@@ -43,6 +65,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   sidecar" (`[hashing] write_sidecar`, on).
 
 ### Changed
+
+- Messages appear where their kind belongs (0.0.25) instead of all in the status line, which keeps only quiet
+  confirmations ("Section 2 added", "Filters reset", "Ready"). Loading or leaving a job in the editor says nothing
+  unless it fails; a finished job, by default, says nothing either (the queue shows it).
+- The countdown after the queue (quit, suspend, power off) is a desktop notification with Abort by default; it can
+  be a toast or a banner instead (Escape still aborts).
+- A file that does not play shows the reason in the banner over the video; the video area keeps only the big Reload
+  button.
+- **Settings migration (config.toml version 1 to 2, backed up first):** the desktop notification switches and their
+  time moved from `[desktop.notifications]` to `[notices.desktop]` and `[notices.kinds.<kind>] desktop`, and
+  `warnings.known_source = false` became `[notices.kinds.known_source] place = "nothing"`. The Settings window shows
+  them where they were for now. An older RustCut reads the new file as "from a newer version" and does not save it.
 
 - The Job Finalization card checks the job again at once when the Codecs panel, the sections or the source's
   description change; an error of the render settings turns Save off with the reason in its tooltip instead of

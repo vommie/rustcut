@@ -1,12 +1,7 @@
-// The countdown after the queue is done and the question when RustCut is closed while it renders (src/ui/power/ fills
-// `Power`; user decisions Q-P1, Q-P2).
+// The question when RustCut is closed while it renders (src/ui/power/ fills `Power`; user decisions Q-P1, Q-P3). The
+// countdown after the queue is a notice (M6.5, `Kind::PowerCountdown`).
 
 export global Power {
-    // The countdown runs: the banner above the video shows `text`, Escape or its button aborts.
-    in property <bool> counting;
-    in property <string> text;
-    callback abort();
-
     // The close question is open; `ask-done`: the queue answered it and RustCut quits by itself soon (Q-P3).
     in property <bool> asking;
     in property <bool> ask-done;

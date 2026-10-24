@@ -29,7 +29,7 @@ pub use tree::{
 
 use crate::ui::dispatcher::UiDispatcher;
 use crate::ui::jump::JumpTarget;
-use crate::ui::status::{self, Level};
+use crate::ui::notices::{self, Kind, Notice};
 use crate::util::model::sync;
 use crate::{MainWindow, TagColumnView, TagHistoryItemModel, TagHistoryRowModel, TagNodeView, TagRate};
 
@@ -202,7 +202,9 @@ impl TagsBridge {
                     b.reveal();
                     b.publish();
                 }
-                Err(e) => b.status(Level::Error, &format!("The job's tags cannot be edited: {e}")),
+                Err(e) => {
+                    Self::tell(Notice::new(Kind::TagsFailed, "The job's tags cannot be edited").detail(e.to_string()));
+                }
             });
         });
     }
@@ -210,7 +212,11 @@ impl TagsBridge {
     /// Escape or Cancel: back to the draft.
     pub fn cancel_edit(&self) {
         if self.state.borrow_mut().end_edit().is_some() {
-            self.status(Level::Info, "The job's tags and rating were left as they were.");
+            // Nothing changed: no message (Q-N8 #36), only the history notes it.
+            Self::tell(Notice::new(
+                Kind::Editing,
+                "The job's tags and rating were left as they were",
+            ));
         }
         self.publish();
     }
@@ -237,9 +243,14 @@ impl TagsBridge {
                 match answer {
                     Ok(()) => {
                         let name = b.state.borrow_mut().end_edit().map(|e| e.name).unwrap_or_default();
-                        b.status(Level::Success, &format!("Tags and rating of \"{name}\" updated."));
+                        Self::tell(Notice::new(
+                            Kind::TagsUpdated,
+                            format!("Tags and rating of \"{name}\" updated"),
+                        ));
                     }
-                    Err(e) => b.status(Level::Error, &format!("The job's tags were not changed: {e}")),
+                    Err(e) => Self::tell(
+                        Notice::new(Kind::TagsFailed, "The job's tags were not changed").detail(e.to_string()),
+                    ),
                 }
                 b.publish();
             });
@@ -317,10 +328,9 @@ impl TagsBridge {
         self.publish();
     }
 
-    fn status(&self, level: Level, message: &str) {
-        if let Some(window) = self.window.upgrade() {
-            status::show(&window, level, message);
-        }
+    fn tell(notice: Notice) {
+        tracing::info!("[Tags] {}", notice.text());
+        notices::post(notice);
     }
 
     /// Shows the whole panel.

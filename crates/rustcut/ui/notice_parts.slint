@@ -1,0 +1,99 @@
+// Small parts the toasts, the banner and the bell share (M6.5): a flat icon button with a tooltip and a text button
+// for a message's actions.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { TooltipHost } from "tooltip.slint";
+
+// A flat icon (close, mute, pager): no frame until the pointer is over it.
+export component NoticeIcon inherits Rectangle {
+    in property <IconId> icon;
+    in property <string> tooltip;
+    in property <color> tint: Theme.text-muted;
+    in property <length> icon-size: IconSize.sm;
+    callback clicked();
+
+    width: 20px;
+    height: 20px;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    border-radius: 4px;
+    background: touch.pressed ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : transparent;
+
+    host := TooltipHost {
+        text: root.tooltip;
+    }
+
+    AppIcon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        icon: root.icon;
+        size: root.icon-size;
+        color: touch.has-hover ? Theme.text : root.tint;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                host.press();
+            }
+        }
+        clicked => { root.clicked(); }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+}
+
+// A message's button ("Show log", "Abort", "Back").
+export component NoticeButton inherits Rectangle {
+    in property <string> text;
+    in property <color> accent: Theme.primary;
+    callback clicked();
+
+    height: 22px;
+    width: label.preferred-width + 16px;
+    horizontal-stretch: 0;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: touch.has-hover ? root.accent.with-alpha(0.7) : Theme.border;
+    background: touch.pressed ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : Theme.surface-variant;
+
+    label := Text {
+        text: root.text;
+        color: Theme.text;
+        font-size: 12px;
+        font-weight: 600;
+        vertical-alignment: center;
+        horizontal-alignment: center;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// A thin progress bar.
+export component NoticeProgress inherits Rectangle {
+    in property <float> progress;
+    in property <color> tint: Theme.primary;
+
+    height: 4px;
+    border-radius: 2px;
+    background: Theme.surface-hover;
+
+    Rectangle {
+        x: 0;
+        width: parent.width * Math.clamp(root.progress, 0, 1);
+        height: parent.height;
+        border-radius: 2px;
+        background: root.tint;
+        animate width { duration: 200ms; easing: ease-out; }
+    }
+}
