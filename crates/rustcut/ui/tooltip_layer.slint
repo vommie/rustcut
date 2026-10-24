@@ -1,9 +1,9 @@
 // The tooltip bubble (M5.5): one per window, on the highest level, drawn for `GlobalTooltip` (tooltip.slint). Short
-// tips are one line, long ones wrap at `TooltipSettings.max-width` (Q-T2); a title, rows and a note make a rich tip;
-// the hold badge and the key caps sit on their own line at the bottom (Q-T1). `TooltipLogic.place` puts the bubble
-// next to its element (centered below, shifted at the window's edges, above, beside, over; Q-T3) and is evaluated in a
+// tips are one line, long ones wrap at `TooltipSettings.max-width` (Q-H2); a title, rows and a note make a rich tip;
+// the hold badge and the key caps sit on their own line at the bottom (Q-H1). `TooltipLogic.place` puts the bubble
+// next to its element (centered below, shifted at the window's edges, above, beside, over; Q-H3) and is evaluated in a
 // binding, so the bubble moves whenever its size, the window or the element changes. It fades in with a small slide
-// away from its element and glides to the next element when it was still showing (Q-T4).
+// away from its element and glides to the next element when it was still showing (Q-H4).
 
 import { AppIcon, IconId } from "icons.slint";
 import { HoldConfirm } from "hold.slint";

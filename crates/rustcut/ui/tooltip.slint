@@ -1,4 +1,4 @@
-// RustCut's tooltips (M5.5, user decisions Q-T1..Q-T4): one bubble per window, drawn by `TooltipLayer`
+// RustCut's tooltips (M5.5, user decisions Q-H1..Q-H4): one bubble per window, drawn by `TooltipLayer`
 // (tooltip_layer.slint) on top of everything (no popup window, so it never grabs the pointer). An element embeds a
 // `TooltipHost` (or wraps its children in a `TooltipArea`): it waits for the hover delay and hands its `Tip` and its
 // rectangle to `GlobalTooltip`. A tip is a text (one line while it is short, wrapped when it is long), optionally a
@@ -12,7 +12,7 @@ import { IconId } from "icons.slint";
 export global TooltipSettings {
     in-out property <bool> enabled: true;
     in-out property <duration> delay: 600ms;
-    // After a tooltip closed, the next one within this time shows at once (moving along a row of buttons, Q-T4).
+    // After a tooltip closed, the next one within this time shows at once (moving along a row of buttons, Q-H4).
     out property <duration> warm-up: 700ms;
     out property <color> background: #181825f4;
     out property <color> border: #45475acc;

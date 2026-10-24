@@ -1,4 +1,4 @@
-//! Where a tooltip bubble goes (user decision Q-T3): below its element and centered on it when it can be; near the
+//! Where a tooltip bubble goes (user decision Q-H3): below its element and centered on it when it can be; near the
 //! window's left or right edge it shifts so it stays inside, and its arrow keeps pointing at the element. Without
 //! room below it goes above (the arrow then points down), without room above and below beside the element (the arrow
 //! points sideways), and as a last resort it lies over the element inside the window, without an arrow. A row of a

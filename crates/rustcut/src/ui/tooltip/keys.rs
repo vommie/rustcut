@@ -1,4 +1,4 @@
-//! The key caps of a tooltip (user decision Q-T1: on their own line under the text). A shortcut text is what
+//! The key caps of a tooltip (user decision Q-H1: on their own line under the text). A shortcut text is what
 //! `Chord::label` writes ("Ctrl+S", "Shift+LeftArrow", "Ctrl++"); an action with several chords joins them with
 //! [`OR`]. Every key becomes its own cap, the arrows show as symbols, long key names get the short names keyboards
 //! print. A text that is no key (RustView's ".*" badge of the regex switch) stays one plain chip without the "Key"

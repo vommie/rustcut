@@ -9,6 +9,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- New tooltips everywhere (0.0.21): one modern bubble with a small arrow that points at its button. The keys of a
+  button sit on their own line under the text as key caps ("Key [Ctrl] [S]"; an action with two keys shows "Keys [,]
+  or [PgUp]"; the arrow keys as arrows). Long explanations get a title and rows, e.g. the deinterlacer, the scaling
+  algorithm and the deshake zoom list every choice with what it does. The bubble finds its place by itself: centered
+  under the button, moved inward at the window's edges, above the button at the bottom of the window, beside the
+  button when neither fits; a context menu's tooltip appears beside the menu so it never covers other entries. The
+  first tooltip waits for the delay from Settings > Appearance, the next one along a row of buttons shows at once,
+  and it fades in softly.
+- The player's buttons (play/pause, frame steps, mute) have tooltips with their keys.
+
 - The "file exists" dialog has tabs (0.0.20). "Decision" shows the existing file with a picture (a click plays it,
   the "i" in its corner shows date, size, length, resolution, codecs and bit rate) and every way out: next free number,
   overwrite, "(n)" and your own name, or the ways for queued jobs. "Similar files" lists every file of the name's
@@ -29,6 +39,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Buttons and menu entries that must be held show a red "Hold 2 s" badge in their tooltip (the time follows the
+  setting) instead of a text starting with "Hold to" (0.0.21).
+- The details behind the "i" of the "file exists" dialog use the new tooltip (0.0.21).
 - The next free number passes over every number the name's series uses in another video format: with "Clip - 02.mp4"
   in the folder, an MKV job never becomes "Clip - 02.mkv". Gaps are filled first (0.0.20).
 - The dialog's Save button names no file ("Save", "Overwrite", "Remove and save"); the chosen row shows the name. The
