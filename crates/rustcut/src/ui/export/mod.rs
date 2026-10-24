@@ -7,8 +7,12 @@
 
 mod check;
 mod dialog;
+#[cfg(test)]
+mod dialog_tests;
+mod dialog_view;
 mod editing;
 mod metadata;
+mod previews;
 mod save;
 mod state;
 
@@ -16,17 +20,19 @@ use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak};
 
+use rustcut_core::media::{PreviewOptions, PreviewPrograms, PreviewService};
 use rustcut_core::naming::{FolderScan, scan_folder};
-use rustcut_core::settings::{AutoSection, ExportPanelState, Settings, WarningSettings};
+use rustcut_core::settings::{AutoSection, ConflictDialogSettings, ExportPanelState, Settings, WarningSettings};
 use rustcut_core::time::Timestamp;
 use slint::ComponentHandle as _;
 
 pub use check::{CardCheck, CardInput, Level as CheckLevel, card_check};
-pub use dialog::{Choice, ConflictDialog, DialogInput, DialogOption, Outcome, silent_outcome};
+pub use dialog::{Choice, ConflictDialog, DialogInput, DialogOption, Outcome, Tab, silent_outcome};
 pub use metadata::{MetadataFacts, Missing, missing};
 pub use state::{ExportDraft, ExportState, JobFacts, MAX_COUNTER, SOURCE_FOLDER, codec_label};
 
 use self::metadata::MetaPending;
+use self::previews::DialogPreviews;
 use self::save::Pending;
 use crate::app::SettingsWriter;
 use crate::ui::editing::JobEditor;
@@ -77,6 +83,24 @@ pub struct ExportBridge {
     meta: RefCell<Option<MetaPending>>,
     /// The editing of a queued job (set after it is installed; it needs the export first).
     editing: RefCell<Weak<JobEditor>>,
+    /// How the conflict dialog behaves (`[dialogs.conflict]`).
+    dialog_settings: RefCell<ConflictDialogSettings>,
+    /// Pictures and descriptions of the dialog's files (shared cache for the run).
+    preview_service: PreviewService,
+    previews: RefCell<DialogPreviews>,
+}
+
+/// What the previews run with, from the settings.
+fn preview_options(settings: &Settings) -> PreviewOptions {
+    let conflict = &settings.dialogs.conflict;
+    PreviewOptions {
+        programs: PreviewPrograms {
+            ffmpeg: settings.advanced.ffmpeg.clone(),
+            ffprobe: settings.advanced.ffprobe.clone(),
+        },
+        picture_at_percent: conflict.picture_at_percent,
+        parallel: usize::from(conflict.parallel_pictures),
+    }
 }
 
 impl ExportBridge {
@@ -109,6 +133,9 @@ impl ExportBridge {
             pending: RefCell::new(None),
             meta: RefCell::new(None),
             editing: RefCell::new(Weak::new()),
+            dialog_settings: RefCell::new(settings.dialogs.conflict.clone()),
+            preview_service: PreviewService::new(preview_options(settings)),
+            previews: RefCell::new(DialogPreviews::default()),
         });
         connect(&bridge, window);
         save::connect_dialog(&bridge, window);
@@ -129,6 +156,11 @@ impl ExportBridge {
     pub fn settings_changed(&self, settings: &Settings) {
         let changed = self.state.borrow_mut().set_settings(&settings.export);
         self.warnings.replace(settings.warnings.clone());
+        self.dialog_settings.replace(settings.dialogs.conflict.clone());
+        let options = preview_options(settings);
+        if self.preview_service.options() != options {
+            self.preview_service.set_options(options);
+        }
         self.auto_section.set(settings.editor.auto_section);
         if changed {
             self.rescan();

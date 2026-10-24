@@ -2,6 +2,7 @@
 //! window, event loop, and the one quit path (`shutdown`).
 
 mod cli;
+mod dialogs;
 mod live;
 pub mod log_book;
 mod logging;
@@ -125,6 +126,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     main.set_app_name(APP_NAME.into());
     main.set_app_version(VERSION.into());
     window::restore(&main, &loaded.ui_state.window);
+    dialogs::restore(&main, &loaded.ui_state.dialogs);
     let quit = shutdown::QuitPath::install(&main, &loaded.ui_state.window);
     let dock = DockBridge::install(&main, dock_persist::from_table(loaded.ui_state.dock.as_ref()));
     let player = PlayerBridge::start(&main, &ui, &loaded.settings.player, &loaded.ui_state.export)?;
@@ -239,6 +241,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         Some(sync.handle.clone()),
         &loaded.settings,
     );
+    media.set_write_sidecar(loaded.settings.hashing.write_sidecar);
     let filters = FiltersBridge::install(
         &main,
         &player,
@@ -446,6 +449,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     queue.save_into(&mut ui_state.queue);
     power.save_into(&mut ui_state.queue);
     ui_state.job.collapsed = inspector.collapsed();
+    dialogs::capture(&main, &mut ui_state.dialogs);
     logs.save_into(&mut ui_state.logs);
     settings_window.save_into(&mut ui_state.settings);
     persistence::save_ui_state(&loaded, &ui_state);

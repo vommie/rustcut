@@ -38,18 +38,30 @@ pub struct ExistingFile {
 
 /// Reads the names in `folder` (never fails: an unreadable folder is reported as such).
 pub async fn scan_folder(folder: &Path) -> FolderScan {
-    let Ok(mut entries) = tokio::fs::read_dir(folder).await else {
+    let folder = folder.to_path_buf();
+    // One blocking pass (tokio's `read_dir` hops to the blocking pool every 32 entries): names only, no `stat` per
+    // entry, so the kernel answers from its directory cache without touching the drive.
+    tokio::task::spawn_blocking(move || scan_folder_now(&folder))
+        .await
+        .unwrap_or_default()
+}
+
+/// [`scan_folder`] on the calling thread.
+pub fn scan_folder_now(folder: &Path) -> FolderScan {
+    let Ok(entries) = std::fs::read_dir(folder) else {
         return FolderScan::default();
     };
     let mut names = HashSet::new();
-    while names.len() < MAX_SCANNED {
-        match entries.next_entry().await {
-            Ok(Some(entry)) => {
+    for entry in entries {
+        if names.len() >= MAX_SCANNED {
+            break;
+        }
+        match entry {
+            Ok(entry) => {
                 if let Some(name) = entry.file_name().to_str() {
                     names.insert(name.to_owned());
                 }
             }
-            Ok(None) => break,
             Err(e) => {
                 tracing::debug!(folder = %folder.display(), error = %e, "[Export] Folder scan stopped");
                 break;
@@ -185,7 +197,20 @@ pub fn next_free_counter(
     taken: &Taken<'_>,
     stem_for: impl Fn(u32) -> Result<String, NameError>,
 ) -> Option<(u32, String)> {
+    next_free_counter_except(counter, container, taken, &[], stem_for)
+}
+
+/// [`next_free_counter`] that also passes over the numbers in `used` (the name's numbered series in other formats:
+/// "Clip - 02.mp4" makes 02 taken for an MKV job too, so a series never gets the same number twice).
+pub fn next_free_counter_except(
+    counter: u32,
+    container: Container,
+    taken: &Taken<'_>,
+    used: &[u32],
+    stem_for: impl Fn(u32) -> Result<String, NameError>,
+) -> Option<(u32, String)> {
     (counter.saturating_add(1)..counter.saturating_add(MAX_COUNTER_TRIES))
+        .filter(|n| !used.contains(n))
         .map(|n| stem_for(n).map(|stem| (n, stem)))
         .find(|candidate| match candidate {
             Ok((_, stem)) => taken.stem_free(stem, container),
@@ -321,6 +346,11 @@ mod tests {
         assert_eq!(
             next_free_counter(1, Container::Mkv, &taken, |_| Err(NameError::Empty)),
             None
+        );
+        assert_eq!(
+            next_free_counter_except(1, Container::Mkv, &taken, &[4, 5, 7], stem_for),
+            Some((6, "Clip - 06".into())),
+            "04 and 05 exist in other formats"
         );
     }
 

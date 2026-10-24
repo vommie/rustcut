@@ -28,6 +28,9 @@ pub enum HashCommand {
     Cancel {
         path: PathBuf,
     },
+    /// Whether a computed hash is written into a new sidecar next to the video (settings `hashing.write_sidecar`; off
+    /// until the app says otherwise).
+    SetWriteSidecar(bool),
     Shutdown {
         reply: Reply<()>,
     },

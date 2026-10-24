@@ -47,6 +47,7 @@ pub use engine::{RenderEnv, RenderError, RenderUpdate, RenderedFile, estimate_et
 pub use estimate::{ESTIMATE_AFTER, estimate_size, scale_size};
 pub use help::{OptionHelp, OptionId};
 pub use library::{LibraryError, ProfileLibrary, Selection};
+pub(crate) use output::rename_no_replace;
 pub use output::{FinalizeError, Leftovers, finalize};
 pub use probe::{
     DEFAULT_PROBE_SECS, PROBE_JOB, PROBE_SECS, ProbeInput, ProbeJob, clear_probe_dir, probe_dir, probe_env, probe_job,

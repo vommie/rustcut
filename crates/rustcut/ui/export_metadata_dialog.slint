@@ -2,6 +2,7 @@
 // missing, the rating bar (a click saves the job with that rating), "Save without" (Enter), "Back to tagging" (Escape)
 // and "Don't ask again". Keys 0-5 pick a rating while it is asked for.
 
+import { DialogFrame, DialogState } from "dialog_frame.slint";
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Switch } from "controls.slint";
@@ -35,20 +36,20 @@ export component MetadataDialog inherits Rectangle {
             accept
         }
 
-        card := Rectangle {
-            width: Math.min(460px, root.width - 40px);
-            height: Math.min(content.preferred-height, root.height - 40px);
-            x: (root.width - self.width) / 2;
-            y: (root.height - self.height) / 2;
-            border-radius: 8px;
-            background: Theme.surface-variant;
-            border-width: 1px;
-            border-color: Theme.border;
-            drop-shadow-blur: 24px;
-            drop-shadow-color: #00000080;
-            clip: true;
+        // Resizable; never smaller than its content, extra height stays free below it.
+        card := DialogFrame {
+            area-width: root.width;
+            area-height: root.height;
+            default-width: 460px;
+            default-height: content.preferred-height;
+            least-width: 360px;
+            least-height: content.preferred-height;
+            stored-width <=> DialogState.metadata-width;
+            stored-height <=> DialogState.metadata-height;
 
             content := VerticalLayout {
+                y: 0;
+                height: self.preferred-height;
                 padding: 16px;
                 spacing: 12px;
 

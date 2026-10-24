@@ -9,6 +9,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The "file exists" dialog has tabs (0.0.20). "Decision" shows the existing file with a picture (a click plays it,
+  the "i" in its corner shows date, size, length, resolution, codecs and bit rate) and every way out: next free number,
+  overwrite, "(n)" and your own name, or the ways for queued jobs. "Similar files" lists every file of the name's
+  numbered series ("Name - 01.mkv", "Name - 02.mp4", ...) in any video format and the other videos whose names start
+  with the name, each with a picture, play and show-in-folder buttons, in two groups you can fold. "Queue" lists the
+  jobs that write the same file when it also exists. Tab and Shift+Tab switch tabs.
+- Pictures of the files are made in the background (the existing file first, then the list), a placeholder shows
+  until each arrives, a file without one says why (audio only, not a video, not readable); "Reading 12 of 40 files"
+  shows how far it is. Closing the dialog stops the work at once.
+- Every dialog can be resized at its edges and corners; the size is remembered (`ui-state.toml`, `[dialogs]`), and
+  switching tabs never changes it. The folded groups are remembered too.
+- Settings > Dialogs: the way out chosen when the dialog opens, whether the series and the similar names are listed,
+  which files get pictures (every file, the existing file only, none), where in a video the picture is taken, how many
+  pictures are made at once and their size in the list (`[dialogs.conflict]` in `config.toml`).
+- MD5 sidecars: when RustCut had to read a video for its MD5, it writes `.<name>.md5` next to it (md5sum's format), so
+  neither RustCut nor other programs read it again; an existing sidecar is never changed. Settings > RustView > "Write a
+  sidecar" (`[hashing] write_sidecar`, on).
+
+### Changed
+
+- The next free number passes over every number the name's series uses in another video format: with "Clip - 02.mp4"
+  in the folder, an MKV job never becomes "Clip - 02.mkv". Gaps are filled first (0.0.20).
+- The dialog's Save button names no file ("Save", "Overwrite", "Remove and save"); the chosen row shows the name. The
+  header shows the whole path; a long folder is shortened, never the file name. "Don't ask again" left the dialog:
+  whether it asks is on the Warnings page.
+- Less drive work: pictures read only the keyframe they show (0.2-2 MB per file instead of up to the whole file), the
+  pictures' ffprobe and ffmpeg and the MD5 reads run at a low priority so playback comes first, MD5 reads ask the
+  kernel for larger read-ahead, and folders are read in one pass of names only.
+
 - Arch package (0.0.19): `./build-package.sh` builds `dist/rustcut-<version>-1-x86_64.pkg.tar.zst` (install it with
   `sudo pacman -U dist/rustcut-<version>-1-x86_64.pkg.tar.zst`). It brings the desktop entry (RustCut opens videos
   from Dolphin and other file managers, several at once; the taskbar entry shows the queue's progress), the AppStream

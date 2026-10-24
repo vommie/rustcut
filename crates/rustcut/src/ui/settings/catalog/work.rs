@@ -161,4 +161,14 @@ pub static RUSTVIEW: &[Card] = &[
             ),
         ],
     },
+    Card {
+        title: "Source hashes",
+        description: "RustView recognizes a source by its MD5. RustCut takes it from RustView's library or from a sidecar                       file next to the video, and reads the whole video only when neither has it.",
+        fields: &[switch!(
+            "hashing.write_sidecar",
+            "Write a sidecar",
+            "When RustCut had to read a video for its MD5, it writes \".<name>.md5\" next to it (md5sum's format), so              neither RustCut nor other programs read it again. An existing sidecar is never changed.",
+            hashing.write_sidecar
+        )],
+    },
 ];

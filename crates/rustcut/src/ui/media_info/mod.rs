@@ -82,6 +82,13 @@ impl MediaInfoBridge {
         self.probe_options.borrow_mut().program = program;
     }
 
+    /// Whether a hash RustCut computes goes into a new sidecar next to the video (settings `hashing.write_sidecar`).
+    pub fn set_write_sidecar(&self, on: bool) {
+        if self.hashing.handle.send(HashCommand::SetWriteSidecar(on)).is_err() {
+            tracing::warn!("[Media] The hash service is gone; the sidecar setting is not applied");
+        }
+    }
+
     /// Handles the panel's callbacks and the hash service's events from now on. The app owns the only strong reference.
     pub fn install(
         window: &MainWindow,

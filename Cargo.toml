@@ -6,7 +6,7 @@ default-members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustc
 [workspace.package]
 # Single source of truth for the app version: the About page, the package script and the PKGBUILD read it from here.
 # Claude bumps the patch number whenever a state is testable; major and minor belong to the user.
-version = "0.0.19"
+version = "0.0.20"
 edition = "2024"
 # The lowest toolchain known to work (rusqlite_migration needs 1.95). rust-toolchain.toml pins `stable`.
 rust-version = "1.95"
@@ -95,8 +95,9 @@ notify-rust = "4"
 isolang = "2"
 
 # Process control of the ffmpeg renders: signals to the process group (pause = SIGSTOP/SIGCONT, cancel), niceness, and the
-# no-replace rename that puts a verified render onto its target without ever clobbering a file that appeared meanwhile.
-rustix = { version = "1", features = ["process", "fs"] }
+# no-replace rename that puts a verified render onto its target without ever clobbering a file that appeared meanwhile;
+# `posix_fadvise` and the thread id for the hash reads (read-ahead advice, drive priority of the reading thread).
+rustix = { version = "1", features = ["process", "fs", "thread"] }
 # The idle I/O class for the renders (`ioprio_set` on the process group), so the desktop stays responsive.
 ioprio = "0.2"
 # Shell quoting of the ffmpeg command line in the job log (copy and paste it into a terminal to reproduce a render).
@@ -104,6 +105,10 @@ shlex = "2"
 # The growing pause between attempts while RustView cannot be reached (exponential, capped), used as a plain iterator of
 # delays by the sync actor.
 backon = { version = "1", default-features = false, features = ["std"] }
+
+# The previews of media files (pictures and descriptions): a concurrent cache weighed in bytes whose loads for the same
+# key are shared (`get_value_or_guard_async`).
+quick_cache = "0.7"
 
 # Tests only.
 proptest = "1"

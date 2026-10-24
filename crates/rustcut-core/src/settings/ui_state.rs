@@ -35,6 +35,10 @@ pub struct UiState {
     /// The Settings window. A value this version cannot read counts as missing.
     #[serde_as(as = "DefaultOnError")]
     pub settings: SettingsWindowState,
+    /// The dialogs' sizes and the conflict dialog's folded groups (0.0.20). A value this version cannot read counts as
+    /// missing.
+    #[serde_as(as = "DefaultOnError")]
+    pub dialogs: super::dialog_ui::DialogUiState,
 }
 
 /// The Settings window (M4.2): its size, the page it showed last and what each page had selected.
@@ -413,6 +417,7 @@ impl VersionedFile for UiState {
             let fresh = SettingsWindowState::default();
             (s.width, s.height) = (fresh.width, fresh.height);
         }
+        self.dialogs.sanitize(&mut notes);
         notes
     }
 }

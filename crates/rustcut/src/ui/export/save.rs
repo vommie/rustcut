@@ -3,28 +3,22 @@
 //! takes a free name without asking); then the queue gets the job. Afterwards the counter goes up (auto-increment) and
 //! the sections are cleared when the card says so.
 
-use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use humansize::{DECIMAL, format_size};
 use rustcut_core::edit::Size;
 use rustcut_core::job::{JOB_SPEC_VERSION, JobId, JobMetadata, JobSpec, SourceSummary, TargetSpec};
 use rustcut_core::media::MediaInfo;
 use rustcut_core::naming::{CheckInput, ExistingFile, check, existing_file, file_name, same_path, scan_folder};
 use rustcut_core::queue::{QueueCommand, QueueError};
 use rustcut_core::render::Severity;
-use slint::{ComponentHandle as _, ModelRc, VecModel};
+use slint::ComponentHandle as _;
 
 use super::ExportBridge;
 use super::dialog::{ConflictDialog, DialogInput, Outcome, silent_outcome};
 use super::state::JobFacts;
-use crate::ui::queue::title as state_title;
 use crate::ui::status::Level;
-use crate::{ConflictJobView, ConflictOptionView, Export, MainWindow};
-
-/// Similar names the dialog lists in its line (the tooltip has them all).
-const SIMILAR_SHOWN: usize = 4;
+use crate::{Export, MainWindow};
 
 /// A job waiting for its target: everything but the target's stem and the overwrite flag.
 #[derive(Debug, Clone)]
@@ -40,7 +34,7 @@ pub(super) struct Draft {
 
 /// The open conflict dialog with its job.
 pub(super) struct Pending {
-    dialog: ConflictDialog,
+    pub(super) dialog: ConflictDialog,
     draft: Draft,
 }
 
@@ -214,6 +208,7 @@ impl ExportBridge {
                 queue,
                 export: &st,
                 facts: &draft.facts,
+                settings: &self.dialog_settings.borrow(),
             })
         };
         if silent {
@@ -234,6 +229,7 @@ impl ExportBridge {
         self.saving.set(false);
         *self.pending.borrow_mut() = Some(Pending { dialog, draft });
         self.publish_dialog();
+        self.start_previews();
         self.publish();
     }
 
@@ -325,84 +321,7 @@ impl ExportBridge {
         self.status(Level::Success, &format!("Job {id} queued: {file}"));
     }
 
-    /// Shows the dialog's state (or closes it).
-    pub(super) fn publish_dialog(&self) {
-        let Some(window) = self.window.upgrade() else { return };
-        let e = window.global::<Export<'_>>();
-        let pending = self.pending.borrow();
-        let Some(Pending { dialog, .. }) = pending.as_ref() else {
-            e.set_dialog_open(false);
-            return;
-        };
-        let c = &dialog.conflicts;
-        let title = match (c.exists.is_some(), c.queued.is_empty()) {
-            (true, false) => "The file exists, and queued jobs write it too",
-            (true, true) => "The file exists already",
-            _ => "Queued jobs write the same file",
-        };
-        e.set_dialog_title(title.into());
-        e.set_dialog_file(dialog.file.as_str().into());
-        e.set_dialog_folder(dialog.folder.display().to_string().into());
-        e.set_dialog_exists(c.exists.map(existing_text).unwrap_or_default().into());
-        e.set_dialog_jobs_title(
-            match c.queued.len() {
-                1 => "1 job in the queue writes this file".to_owned(),
-                n => format!("{n} jobs in the queue write this file"),
-            }
-            .into(),
-        );
-        let jobs: Vec<ConflictJobView> = c
-            .queued
-            .iter()
-            .map(|q| ConflictJobView {
-                id: q.id.to_string().into(),
-                name: q
-                    .target
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default()
-                    .into(),
-                state: state_title(q.state).into(),
-                running: q.state.is_active(),
-            })
-            .collect();
-        e.set_dialog_jobs(ModelRc::new(VecModel::from(jobs)));
-        let more = c.similar.len().saturating_sub(SIMILAR_SHOWN);
-        let mut similar = c
-            .similar
-            .iter()
-            .take(SIMILAR_SHOWN)
-            .cloned()
-            .collect::<Vec<_>>()
-            .join(", ");
-        if more > 0 {
-            let _ = write!(similar, " and {more} more");
-        }
-        e.set_dialog_similar(similar.into());
-        e.set_dialog_similar_tooltip(c.similar.join("\n").into());
-        let options: Vec<ConflictOptionView> = dialog
-            .options
-            .iter()
-            .map(|o| ConflictOptionView {
-                title: o.title.as_str().into(),
-                file: o.file.as_str().into(),
-                detail: o.detail.as_str().into(),
-                enabled: o.enabled,
-                destructive: o.destructive,
-                typed: o.choice == super::Choice::Rename,
-            })
-            .collect();
-        e.set_dialog_options(ModelRc::new(VecModel::from(options)));
-        e.set_dialog_selected(i32::try_from(dialog.selected).unwrap_or_default());
-        e.set_dialog_typed(dialog.typed.as_str().into());
-        e.set_dialog_dont_ask_text(dialog.dont_ask_text().into());
-        e.set_dialog_dont_ask(dialog.dont_ask);
-        e.set_dialog_can_confirm(dialog.outcome().is_some());
-        e.set_dialog_confirm_text(dialog.confirm_text().into());
-        e.set_dialog_open(true);
-    }
-
-    fn with_dialog(&self, change: impl FnOnce(&mut ConflictDialog)) {
+    pub(super) fn with_dialog(&self, change: impl FnOnce(&mut ConflictDialog)) {
         if let Some(pending) = self.pending.borrow_mut().as_mut() {
             change(&mut pending.dialog);
         }
@@ -417,24 +336,6 @@ impl ExportBridge {
             *self.pending.borrow_mut() = Some(pending);
             return;
         };
-        if pending.dialog.dont_ask {
-            let exists = pending.dialog.conflicts.exists.is_some();
-            {
-                let mut warnings = self.warnings.borrow_mut();
-                if exists {
-                    warnings.target_exists = false;
-                } else {
-                    warnings.target_queued = false;
-                }
-            }
-            let warnings = self.warnings.borrow().clone();
-            if !self.writer.update(|s| s.warnings = warnings) {
-                self.status(
-                    Level::Warning,
-                    "config.toml is from a newer RustCut: the choice is kept for this run only.",
-                );
-            }
-        }
         self.publish_dialog();
         if let Some(window) = self.window.upgrade() {
             window.invoke_focus_keys();
@@ -451,40 +352,6 @@ impl ExportBridge {
             window.invoke_focus_keys();
         }
         self.publish();
-    }
-
-    /// The existing target: played in the default player, or shown in the file manager (off the UI thread).
-    fn open_existing(&self, reveal: bool) {
-        let Some(path) = self
-            .pending
-            .borrow()
-            .as_ref()
-            .map(|p| p.dialog.folder.join(&p.dialog.file))
-        else {
-            return;
-        };
-        self.runtime.spawn_blocking(move || {
-            let result = if reveal {
-                opener::reveal(&path)
-            } else {
-                opener::open(&path)
-            };
-            if let Err(e) = result {
-                tracing::warn!(file = %path.display(), error = %e, "[Export] The existing file could not be opened");
-            }
-        });
-    }
-}
-
-/// "245 MB · modified 2026-10-22 14:05".
-fn existing_text(file: ExistingFile) -> String {
-    let size = format_size(file.bytes, DECIMAL);
-    match file.modified {
-        Some(time) => {
-            let local: chrono::DateTime<chrono::Local> = time.into();
-            format!("{size} · modified {}", local.format("%Y-%m-%d %H:%M"))
-        }
-        None => size,
     }
 }
 
@@ -521,12 +388,6 @@ pub(super) fn connect_dialog(bridge: &Rc<ExportBridge>, window: &MainWindow) {
         }
     });
     let weak = Rc::downgrade(bridge);
-    e.on_dialog_toggle_dont_ask(move || {
-        if let Some(b) = weak.upgrade() {
-            b.with_dialog(|d| d.dont_ask = !d.dont_ask);
-        }
-    });
-    let weak = Rc::downgrade(bridge);
     e.on_dialog_confirm(move || {
         if let Some(b) = weak.upgrade() {
             b.confirm();
@@ -539,15 +400,25 @@ pub(super) fn connect_dialog(bridge: &Rc<ExportBridge>, window: &MainWindow) {
         }
     });
     let weak = Rc::downgrade(bridge);
-    e.on_dialog_play_existing(move || {
+    e.on_dialog_open_file(move |group, index, reveal| {
         if let Some(b) = weak.upgrade() {
-            b.open_existing(false);
+            b.open_listed(group, index, reveal);
         }
     });
     let weak = Rc::downgrade(bridge);
-    e.on_dialog_reveal(move || {
+    e.on_dialog_set_tab(move |index| {
         if let Some(b) = weak.upgrade() {
-            b.open_existing(true);
+            b.with_dialog(|d| {
+                if let Some(tab) = d.tabs().get(usize::try_from(index).unwrap_or(usize::MAX)) {
+                    d.set_tab(*tab);
+                }
+            });
+        }
+    });
+    let weak = Rc::downgrade(bridge);
+    e.on_dialog_cycle_tab(move |delta| {
+        if let Some(b) = weak.upgrade() {
+            b.with_dialog(|d| d.cycle_tab(delta));
         }
     });
 }

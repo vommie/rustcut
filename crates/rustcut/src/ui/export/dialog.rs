@@ -1,14 +1,23 @@
-//! The conflict dialog without Slint (user decision Q-X1: a modal dialog like PyCutRv's, with every way out in one
-//! place): what stands in the way of the target, and the choices, each with the file name it leads to and whether it
-//! is free. Keys 1-6 pick a choice, Up/Down move, Enter saves, Escape cancels.
+//! The conflict dialog without Slint (user decisions Q-X1, Q-X6 and the requests of 2026-10-24): what stands in the way
+//! of the target, the choices (each with the file name it leads to and whether it is free) and the tabs. The first tab,
+//! "Decision", holds every way out: the primary ones first (a free name and overwrite, or the queued jobs' ways), then
+//! the other free name and a typed one; "Similar files" lists the numbered series of the name and the other names that
+//! start like it, video files only (`media::is_video_file`; settings `dialogs.conflict`); "Queue" the jobs that write the file when it also exists. Keys 1-6 pick
+//! a choice (the Decision tab shows), Up/Down move, Tab/Shift+Tab switch tabs, Enter saves, Escape cancels. Whether it asks at all is a warning
+//! setting (`warnings.target_exists`, `warnings.target_queued`); the dialog itself has no "Don't ask again" (user
+//! request 2026-10-24: it makes no sense for this question).
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use rustcut_core::job::JobId;
+use rustcut_core::media::is_video_file;
 use rustcut_core::naming::{
-    Conflicts, FolderScan, QueuedTarget, Taken, TypedNameError, file_name, free_variant, next_free_counter, typed_stem,
+    Conflicts, FolderScan, MAX_SIMILAR, QueuedTarget, SeriesFile, Taken, TypedNameError, file_name, free_variant,
+    next_free_counter_except, series, typed_stem,
 };
 use rustcut_core::render::Container;
+use rustcut_core::settings::{ConflictDialogSettings, ConflictPreselect};
 
 use super::state::{ExportState, JobFacts};
 
@@ -27,6 +36,24 @@ pub enum Choice {
     RemoveQueued,
     /// Save with the same name; the job renders after the queued ones and replaces their file.
     KeepName,
+}
+
+/// A tab of the dialog.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tab {
+    Decision,
+    Similar,
+    Queue,
+}
+
+impl Tab {
+    pub const fn title(self) -> &'static str {
+        match self {
+            Self::Decision => "Decision",
+            Self::Similar => "Similar files",
+            Self::Queue => "Queue",
+        }
+    }
 }
 
 /// What saving does after the dialog.
@@ -49,7 +76,7 @@ pub struct DialogOption {
     pub enabled: bool,
     /// Replaces or removes something (drawn as a warning).
     pub destructive: bool,
-    outcome: Option<Outcome>,
+    pub(super) outcome: Option<Outcome>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,10 +84,17 @@ pub struct ConflictDialog {
     pub folder: PathBuf,
     pub file: String,
     pub conflicts: Conflicts,
+    /// In tab order: the Decision tab's choices first.
     pub options: Vec<DialogOption>,
     pub selected: usize,
+    pub tab: Tab,
     pub typed: String,
-    pub dont_ask: bool,
+    /// Every file of the name's numbered series in the folder (the target too, when it is one).
+    pub series: Vec<SeriesFile>,
+    /// Other files whose names start with the card's name (not in the series, not the target).
+    pub others: Vec<String>,
+    /// The free name listed first: the next number, or "(n)" (no counter, or chosen in the settings).
+    primary_free: Choice,
     container: Container,
     scan: FolderScan,
     queue: Vec<QueuedTarget>,
@@ -75,26 +109,47 @@ pub struct DialogInput<'a> {
     pub queue: Vec<QueuedTarget>,
     pub export: &'a ExportState,
     pub facts: &'a JobFacts,
+    pub settings: &'a ConflictDialogSettings,
 }
 
 impl ConflictDialog {
     pub fn new(input: DialogInput<'_>) -> Self {
         let container = input.facts.container;
+        let file = file_name(input.stem, container);
+        // The series counts for the next free number even when it is not listed; only video files are a series.
+        let mut series = if input.export.template_uses_counter() {
+            let videos = input.scan.names.iter().filter(|n| is_video_file(n));
+            series(videos, |n| input.export.stem_with(input.facts, Some(n)).ok())
+        } else {
+            Vec::new()
+        };
+        let used: Vec<u32> = series.iter().map(|f| f.counter).collect();
+        if !input.settings.show_series {
+            series.clear();
+        }
+        let others = if input.settings.show_similar {
+            similar_names(&input.scan, &input.export.name, &file, &series)
+        } else {
+            Vec::new()
+        };
         let mut dialog = Self {
             folder: input.folder.to_path_buf(),
-            file: file_name(input.stem, container),
+            file,
             conflicts: input.conflicts,
             options: Vec::new(),
             selected: 0,
+            tab: Tab::Decision,
             typed: input.stem.to_owned(),
-            dont_ask: false,
+            series,
+            others,
+            primary_free: Choice::NextNumber,
             container,
             scan: input.scan,
             queue: input.queue,
         };
-        dialog.options = dialog.build(input.stem, input.export, input.facts);
-        dialog.selected = dialog.options.iter().position(|o| o.enabled).unwrap_or(0);
+        dialog.options = dialog.build(input.stem, input.export, input.facts, input.settings.preselect, &used);
         dialog.update_rename();
+        dialog.selected = dialog.preselected(input.settings.preselect);
         dialog
     }
 
@@ -106,12 +161,20 @@ impl ConflictDialog {
         }
     }
 
-    fn build(&self, stem: &str, export: &ExportState, facts: &JobFacts) -> Vec<DialogOption> {
+    fn build(
+        &mut self,
+        stem: &str,
+        export: &ExportState,
+        facts: &JobFacts,
+        preselect: ConflictPreselect,
+        used: &[u32],
+    ) -> Vec<DialogOption> {
         let taken = self.taken();
-        let mut options = Vec::new();
-        if export.template_uses_counter() {
+        let next = export.template_uses_counter().then(|| {
             let start = if export.counter_enabled { export.counter } else { 0 };
-            let found = next_free_counter(start, self.container, &taken, |n| export.stem_with(facts, Some(n)));
+            let found = next_free_counter_except(start, self.container, &taken, used, |n| {
+                export.stem_with(facts, Some(n))
+            });
             let detail = match found {
                 Some((n, _)) if export.auto_increment => {
                     format!("The counter continues at {:02} for the next job.", n.saturating_add(1))
@@ -119,7 +182,7 @@ impl ConflictDialog {
                 Some((n, _)) => format!("The counter becomes {n:02}."),
                 None => "No free number was found.".to_owned(),
             };
-            options.push(DialogOption {
+            DialogOption {
                 choice: Choice::NextNumber,
                 title: if export.counter_enabled {
                     "Next free number"
@@ -140,35 +203,50 @@ impl ConflictDialog {
                     overwrite: false,
                     remove: Vec::new(),
                 }),
-            });
-        }
-        let variant = free_variant(stem, self.container, &taken);
-        options.push(DialogOption {
+            }
+        });
+        let found = free_variant(stem, self.container, &taken);
+        let variant = DialogOption {
             choice: Choice::Variant,
             title: "Add \"(n)\"".to_owned(),
-            file: variant
+            file: found
                 .as_deref()
                 .map(|s| file_name(s, self.container))
                 .unwrap_or_default(),
             detail: "Keeps the name and adds the next free number in brackets.".to_owned(),
-            enabled: variant.is_some(),
+            enabled: found.is_some(),
             destructive: false,
-            outcome: variant.map(|stem| Outcome {
+            outcome: found.map(|stem| Outcome {
                 stem,
                 counter: None,
                 overwrite: false,
                 remove: Vec::new(),
             }),
-        });
-        options.push(DialogOption {
+        };
+        let rename = DialogOption {
             choice: Choice::Rename,
-            title: "Another name".to_owned(),
+            title: "Own name".to_owned(),
             file: String::new(),
             detail: String::new(),
             enabled: false,
             destructive: false,
             outcome: None,
-        });
+        };
+        let (primary, secondary) = match next {
+            Some(next) if preselect != ConflictPreselect::Variant => (next, Some(variant)),
+            Some(next) => (variant, Some(next)),
+            None => (variant, None),
+        };
+        self.primary_free = primary.choice;
+        let mut options = vec![primary];
+        options.extend(self.decision_options(stem));
+        options.extend(secondary);
+        options.push(rename);
+        options
+    }
+
+    /// Overwrite, or the ways of the queued jobs.
+    fn decision_options(&self, stem: &str) -> Vec<DialogOption> {
         let queued = self.conflicts.queued.len();
         let same = Outcome {
             stem: stem.to_owned(),
@@ -182,7 +260,7 @@ impl ConflictDialog {
                 1 => " A queued job writes it too.".to_owned(),
                 n => format!(" {n} queued jobs write it too."),
             };
-            options.push(DialogOption {
+            return vec![DialogOption {
                 choice: Choice::Overwrite,
                 title: "Overwrite".to_owned(),
                 file: self.file.clone(),
@@ -190,11 +268,24 @@ impl ConflictDialog {
                 enabled: true,
                 destructive: true,
                 outcome: Some(same),
-            });
-        } else if queued > 0 {
-            let running = self.conflicts.queued.iter().find(|q| q.state.is_active());
-            let ids: Vec<JobId> = self.conflicts.queued.iter().map(|q| q.id).collect();
-            options.push(DialogOption {
+            }];
+        }
+        if queued == 0 {
+            return Vec::new();
+        }
+        let running = self.conflicts.queued.iter().find(|q| q.state.is_active());
+        let ids: Vec<JobId> = self.conflicts.queued.iter().map(|q| q.id).collect();
+        vec![
+            DialogOption {
+                choice: Choice::KeepName,
+                title: "Save anyway".to_owned(),
+                file: self.file.clone(),
+                detail: "Renders after the queued jobs and replaces their file.".to_owned(),
+                enabled: true,
+                destructive: false,
+                outcome: Some(same.clone()),
+            },
+            DialogOption {
                 choice: Choice::RemoveQueued,
                 title: if queued == 1 {
                     "Remove the queued job".to_owned()
@@ -211,38 +302,78 @@ impl ConflictDialog {
                 outcome: Some(Outcome {
                     remove: ids,
                     overwrite: false,
-                    ..same.clone()
+                    ..same
                 }),
-            });
-            options.push(DialogOption {
-                choice: Choice::KeepName,
-                title: "Save anyway".to_owned(),
-                file: self.file.clone(),
-                detail: "Renders after the queued jobs and replaces their file.".to_owned(),
-                enabled: true,
-                destructive: false,
-                outcome: Some(same),
-            });
-        }
-        options
+            },
+        ]
     }
 
-    /// The text of "Don't ask again" for the conflicts shown.
-    pub fn dont_ask_text(&self) -> &'static str {
-        if self.conflicts.exists.is_some() {
-            "Don't ask again: take a free name"
+    /// The choice the dialog opens with: the one the settings name when it can be taken, else the first free name.
+    fn preselected(&self, preselect: ConflictPreselect) -> usize {
+        let want = match preselect {
+            ConflictPreselect::NextNumber => self.primary_free,
+            ConflictPreselect::Variant => Choice::Variant,
+            ConflictPreselect::Overwrite => Choice::Overwrite,
+        };
+        let find = |test: &dyn Fn(&DialogOption) -> bool| self.options.iter().position(|o| o.enabled && test(o));
+        find(&|o| o.choice == want)
+            .or_else(|| find(&|o| !o.destructive))
+            .or_else(|| find(&|_| true))
+            .unwrap_or(0)
+    }
+
+    /// The tabs with content, in order.
+    pub fn tabs(&self) -> Vec<Tab> {
+        let mut tabs = vec![Tab::Decision];
+        if !self.series.is_empty() || !self.others.is_empty() {
+            tabs.push(Tab::Similar);
+        }
+        if self.conflicts.exists.is_some() && !self.conflicts.queued.is_empty() {
+            tabs.push(Tab::Queue);
+        }
+        tabs
+    }
+
+    /// The choices `tab` shows with their index in [`Self::options`] (the key that picks them is the index + 1): all
+    /// on the Decision tab, none elsewhere.
+    pub fn options_of(&self, tab: Tab) -> Vec<(usize, &DialogOption)> {
+        if tab == Tab::Decision {
+            self.options.iter().enumerate().collect()
         } else {
-            "Don't ask again: save anyway"
+            Vec::new()
         }
     }
 
+    pub fn set_tab(&mut self, tab: Tab) {
+        if self.tabs().contains(&tab) {
+            self.tab = tab;
+        }
+    }
+
+    /// The next (`1`) or previous (`-1`) tab, wrapping around.
+    pub fn cycle_tab(&mut self, delta: i32) {
+        let tabs = self.tabs();
+        let at = tabs.iter().position(|t| *t == self.tab).unwrap_or(0);
+        let next = if delta < 0 {
+            at.checked_sub(1).unwrap_or(tabs.len().saturating_sub(1))
+        } else {
+            (at + 1) % tabs.len().max(1)
+        };
+        if let Some(tab) = tabs.get(next) {
+            self.tab = *tab;
+        }
+    }
+
+    /// Picks the choice at `index`; the Decision tab shows it.
     pub fn select(&mut self, index: usize) {
         if index < self.options.len() {
             self.selected = index;
+            self.tab = Tab::Decision;
         }
     }
 
-    /// Up (`-1`) or down (`1`), skipping choices that cannot be taken; the typed name can always be chosen.
+    /// Up (`-1`) or down (`1`), skipping choices that cannot be taken (the typed name can always be chosen); the
+    /// Decision tab shows the choice.
     pub fn step(&mut self, delta: i32) {
         let count = self.options.len();
         let mut i = self.selected;
@@ -257,7 +388,7 @@ impl ConflictDialog {
                 .get(i)
                 .is_some_and(|o| o.enabled || o.choice == Choice::Rename)
             {
-                self.selected = i;
+                self.select(i);
                 return;
             }
         }
@@ -308,15 +439,40 @@ impl ConflictDialog {
         self.current().filter(|o| o.enabled).and_then(|o| o.outcome.clone())
     }
 
-    /// The text of the confirm button.
-    pub fn confirm_text(&self) -> String {
+    /// The text of the confirm button (without the file name, which the chosen row shows: a long name would crowd
+    /// the button, user request 2026-10-24).
+    pub fn confirm_text(&self) -> &'static str {
         match self.current() {
-            Some(o) if o.enabled && o.choice == Choice::Overwrite => format!("Overwrite {}", o.file),
-            Some(o) if o.enabled && o.choice == Choice::RemoveQueued => "Remove and save".to_owned(),
-            Some(o) if o.enabled => format!("Save as {}", o.file),
-            _ => "Save".to_owned(),
+            Some(o) if o.enabled && o.choice == Choice::Overwrite => "Overwrite",
+            Some(o) if o.enabled && o.choice == Choice::RemoveQueued => "Remove and save",
+            _ => "Save",
         }
     }
+}
+
+/// Video files whose names start with `base` (ignoring case), except the target, hidden files and the series; sorted, at
+/// most [`MAX_SIMILAR`].
+fn similar_names(scan: &FolderScan, base: &str, target: &str, series: &[SeriesFile]) -> Vec<String> {
+    let base = base.trim().to_lowercase();
+    if base.is_empty() {
+        return Vec::new();
+    }
+    let in_series: HashSet<&str> = series.iter().map(|f| f.name.as_str()).collect();
+    let mut names: Vec<String> = scan
+        .names
+        .iter()
+        .filter(|n| {
+            n.as_str() != target
+                && !n.starts_with('.')
+                && is_video_file(n)
+                && !in_series.contains(n.as_str())
+                && n.to_lowercase().starts_with(&base)
+        })
+        .cloned()
+        .collect();
+    names.sort();
+    names.truncate(MAX_SIMILAR);
+    names
 }
 
 /// The way out without asking (the warning is switched off): the next free number when the counter is on, else
@@ -334,141 +490,4 @@ pub fn silent_outcome(dialog: &ConflictDialog, export: &ExportState) -> Option<O
         .find(|o| o.choice == preferred)
         .or_else(|| dialog.options.iter().find(|o| o.enabled && o.choice == Choice::Variant))
         .and_then(|o| o.outcome.clone())
-}
-
-#[cfg(test)]
-mod tests {
-    use rustcut_core::job::JobStateKind;
-    use rustcut_core::naming::ExistingFile;
-    use rustcut_core::render::builtin_profiles;
-    use rustcut_core::settings::{ExportPanelState, ExportSettings};
-    use rustcut_core::time::Timestamp;
-
-    use super::*;
-
-    fn export(counter_enabled: bool) -> ExportState {
-        let mut st = ExportState::new(
-            &ExportSettings::default(),
-            &ExportPanelState {
-                counter_enabled,
-                counter: 1,
-                ..ExportPanelState::default()
-            },
-        );
-        st.file_opened(Path::new("/out/Clip.mp4"));
-        st
-    }
-
-    fn facts() -> JobFacts {
-        JobFacts::new(&builtin_profiles().remove(0), 1, Timestamp::from_secs(5))
-    }
-
-    fn dialog(st: &ExportState, conflicts: Conflicts, queue: Vec<QueuedTarget>) -> ConflictDialog {
-        let stem = st.file(&facts()).unwrap().0;
-        ConflictDialog::new(DialogInput {
-            folder: Path::new("/out"),
-            stem: &stem,
-            conflicts,
-            scan: FolderScan {
-                readable: true,
-                names: ["Clip - 01.mkv", "Clip - 02.mkv", "Clip.mkv", "Clip (1).mkv"]
-                    .into_iter()
-                    .map(str::to_owned)
-                    .collect(),
-            },
-            queue,
-            export: st,
-            facts: &facts(),
-        })
-    }
-
-    fn exists() -> Conflicts {
-        Conflicts {
-            exists: Some(ExistingFile {
-                bytes: 1,
-                modified: None,
-            }),
-            ..Conflicts::default()
-        }
-    }
-
-    #[test]
-    fn an_existing_file_offers_numbers_names_and_overwrite() {
-        let st = export(true);
-        let mut d = dialog(&st, exists(), Vec::new());
-        let choices: Vec<Choice> = d.options.iter().map(|o| o.choice).collect();
-        assert_eq!(
-            choices,
-            vec![Choice::NextNumber, Choice::Variant, Choice::Rename, Choice::Overwrite]
-        );
-        assert_eq!(d.selected, 0);
-        assert_eq!(d.options[0].file, "Clip - 03.mkv");
-        assert!(d.options[0].detail.contains("04"), "{}", d.options[0].detail);
-        assert_eq!(d.outcome().unwrap().counter, Some(3));
-        assert_eq!(d.options[1].file, "Clip - 01 (1).mkv");
-        assert_eq!(d.confirm_text(), "Save as Clip - 03.mkv");
-        assert!(!d.options[2].enabled, "the typed name starts as the taken one");
-        d.type_name("Clip - 02");
-        assert!(d.options[2].detail.contains("taken"));
-        d.type_name("Holiday");
-        d.select(2);
-        assert_eq!(d.outcome().unwrap().stem, "Holiday");
-        d.step(1);
-        assert_eq!(
-            (d.current().unwrap().choice, d.confirm_text()),
-            (Choice::Overwrite, "Overwrite Clip - 01.mkv".into())
-        );
-        assert!(d.outcome().unwrap().overwrite);
-        d.step(1);
-        assert_eq!(d.selected, 0, "wraps around");
-        assert_eq!(d.dont_ask_text(), "Don't ask again: take a free name");
-        assert_eq!(silent_outcome(&d, &st).unwrap().stem, "Clip - 03");
-    }
-
-    #[test]
-    fn queued_jobs_offer_removal_and_save_anyway() {
-        let mut st = export(false);
-        st.counter_enabled = false;
-        let queue = vec![QueuedTarget {
-            id: JobId(4),
-            target: PathBuf::from("/out/Clip.mkv"),
-            state: JobStateKind::Waiting,
-        }];
-        let conflicts = Conflicts {
-            queued: queue.clone(),
-            ..Conflicts::default()
-        };
-        let d = dialog(&st, conflicts, queue.clone());
-        let choices: Vec<Choice> = d.options.iter().map(|o| o.choice).collect();
-        assert_eq!(
-            choices,
-            vec![
-                Choice::NextNumber,
-                Choice::Variant,
-                Choice::Rename,
-                Choice::RemoveQueued,
-                Choice::KeepName
-            ]
-        );
-        assert_eq!(d.options[0].title, "Add a number");
-        assert_eq!(d.options[0].file, "Clip - 03.mkv", "01 and 02 are on the drive");
-        assert_eq!(d.options[1].file, "Clip (2).mkv");
-        assert_eq!(d.options[3].outcome.as_ref().unwrap().remove, vec![JobId(4)]);
-        assert!(d.options[4].outcome.as_ref().unwrap().overwrite);
-        assert_eq!(silent_outcome(&d, &st).unwrap().stem, "Clip (2)");
-        let running = vec![QueuedTarget {
-            state: JobStateKind::Rendering,
-            ..queue[0].clone()
-        }];
-        let d = dialog(
-            &st,
-            Conflicts {
-                queued: running.clone(),
-                ..Conflicts::default()
-            },
-            running,
-        );
-        assert!(!d.options[3].enabled && d.options[3].detail.contains("rendering"));
-        assert_eq!(d.dont_ask_text(), "Don't ask again: save anyway");
-    }
 }

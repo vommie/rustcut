@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak};
 use std::time::Instant;
 
+use rustcut_core::media::video_extensions;
 use rustcut_core::time::Timestamp;
 use slint::ComponentHandle as _;
 use slint::winit_030::winit::event::WindowEvent;
@@ -26,11 +27,6 @@ use crate::ui::player::PlayerBridge;
 use crate::ui::probe::ProbeBridge;
 use crate::ui::status::{self, Level};
 use crate::{MainWindow, Playback};
-
-/// File name extensions offered by the dialog's "Videos" filter (the "All files" filter shows everything).
-const VIDEO_EXTENSIONS: &[&str] = &[
-    "mkv", "mp4", "m4v", "mov", "avi", "webm", "mpg", "mpeg", "ts", "m2ts", "mts", "wmv", "flv", "ogv", "3gp", "vob",
-];
 
 pub struct FileOpener {
     window: slint::Weak<MainWindow>,
@@ -205,7 +201,8 @@ impl FileOpener {
         let Some(window) = self.window.upgrade() else { return };
         let mut dialog = rfd::AsyncFileDialog::new()
             .set_title("Open Video")
-            .add_filter("Videos", VIDEO_EXTENSIONS)
+            // The video formats ffmpeg reads (`media::VIDEO_FORMATS`, the one list RustCut has).
+            .add_filter("Videos", &video_extensions().collect::<Vec<_>>())
             .add_filter("All files", &["*"]);
         let start = self.last_open_dir().or_else(|| {
             self.player

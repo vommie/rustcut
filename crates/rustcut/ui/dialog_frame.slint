@@ -1,0 +1,187 @@
+// The frame of RustCut's modal dialogs (user request with M5.4): a centered card the user resizes at its edges and
+// corners; its size stays the same whatever the dialog shows (tabs never change it) and is kept per dialog in
+// ui-state.toml (`DialogState`, src/app/dialogs.rs). The dialog lays its content out from the top; height it does not
+// need stays free at the bottom of its content area.
+
+import { Theme } from "styles.slint";
+
+/// What the user changed in the dialogs (0 = the dialog's default size); the app restores it at start and saves it at
+/// quit.
+export global DialogState {
+    in-out property <length> conflict-width;
+    in-out property <length> conflict-height;
+    in-out property <length> metadata-width;
+    in-out property <length> metadata-height;
+    in-out property <length> job-load-width;
+    in-out property <length> job-load-height;
+    in-out property <length> quit-width;
+    in-out property <length> quit-height;
+    // The conflict dialog's "Similar files" groups.
+    in-out property <bool> conflict-series-folded;
+    in-out property <bool> conflict-others-folded;
+}
+
+/// A strip or corner that resizes the frame: `sx`/`sy` say which side (-1 left/top, 1 right/bottom, 0 neither).
+component ResizeGrip inherits TouchArea {
+    in property <int> sx;
+    in property <int> sy;
+    // The pointer moved this far (window coordinates) since the press.
+    callback pressed-at();
+    callback dragged(length, length);
+
+    property <length> press-x;
+    property <length> press-y;
+
+    mouse-cursor: root.sx == 0 ? MouseCursor.ns-resize
+        : root.sy == 0 ? MouseCursor.ew-resize
+        : root.sx == root.sy ? MouseCursor.nwse-resize : MouseCursor.nesw-resize;
+
+    pointer-event(event) => {
+        if event.kind == PointerEventKind.down {
+            root.press-x = root.absolute-position.x + root.mouse-x;
+            root.press-y = root.absolute-position.y + root.mouse-y;
+            root.pressed-at();
+        }
+    }
+
+    moved => {
+        if self.pressed {
+            root.dragged(root.absolute-position.x + root.mouse-x - root.press-x,
+                root.absolute-position.y + root.mouse-y - root.press-y);
+        }
+    }
+}
+
+/// The dialog card, centered in `area-width` x `area-height`. `stored-width`/`stored-height` (bound to `DialogState`)
+/// hold the user's size, 0 = `default-width`/`default-height`; the frame never gets smaller than `least-width`/`least-height`
+/// or larger than the area. Dragging an edge resizes both sides alike, so the card stays centered and the edge follows
+/// the pointer.
+export component DialogFrame inherits Rectangle {
+    in property <length> area-width;
+    in property <length> area-height;
+    in property <length> default-width: 560px;
+    in property <length> default-height: 360px;
+    in property <length> least-width: 360px;
+    in property <length> least-height: 200px;
+    in-out property <length> stored-width;
+    in-out property <length> stored-height;
+
+    property <length> max-w: Math.max(200px, root.area-width - 40px);
+    property <length> max-h: Math.max(160px, root.area-height - 40px);
+    property <length> start-w;
+    property <length> start-h;
+    property <length> grip: 6px;
+
+    width: Math.min(root.max-w, Math.max(root.least-width, root.stored-width > 0 ? root.stored-width : root.default-width));
+    height: Math.min(root.max-h, Math.max(root.least-height, root.stored-height > 0 ? root.stored-height : root.default-height));
+    x: (root.area-width - self.width) / 2;
+    y: (root.area-height - self.height) / 2;
+    border-radius: 8px;
+    background: Theme.surface-variant;
+    border-width: 1px;
+    border-color: Theme.border;
+    drop-shadow-blur: 24px;
+    drop-shadow-color: #00000080;
+    clip: true;
+
+    function start() {
+        root.start-w = root.width;
+        root.start-h = root.height;
+    }
+
+    function resize(sx: int, sy: int, dx: length, dy: length) {
+        if sx != 0 {
+            root.stored-width = Math.min(root.max-w, Math.max(root.least-width, root.start-w + sx * 2 * dx));
+        }
+        if sy != 0 {
+            root.stored-height = Math.min(root.max-h, Math.max(root.least-height, root.start-h + sy * 2 * dy));
+        }
+    }
+
+    @children
+
+    // Edges, then corners (on top).
+    ResizeGrip {
+        x: root.grip;
+        y: 0;
+        width: parent.width - 2 * root.grip;
+        height: root.grip;
+        sy: -1;
+        pressed-at => { root.start(); }
+        dragged(dx, dy) => { root.resize(0, -1, dx, dy); }
+    }
+
+    ResizeGrip {
+        x: root.grip;
+        y: parent.height - root.grip;
+        width: parent.width - 2 * root.grip;
+        height: root.grip;
+        sy: 1;
+        pressed-at => { root.start(); }
+        dragged(dx, dy) => { root.resize(0, 1, dx, dy); }
+    }
+
+    ResizeGrip {
+        x: 0;
+        y: root.grip;
+        width: root.grip;
+        height: parent.height - 2 * root.grip;
+        sx: -1;
+        pressed-at => { root.start(); }
+        dragged(dx, dy) => { root.resize(-1, 0, dx, dy); }
+    }
+
+    ResizeGrip {
+        x: parent.width - root.grip;
+        y: root.grip;
+        width: root.grip;
+        height: parent.height - 2 * root.grip;
+        sx: 1;
+        pressed-at => { root.start(); }
+        dragged(dx, dy) => { root.resize(1, 0, dx, dy); }
+    }
+
+    ResizeGrip {
+        x: 0;
+        y: 0;
+        width: 2 * root.grip;
+        height: 2 * root.grip;
+        sx: -1;
+        sy: -1;
+        pressed-at => { root.start(); }
+        dragged(dx, dy) => { root.resize(-1, -1, dx, dy); }
+    }
+
+    ResizeGrip {
+        x: parent.width - 2 * root.grip;
+        y: 0;
+        width: 2 * root.grip;
+        height: 2 * root.grip;
+        sx: 1;
+        sy: -1;
+        pressed-at => { root.start(); }
+        dragged(dx, dy) => { root.resize(1, -1, dx, dy); }
+    }
+
+    ResizeGrip {
+        x: 0;
+        y: parent.height - 2 * root.grip;
+        width: 2 * root.grip;
+        height: 2 * root.grip;
+        sx: -1;
+        sy: 1;
+        pressed-at => { root.start(); }
+        dragged(dx, dy) => { root.resize(-1, 1, dx, dy); }
+    }
+
+    ResizeGrip {
+        x: parent.width - 2 * root.grip;
+        y: parent.height - 2 * root.grip;
+        width: 2 * root.grip;
+        height: 2 * root.grip;
+        sx: 1;
+        sy: 1;
+        pressed-at => { root.start(); }
+        dragged(dx, dy) => { root.resize(1, 1, dx, dy); }
+    }
+}

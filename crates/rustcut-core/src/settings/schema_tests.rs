@@ -228,3 +228,67 @@ fn appearance_and_tag_history_have_defaults_and_are_sanitized() {
     assert_eq!(s.sanitize().len(), 2);
     assert_eq!((s.appearance.tooltip_delay_ms, s.rustview.tag_history_size), (5_000, 1));
 }
+
+#[test]
+fn dialog_settings_have_defaults_bad_values_read_as_defaults_and_ranges_are_kept() {
+    use crate::settings::{ConflictPreselect, DialogSettings, PictureScope, TileSize};
+    // A file of 0.0.19 has no `[dialogs]`: the defaults fill in, no migration, no backup.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("config.toml"), "version = 1\n[queue]\nworkers = 2\n").unwrap();
+    let outcome = load::<Settings>(dir.path(), &dir.path().join("b")).unwrap();
+    assert!(
+        matches!(outcome, LoadOutcome::Loaded { ref notes, .. } if notes.is_empty()),
+        "{outcome:?}"
+    );
+    let value = outcome.into_value();
+    assert_eq!(value.dialogs, DialogSettings::default());
+    assert_eq!(value.queue.workers, 2);
+    assert!(!dir.path().join("b").exists());
+    let c = &value.dialogs.conflict;
+    assert_eq!(
+        (
+            c.preselect,
+            c.show_series,
+            c.show_similar,
+            c.pictures,
+            c.picture_at_percent,
+            c.parallel_pictures
+        ),
+        (ConflictPreselect::NextNumber, true, true, PictureScope::All, 10, 3)
+    );
+
+    // An unknown choice reads as its default and never resets the rest; numbers out of range are brought back.
+    let text = "version = 1\n[dialogs.conflict]\npreselect = \"later\"\npictures = \"existing\"\n\
+                tile_size = \"huge\"\nshow_series = false\npicture_at_percent = 99\nparallel_pictures = 0\n";
+    let mut s: Settings = toml::from_str(text).unwrap();
+    let c = &s.dialogs.conflict;
+    assert_eq!(
+        (c.preselect, c.pictures, c.tile_size, c.show_series),
+        (
+            ConflictPreselect::NextNumber,
+            PictureScope::Existing,
+            TileSize::Medium,
+            false
+        )
+    );
+    assert_eq!(s.sanitize().len(), 2);
+    assert_eq!(
+        (
+            s.dialogs.conflict.picture_at_percent,
+            s.dialogs.conflict.parallel_pictures
+        ),
+        (90, 1)
+    );
+    let written = toml::to_string(&s).unwrap();
+    assert!(written.contains("[dialogs.conflict]"), "{written}");
+    assert_eq!(toml::from_str::<Settings>(&written).unwrap(), s, "round trip");
+}
+
+#[test]
+fn sidecar_writing_is_on_by_default_and_old_files_load() {
+    // 0.0.19 wrote no `[hashing]`.
+    let s: Settings = toml::from_str("version = 1\n[queue]\nworkers = 2\n").unwrap();
+    assert!(s.hashing.write_sidecar);
+    let s: Settings = toml::from_str("version = 1\n[hashing]\nwrite_sidecar = false\n").unwrap();
+    assert!(!s.hashing.write_sidecar);
+}

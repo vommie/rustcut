@@ -82,7 +82,10 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
     }
     if (before.export != after.export
         || before.warnings != after.warnings
-        || before.editor.auto_section != after.editor.auto_section)
+        || before.editor.auto_section != after.editor.auto_section
+        || before.dialogs != after.dialogs
+        || before.advanced.ffmpeg != after.advanced.ffmpeg
+        || before.advanced.ffprobe != after.advanced.ffprobe)
         && let Some(export) = p.export.upgrade()
     {
         export.settings_changed(after);
@@ -124,6 +127,11 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
         && let Some(media) = p.media.upgrade()
     {
         media.set_known_source(after.warnings.known_source);
+    }
+    if before.hashing != after.hashing
+        && let Some(media) = p.media.upgrade()
+    {
+        media.set_write_sidecar(after.hashing.write_sidecar);
     }
     if before.general.single_instance != after.general.single_instance {
         (p.instance)(after.general.single_instance);

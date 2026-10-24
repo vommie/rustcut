@@ -40,7 +40,9 @@ fn finalize_blocking(temp: &Path, target: &Path, overwrite: bool) -> Result<(), 
     Ok(())
 }
 
-fn rename_no_replace(temp: &Path, target: &Path) -> Result<(), FinalizeError> {
+/// Renames `temp` onto `target` unless `target` exists (atomic where the file system allows: `RENAME_NOREPLACE`, then a
+/// hard link; on FAT a check before the rename). Blocking.
+pub(crate) fn rename_no_replace(temp: &Path, target: &Path) -> Result<(), FinalizeError> {
     let exists = || FinalizeError::TargetExists(target.to_path_buf());
     match renameat_with(CWD, temp, CWD, target, RenameFlags::NOREPLACE) {
         Ok(()) => return Ok(()),
