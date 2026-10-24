@@ -45,7 +45,7 @@ fn the_tag_panel_round_trips_is_sanitized_and_old_files_load() {
     );
 
     let mut bad = UiState::default();
-    bad.tags.history = (0..30).chain([1, 1]).collect();
+    bad.tags.history = (0..120).chain([1, 1]).collect();
     bad.tags.locked = vec![4, 4, 2];
     bad.tags.history_height = 9;
     bad.tags.last_rating = Some(9);
@@ -238,4 +238,35 @@ fn the_queue_job_and_logs_panels_round_trip_and_old_files_load() {
     assert_eq!(bad.queue.selected, vec![JobId(1), JobId(2)]);
     assert_eq!(bad.queue.state_filter, vec![JobStateKind::Held]);
     assert_eq!(bad.queue.search.len(), QueuePanelState::SEARCH_MAX);
+}
+
+#[test]
+fn the_settings_window_round_trips_and_old_files_load() {
+    let dir = tempfile::tempdir().unwrap();
+    // 0.0.14 wrote no `[settings]`.
+    std::fs::write(dir.path().join("ui-state.toml"), "version = 1\n[window]\nwidth = 1000\n").unwrap();
+    let loaded = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+    assert_eq!(loaded.settings, SettingsWindowState::default());
+
+    let mut state = UiState::default();
+    state.settings = SettingsWindowState {
+        width: 1000,
+        height: 700,
+        page: "hotkeys".into(),
+        profile: Some("my-hevc".into()),
+        hotkey_search: "crop".into(),
+    };
+    save(dir.path(), &state).unwrap();
+    let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+    assert_eq!(read.settings, state.settings);
+
+    // A size off any screen is reset, the page stays; a value this version cannot read counts as missing.
+    let mut state = UiState::default();
+    state.settings.width = 10;
+    state.settings.page = "queue".into();
+    assert_eq!(state.sanitize().len(), 1);
+    assert_eq!((state.settings.width, state.settings.page.as_str()), (900, "queue"));
+    std::fs::write(dir.path().join("ui-state.toml"), "version = 1\nsettings = 3\n").unwrap();
+    let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+    assert_eq!(read.settings, SettingsWindowState::default());
 }

@@ -152,6 +152,27 @@ impl RenderSettingsBridge {
         st.library.get(id).cloned()
     }
 
+    /// The user's profiles changed elsewhere (the Settings window): the list follows; the working copy keeps its
+    /// settings (marked modified when its profile is gone or differs now).
+    pub fn profiles_changed(&self, user: &[RenderProfile]) {
+        {
+            let mut st = self.state.borrow_mut();
+            if st.library.user() == user {
+                return;
+            }
+            st.library = ProfileLibrary::new(user.to_vec());
+            let state = &mut *st;
+            state.selection.follow(&state.library);
+        }
+        self.settings.borrow_mut().render.profiles = user.to_vec();
+        self.changed(false);
+    }
+
+    /// What the capability check knows about the encoders (the Settings window's profile editor).
+    pub fn encoders(&self) -> Encoders {
+        self.state.borrow().encoders.clone()
+    }
+
     /// The capability check's result once known (encoder availability, the VAAPI device, vid.stab).
     pub fn capabilities(&self) -> Option<Arc<Capabilities>> {
         match &self.state.borrow().encoders {

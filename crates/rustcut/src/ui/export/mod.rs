@@ -64,7 +64,7 @@ pub struct ExportBridge {
     tags: Weak<TagsBridge>,
     state: RefCell<ExportState>,
     warnings: RefCell<WarningSettings>,
-    auto_section: AutoSection,
+    auto_section: Cell<AutoSection>,
     /// The last scan and the folder it is of.
     scan: RefCell<Option<(PathBuf, FolderScan)>>,
     /// Counts scans; a result counts only when it is the newest.
@@ -102,7 +102,7 @@ impl ExportBridge {
             tags: Rc::downgrade(parts.tags),
             state: RefCell::new(ExportState::new(&settings.export, panel)),
             warnings: RefCell::new(settings.warnings.clone()),
-            auto_section: settings.editor.auto_section,
+            auto_section: Cell::new(settings.editor.auto_section),
             scan: RefCell::new(None),
             scans: Cell::new(0),
             saving: Cell::new(false),
@@ -123,6 +123,22 @@ impl ExportBridge {
         bridge
     }
 
+    /// The settings changed (the Settings window, or this card's own folders and "Don't ask again"): the folders, the
+    /// template, the warnings and the automatic section follow; the card keeps the selected folder when it is still
+    /// listed.
+    pub fn settings_changed(&self, settings: &Settings) {
+        let changed = self
+            .state
+            .borrow_mut()
+            .set_settings(&settings.export);
+        self.warnings.replace(settings.warnings.clone());
+        self.auto_section.set(settings.editor.auto_section);
+        if changed {
+            self.rescan();
+        }
+        self.publish();
+    }
+
     /// Another video was opened: the name and the counter start over, the source folder may be another one.
     pub fn file_opened(&self, path: &Path) {
         self.state.borrow_mut().file_opened(path);
@@ -140,7 +156,7 @@ impl ExportBridge {
         let (sections, duration) = self
             .editor
             .upgrade()
-            .and_then(|e| e.sections_for_save(self.auto_section).ok())
+            .and_then(|e| e.sections_for_save(self.auto_section.get()).ok())
             .map_or((0, Timestamp::ZERO), |list| (list.len(), list.total_duration()));
         Some(JobFacts::new(&profile, sections, duration))
     }

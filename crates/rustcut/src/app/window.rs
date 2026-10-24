@@ -78,7 +78,7 @@ pub fn capture(window: &MainWindow, state: &mut WindowState) {
 }
 
 /// A logical size as whole pixels; `fallback` for values that are not a sensible size.
-fn to_dimension(value: f32, fallback: u32) -> u32 {
+pub fn to_dimension(value: f32, fallback: u32) -> u32 {
     value
         .round()
         .checked_as::<u32>()

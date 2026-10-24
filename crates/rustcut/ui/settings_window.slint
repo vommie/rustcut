@@ -1,0 +1,177 @@
+// The Settings window (M4.2), styled like RustView's (crates/rustview/ui/settings_window.slint): the categories on the
+// left, the page's cards on the right. Every change is saved at once (src/ui/settings/), so there is no Save button;
+// buttons that put options back to their defaults are held (user decision Q-Q4).
+
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "styles.slint";
+import { IconId } from "icons.slint";
+import { IconButton } from "controls.slint";
+import { TooltipLayer } from "tooltip.slint";
+import { SettingsSidebar } from "settings_sidebar.slint";
+import { SettingsCard } from "settings_card.slint";
+import { SettingsRow } from "settings_row.slint";
+import { SettingsUi } from "settings_types.slint";
+import { SettingsFolders } from "settings_folders.slint";
+import { SettingsProfiles } from "settings_profiles.slint";
+import { SettingsHotkeys } from "settings_hotkeys.slint";
+import { SettingsAbout } from "settings_about.slint";
+
+export component SettingsWindow inherits Window {
+    title: "RustCut - Settings";
+    preferred-width: 900px;
+    preferred-height: 660px;
+    min-width: 600px;
+    min-height: 400px;
+    background: Theme.background;
+    default-font-size: Theme.font-size;
+
+    forward-focus: dialog-focus;
+
+    dialog-focus := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape && SettingsUi.recording == "" {
+                SettingsUi.close();
+                return accept;
+            }
+            return reject;
+        }
+
+        HorizontalLayout {
+            SettingsSidebar {
+                categories: SettingsUi.pages;
+                active-category: SettingsUi.page;
+                category-selected(index) => {
+                    dialog-focus.focus();
+                    SettingsUi.select-page(index);
+                }
+            }
+
+            VerticalLayout {
+                horizontal-stretch: 1;
+
+                Rectangle {
+                    height: 48px;
+                    background: Theme.surface;
+
+                    Rectangle {
+                        y: parent.height - 1px;
+                        height: 1px;
+                        background: Theme.border;
+                    }
+
+                    HorizontalLayout {
+                        padding-left: 16px;
+                        padding-right: 12px;
+                        spacing: 8px;
+
+                        Text {
+                            horizontal-stretch: 1;
+                            text: SettingsUi.page-title;
+                            color: Theme.text;
+                            font-size: 16px;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                        }
+
+                        if SettingsUi.resettable: VerticalLayout {
+                            alignment: center;
+
+                            IconButton {
+                                icon: IconId.settings-reset;
+                                hold: true;
+                                tooltip: "Hold to put every option of this page back to its default";
+                                clicked => { SettingsUi.reset-page(); }
+                            }
+                        }
+                    }
+                }
+
+                if SettingsUi.read-only-note != "": Rectangle {
+                    background: Theme.accent.with-alpha(0.15);
+
+                    HorizontalLayout {
+                        padding: 8px;
+                        padding-left: 16px;
+
+                        Text {
+                            text: SettingsUi.read-only-note;
+                            color: Theme.accent;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+
+                ScrollView {
+                    vertical-stretch: 1;
+
+                    page := VerticalLayout {
+                        padding: 16px;
+                        spacing: 16px;
+                        alignment: start;
+
+                        for card in SettingsUi.cards: SettingsCard {
+                            title: card.title;
+                            description: card.description;
+
+                            for option in card.rows: SettingsRow {
+                                option: option;
+                            }
+                        }
+
+                        if SettingsUi.special == 1: SettingsFolders { }
+
+                        if SettingsUi.special == 2: SettingsProfiles { }
+
+                        if SettingsUi.special == 3: SettingsHotkeys { }
+
+                        if SettingsUi.special == 4: SettingsAbout { }
+                    }
+                }
+
+                Rectangle {
+                    height: 40px;
+                    background: Theme.surface;
+
+                    Rectangle {
+                        y: 0;
+                        height: 1px;
+                        background: Theme.border;
+                    }
+
+                    HorizontalLayout {
+                        padding-left: 16px;
+                        padding-right: 12px;
+                        spacing: 8px;
+
+                        Text {
+                            horizontal-stretch: 1;
+                            text: "Changes are saved at once.";
+                            color: Theme.text-muted;
+                            font-size: 11px;
+                            vertical-alignment: center;
+                        }
+
+                        VerticalLayout {
+                            alignment: center;
+
+                            IconButton {
+                                text: "Close";
+                                tooltip: "Close the settings";
+                                shortcut: "Esc";
+                                clicked => { SettingsUi.close(); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    TooltipLayer {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+    }
+}

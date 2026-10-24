@@ -1,0 +1,76 @@
+// Export & Naming: the named target folders of the export card (PyCutRv's folder dialog): add, label, reorder, remove
+// (held, user decision Q-Q4). "Source folder" is always the first choice of the card and is not listed here.
+
+import { Theme } from "styles.slint";
+import { IconId } from "icons.slint";
+import { IconButton, NumberField } from "controls.slint";
+import { SettingsCard } from "settings_card.slint";
+import { SettingsUi } from "settings_types.slint";
+
+export component SettingsFolders inherits SettingsCard {
+    title: "Target folders";
+    description: "The folders the export card offers after \"Source folder\", in this order. The label is what the card shows.";
+
+    for folder[index] in SettingsUi.folders: HorizontalLayout {
+        spacing: 6px;
+        padding-left: 8px;
+        padding-right: 8px;
+
+        NumberField {
+            width: 150px;
+            horizontal-stretch: 0;
+            text: folder.label;
+            placeholder: "Label";
+            tooltip: "The name the export card shows";
+            alignment: left;
+            committed(text) => { return SettingsUi.rename-folder(index, text); }
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: folder.missing ? folder.path + "  (missing)" : folder.path;
+            color: folder.missing ? Theme.accent : Theme.text-muted;
+            font-size: 11px;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        IconButton {
+            icon: IconId.move-up;
+            tooltip: "Move up";
+            enabled: index > 0;
+            clicked => { SettingsUi.move-folder(index, -1); }
+        }
+
+        IconButton {
+            icon: IconId.move-down;
+            tooltip: "Move down";
+            enabled: index < SettingsUi.folders.length - 1;
+            clicked => { SettingsUi.move-folder(index, 1); }
+        }
+
+        IconButton {
+            icon: IconId.folder-remove;
+            hold: true;
+            tooltip: "Hold to remove the folder from the list (the folder itself stays)";
+            clicked => { SettingsUi.remove-folder(index); }
+        }
+    }
+
+    if SettingsUi.folders.length == 0: Text {
+        text: "No named folders yet: jobs go next to their source.";
+        color: Theme.text-muted;
+        font-size: 11px;
+    }
+
+    HorizontalLayout {
+        alignment: start;
+        padding-left: 8px;
+
+        IconButton {
+            icon: IconId.folder-add;
+            tooltip: "Add a folder";
+            clicked => { SettingsUi.add-folder(); }
+        }
+    }
+}

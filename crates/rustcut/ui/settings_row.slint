@@ -1,0 +1,157 @@
+// One option of the Settings window, drawn like RustView's `SettingsOptionRow` and `SettingsSwitchRow`
+// (crates/rustview/ui/settings_option_row.slint): the label with its description on the left, the control on the right;
+// a switch row switches with a click anywhere on it. The row is generic: Rust says which control it has (`kind`).
+
+import { Theme } from "styles.slint";
+import { IconId } from "icons.slint";
+import { ChoiceButton, IconButton, NumberField } from "controls.slint";
+import { ToggleSwitch } from "toggle_switch.slint";
+import { SettingRowView, SettingsUi } from "settings_types.slint";
+
+export component SettingsRow inherits Rectangle {
+    in property <SettingRowView> option;
+
+    property <length> indent: root.option.indent ? 22px : 0px;
+
+    background: root.option.kind == 0 && area.has-hover && root.option.enabled ? Theme.surface-hover : transparent;
+    border-radius: 4px;
+    min-height: content.min-height;
+    preferred-height: content.preferred-height;
+
+    function toggle() {
+        if root.option.enabled {
+            SettingsUi.toggle(root.option.key);
+        }
+    }
+
+    area := TouchArea {
+        enabled: root.option.kind == 0;
+        mouse-cursor: root.option.kind == 0 && root.option.enabled ? MouseCursor.pointer : MouseCursor.default;
+        clicked => {
+            keys.focus();
+            root.toggle();
+        }
+    }
+
+    keys := FocusScope {
+        width: 0px;
+        height: 0px;
+        enabled: root.option.kind == 0 && root.option.enabled;
+        key-pressed(event) => {
+            if event.text == " " || event.text == "\n" {
+                root.toggle();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    content := HorizontalLayout {
+        padding-left: 8px + root.indent;
+        padding-right: 8px;
+        padding-top: 5px;
+        padding-bottom: 5px;
+        spacing: 12px;
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 2px;
+
+            Text {
+                text: root.option.label;
+                color: root.option.enabled ? Theme.text : Theme.text-muted;
+                font-size: 12px;
+                wrap: word-wrap;
+            }
+
+            if root.option.description != "": Text {
+                text: root.option.description;
+                color: Theme.text-muted;
+                font-size: 11px;
+                wrap: word-wrap;
+            }
+
+            if root.option.error != "": Text {
+                text: root.option.error;
+                color: Theme.status-corrupt;
+                font-size: 11px;
+                wrap: word-wrap;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 0;
+
+            if root.option.kind == 0: ToggleSwitch {
+                checked: root.option.checked;
+                enabled: root.option.enabled;
+                has-focus: keys.has-focus;
+            }
+
+            if root.option.kind == 1: ChoiceButton {
+                items: root.option.items;
+                current: root.option.index;
+                enabled: root.option.enabled;
+                selected(index) => { SettingsUi.choose(root.option.key, index); }
+            }
+
+            if root.option.kind == 2: HorizontalLayout {
+                spacing: 6px;
+
+                NumberField {
+                    width: 80px;
+                    text: root.option.text;
+                    enabled: root.option.enabled;
+                    committed(text) => { return SettingsUi.type-text(root.option.key, text); }
+                    stepped(steps) => { SettingsUi.step(root.option.key, steps); }
+                }
+
+                Text {
+                    width: 44px;
+                    text: root.option.suffix;
+                    color: Theme.text-muted;
+                    font-size: 11px;
+                    vertical-alignment: center;
+                }
+            }
+
+            if root.option.kind == 3: NumberField {
+                width: 260px;
+                text: root.option.text;
+                placeholder: root.option.placeholder;
+                enabled: root.option.enabled;
+                alignment: left;
+                committed(text) => { return SettingsUi.type-text(root.option.key, text); }
+            }
+
+            if root.option.kind == 4 || root.option.kind == 5: HorizontalLayout {
+                spacing: 4px;
+
+                NumberField {
+                    width: 230px;
+                    text: root.option.text;
+                    placeholder: root.option.placeholder;
+                    enabled: root.option.enabled;
+                    alignment: left;
+                    committed(text) => { return SettingsUi.type-text(root.option.key, text); }
+                }
+
+                IconButton {
+                    icon: IconId.browse;
+                    tooltip: root.option.kind == 4 ? "Choose a folder" : "Choose a file";
+                    enabled: root.option.enabled;
+                    clicked => { SettingsUi.pick(root.option.key); }
+                }
+            }
+
+            if root.option.kind == 6: IconButton {
+                text: root.option.suffix;
+                tooltip: root.option.description;
+                enabled: root.option.enabled;
+                clicked => { SettingsUi.action(root.option.key); }
+            }
+        }
+    }
+}

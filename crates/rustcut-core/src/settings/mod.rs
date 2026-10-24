@@ -13,11 +13,11 @@ mod ui_state_tests;
 pub use file::{FileError, LoadOutcome, MigrationStep, VersionedFile, backup_file, load, save};
 pub use paths::AppPaths;
 pub use schema::{
-    AdvancedSettings, AutoSection, DesktopSettings, DraftOnLoad, EditorSettings, ExportSettings, FilterDefaults,
+    AdvancedSettings, AppearanceSettings, AutoSection, DesktopSettings, DraftOnLoad, EditorSettings, ExportSettings, FilterDefaults,
     GeneralSettings, NotificationSettings, PlayerSettings, QueueSettings, RenderSettings, RustViewSettings, Settings,
     TargetFolder, TraySettings, WarningSettings, WhenDone, WriteTiming,
 };
 pub use ui_state::{
-    ExportPanelState, JobPanelState, LogPanelState, ProbeState, QueuePanelState, TagPanelState, TimelineState, UiState,
-    WindowState,
+    ExportPanelState, JobPanelState, LogPanelState, ProbeState, QueuePanelState, SettingsWindowState, TagPanelState,
+    TimelineState, UiState, WindowState,
 };

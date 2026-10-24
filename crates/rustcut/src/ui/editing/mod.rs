@@ -147,6 +147,11 @@ impl JobEditor {
     }
 
     /// "Edit in the editor" or "Load as a new job" of job `id`: reads its spec on the runtime first.
+    /// What happens to the draft at the next load (`editor.draft_on_load`, changed in the Settings window).
+    pub fn set_draft_on_load(&self, mode: DraftOnLoad) {
+        self.mode.set(mode);
+    }
+
     pub fn load(&self, id: JobId) {
         if self.loading.get().is_some() {
             self.status(

@@ -9,6 +9,7 @@ when started with SLINT_MCP_PORT, e.g. by `scripts/session.sh --mcp PORT`). Stan
     scripts/mcp.py [--port P] click ID                  left click on the first element with that id
     scripts/mcp.py [--port P] shot FILE                 PNG screenshot of the main window (as Slint renders it)
 
+`--window N` (after `--port`) acts on the N-th open window instead of the first (the Settings window once it is open).
 The port defaults to $SLINT_MCP_PORT, then 9315. Exit code 1 on any error.
 """
 
@@ -54,12 +55,15 @@ def first(blocks):
     return blocks[0] if blocks else None
 
 
+WINDOW = 0
+
+
 def main_window(port):
     windows = first(call(port, "list_windows"))
     handles = windows.get("windowHandles") if isinstance(windows, dict) else windows
-    if not handles:
-        raise RuntimeError(f"no window: {windows}")
-    return handles[0]
+    if not handles or len(handles) <= WINDOW:
+        raise RuntimeError(f"no window {WINDOW}: {windows}")
+    return handles[WINDOW]
 
 
 def find(port, element_id):
@@ -70,8 +74,11 @@ def find(port, element_id):
 
 def main(argv):
     port = int(os.environ.get("SLINT_MCP_PORT", DEFAULT_PORT))
+    global WINDOW
     if len(argv) >= 2 and argv[0] == "--port":
         port, argv = int(argv[1]), argv[2:]
+    if len(argv) >= 2 and argv[0] == "--window":
+        WINDOW, argv = int(argv[1]), argv[2:]
     if not argv:
         print(__doc__)
         return 1

@@ -64,9 +64,9 @@ pub struct Editor {
     player: Weak<PlayerBridge>,
     media: Weak<MediaInfoBridge>,
     filters: Weak<FiltersBridge>,
-    keymap: Keymap,
-    seek_step: f64,
-    seek_step_long: f64,
+    keymap: RefCell<Keymap>,
+    seek_step: Cell<f64>,
+    seek_step_long: Cell<f64>,
     state: RefCell<State>,
     /// The probe render (set after it is installed; it needs the editor first).
     probe: RefCell<Weak<ProbeBridge>>,
@@ -109,9 +109,9 @@ impl Editor {
             player: Rc::downgrade(player),
             media: Rc::downgrade(media),
             filters: Rc::downgrade(filters),
-            keymap,
-            seek_step: f64::from(seek_step_secs),
-            seek_step_long: f64::from(seek_step_long_secs),
+            keymap: RefCell::new(keymap),
+            seek_step: Cell::new(f64::from(seek_step_secs)),
+            seek_step_long: Cell::new(f64::from(seek_step_long_secs)),
             state: RefCell::new(State {
                 sections: SectionsState::default(),
                 viewport: Viewport::new(Timestamp::ZERO, 0.0, timeline.zoom),
@@ -264,9 +264,22 @@ impl Editor {
         Some((st.playhead, duration, job))
     }
 
+    /// The keymap and the seek steps changed in the Settings window: they hold from the next key press on.
+    pub fn apply_settings(&self, settings: &Settings) {
+        let (keymap, notes) = Keymap::from_table(&settings.keymap);
+        for note in &notes {
+            tracing::warn!(note = %note, "[Keymap] Repaired");
+        }
+        *self.keymap.borrow_mut() = keymap;
+        self.seek_step.set(f64::from(settings.editor.seek_step_secs));
+        self.seek_step_long.set(f64::from(settings.editor.seek_step_long_secs));
+        self.publish_menu_keys(false);
+    }
+
     /// The first key of `action` as the tooltips show it ("" when unbound).
     pub fn key_label(&self, action: Action) -> String {
         self.keymap
+            .borrow()
             .chords(action)
             .first()
             .map(crate::ui::keymap::Chord::label)
@@ -346,10 +359,12 @@ impl Editor {
     fn publish_menu_keys(&self, editing: bool) {
         let Some(window) = self.window.upgrade() else { return };
         let sc = window.global::<Shortcuts<'_>>();
-        let keys = |action| self.keymap.menu_keys(action, editing);
+        let keymap = self.keymap.borrow();
+        let keys = |action| keymap.menu_keys(action, editing);
         sc.set_open(keys(Action::Open));
         sc.set_save(keys(Action::Save));
         sc.set_quit(keys(Action::Quit));
+        sc.set_settings(keys(Action::OpenSettings));
         sc.set_toggle_pause(keys(Action::TogglePause));
         sc.set_frame_back(keys(Action::FrameBack));
         sc.set_frame_forward(keys(Action::FrameForward));
@@ -376,7 +391,7 @@ impl Editor {
         sc.set_mirror_horizontal(keys(Action::MirrorHorizontal));
         sc.set_mirror_vertical(keys(Action::MirrorVertical));
         let label = |action| {
-            self.keymap
+            keymap
                 .chords(action)
                 .first()
                 .map(crate::ui::keymap::Chord::label)

@@ -173,6 +173,11 @@ impl FiltersBridge {
     }
 
     /// What `ui-state.toml` keeps of the filters.
+    /// The deinterlacer and deshake defaults changed in the Settings window: fresh chains take them.
+    pub fn set_defaults(&self, defaults: rustcut_core::settings::FilterDefaults) {
+        self.state.borrow_mut().set_defaults(defaults);
+    }
+
     pub fn save_into(&self, export: &mut ExportPanelState) {
         let st = self.state.borrow();
         export.preview_filters = st.preview;

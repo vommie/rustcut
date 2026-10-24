@@ -27,6 +27,7 @@ pub struct Settings {
     pub rustview: RustViewSettings,
     pub warnings: WarningSettings,
     pub desktop: DesktopSettings,
+    pub appearance: AppearanceSettings,
     pub advanced: AdvancedSettings,
     /// Key bindings by action id (`set_start = ["I", "Home"]`); a missing action keeps its default, an empty list unbinds
     /// it. Owned, validated and sanitized by the app's keymap (key names are Slint's); the core only stores it. A value
@@ -272,6 +273,13 @@ pub struct RustViewSettings {
     pub write_timing: WriteTiming,
     /// Seconds a `rustview api` call may take.
     pub timeout_secs: u8,
+    /// Tags the Tag & Rate panel's history keeps (RustView's default: 20).
+    pub tag_history_size: u8,
+}
+
+impl RustViewSettings {
+    /// Smallest and largest tag history.
+    pub const TAG_HISTORY: std::ops::RangeInclusive<u8> = 1..=100;
 }
 
 impl Default for RustViewSettings {
@@ -281,6 +289,7 @@ impl Default for RustViewSettings {
             binary: None,
             write_timing: WriteTiming::AtEnqueue,
             timeout_secs: 10,
+            tag_history_size: 20,
         }
     }
 }
@@ -368,6 +377,30 @@ impl Default for DesktopSettings {
     }
 }
 
+/// How the windows look and explain themselves.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AppearanceSettings {
+    /// Tooltips on buttons and options.
+    pub tooltips: bool,
+    /// How long the pointer rests before a tooltip shows, in milliseconds.
+    pub tooltip_delay_ms: u16,
+}
+
+impl AppearanceSettings {
+    /// Shortest and longest tooltip delay.
+    pub const TOOLTIP_DELAY_MS: std::ops::RangeInclusive<u16> = 0..=5_000;
+}
+
+impl Default for AppearanceSettings {
+    fn default() -> Self {
+        Self {
+            tooltips: true,
+            tooltip_delay_ms: 600,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AdvancedSettings {
@@ -417,6 +450,20 @@ impl VersionedFile for Settings {
         }
         if fix("rustview.timeout_secs raised to 1", self.rustview.timeout_secs == 0) {
             self.rustview.timeout_secs = 1;
+        }
+        let history = &mut self.rustview.tag_history_size;
+        if fix(
+            "rustview.tag_history_size brought into range",
+            !RustViewSettings::TAG_HISTORY.contains(history),
+        ) {
+            *history = (*history).clamp(*RustViewSettings::TAG_HISTORY.start(), *RustViewSettings::TAG_HISTORY.end());
+        }
+        let delay = &mut self.appearance.tooltip_delay_ms;
+        if fix(
+            "appearance.tooltip_delay_ms limited to 5000",
+            !AppearanceSettings::TOOLTIP_DELAY_MS.contains(delay),
+        ) {
+            *delay = *AppearanceSettings::TOOLTIP_DELAY_MS.end();
         }
         if fix(
             "player.wheel_volume_step limited to 1-25",

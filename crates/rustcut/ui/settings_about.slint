@@ -1,0 +1,43 @@
+// About: the version, the license, where the files are, and the Slint attribution the royalty-free license asks for
+// (`AboutSlint`, as in RustView's General page).
+
+import { AboutSlint } from "std-widgets.slint";
+import { Theme } from "styles.slint";
+import { SettingsCard } from "settings_card.slint";
+import { SettingsUi } from "settings_types.slint";
+
+export component SettingsAbout inherits VerticalLayout {
+    spacing: 16px;
+
+    SettingsCard {
+        title: SettingsUi.app-name + " " + SettingsUi.app-version;
+        description: "A video cutter: mark sections, apply filters, queue render jobs, and tag and rate the results in RustView. MIT License, Copyright (c) 2026 vommie.";
+
+        Text {
+            text: "Videos play through mpv (libmpv) and render through FFmpeg; tags and ratings go to RustView. Icons: Tabler Icons (MIT).";
+            font-size: 11px;
+            color: Theme.text-muted;
+            wrap: word-wrap;
+        }
+    }
+
+    SettingsCard {
+        title: "Files";
+
+        Text {
+            text: SettingsUi.about-paths;
+            font-size: 11px;
+            color: Theme.text-muted;
+            wrap: word-wrap;
+        }
+    }
+
+    SettingsCard {
+        title: "Built with Slint";
+        description: "The user interface is built with Slint, used under the Slint Royalty-free License 2.0.";
+
+        AboutSlint {
+            height: 88px;
+        }
+    }
+}

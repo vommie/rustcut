@@ -1,0 +1,186 @@
+// Render Profiles: every profile with the one new jobs start with (the star), and the editor of the selected one. The
+// built-in profiles never change: "Duplicate" makes an own copy to edit. An own profile is saved with every change; the
+// Codecs panel keeps its own working copy for the next job (user decision Q-E4).
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { IconButton, NumberField } from "controls.slint";
+import { SettingsCard } from "settings_card.slint";
+import { OptionRow } from "render_option_row.slint";
+import { OptionRowView } from "render_types.slint";
+import { SettingsUi } from "settings_types.slint";
+
+component ProfileRows inherits VerticalLayout {
+    in property <string> heading;
+    in property <[OptionRowView]> rows;
+
+    spacing: 4px;
+
+    if root.rows.length > 0: Text {
+        text: root.heading;
+        color: Theme.primary;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    for item in root.rows: OptionRow {
+        option: item;
+        choose(key, index) => { SettingsUi.profile-choose(key, index); }
+        slide(key, position) => { SettingsUi.profile-slide(key, position); }
+        toggle(key) => { SettingsUi.profile-toggle(key); }
+        type-text(key, text) => { return SettingsUi.profile-type(key, text); }
+        step(key, steps) => { SettingsUi.profile-step(key, steps); }
+    }
+}
+
+export component SettingsProfiles inherits VerticalLayout {
+    spacing: 16px;
+
+    SettingsCard {
+        title: "Profiles";
+        description: "The star marks the profile the Codecs panel starts with in a fresh profile and after a reset.";
+
+        for profile[index] in SettingsUi.profiles: Rectangle {
+            height: 34px;
+            border-radius: 4px;
+            background: index == SettingsUi.profile-index ? Theme.surface-selected
+                : touch.has-hover ? Theme.surface-hover : transparent;
+
+            touch := TouchArea {
+                clicked => { SettingsUi.select-profile(index); }
+            }
+
+            HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 8px;
+                spacing: 8px;
+
+                VerticalLayout {
+                    alignment: center;
+
+                    AppIcon {
+                        icon: profile.default ? IconId.profile-default-set : IconId.profile-default;
+                        size: IconSize.sm;
+                        color: profile.default ? Theme.accent : Theme.status-deleted;
+                    }
+                }
+
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    alignment: center;
+
+                    Text {
+                        text: profile.name;
+                        color: Theme.text;
+                        font-size: 12px;
+                        font-weight: index == SettingsUi.profile-index ? 700 : 400;
+                        overflow: elide;
+                    }
+
+                    Text {
+                        text: profile.builtin ? "Built-in · " + profile.summary : profile.summary;
+                        color: Theme.text-muted;
+                        font-size: 10px;
+                        overflow: elide;
+                    }
+                }
+            }
+        }
+
+        HorizontalLayout {
+            spacing: 4px;
+            padding-left: 8px;
+            alignment: start;
+
+            IconButton {
+                icon: IconId.profile-default;
+                tooltip: "New jobs start with this profile";
+                clicked => { SettingsUi.default-profile(); }
+            }
+
+            IconButton {
+                icon: IconId.job-duplicate;
+                tooltip: "Duplicate: an own copy to edit";
+                clicked => { SettingsUi.duplicate-profile(); }
+            }
+
+            IconButton {
+                icon: IconId.profile-delete;
+                hold: true;
+                enabled: !SettingsUi.profile-builtin;
+                tooltip: SettingsUi.profile-builtin ? "Built-in profiles cannot be deleted" : "Hold to delete this profile";
+                clicked => { SettingsUi.delete-profile(); }
+            }
+        }
+    }
+
+    SettingsCard {
+        title: SettingsUi.profile-name;
+        description: SettingsUi.profile-builtin
+            ? "A built-in profile does not change: duplicate it to edit an own copy."
+            : "Every change is saved into this profile at once. Jobs keep the settings they were saved with.";
+
+        if !SettingsUi.profile-builtin: HorizontalLayout {
+            spacing: 6px;
+
+            Text {
+                width: 36%;
+                text: "Name";
+                color: Theme.text-muted;
+                font-size: 11px;
+                vertical-alignment: center;
+            }
+
+            NumberField {
+                text: SettingsUi.profile-name;
+                tooltip: "The profile's name (Enter keeps it)";
+                alignment: left;
+                committed(text) => { return SettingsUi.rename-profile(text); }
+            }
+        }
+
+        if SettingsUi.encoders-note != "": Text {
+            text: SettingsUi.encoders-note;
+            color: Theme.text-muted;
+            font-size: 11px;
+            wrap: word-wrap;
+        }
+
+        for issue in SettingsUi.profile-issues: HorizontalLayout {
+            spacing: 6px;
+
+            VerticalLayout {
+                alignment: start;
+
+                AppIcon {
+                    icon: issue.error ? IconId.status-error : IconId.status-warning;
+                    size: IconSize.sm;
+                    color: issue.error ? Theme.status-corrupt : Theme.accent;
+                }
+            }
+
+            Text {
+                horizontal-stretch: 1;
+                text: issue.text;
+                color: issue.error ? Theme.status-corrupt : Theme.accent;
+                font-size: 11px;
+                wrap: word-wrap;
+            }
+        }
+
+        ProfileRows {
+            heading: "Video";
+            rows: SettingsUi.profile-video;
+        }
+
+        ProfileRows {
+            heading: "Audio and container";
+            rows: SettingsUi.profile-audio;
+        }
+
+        ProfileRows {
+            heading: "Expert";
+            rows: SettingsUi.profile-expert;
+        }
+    }
+}

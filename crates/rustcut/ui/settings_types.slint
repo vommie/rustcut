@@ -1,0 +1,140 @@
+// The data of the Settings window (src/ui/settings/ fills `SettingsUi`): the pages, the generic cards of the current
+// page with their rows, and the editors of the pages that have their own (target folders, render profiles, hotkeys,
+// About). Every change goes from here to Rust, which writes `config.toml` and gives the new values back.
+
+import { OptionRowView, RenderIssueView } from "render_types.slint";
+
+// One option. kind: 0 switch, 1 choice, 2 number, 3 text, 4 folder path, 5 file path, 6 button.
+export struct SettingRowView {
+    key: string,
+    kind: int,
+    label: string,
+    description: string,
+    checked: bool,
+    items: [string],
+    index: int,
+    text: string,
+    placeholder: string,
+    // A number's unit, a button's text.
+    suffix: string,
+    enabled: bool,
+    indent: bool,
+    // Why the last typed text was refused.
+    error: string,
+}
+
+export struct SettingCardView {
+    title: string,
+    description: string,
+    rows: [SettingRowView],
+}
+
+// A named target folder of the Export & Naming page.
+export struct FolderRowView {
+    label: string,
+    path: string,
+    // The folder does not exist (now).
+    missing: bool,
+}
+
+// A profile in the Render Profiles page's list.
+export struct ProfileItemView {
+    name: string,
+    // "AV1 · MKV · Opus"
+    summary: string,
+    builtin: bool,
+    // New jobs start with it.
+    default: bool,
+}
+
+// A key of an action on the Hotkeys page.
+export struct HotkeyChipView {
+    text: string,
+    label: string,
+}
+
+export struct HotkeyRowView {
+    id: string,
+    title: string,
+    group: string,
+    keys: [HotkeyChipView],
+    // The keys differ from the defaults.
+    changed: bool,
+    // The defaults as a text ("Ctrl+O"), for the reset button's tooltip.
+    defaults: string,
+}
+
+export global SettingsUi {
+    in property <[string]> pages;
+    in property <int> page;
+    in property <string> page-title;
+    // 0 none, 1 target folders, 2 render profiles, 3 hotkeys, 4 About.
+    in property <int> special;
+    in property <[SettingCardView]> cards;
+    // The page has generic options that can go back to their defaults.
+    in property <bool> resettable;
+    // config.toml is from a newer RustCut or unreadable: changes hold until quit.
+    in property <string> read-only-note;
+
+    callback select-page(int);
+    callback reset-page();
+    callback toggle(/* key */ string);
+    callback choose(/* key */ string, /* index */ int);
+    // A typed value; false keeps the field open and marked.
+    callback type-text(/* key */ string, /* text */ string) -> bool;
+    callback step(/* key */ string, /* steps */ int);
+    // The browse button of a path row.
+    callback pick(/* key */ string);
+    // A button row.
+    callback action(/* key */ string);
+    callback close();
+
+    // Export & Naming: the named target folders.
+    in property <[FolderRowView]> folders;
+    callback add-folder();
+    callback remove-folder(int);
+    callback move-folder(/* index */ int, /* by */ int);
+    callback rename-folder(/* index */ int, /* label */ string) -> bool;
+
+    // Render Profiles.
+    in property <[ProfileItemView]> profiles;
+    in property <int> profile-index;
+    in property <bool> profile-builtin;
+    in property <string> profile-name;
+    in property <[RenderIssueView]> profile-issues;
+    in property <[OptionRowView]> profile-video;
+    in property <[OptionRowView]> profile-audio;
+    in property <[OptionRowView]> profile-expert;
+    in property <string> encoders-note;
+    callback select-profile(int);
+    callback duplicate-profile();
+    callback rename-profile(string) -> bool;
+    callback delete-profile();
+    callback default-profile();
+    callback profile-choose(string, int);
+    callback profile-slide(string, int);
+    callback profile-toggle(string);
+    callback profile-type(string, string) -> bool;
+    callback profile-step(string, int);
+
+    // Hotkeys.
+    in property <[HotkeyRowView]> hotkeys;
+    in property <string> hotkey-search;
+    // The action waiting for a key ("" = none), and what the last press did.
+    in property <string> recording;
+    in property <string> hotkey-note;
+    in property <bool> hotkey-note-error;
+    callback hotkey-search-edited(string);
+    callback record(/* action id */ string);
+    // A key press while recording: the same arguments as the main window's key scope.
+    callback recorded(/* text */ string, bool, bool, bool, bool) -> bool;
+    callback cancel-recording();
+    callback unbind(/* action id */ string, /* key text */ string);
+    callback reset-hotkey(/* action id */ string);
+    callback reset-hotkeys();
+
+    // About.
+    in property <string> app-name;
+    in property <string> app-version;
+    in property <string> about-paths;
+}

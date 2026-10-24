@@ -1,0 +1,34 @@
+// Copy of RustView's crates/rustview/ui/settings_card.slint (only the header differs).
+
+import { Theme } from "styles.slint";
+
+/// Reusable grouped card container for setting configurations.
+export component SettingsCard inherits Rectangle {
+    in property <string> title: "";
+    in property <string> description: "";
+
+    background: Theme.surface;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    VerticalLayout {
+        padding: 12px;
+        spacing: 10px;
+
+        if root.title != "" : Text {
+            text: root.title;
+            font-weight: 700;
+            color: Theme.primary;
+        }
+
+        if root.description != "" : Text {
+            text: root.description;
+            font-size: 11px;
+            color: Theme.text-muted;
+            wrap: word-wrap;
+        }
+
+        @children
+    }
+}

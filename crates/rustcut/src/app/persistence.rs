@@ -45,10 +45,23 @@ pub fn load_all(paths: AppPaths) -> Loaded {
 /// Writes `config.toml` on the runtime whenever the app changed the settings (the Render Settings panel's profiles, the
 /// export panel's target folders and warnings), one save after the other; the latest settings win when several changes
 /// come quickly. Every bridge changes the one shared copy, so no bridge overwrites another one's change. UI thread only.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SettingsWriter {
     sender: Option<tokio::sync::watch::Sender<Option<Settings>>>,
     current: std::rc::Rc<std::cell::RefCell<Settings>>,
+    listeners: std::rc::Rc<std::cell::RefCell<Vec<Listener>>>,
+}
+
+/// Called with the settings before and after a change (UI thread).
+type Listener = std::rc::Rc<dyn Fn(&Settings, &Settings)>;
+
+impl std::fmt::Debug for SettingsWriter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SettingsWriter")
+            .field("read_only", &self.sender.is_none())
+            .field("listeners", &self.listeners.borrow().len())
+            .finish_non_exhaustive()
+    }
 }
 
 impl SettingsWriter {
@@ -61,8 +74,13 @@ impl SettingsWriter {
         settings: &Settings,
     ) -> Self {
         let current = std::rc::Rc::new(std::cell::RefCell::new(settings.clone()));
+        let listeners = std::rc::Rc::default();
         if read_only {
-            return Self { sender: None, current };
+            return Self {
+                sender: None,
+                current,
+                listeners,
+            };
         }
         let (sender, mut receiver) = tokio::sync::watch::channel(None::<Settings>);
         runtime.spawn(async move {
@@ -81,22 +99,42 @@ impl SettingsWriter {
         Self {
             sender: Some(sender),
             current,
+            listeners,
         }
+    }
+
+    /// Runs `listener` after every change that changed something, with the settings before and after (the bridges that
+    /// apply a setting while RustCut runs). A listener may change the settings itself.
+    pub fn subscribe(&self, listener: impl Fn(&Settings, &Settings) + 'static) {
+        self.listeners.borrow_mut().push(std::rc::Rc::new(listener));
+    }
+
+    /// Whether `config.toml` is written (not a newer or unreadable file).
+    pub fn writable(&self) -> bool {
+        self.sender.is_some()
     }
 
     /// Changes the settings with `change` and saves them soon (on the runtime). `false` when `config.toml` must not be
     /// written (the change still holds for this run).
     pub fn update(&self, change: impl FnOnce(&mut Settings)) -> bool {
-        let settings = {
+        let (before, settings) = {
             let mut current = self.current.borrow_mut();
+            let before = current.clone();
             change(&mut current);
-            current.clone()
+            (before, current.clone())
         };
+        if before != settings {
+            // Cloned out, so a listener may subscribe or change the settings again.
+            let listeners: Vec<Listener> = self.listeners.borrow().clone();
+            for listener in listeners {
+                listener(&before, &settings);
+            }
+        }
         let Some(sender) = &self.sender else {
             tracing::warn!("[Settings] config.toml is from a newer version or unreadable; not overwritten");
             return false;
         };
-        sender.send_replace(Some(settings));
+        sender.send_replace(Some(self.current()));
         true
     }
 
@@ -180,6 +218,13 @@ mod tests {
             .unwrap()
             .into_value();
         assert_eq!((read.queue.workers, read.render.nice), (3, 5));
+
+        let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let log = std::rc::Rc::clone(&seen);
+        writer.subscribe(move |before, after| log.borrow_mut().push((before.queue.workers, after.queue.workers)));
+        assert!(writer.update(|s| s.queue.workers = 4));
+        assert!(writer.update(|s| s.queue.workers = 4), "saved again, no change to report");
+        assert_eq!(*seen.borrow(), vec![(3, 4)]);
 
         let other = tempfile::tempdir().unwrap();
         let locked = SettingsWriter::start(runtime.handle(), other.path().to_path_buf(), true, &Settings::default());

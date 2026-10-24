@@ -1,0 +1,233 @@
+// Hotkeys: every action of the keymap with its keys. The keyboard button waits for a key (Escape cancels); a key another
+// action has is not taken at once: pressing it a second time moves it here. A key's cross removes it, the reset button
+// puts the action's default keys back, the held button in the page header every default.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { IconButton } from "controls.slint";
+import { SettingsCard } from "settings_card.slint";
+import { HotkeyChipView, HotkeyRowView, SettingsUi } from "settings_types.slint";
+
+component KeyChip inherits Rectangle {
+    in property <HotkeyChipView> chip;
+    callback remove();
+
+    height: 22px;
+    width: chip-row.preferred-width;
+    horizontal-stretch: 0;
+    border-radius: 3px;
+    background: Theme.surface-variant;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    chip-row := HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 2px;
+        spacing: 2px;
+
+        Text {
+            text: root.chip.label;
+            color: Theme.accent;
+            font-size: 11px;
+            font-weight: 700;
+            vertical-alignment: center;
+        }
+
+        VerticalLayout {
+            alignment: center;
+
+            Rectangle {
+                width: 16px;
+                height: 16px;
+                border-radius: 2px;
+                background: cross.has-hover ? Theme.surface-hover : transparent;
+
+                cross := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => { root.remove(); }
+                }
+
+                AppIcon {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    icon: IconId.close;
+                    size: IconSize.sm;
+                    color: cross.has-hover ? Theme.status-corrupt : Theme.text-muted;
+                }
+            }
+        }
+    }
+}
+
+/// A one-line search field whose text follows the typing.
+component SearchBox inherits Rectangle {
+    in property <string> initial;
+    callback edited(string);
+
+    height: 24px;
+    border-radius: 4px;
+    background: Theme.background;
+    border-width: 1px;
+    border-color: input.has-focus ? Theme.primary : Theme.border;
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 6px;
+        spacing: 6px;
+
+        VerticalLayout {
+            alignment: center;
+
+            AppIcon {
+                icon: IconId.search;
+                size: IconSize.sm;
+                color: Theme.text-muted;
+            }
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+
+            if input.text == "": Text {
+                x: 0;
+                width: parent.width;
+                text: "Filter by action or key";
+                color: Theme.status-deleted;
+                font-size: 12px;
+                vertical-alignment: center;
+            }
+
+            input := TextInput {
+                width: parent.width;
+                height: parent.height;
+                single-line: true;
+                color: Theme.text;
+                font-size: 12px;
+                vertical-alignment: center;
+                init => { self.text = root.initial; }
+                edited => { root.edited(self.text); }
+            }
+        }
+    }
+}
+
+export component SettingsHotkeys inherits SettingsCard {
+    title: "Keys";
+    description: "Keys work in the main window when no text field has the keyboard. A key with Ctrl, Alt or Meta also works from the menus.";
+
+    recorder := FocusScope {
+        width: 0px;
+        height: 0px;
+        key-pressed(event) => {
+            if SettingsUi.recording == "" {
+                return reject;
+            }
+            if event.text == Key.Escape {
+                SettingsUi.cancel-recording();
+                return accept;
+            }
+            if SettingsUi.recorded(event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift,
+                event.modifiers.meta) {
+                return accept;
+            }
+            accept
+        }
+        changed has-focus => {
+            if !self.has-focus && SettingsUi.recording != "" {
+                SettingsUi.cancel-recording();
+            }
+        }
+    }
+
+    SearchBox {
+        initial: SettingsUi.hotkey-search;
+        edited(text) => { SettingsUi.hotkey-search-edited(text); }
+    }
+
+    if SettingsUi.hotkey-note != "": Text {
+        text: SettingsUi.hotkey-note;
+        color: SettingsUi.hotkey-note-error ? Theme.status-corrupt : Theme.accent;
+        font-size: 11px;
+        wrap: word-wrap;
+    }
+
+    for row in SettingsUi.hotkeys: Rectangle {
+        min-height: 30px;
+        border-radius: 4px;
+        background: SettingsUi.recording == row.id ? Theme.primary.with-alpha(0.12)
+            : hover.has-hover ? Theme.surface-hover : transparent;
+
+        hover := TouchArea { }
+
+        HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 4px;
+            padding-top: 3px;
+            padding-bottom: 3px;
+            spacing: 6px;
+
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+
+                Text {
+                    text: row.title;
+                    color: Theme.text;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+
+                Text {
+                    text: row.group;
+                    color: Theme.text-muted;
+                    font-size: 10px;
+                }
+            }
+
+            for chip in row.keys: VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 0;
+
+                KeyChip {
+                    chip: chip;
+                    remove => { SettingsUi.unbind(row.id, chip.text); }
+                }
+            }
+
+            if SettingsUi.recording == row.id: VerticalLayout {
+                alignment: center;
+
+                Text {
+                    text: "Press a key (Esc cancels)";
+                    color: Theme.primary;
+                    font-size: 11px;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+
+                IconButton {
+                    icon: IconId.hotkey-add;
+                    checked: SettingsUi.recording == row.id;
+                    tooltip: "Add a key: press it next";
+                    clicked => {
+                        recorder.focus();
+                        SettingsUi.record(row.id);
+                    }
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+
+                IconButton {
+                    icon: IconId.profile-reset;
+                    enabled: row.changed;
+                    tooltip: row.defaults == "" ? "Back to no key" : "Back to the default: " + row.defaults;
+                    clicked => { SettingsUi.reset-hotkey(row.id); }
+                }
+            }
+        }
+    }
+}

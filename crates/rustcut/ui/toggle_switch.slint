@@ -1,0 +1,29 @@
+// Copy of RustView's crates/rustview/ui/toggle_switch.slint (only the header differs).
+
+import { Theme } from "styles.slint";
+
+/// A switch drawn in the theme colors. It is purely visual: whoever owns the click flips `checked` (see
+/// `SettingsSwitchRow`, where the whole row is the click target).
+export component ToggleSwitch inherits Rectangle {
+    in property <bool> checked: false;
+    in property <bool> enabled: true;
+    in property <bool> has-focus: false;
+
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: root.has-focus ? Theme.primary : (root.checked && root.enabled ? Theme.primary : Theme.border);
+    background: !root.enabled ? Theme.surface-variant : (root.checked ? Theme.primary : Theme.surface-selected);
+    animate background { duration: 120ms; }
+
+    Rectangle {
+        width: 14px;
+        height: 14px;
+        border-radius: 7px;
+        x: root.checked ? 19px : 3px;
+        y: 3px;
+        background: !root.enabled ? Theme.text-muted : (root.checked ? Theme.background : Theme.text);
+        animate x { duration: 120ms; easing: ease-in-out; }
+    }
+}

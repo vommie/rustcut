@@ -89,6 +89,27 @@ impl ExportState {
         }
     }
 
+    /// The named folders or the template changed: the selection stays on the same folder (by path) when it is still
+    /// listed, else it goes back to the source folder. `true` = the target folder or the name changed.
+    pub fn set_settings(&mut self, settings: &ExportSettings) -> bool {
+        let mut changed = false;
+        if self.folders != settings.target_folders {
+            let before = self.target_folder();
+            self.folder = crate::ui::settings::folders::follow_selection(
+                &self.folders,
+                &settings.target_folders,
+                self.folder,
+            );
+            self.folders.clone_from(&settings.target_folders);
+            changed = self.target_folder() != before;
+        }
+        if self.template != settings.name_template {
+            self.template.clone_from(&settings.name_template);
+            changed = true;
+        }
+        changed
+    }
+
     pub fn save_into(&self, panel: &mut ExportPanelState) {
         panel.target_folder = self.folder;
         panel.counter_enabled = self.counter_enabled;

@@ -1,0 +1,60 @@
+// The category list of the Settings window, after RustView's crates/rustview/ui/settings_sidebar.slint (the categories
+// come from Rust).
+
+import { Theme } from "styles.slint";
+
+export component SettingsCategoryItem inherits Rectangle {
+    in property <string> title: "";
+    in property <bool> is-active: false;
+    callback clicked();
+
+    height: 34px;
+    background: root.is-active ? Theme.surface-selected : (cat-touch.has-hover ? Theme.surface-hover : transparent);
+    border-radius: 4px;
+
+    cat-touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+
+        Text {
+            text: root.title;
+            color: root.is-active ? Theme.primary : Theme.text;
+            font-weight: root.is-active ? 700 : 400;
+            font-size: 12px;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component SettingsSidebar inherits Rectangle {
+    in property <int> active-category: 0;
+    in property <[string]> categories;
+
+    callback category-selected(int);
+
+    width: 200px;
+    background: Theme.surface;
+
+    // Right border separator line running the full height
+    Rectangle {
+        x: parent.width - 1px;
+        width: 1px;
+        background: Theme.border;
+    }
+
+    VerticalLayout {
+        padding: 8px;
+        spacing: 4px;
+        alignment: start;
+
+        for cat[idx] in root.categories: SettingsCategoryItem {
+            title: cat;
+            is-active: root.active-category == idx;
+            clicked => { root.category-selected(idx); }
+        }
+    }
+}

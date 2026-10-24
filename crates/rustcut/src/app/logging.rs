@@ -33,6 +33,33 @@ pub struct LogControl {
     guard: Mutex<Option<WorkerGuard>>,
 }
 
+/// Changes the log filter (a clone of the reload handle).
+#[derive(Clone)]
+pub struct LevelSetter {
+    handle: Option<reload::Handle<EnvFilter, Registry>>,
+    from_env: bool,
+}
+
+impl LevelSetter {
+    /// Uses `level` unless `RUST_LOG` was given (the environment wins).
+    pub fn apply(&self, level: &str) {
+        if self.from_env {
+            return;
+        }
+        let Some(handle) = &self.handle else { return };
+        match EnvFilter::try_new(level) {
+            Ok(filter) => {
+                if let Err(e) = handle.reload(filter) {
+                    tracing::warn!(error = %e, "[App] The log level could not be changed");
+                } else {
+                    tracing::debug!(level, "[App] Log level from the settings");
+                }
+            }
+            Err(e) => tracing::warn!(level, error = %e, "[App] The configured log level is not valid; keeping info"),
+        }
+    }
+}
+
 /// Installs the global subscriber. A second call (tests) leaves the first one in place.
 pub fn init() -> LogControl {
     let from_env = std::env::var_os("RUST_LOG").is_some();
@@ -61,19 +88,14 @@ pub fn init() -> LogControl {
 impl LogControl {
     /// Uses the configured level unless `RUST_LOG` was given (the environment wins).
     pub fn apply_setting(&self, level: &str) {
-        if self.from_env {
-            return;
-        }
-        let Some(handle) = &self.handle else { return };
-        match EnvFilter::try_new(level) {
-            Ok(filter) => {
-                if let Err(e) = handle.reload(filter) {
-                    tracing::warn!(error = %e, "[App] The log level could not be changed");
-                } else {
-                    tracing::debug!(level, "[App] Log level from the settings");
-                }
-            }
-            Err(e) => tracing::warn!(level, error = %e, "[App] The configured log level is not valid; keeping info"),
+        self.level_setter().apply(level);
+    }
+
+    /// Changes the level later (the Settings window), with the same rule.
+    pub fn level_setter(&self) -> LevelSetter {
+        LevelSetter {
+            handle: self.handle.clone(),
+            from_env: self.from_env,
         }
     }
 

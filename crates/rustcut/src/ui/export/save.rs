@@ -99,7 +99,7 @@ impl ExportBridge {
         let player = self.player.upgrade().ok_or_else(gone)?;
         let source = player.current_file().ok_or("Open a video first.")?;
         let editor = self.editor.upgrade().ok_or_else(gone)?;
-        let sections = editor.sections_for_save(self.auto_section)?;
+        let sections = editor.sections_for_save(self.auto_section.get())?;
         let render = self.render.upgrade().ok_or_else(gone)?;
         let profile = render.working_profile();
         if let Some(issue) = profile.validate().into_iter().find(|i| i.severity == Severity::Error) {

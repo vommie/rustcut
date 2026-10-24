@@ -1,0 +1,127 @@
+// One option row of a render profile: its label (explained by its tooltip, colored when the option has an issue) and
+// its control. Used by the Codecs panel (render_cards.slint) and the Settings window's profile editor; the owner
+// forwards the callbacks to its own global.
+
+import { Theme } from "styles.slint";
+import { ChoiceButton, NumberField, Switch } from "controls.slint";
+import { TooltipArea } from "tooltip.slint";
+import { PlayerSeekBar } from "player_seek_bar.slint";
+import { OptionRowView } from "render_types.slint";
+
+/// The name of an option, explained by its tooltip; colored when the option has an issue.
+component RowLabel inherits TooltipArea {
+    in property <string> label;
+    in property <int> mark;
+
+    horizontal-stretch: 0;
+    min-width: 40px;
+
+    Text {
+        width: parent.width;
+        height: parent.height;
+        text: root.label;
+        color: root.mark == 2 ? Theme.status-corrupt : root.mark == 1 ? Theme.accent : Theme.text-muted;
+        font-size: 11px;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+}
+
+/// One option: its label on the left, the control on the right.
+export component OptionRow inherits HorizontalLayout {
+    in property <OptionRowView> option;
+    callback choose(/* key */ string, /* index */ int);
+    callback slide(/* key */ string, /* position */ int);
+    callback toggle(/* key */ string);
+    callback type-text(/* key */ string, /* text */ string) -> bool;
+    callback step(/* key */ string, /* steps */ int);
+
+    spacing: 6px;
+    min-height: root.option.kind == 4 ? 38px : 24px;
+
+    // The labels take a fixed share, so every control starts at the same place.
+    RowLabel {
+        width: 36%;
+        label: root.option.label;
+        mark: root.option.mark;
+        text: root.option.tooltip;
+    }
+
+    HorizontalLayout {
+        horizontal-stretch: 1;
+        min-width: 60px;
+
+        if root.option.kind == 0: ChoiceButton {
+            items: root.option.items;
+            current: root.option.index;
+            tooltip: root.option.tooltip;
+            enabled: root.option.enabled;
+            selected(index) => { root.choose(root.option.key, index); }
+        }
+
+        // Keeps a choice or a switch at its own width on the left.
+        if root.option.kind == 0 || root.option.kind == 2: Rectangle {
+            horizontal-stretch: 1;
+            min-width: 0;
+        }
+
+        if root.option.kind == 1: NumberField {
+            text: root.option.text;
+            placeholder: root.option.placeholder;
+            tooltip: root.option.tooltip;
+            enabled: root.option.enabled;
+            committed(text) => { return root.type-text(root.option.key, text); }
+            stepped(steps) => { root.step(root.option.key, steps); }
+        }
+
+        if root.option.kind == 2: VerticalLayout {
+            alignment: center;
+
+            Switch {
+                checked: root.option.checked;
+                enabled: root.option.enabled;
+                tooltip: root.option.tooltip;
+                toggled => { root.toggle(root.option.key); }
+            }
+        }
+
+        if root.option.kind == 3: NumberField {
+            text: root.option.text;
+            placeholder: root.option.placeholder;
+            tooltip: root.option.tooltip;
+            enabled: root.option.enabled;
+            alignment: left;
+            committed(text) => { return root.type-text(root.option.key, text); }
+        }
+
+        if root.option.kind == 4: VerticalLayout {
+            spacing: 0px;
+
+            slider := PlayerSeekBar {
+                height: 20px;
+                enabled: root.option.enabled;
+                value: root.option.steps > 0 ? root.option.position / root.option.steps : 0;
+                changed(value, final) => {
+                    root.slide(root.option.key, Math.round(value * root.option.steps));
+                }
+            }
+
+            TooltipArea {
+                text: root.option.tooltip;
+                height: 16px;
+
+                Text {
+                    width: parent.width;
+                    height: parent.height;
+                    text: root.option.text;
+                    color: root.option.enabled ? Theme.text : Theme.text-muted;
+                    font-size: 11px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+        }
+    }
+}
+
