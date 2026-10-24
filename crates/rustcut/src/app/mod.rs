@@ -53,6 +53,7 @@ use crate::ui::render_settings::RenderSettingsBridge;
 use crate::ui::settings::SettingsBridge;
 use crate::ui::status::{self, Level};
 use crate::ui::tags::TagsBridge;
+use crate::ui::tray::TrayBridge;
 
 /// How long the runtime may take to finish its tasks at quit.
 const RUNTIME_SHUTDOWN: Duration = Duration::from_secs(2);
@@ -368,6 +369,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         let power = Rc::downgrade(&power);
         editor.set_escape_hook(move || power.upgrade().is_some_and(|p| p.escape()));
     }
+    let tray = TrayBridge::install(&main, &queue, &player, &loaded.settings.desktop.tray);
     let settings_window = SettingsBridge::install(
         &main,
         runtime.handle().clone(),
@@ -407,6 +409,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             runtime: runtime.handle().clone(),
             instance,
             power: Rc::downgrade(&power),
+            tray: Rc::downgrade(&tray),
         },
     );
     shutdown::watch_signals(runtime.handle(), ui, main.as_weak());
@@ -423,7 +426,10 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             "[App] Only the first file on the command line is opened"
         );
     }
-    main.run()?;
+    // Not `main.run()`: the event loop has to go on while the window is hidden in the tray; the quit path ends it.
+    main.show()?;
+    slint::run_event_loop_until_quit()?;
+    let _ = main.hide();
 
     // The single quit path: save what the user arranged, then stop the services.
     let mut ui_state = loaded.ui_state.clone();
@@ -453,6 +459,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     drop(logs);
     drop(inspector);
     // The desktop actor ends with its last handle: the sleep lock goes, the taskbar entry is cleared.
+    drop(tray);
     drop(power);
     drop(queue);
     drop(menu);

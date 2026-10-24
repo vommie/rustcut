@@ -4,6 +4,7 @@
 //! question with three ways, and the desktop actor's sleep lock and taskbar entry following the queue. Pure parts in
 //! `state.rs`.
 
+mod notices;
 mod question;
 pub mod state;
 
@@ -12,7 +13,7 @@ use std::rc::{Rc, Weak};
 use std::time::Duration;
 
 use rustcut_core::queue::QueueCommand;
-use rustcut_core::settings::{QueuePanelState, Settings, WhenDone};
+use rustcut_core::settings::{NotificationSettings, QueuePanelState, Settings, WhenDone};
 use slint::ComponentHandle as _;
 
 use self::state::{CHOICES, Countdown, Tick};
@@ -45,7 +46,8 @@ pub struct PowerBridge {
     /// `queue.when_done_countdown_secs`, `general.confirm_quit_while_rendering`, notification timeout.
     seconds: Cell<u8>,
     confirm: Cell<bool>,
-    notify_timeout: Cell<u16>,
+    /// `desktop.notifications`.
+    notices: RefCell<NotificationSettings>,
     /// What the desktop actor was told last.
     rendering: Cell<bool>,
     badge: Cell<Badge>,
@@ -82,7 +84,7 @@ impl PowerBridge {
             quit_after: Cell::new(false),
             seconds: Cell::new(settings.queue.when_done_countdown_secs),
             confirm: Cell::new(settings.general.confirm_quit_while_rendering),
-            notify_timeout: Cell::new(settings.desktop.notifications.timeout_secs),
+            notices: RefCell::new(settings.desktop.notifications.clone()),
             rendering: Cell::new(false),
             badge: Cell::new(Badge::NONE),
         });
@@ -90,9 +92,15 @@ impl PowerBridge {
         {
             let mut hooks = queue.hooks();
             let weak = Rc::downgrade(&bridge);
-            hooks.status = Some(Box::new(move |status| {
+            hooks.status.push(Box::new(move |status| {
                 if let Some(b) = weak.upgrade() {
                     b.follow(status);
+                }
+            }));
+            let weak = Rc::downgrade(&bridge);
+            hooks.job_done = Some(Box::new(move |row| {
+                if let Some(b) = weak.upgrade() {
+                    b.job_done(row);
                 }
             }));
             let weak = Rc::downgrade(&bridge);
@@ -110,7 +118,7 @@ impl PowerBridge {
     pub fn apply_settings(&self, settings: &Settings) {
         self.seconds.set(settings.queue.when_done_countdown_secs);
         self.confirm.set(settings.general.confirm_quit_while_rendering);
-        self.notify_timeout.set(settings.desktop.notifications.timeout_secs);
+        self.notices.replace(settings.desktop.notifications.clone());
         let _ = self.desktop.send(DesktopCommand::Settings {
             inhibit: settings.desktop.inhibit_sleep,
             taskbar: settings.desktop.taskbar_progress,
@@ -179,14 +187,16 @@ impl PowerBridge {
         tracing::info!(?choice, finished, failed, "[Power] The queue is done");
         // The close question was waiting for this: the chosen action (quitting too) or a short countdown to the quit.
         let quit_after = self.question_on_done(choice);
-        if choice == WhenDone::Notify {
-            self.notify(Note {
-                style: if failed > 0 { Style::Failed } else { Style::Done },
-                title: "The queue is done".into(),
-                body: text,
-                timeout_secs: u32::from(self.notify_timeout.get()),
-                action: None,
-            });
+        if matches!(choice, WhenDone::Nothing | WhenDone::Notify) {
+            if let Some(timeout_secs) = self.queue_done_notice(choice == WhenDone::Notify) {
+                self.notify(Note {
+                    style: if failed > 0 { Style::Failed } else { Style::Done },
+                    title: "The queue is done".into(),
+                    body: text,
+                    timeout_secs,
+                    action: None,
+                });
+            }
             return;
         }
         let Some(countdown) = Countdown::start(choice, u32::from(self.seconds.get())) else {

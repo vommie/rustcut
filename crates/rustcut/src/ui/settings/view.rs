@@ -152,16 +152,10 @@ mod tests {
             (workers.kind, workers.text.as_str(), workers.enabled),
             (RowKind::Number, "2", true)
         );
-        let tray = cards(Page::Desktop, &settings, &errors, &Paths)
-            .iter()
-            .flat_map(|c| c.rows.clone())
-            .find(|r| r.key == "desktop.tray.enabled")
-            .unwrap();
-        assert!(
-            tray.description.ends_with("Applies at the next start."),
-            "{}",
-            tray.description
-        );
+        // Every option applies while RustCut runs now; one that could not would say so.
+        let later = (*catalog::field("queue.workers").unwrap()).next_start();
+        let note = row(&later, &settings, &errors, &Paths).description;
+        assert!(note.ends_with("Applies at the next start."), "{note}");
         assert!(!workers.description.contains("next start"));
         let countdown = queue.get(1).and_then(|c| c.rows.get(1)).unwrap();
         assert_eq!(countdown.error, "Type a whole number.");

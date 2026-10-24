@@ -62,6 +62,8 @@ struct Shared {
     ended: bool,
     /// The queue reported that it is done (finished, failed) since the last refresh.
     done: Option<(u32, u32)>,
+    /// Jobs whose render ended (finished, failed or canceled) since the last refresh.
+    ended_jobs: Vec<JobSummary>,
 }
 
 /// How busy the queue is (the desktop integration: sleep lock, taskbar, close warning).
@@ -93,6 +95,8 @@ struct PanelUi {
 }
 
 /// The render profiles (id, name) for "Render again with".
+/// See [`QueueHooks::job_done`].
+pub type JobDoneHook = Box<dyn Fn(&JobSummary)>;
 pub type ProfilesHook = Box<dyn Fn() -> Vec<(String, String)>>;
 /// The profile of an id ("" = the Codecs panel's current settings).
 pub type ProfileHook = Box<dyn Fn(&str) -> Option<RenderProfile>>;
@@ -110,10 +114,12 @@ pub struct QueueHooks {
     pub reveal: Option<Box<dyn Fn(PanelId)>>,
     /// After every refresh (the Job and Logs panels follow the current job).
     pub refreshed: Option<Box<dyn Fn()>>,
-    /// After every refresh, how busy the queue is.
-    pub status: Option<Box<dyn Fn(QueueStatus)>>,
+    /// After every refresh, how busy the queue is (the power bridge and the tray).
+    pub status: Vec<Box<dyn Fn(QueueStatus)>>,
     /// The last waiting job ended (finished, failed): the "when done" action follows.
     pub done: Option<Box<dyn Fn(u32, u32)>>,
+    /// A job's render ended (finished, failed or canceled; not a later edit of a done job): its notification.
+    pub job_done: Option<JobDoneHook>,
     pub profiles: Option<ProfilesHook>,
     pub profile: Option<ProfileHook>,
 }
@@ -376,11 +382,20 @@ impl QueueBridge {
         if let Some(hook) = self.hooks.borrow().refreshed.as_ref() {
             hook();
         }
-        let (done, status) = {
+        let (done, status, ended_jobs) = {
             let mut shared = self.shared.lock();
-            (shared.done.take(), status_of(&shared.view))
+            (
+                shared.done.take(),
+                status_of(&shared.view),
+                std::mem::take(&mut shared.ended_jobs),
+            )
         };
-        if let Some(hook) = self.hooks.borrow().status.as_ref() {
+        if let Some(hook) = self.hooks.borrow().job_done.as_ref() {
+            for row in &ended_jobs {
+                hook(row);
+            }
+        }
+        for hook in &self.hooks.borrow().status {
             hook(status);
         }
         if let Some((finished, failed)) = done
@@ -451,6 +466,12 @@ async fn follow(service: QueueService, shared: Arc<Mutex<Shared>>, ui: UiDispatc
                     let mut s = shared.lock();
                     if let QueueEvent::Done { finished, failed } = &event {
                         s.done = Some((*finished, *failed));
+                    }
+                    if let QueueEvent::Updated(row) = &event
+                        && row.state.kind().is_done()
+                        && s.view.row(row.id).is_some_and(|before| before.state.kind().is_active())
+                    {
+                        s.ended_jobs.push((**row).clone());
                     }
                     if s.view.apply(event, now()) {
                         s.ended = true;

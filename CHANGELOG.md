@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- App icon (0.0.18): a film frame with scissors in RustView's style; the windows and the tray use it.
+- Tray icon (optional, `desktop.tray.enabled`, off by default): shows the queue in its tooltip ("1 rendering, 2 waiting ·
+  42 %"); a click shows or hides the window (a minimized window comes back), its menu pauses or resumes the queue
+  and quits. With `desktop.tray.minimize_to_tray`, minimizing the window while a job renders hides it in the tray; the
+  open video plays on from the same place when the window comes back.
+- Notifications for finished jobs (with "Open folder"; off by default), failed jobs (with the reason and "Show log")
+  and the queue being done (`desktop.notifications.*`).
 - When the queue is done (0.0.17): a power button in the queue panel chooses what happens after the last job:
   nothing, a notification, quit RustCut, suspend or power off. Before quit, suspend or power off a banner above the
   video counts down (`queue.when_done_countdown_secs`, default 5 s) with an Abort button (Escape also aborts), and a

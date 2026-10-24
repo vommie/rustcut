@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <title>RustCut</title>
+  <!-- A film frame with scissors over it (user decision Q-I2, 2026-10-24), in RustView's icon style: its background
+       gradient, a light tile and one orange symbol with a dark halo. The scissors are the Tabler "cut" outline (MIT,
+       https://tabler.io/icons) with a heavier stroke, exactly in the center. Only plain shapes, strokes and gradients,
+       so every SVG renderer (librsvg, Qt, resvg) draws it the same. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d3340"/><stop offset="1" stop-color="#171a21"/></linearGradient>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#c3cbda"/></linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#bg)"/>
+  <rect x="20" y="16" width="88" height="96" rx="12" fill="url(#tile)"/>
+  <g fill="#222630"><rect x="26" y="24" width="9" height="9" rx="2"/><rect x="93" y="24" width="9" height="9" rx="2"/><rect x="26" y="42" width="9" height="9" rx="2"/><rect x="93" y="42" width="9" height="9" rx="2"/><rect x="26" y="60" width="9" height="9" rx="2"/><rect x="93" y="60" width="9" height="9" rx="2"/><rect x="26" y="78" width="9" height="9" rx="2"/><rect x="93" y="78" width="9" height="9" rx="2"/><rect x="26" y="95" width="9" height="9" rx="2"/><rect x="93" y="95" width="9" height="9" rx="2"/></g>
+  <g transform="translate(64 64) scale(3.2) translate(-12 -12)" fill="none" stroke-linecap="round" stroke-linejoin="round"><g stroke="#222630" stroke-width="4.3"><path d="M4 17a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M14 17a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M9.15 14.85l8.85 -10.85"/><path d="M6 4l8.85 10.85"/></g><g stroke="#ff7a2f" stroke-width="2.5"><path d="M4 17a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M14 17a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M9.15 14.85l8.85 -10.85"/><path d="M6 4l8.85 10.85"/></g></g>
+</svg>

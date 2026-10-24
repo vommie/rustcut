@@ -22,3 +22,4 @@ pub mod settings;
 pub mod status;
 pub mod tags;
 pub mod timeline;
+pub mod tray;

@@ -175,10 +175,9 @@ pub static DESKTOP: &[Card] = &[
             switch!(
                 "desktop.tray.enabled",
                 "Show a tray icon",
-                "Queue progress, pause and resume in the system tray.",
+                "Queue progress, pause and resume in the system tray; a click shows or hides the window.",
                 desktop.tray.enabled
-            )
-            .next_start(),
+            ),
             switch!(
                 "desktop.tray.minimize_to_tray",
                 "Minimize to the tray while rendering",

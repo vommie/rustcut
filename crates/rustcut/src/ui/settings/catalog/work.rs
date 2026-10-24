@@ -25,7 +25,8 @@ pub static QUEUE: &[Card] = &[
                 "Start paused",
                 "When jobs are waiting at start, the queue starts paused instead of rendering at once.",
                 queue.pause_on_start
-            ),
+            )
+            .next_start(),
         ],
     },
     Card {

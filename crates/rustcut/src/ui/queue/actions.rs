@@ -333,6 +333,16 @@ impl QueueBridge {
         }
     }
 
+    /// Selects the job and shows its log (a notification's "Show log").
+    pub fn show_log(&self, id: JobId) {
+        if self.row(id).is_none() {
+            return;
+        }
+        self.ui.borrow_mut().selection.click(id);
+        self.refresh();
+        self.reveal(PanelId::Logs);
+    }
+
     fn reveal(&self, panel: PanelId) {
         if let Some(hook) = self.hooks.borrow().reveal.as_ref() {
             hook(panel);
