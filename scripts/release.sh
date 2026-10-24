@@ -48,8 +48,9 @@ section() {
   ' CHANGELOG.md
 }
 has_text() { [ -n "$(printf '%s' "$1" | tr -d '[:space:]')" ]; }
-# Entries are list items ("- ..."); headings alone ("### Added") document nothing.
-has_entries() { printf '%s\n' "$1" | grep -q '^- '; }
+# Entries are list items ("- ..."); headings alone ("### Added") document nothing. A here-string, not a pipe: grep -q
+# stops at the first match, and under pipefail the writer's SIGPIPE would fail the check.
+has_entries() { grep -q '^- ' <<<"$1"; }
 
 if [ "$mode" = check ]; then
   [ -f CHANGELOG.md ] || fail "CHANGELOG.md is missing"
