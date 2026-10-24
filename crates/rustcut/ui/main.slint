@@ -40,6 +40,7 @@ import { TooltipSettings } from "tooltip.slint";
 import { Power } from "power_types.slint";
 import { PowerBanner } from "power_banner.slint";
 import { QuitDialog } from "power_quit_dialog.slint";
+import { AppTray } from "tray.slint";
 
 export {
     Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
@@ -48,7 +49,7 @@ export {
     ConflictJobView, ConflictOptionView, Queue, QueueRowView, QueueColumnView, QueueChipView, TagRate, TagNodeView,
     TagColumnView, TagHistoryItemModel, TagHistoryRowModel, Job, JobRowView, JobSectionView, Logs, LogLineView, JobLoad,
     ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderRowView,
-    ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power
+    ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power, AppTray
 }
 
 export component MainWindow inherits Window {
@@ -92,6 +93,7 @@ export component MainWindow inherits Window {
     in property <string> window-title: root.app-name;
 
     title: root.window-title;
+    icon: @image-url("../assets/app/window-icon.png");
 
     // Gives the keyboard to the key scope (after a text field is done, or a click on the video or the timeline).
     public function focus-keys() {

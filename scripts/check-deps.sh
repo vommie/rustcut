@@ -91,6 +91,7 @@ check required cmd:bsdtar                libarchive         "creates the source 
 check optional cmd:namcap                namcap             "lints the PKGBUILD and the package"
 check optional cmd:desktop-file-validate desktop-file-utils "validates the desktop file"
 check optional cmd:appstreamcli          appstream          "validates the AppStream metainfo"
+check optional cmd:rsvg-convert          librsvg            "renders the app icon's PNGs (scripts/gen-app-icons.sh)"
 
 section "Quality checks"
 check optional cmd:cargo-audit cargo-audit "checks dependencies for known vulnerabilities"

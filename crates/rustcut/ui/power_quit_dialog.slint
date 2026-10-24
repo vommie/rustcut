@@ -1,6 +1,7 @@
 // The question when RustCut is closed while a job renders (`general.confirm_quit_while_rendering`, user decision Q-P1):
 // keep rendering (Escape), quit when the queue is done, or quit now (held, user decision Q-Q4: the render stops and the
-// job starts again at the next start).
+// job starts again at the next start). When the queue gets done while it is open, it says so and RustCut quits by
+// itself after a short countdown (Q-P3); "Stay" (Escape) keeps RustCut open.
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
@@ -101,7 +102,7 @@ export component QuitDialog inherits Rectangle {
                         spacing: 4px;
 
                         Text {
-                            text: "Quit while rendering?";
+                            text: Power.ask-done ? "Nothing to wait for anymore" : "Quit while rendering?";
                             color: Theme.text;
                             font-size: 15px;
                             font-weight: 700;
@@ -121,20 +122,31 @@ export component QuitDialog inherits Rectangle {
                     spacing: 8px;
                     alignment: end;
 
-                    HoldButton {
+                    if !Power.ask-done: HoldButton {
                         text: "Quit now";
                         confirmed => { Power.quit-now(); }
                     }
 
-                    DialogButton {
+                    if !Power.ask-done: DialogButton {
                         text: "Quit when done";
                         clicked => { Power.quit-when-done(); }
                     }
 
-                    DialogButton {
+                    if !Power.ask-done: DialogButton {
                         text: "Keep rendering";
                         primary: true;
                         clicked => { Power.keep(); }
+                    }
+
+                    if Power.ask-done: DialogButton {
+                        text: "Stay";
+                        clicked => { Power.keep(); }
+                    }
+
+                    if Power.ask-done: DialogButton {
+                        text: "Quit now";
+                        primary: true;
+                        clicked => { Power.quit-now(); }
                     }
                 }
             }

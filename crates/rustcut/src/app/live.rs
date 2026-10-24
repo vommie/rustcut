@@ -22,6 +22,7 @@ use crate::ui::power::PowerBridge;
 use crate::ui::probe::ProbeBridge;
 use crate::ui::render_settings::RenderSettingsBridge;
 use crate::ui::tags::TagsBridge;
+use crate::ui::tray::TrayBridge;
 use crate::{HoldConfirm, MainWindow, TooltipSettings};
 
 /// The parts that follow the settings.
@@ -46,6 +47,7 @@ pub struct Parts {
     /// Starts (`true`) or stops listening for a second start.
     pub instance: Box<dyn Fn(bool)>,
     pub power: Weak<PowerBridge>,
+    pub tray: Weak<TrayBridge>,
 }
 
 /// The hold time and the tooltips of the main window.
@@ -154,6 +156,11 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
         && let Some(p) = p.power.upgrade()
     {
         p.apply_settings(after);
+    }
+    if before.desktop.tray != after.desktop.tray
+        && let Some(tray) = p.tray.upgrade()
+    {
+        tray.apply_settings(&after.desktop.tray);
     }
     if before.advanced.log_level != after.advanced.log_level {
         p.log.apply(&after.advanced.log_level);

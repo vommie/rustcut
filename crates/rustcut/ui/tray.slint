@@ -1,0 +1,38 @@
+// RustCut's tray icon (P5 M5.2, ADR-15, optional: `desktop.tray.enabled`): Slint's own `SystemTrayIcon` (a
+// StatusNotifierItem in KDE Plasma's tray). It shows the queue in its tooltip; a click shows or hides the window; the menu
+// pauses or resumes the queue and quits. src/ui/tray/ owns it.
+
+export component AppTray inherits SystemTrayIcon {
+    in property <string> status;
+    in property <bool> window-shown: true;
+    in property <bool> paused;
+    callback toggle-window();
+    callback toggle-paused();
+    callback quit-app();
+
+    icon: @image-url("../assets/app/tray-icon.png");
+    tooltip: root.status;
+    title: "RustCut";
+    clicked => { root.toggle-window(); }
+
+    Menu {
+        MenuItem {
+            title: root.window-shown ? "Hide RustCut" : "Show RustCut";
+            activated => { root.toggle-window(); }
+        }
+
+        MenuSeparator { }
+
+        MenuItem {
+            title: root.paused ? "Resume the queue" : "Pause the queue";
+            activated => { root.toggle-paused(); }
+        }
+
+        MenuSeparator { }
+
+        MenuItem {
+            title: "Quit";
+            activated => { root.quit-app(); }
+        }
+    }
+}

@@ -241,6 +241,13 @@ impl PlayerBridge {
         self.state.lock().file.clone()
     }
 
+    /// The open file with its playhead and whether it is paused (to open it again at the same place).
+    pub fn resume_point(&self) -> Option<(PathBuf, Timestamp, bool)> {
+        let state = self.state.lock();
+        let file = state.file.clone()?;
+        Some((file, state.seek_target.unwrap_or(state.position), !state.playing()))
+    }
+
     /// Volume and mute as mpv has them now (saved in the UI state at quit).
     pub fn volume_and_mute(&self) -> (u8, bool) {
         let state = self.state.lock();

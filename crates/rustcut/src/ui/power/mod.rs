@@ -4,6 +4,8 @@
 //! question with three ways, and the desktop actor's sleep lock and taskbar entry following the queue. Pure parts in
 //! `state.rs`.
 
+mod notices;
+mod question;
 pub mod state;
 
 use std::cell::{Cell, RefCell};
@@ -11,7 +13,7 @@ use std::rc::{Rc, Weak};
 use std::time::Duration;
 
 use rustcut_core::queue::QueueCommand;
-use rustcut_core::settings::{QueuePanelState, Settings, WhenDone};
+use rustcut_core::settings::{NotificationSettings, QueuePanelState, Settings, WhenDone};
 use slint::ComponentHandle as _;
 
 use self::state::{CHOICES, Countdown, Tick};
@@ -37,10 +39,15 @@ pub struct PowerBridge {
     when_done: Cell<WhenDone>,
     countdown: Cell<Option<Countdown>>,
     timer: slint::Timer,
+    /// The close question while it is open (`question.rs`).
+    question: question::Question,
+    /// The user wanted to quit when the queue got done: quit after the "when done" action (suspend).
+    quit_after: Cell<bool>,
     /// `queue.when_done_countdown_secs`, `general.confirm_quit_while_rendering`, notification timeout.
     seconds: Cell<u8>,
     confirm: Cell<bool>,
-    notify_timeout: Cell<u16>,
+    /// `desktop.notifications`.
+    notices: RefCell<NotificationSettings>,
     /// What the desktop actor was told last.
     rendering: Cell<bool>,
     badge: Cell<Badge>,
@@ -73,9 +80,11 @@ impl PowerBridge {
             when_done: Cell::new(when_done),
             countdown: Cell::new(None),
             timer: slint::Timer::default(),
+            question: question::Question::default(),
+            quit_after: Cell::new(false),
             seconds: Cell::new(settings.queue.when_done_countdown_secs),
             confirm: Cell::new(settings.general.confirm_quit_while_rendering),
-            notify_timeout: Cell::new(settings.desktop.notifications.timeout_secs),
+            notices: RefCell::new(settings.desktop.notifications.clone()),
             rendering: Cell::new(false),
             badge: Cell::new(Badge::NONE),
         });
@@ -83,9 +92,15 @@ impl PowerBridge {
         {
             let mut hooks = queue.hooks();
             let weak = Rc::downgrade(&bridge);
-            hooks.status = Some(Box::new(move |status| {
+            hooks.status.push(Box::new(move |status| {
                 if let Some(b) = weak.upgrade() {
                     b.follow(status);
+                }
+            }));
+            let weak = Rc::downgrade(&bridge);
+            hooks.job_done = Some(Box::new(move |row| {
+                if let Some(b) = weak.upgrade() {
+                    b.job_done(row);
                 }
             }));
             let weak = Rc::downgrade(&bridge);
@@ -103,7 +118,7 @@ impl PowerBridge {
     pub fn apply_settings(&self, settings: &Settings) {
         self.seconds.set(settings.queue.when_done_countdown_secs);
         self.confirm.set(settings.general.confirm_quit_while_rendering);
-        self.notify_timeout.set(settings.desktop.notifications.timeout_secs);
+        self.notices.replace(settings.desktop.notifications.clone());
         let _ = self.desktop.send(DesktopCommand::Settings {
             inhibit: settings.desktop.inhibit_sleep,
             taskbar: settings.desktop.taskbar_progress,
@@ -163,25 +178,31 @@ impl PowerBridge {
         if badge != self.badge.replace(badge) {
             let _ = self.desktop.send(DesktopCommand::Badge(badge));
         }
+        self.question_follows(&status);
     }
 
     fn queue_done(&self, finished: u32, failed: u32) {
         let choice = self.when_done.get();
         let text = state::done_text(finished, failed);
         tracing::info!(?choice, finished, failed, "[Power] The queue is done");
-        if choice == WhenDone::Notify {
-            self.notify(Note {
-                style: if failed > 0 { Style::Failed } else { Style::Done },
-                title: "The queue is done".into(),
-                body: text,
-                timeout_secs: u32::from(self.notify_timeout.get()),
-                action: None,
-            });
+        // The close question was waiting for this: the chosen action (quitting too) or a short countdown to the quit.
+        let quit_after = self.question_on_done(choice);
+        if matches!(choice, WhenDone::Nothing | WhenDone::Notify) {
+            if let Some(timeout_secs) = self.queue_done_notice(choice == WhenDone::Notify) {
+                self.notify(Note {
+                    style: if failed > 0 { Style::Failed } else { Style::Done },
+                    title: "The queue is done".into(),
+                    body: text,
+                    timeout_secs,
+                    action: None,
+                });
+            }
             return;
         }
         let Some(countdown) = Countdown::start(choice, u32::from(self.seconds.get())) else {
             return;
         };
+        self.quit_after.set(quit_after);
         self.countdown.set(Some(countdown));
         self.notify(Note {
             style: Style::Power,
@@ -257,36 +278,13 @@ impl PowerBridge {
             let result = answer.await.unwrap_or_else(|_gone| Err("no answer".into()));
             let Some(b) = weak.upgrade() else { return };
             match result {
-                Ok(()) if power == PowerAction::PowerOff => b.quit_now(),
+                Ok(()) if power == PowerAction::PowerOff || b.quit_after.take() => b.quit_now(),
                 Ok(()) => {}
                 Err(reason) => b.status(Level::Error, &format!("The system refused: {reason}")),
             }
         });
         if let Err(e) = spawned {
             tracing::error!(error = %e, "[Power] The event loop is gone");
-        }
-    }
-
-    /// Window close, File > Quit or the Quit key: asks first while a job renders.
-    fn request_quit(&self) {
-        let status = self.queue.upgrade().map(|q| q.status());
-        let ask = status.is_some_and(|s| state::ask_before_quit(&s, self.confirm.get()));
-        let Some(window) = self.window.upgrade() else { return };
-        if !ask {
-            window.invoke_quit();
-            return;
-        }
-        let power = window.global::<Power<'_>>();
-        if let Some(status) = status {
-            power.set_ask_text(state::ask_text(&status).into());
-        }
-        power.set_asking(true);
-    }
-
-    fn close_question(&self) {
-        if let Some(window) = self.window.upgrade() {
-            window.global::<Power<'_>>().set_asking(false);
-            window.invoke_focus_keys();
         }
     }
 

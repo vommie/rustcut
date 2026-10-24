@@ -61,6 +61,11 @@ impl Actor {
                 self.publish_processing();
                 self.kick().await;
             }
+            QueueCommand::HoldStarts(on) => {
+                tracing::info!(on, "[Queue] New starts held while RustCut may quit");
+                self.model.set_hold_starts(on);
+                self.kick().await;
+            }
             QueueCommand::SetWorkers(workers) => {
                 self.model.set_workers(workers);
                 self.publish_processing();
