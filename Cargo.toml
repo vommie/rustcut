@@ -105,6 +105,10 @@ shlex = "2"
 # delays by the sync actor.
 backon = { version = "1", default-features = false, features = ["std"] }
 
+# The previews of media files (pictures and descriptions): a concurrent cache weighed in bytes whose loads for the same
+# key are shared (`get_value_or_guard_async`).
+quick_cache = "0.7"
+
 # Tests only.
 proptest = "1"
 insta = "1"

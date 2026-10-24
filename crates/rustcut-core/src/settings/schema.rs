@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::formats::PreferMany;
 use serde_with::{DefaultOnError, OneOrMany, VecSkipError, serde_as};
 
+use super::dialogs::DialogSettings;
 use super::file::VersionedFile;
 use crate::edit::{Deinterlacer, DeshakeParams};
 use crate::naming::DEFAULT_TEMPLATE;
@@ -29,6 +30,8 @@ pub struct Settings {
     pub desktop: DesktopSettings,
     pub appearance: AppearanceSettings,
     pub advanced: AdvancedSettings,
+    /// How the dialogs behave (0.0.20).
+    pub dialogs: DialogSettings,
     /// Key bindings by action id (`set_start = ["I", "Home"]`); a missing action keeps its default, an empty list unbinds
     /// it. Owned, validated and sanitized by the app's keymap (key names are Slint's); the core only stores it. A value
     /// that is neither a string nor a list of strings reads as missing, so a typo never resets the other settings.
@@ -520,6 +523,7 @@ impl VersionedFile for Settings {
         if fix("render.default_profile was unknown", !known) {
             self.render.default_profile = DEFAULT_PROFILE_ID.into();
         }
+        notes.extend(self.dialogs.conflict.sanitize());
         notes
     }
 }
