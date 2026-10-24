@@ -95,6 +95,8 @@ struct Key {
     path: PathBuf,
     bytes: u64,
     modified: Option<SystemTime>,
+    /// With a picture (at `picture_at_percent`) or only the description (then the place is 0).
+    picture: bool,
     picture_at_percent: u8,
 }
 
@@ -146,12 +148,21 @@ impl PreviewService {
         self.inner.state.lock().0.clone()
     }
 
-    /// The preview of `path`, from the cache while the file has the same size and modification time.
+    /// The preview of `path` with its picture, from the cache while the file has the same size and modification time.
     ///
     /// # Errors
     /// [`PreviewError::NotAFile`] when `path` is not a readable file. A file ffprobe or ffmpeg cannot read is no error:
     /// its preview says so in `problem`.
     pub async fn preview(&self, path: &Path) -> Result<Arc<Preview>, PreviewError> {
+        self.get(&PreviewRequest::picture(path)).await
+    }
+
+    /// What `request` asks for; a description-only request takes a cached preview with a picture when there is one.
+    ///
+    /// # Errors
+    /// See [`Self::preview`].
+    pub async fn get(&self, request: &PreviewRequest) -> Result<Arc<Preview>, PreviewError> {
+        let path = request.path.as_path();
         let metadata = tokio::fs::metadata(path)
             .await
             .map_err(|e| PreviewError::NotAFile(e.to_string()))?;
@@ -166,8 +177,19 @@ impl PreviewService {
             path: path.to_path_buf(),
             bytes: metadata.len(),
             modified: metadata.modified().ok(),
-            picture_at_percent: options.picture_at_percent,
+            picture: request.picture,
+            picture_at_percent: if request.picture { options.picture_at_percent } else { 0 },
         };
+        if !key.picture {
+            let pictured = Key {
+                picture: true,
+                picture_at_percent: options.picture_at_percent,
+                ..key.clone()
+            };
+            if let Some(cached) = self.inner.cache.get(&pictured) {
+                return Ok(cached);
+            }
+        }
         let guard = match self.inner.cache.get_value_or_guard_async(&key).await {
             Ok(cached) => return Ok(cached),
             Err(guard) => guard,
@@ -225,6 +247,29 @@ impl Drop for PreviewBatch {
     }
 }
 
+/// One file of a batch, with its picture or only its description.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreviewRequest {
+    pub path: PathBuf,
+    pub picture: bool,
+}
+
+impl PreviewRequest {
+    pub fn picture(path: impl Into<PathBuf>) -> Self {
+        Self {
+            path: path.into(),
+            picture: true,
+        }
+    }
+
+    pub fn describe(path: impl Into<PathBuf>) -> Self {
+        Self {
+            path: path.into(),
+            picture: false,
+        }
+    }
+}
+
 impl PreviewService {
     /// Reads `first` before anything else (the conflict dialog's existing target), then the files of `rest` (in their
     /// order, `parallel` at a time). Every result arrives on the receiver as soon as it is there; the batch ends
@@ -232,14 +277,14 @@ impl PreviewService {
     pub fn batch(
         &self,
         runtime: &tokio::runtime::Handle,
-        first: Option<PathBuf>,
-        rest: Vec<PathBuf>,
+        first: Option<PreviewRequest>,
+        rest: Vec<PreviewRequest>,
     ) -> (PreviewBatch, mpsc::UnboundedReceiver<PreviewEvent>) {
         let (tx, rx) = mpsc::unbounded_channel();
         let service = self.clone();
         let task = runtime.spawn(async move {
-            if let Some(path) = first {
-                let result = service.preview(&path).await;
+            if let Some(request) = first {
+                let result = service.get(&request).await;
                 if tx
                     .send(PreviewEvent {
                         slot: PreviewSlot::First,
@@ -252,9 +297,9 @@ impl PreviewService {
             }
             // Dropping the set (the batch was stopped) aborts every read in it.
             let mut reads = JoinSet::new();
-            for (index, path) in rest.into_iter().enumerate() {
+            for (index, request) in rest.into_iter().enumerate() {
                 let service = service.clone();
-                reads.spawn(async move { (index, service.preview(&path).await) });
+                reads.spawn(async move { (index, service.get(&request).await) });
             }
             while let Some(joined) = reads.join_next().await {
                 let Ok((index, result)) = joined else { continue };
@@ -296,7 +341,7 @@ async fn read(path: &Path, key: &Key, options: &PreviewOptions) -> Preview {
             return preview;
         }
     }
-    let Some(info) = preview.info.as_ref() else {
+    let Some(info) = preview.info.as_ref().filter(|_| key.picture) else {
         return preview;
     };
     // The video a player shows, never cover art.

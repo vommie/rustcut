@@ -23,7 +23,7 @@ pub use model::{
 };
 pub use preview::{
     DEFAULT_PARALLEL, Preview, PreviewBatch, PreviewError, PreviewEvent, PreviewOptions, PreviewPrograms,
-    PreviewService, PreviewSlot, THUMB_HEIGHT, THUMB_WIDTH, Thumbnail, picture_time, thumbnail_args,
+    PreviewRequest, PreviewService, PreviewSlot, THUMB_HEIGHT, THUMB_WIDTH, Thumbnail, picture_time, thumbnail_args,
 };
 pub(crate) use probe::run as run_tool;
 pub use probe::{

@@ -14,7 +14,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use rustcut_core::media::{
-    DEFAULT_PARALLEL, PreviewOptions, PreviewPrograms, PreviewService, PreviewSlot, THUMB_HEIGHT, THUMB_WIDTH,
+    DEFAULT_PARALLEL, PreviewOptions, PreviewPrograms, PreviewRequest, PreviewService, PreviewSlot, THUMB_HEIGHT,
+    THUMB_WIDTH,
 };
 
 /// The bytes of one picture.
@@ -65,6 +66,14 @@ fn media(dir: &Path, names: &[&str]) -> Vec<PathBuf> {
             path
         })
         .collect()
+}
+
+fn pic(path: &Path) -> PreviewRequest {
+    PreviewRequest::picture(path)
+}
+
+fn pics(paths: &[PathBuf]) -> Vec<PreviewRequest> {
+    paths.iter().map(PreviewRequest::picture).collect()
 }
 
 fn lines(log: &Path) -> Vec<String> {
@@ -120,7 +129,7 @@ fn the_existing_target_comes_first_and_at_most_three_run_at_once() {
         &["main.mp4", "s1.mp4", "s2.mp4", "s3.mp4", "s4.mp4", "s5.mp4"],
     );
     let service = PreviewService::new(with(programs));
-    let (batch, mut events) = service.batch(rt.handle(), Some(files[0].clone()), files[1..].to_vec());
+    let (batch, mut events) = service.batch(rt.handle(), Some(pic(&files[0])), pics(&files[1..]));
     let mut got = Vec::new();
     rt.block_on(async {
         while let Some(event) = events.recv().await {
@@ -167,7 +176,7 @@ fn closing_the_dialog_kills_the_running_programs_and_keeps_the_cache_clean() {
         ffprobe: Some(ffprobe(&tools, &log, "0")),
         ffmpeg: Some(ffmpeg(&tools, &log, "forever")),
     }));
-    let (batch, events) = service.batch(rt.handle(), Some(files[0].clone()), files[1..].to_vec());
+    let (batch, events) = service.batch(rt.handle(), Some(pic(&files[0])), pics(&files[1..]));
     wait_for("the main picture to start", || {
         lines(&log).iter().any(|l| l.starts_with("picture-start"))
     });
@@ -191,7 +200,7 @@ fn closing_the_dialog_kills_the_running_programs_and_keeps_the_cache_clean() {
         ffprobe: Some(ffprobe(&tools, &log, "forever")),
         ffmpeg: Some(ffmpeg(&tools, &log, "0")),
     }));
-    let (batch, _events) = service.batch(rt.handle(), None, files[1..].to_vec());
+    let (batch, _events) = service.batch(rt.handle(), None, pics(&files[1..]));
     wait_for("three probes", || lines(&log).len() == DEFAULT_PARALLEL);
     let pids: Vec<String> = lines(&log)
         .iter()
@@ -222,7 +231,7 @@ fn a_batch_ends_by_itself_when_nobody_listens() {
         ffprobe: Some(ffprobe(dir.path(), &log, "0")),
         ffmpeg: Some(ffmpeg(dir.path(), &log, "0.2")),
     }));
-    let (batch, events) = service.batch(rt.handle(), Some(files[0].clone()), vec![files[1].clone()]);
+    let (batch, events) = service.batch(rt.handle(), Some(pic(&files[0])), pics(&files[1..]));
     drop(events);
     wait_for("the batch to end", || batch.is_finished());
 }
@@ -279,7 +288,7 @@ fn another_picture_place_is_read_again_and_fewer_turns_apply_to_new_reads() {
         "another place is another picture"
     );
     std::fs::remove_file(&log).unwrap();
-    let (_batch, mut events) = service.batch(rt.handle(), None, files[1..].to_vec());
+    let (_batch, mut events) = service.batch(rt.handle(), None, pics(&files[1..]));
     rt.block_on(async { while events.recv().await.is_some() {} });
     let (mut running, mut most) = (0_usize, 0_usize);
     for line in lines(&log) {
@@ -291,4 +300,39 @@ fn another_picture_place_is_read_again_and_fewer_turns_apply_to_new_reads() {
         most = most.max(running);
     }
     assert_eq!(most, 1, "one at a time");
+}
+
+#[test]
+fn a_description_alone_runs_no_ffmpeg_and_a_cached_picture_serves_it() {
+    let rt = runtime();
+    let dir = tempfile::tempdir().unwrap();
+    let log = dir.path().join("log");
+    let files = media(dir.path(), &["a.mp4", "b.mp4"]);
+    let service = PreviewService::new(with(PreviewPrograms {
+        ffprobe: Some(ffprobe(dir.path(), &log, "0")),
+        ffmpeg: Some(ffmpeg(dir.path(), &log, "0")),
+    }));
+    let pictured = rt.block_on(service.preview(&files[0])).unwrap();
+    let (_batch, mut events) = service.batch(
+        rt.handle(),
+        Some(PreviewRequest::describe(&files[0])),
+        vec![PreviewRequest::describe(&files[1])],
+    );
+    let got = rt.block_on(async {
+        let mut got = Vec::new();
+        while let Some(event) = events.recv().await {
+            got.push(event);
+        }
+        got
+    });
+    let first = got.iter().find(|e| e.slot == PreviewSlot::First).unwrap();
+    assert!(
+        std::sync::Arc::ptr_eq(first.result.as_ref().unwrap(), &pictured),
+        "the cached preview serves"
+    );
+    let other = got.iter().find(|e| e.slot == PreviewSlot::Rest(0)).unwrap();
+    let other = other.result.as_ref().unwrap();
+    assert!(other.info.is_some() && other.thumbnail.is_none());
+    let pictures = lines(&log).iter().filter(|l| l.starts_with("picture-start")).count();
+    assert_eq!(pictures, 1, "only the first preview ran ffmpeg");
 }
