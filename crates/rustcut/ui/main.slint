@@ -37,6 +37,9 @@ import { TagColumnView, TagHistoryItemModel, TagHistoryRowModel, TagNodeView, Ta
 import { FolderRowView, HotkeyChipView, HotkeyRowView, ProfileItemView, SettingCardView, SettingRowView, SettingsUi } from "settings_types.slint";
 import { SettingsWindow } from "settings_window.slint";
 import { TooltipSettings } from "tooltip.slint";
+import { Power } from "power_types.slint";
+import { PowerBanner } from "power_banner.slint";
+import { QuitDialog } from "power_quit_dialog.slint";
 
 export {
     Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
@@ -45,7 +48,7 @@ export {
     ConflictJobView, ConflictOptionView, Queue, QueueRowView, QueueColumnView, QueueChipView, TagRate, TagNodeView,
     TagColumnView, TagHistoryItemModel, TagHistoryRowModel, Job, JobRowView, JobSectionView, Logs, LogLineView, JobLoad,
     ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderRowView,
-    ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings
+    ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power
 }
 
 export component MainWindow inherits Window {
@@ -75,8 +78,10 @@ export component MainWindow inherits Window {
     callback open-file();
     // Opens a path (UI-thread entry for the dialog, drops and a second start).
     callback open-path(string);
-    // File > Quit: the same path as closing the window.
+    // Quits now: the same path as closing the window once nothing has to be asked (signals, the countdown, "Quit now").
     callback quit();
+    // The user wants to quit (window close, File > Quit, the Quit key): asks first while a job renders (src/ui/power/).
+    callback request-quit();
     // File > Settings and Help > About: the Settings window on a page ("" = the page it showed last; src/ui/settings/).
     callback open-settings();
     callback open-settings-page(string);
@@ -133,7 +138,7 @@ export component MainWindow inherits Window {
             MenuItem {
                 title: "Quit";
                 shortcut: Shortcuts.quit;
-                activated => { root.quit(); }
+                activated => { root.request-quit(); }
             }
         }
 
@@ -433,6 +438,8 @@ export component MainWindow inherits Window {
 
                     ProbeBanner { }
 
+                    PowerBanner { }
+
                     player := PlayerView {
                         vertical-stretch: 1;
                         frame: root.video-frame;
@@ -481,6 +488,13 @@ export component MainWindow inherits Window {
     }
 
     if Export.meta-open: MetadataDialog {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+    }
+
+    if Power.asking: QuitDialog {
         x: 0;
         y: 0;
         width: parent.width;

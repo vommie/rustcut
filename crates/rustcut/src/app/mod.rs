@@ -32,6 +32,7 @@ use self::services::{
 };
 use crate::MainWindow;
 use crate::desktop::instance;
+use crate::desktop::service::spawn_desktop;
 use crate::ui::dispatcher::{SlintSink, UiDispatcher};
 use crate::ui::dock::{DockBridge, PanelId, persist as dock_persist};
 use crate::ui::editing::{EditingParts, JobEditor};
@@ -45,6 +46,7 @@ use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::menu::ContextMenuBridge;
 use crate::ui::open::{FileOpener, OpenerParts};
 use crate::ui::player::{PlayerBridge, PlayerBridgeError};
+use crate::ui::power::PowerBridge;
 use crate::ui::probe::{self, ProbeBridge};
 use crate::ui::queue::{MenuKeys, QueueBridge};
 use crate::ui::render_settings::RenderSettingsBridge;
@@ -345,6 +347,27 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         })
     };
     tags.set_history_size(loaded.settings.rustview.tag_history_size);
+    // The desktop (P5): the sleep lock and the taskbar entry follow the queue; "when done" and the close question.
+    let desktop = spawn_desktop(
+        runtime.handle(),
+        loaded.settings.desktop.inhibit_sleep,
+        loaded.settings.desktop.taskbar_progress,
+    );
+    let power = PowerBridge::install(
+        &main,
+        (&ui, runtime.handle(), &queue, &menu),
+        desktop,
+        &loaded.settings,
+        loaded
+            .ui_state
+            .queue
+            .when_done
+            .unwrap_or(loaded.settings.queue.when_done),
+    );
+    {
+        let power = Rc::downgrade(&power);
+        editor.set_escape_hook(move || power.upgrade().is_some_and(|p| p.escape()));
+    }
     let settings_window = SettingsBridge::install(
         &main,
         runtime.handle().clone(),
@@ -383,6 +406,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             probe: Rc::downgrade(&probe),
             runtime: runtime.handle().clone(),
             instance,
+            power: Rc::downgrade(&power),
         },
     );
     shutdown::watch_signals(runtime.handle(), ui, main.as_weak());
@@ -414,6 +438,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     export.save_into(&mut ui_state.export);
     tags.save_into(&mut ui_state.tags);
     queue.save_into(&mut ui_state.queue);
+    power.save_into(&mut ui_state.queue);
     ui_state.job.collapsed = inspector.collapsed();
     logs.save_into(&mut ui_state.logs);
     settings_window.save_into(&mut ui_state.settings);
@@ -427,6 +452,8 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     drop(export);
     drop(logs);
     drop(inspector);
+    // The desktop actor ends with its last handle: the sleep lock goes, the taskbar entry is cleared.
+    drop(power);
     drop(queue);
     drop(menu);
     drop(tags);

@@ -1,3 +1,8 @@
-//! Desktop integration: single instance with file forwarding (more in P5: notifications, taskbar progress, tray, logind).
+//! Desktop integration: single instance with file forwarding, and (P5) the sleep lock, suspend and power off through
+//! logind, the taskbar progress and notifications (`service` is the actor behind them).
 
 pub mod instance;
+pub mod logind;
+pub mod notify;
+pub mod service;
+pub mod taskbar;

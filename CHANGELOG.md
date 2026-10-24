@@ -9,6 +9,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- When the queue is done (0.0.17): a power button in the queue panel chooses what happens after the last job:
+  nothing, a notification, quit RustCut, suspend or power off. Before quit, suspend or power off a banner above the
+  video counts down (`queue.when_done_countdown_secs`, default 5 s) with an Abort button (Escape also aborts), and a
+  desktop notification with Abort appears. After quitting, suspending or powering off, the choice goes back to
+  "nothing", so it never repeats by surprise; the choice is kept in `ui-state.toml`.
+- Closing RustCut while a job renders asks first (`general.confirm_quit_while_rendering`): keep rendering (Escape),
+  quit when the queue is done, or quit now (hold the button; the job starts again at the next start).
+- While a job renders, the computer does not go to sleep (`desktop.inhibit_sleep`, through systemd-logind).
+- The queue's progress and the number of open jobs show on RustCut's taskbar entry (`desktop.taskbar_progress`; KDE
+  Plasma shows it once RustCut's desktop file is installed).
 - Logs panel (0.0.16): besides the log of the job chosen in the queue, it shows RustCut's own log of this run (the
   lines the log file gets, with time and level) or only its RustView part (the link and the Tag & Rate panel). The
   log grows while it is shown; search, "errors only", following the newest line and Copy work on every log. The

@@ -105,6 +105,15 @@ export component QueuePanel inherits Rectangle {
                 clicked => { Queue.toggle-pause-after(); }
             }
 
+            when-done := IconButton {
+                icon: IconId.when-done;
+                checked: Queue.when-done != 0;
+                tooltip: Queue.when-done-tip;
+                clicked => {
+                    Queue.when-done-menu(when-done.absolute-position.x, when-done.absolute-position.y + when-done.height);
+                }
+            }
+
             VerticalLayout {
                 horizontal-stretch: 1;
                 alignment: center;

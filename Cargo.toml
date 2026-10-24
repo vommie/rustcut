@@ -6,7 +6,7 @@ default-members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustc
 [workspace.package]
 # Single source of truth for the app version: the About page, the package script and the PKGBUILD read it from here.
 # Claude bumps the patch number whenever a state is testable; major and minor belong to the user.
-version = "0.0.16"
+version = "0.0.17"
 edition = "2024"
 # The lowest toolchain known to work (rusqlite_migration needs 1.95). rust-toolchain.toml pins `stable`.
 rust-version = "1.95"
@@ -87,6 +87,10 @@ humansize = "2"
 opener = { version = "0.9", features = ["reveal"] }
 # The clipboard (Copy in the Logs panel): X11 and Wayland's data-control protocol; Slint's winit backend uses it too.
 arboard = { version = "3.7", default-features = false, features = ["wayland-data-control"] }
+# D-Bus for logind (sleep inhibitor, suspend, power off) and the taskbar progress (Unity LauncherEntry); the version
+# rfd's portal already uses.
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+notify-rust = "4"
 # Language names of audio and subtitle tracks from their ISO 639 codes ("deu" -> "German").
 isolang = "2"
 

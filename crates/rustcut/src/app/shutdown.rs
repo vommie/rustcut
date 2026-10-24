@@ -28,15 +28,20 @@ impl QuitPath {
         });
         let (this, weak) = (Rc::downgrade(&path), main.as_weak());
         main.window().on_close_requested(move || {
-            if let (Some(path), Some(main)) = (this.upgrade(), weak.upgrade()) {
-                tracing::info!("[App] Window closed; quitting");
-                path.capture(&main);
+            // The window stays until RustCut really quits: closing it asks first while a job renders (`request-quit`,
+            // src/ui/power/), and quitting ends the event loop also while the Settings window is open.
+            if let (Some(_), Some(main)) = (this.upgrade(), weak.upgrade()) {
+                tracing::info!("[App] Window close requested");
+                main.invoke_request_quit();
             }
-            // The Settings window may still be open: closing the main window quits all the same.
-            if let Err(e) = slint::quit_event_loop() {
-                tracing::warn!(error = %e, "[App] The event loop could not be ended");
+            slint::CloseRequestResponse::KeepWindowShown
+        });
+        // Until the power bridge asks first: quit at once.
+        let weak = main.as_weak();
+        main.on_request_quit(move || {
+            if let Some(main) = weak.upgrade() {
+                main.invoke_quit();
             }
-            slint::CloseRequestResponse::HideWindow
         });
         let (this, weak) = (Rc::downgrade(&path), main.as_weak());
         main.on_quit(move || {

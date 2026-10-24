@@ -159,3 +159,6 @@ browse = { tabler = "folder-open", doc = "Pick a file or a folder with the file 
 hotkey_add = { tabler = "keyboard", doc = "Press a new key for the action" }
 profile_default = { tabler = "star", doc = "The profile new jobs start with (outline: make it so)" }
 profile_default_set = { tabler = "star", style = "filled", doc = "The profile new jobs start with" }
+
+# --- Power and quitting ----------------------------------------------------------------------------------------------
+when_done = { tabler = "power", doc = "What happens when the queue is done (nothing, notify, quit, suspend, power off)" }
