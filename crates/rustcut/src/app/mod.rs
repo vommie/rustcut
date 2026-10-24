@@ -149,6 +149,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     };
     let queue_service = start_queue(&runtime, &store, &loaded, &encoders, sync_link);
     live::look(&main, &loaded.settings);
+    crate::ui::tooltip::install(&main);
     let menu = ContextMenuBridge::install(&main);
     let (keys, save_key) = queue_keys(&loaded.settings);
     let queue = QueueBridge::install(
@@ -486,20 +487,13 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
 /// The queue's key labels for its tooltips and menu (the keymap as the editor reads it), and the Save key.
 fn queue_keys(settings: &Settings) -> (MenuKeys, String) {
     let (keymap, _notes) = Keymap::from_table(&settings.keymap);
-    let label = |action| {
-        keymap
-            .chords(action)
-            .first()
-            .map(crate::ui::keymap::Chord::label)
-            .unwrap_or_default()
-    };
     (
         MenuKeys {
-            move_up: label(Action::QueueMoveUp),
-            move_down: label(Action::QueueMoveDown),
-            move_top: label(Action::QueueMoveTop),
-            move_bottom: label(Action::QueueMoveBottom),
+            move_up: keymap.tooltip_keys(Action::QueueMoveUp),
+            move_down: keymap.tooltip_keys(Action::QueueMoveDown),
+            move_top: keymap.first_label(Action::QueueMoveTop),
+            move_bottom: keymap.first_label(Action::QueueMoveBottom),
         },
-        label(Action::Save),
+        keymap.first_label(Action::Save),
     )
 }

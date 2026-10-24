@@ -354,7 +354,7 @@ export component SectionsCardBody inherits VerticalLayout {
             icon: IconId.section-delete;
             hold: true;
             enabled: Sections.can-delete;
-            tooltip: "Hold to delete the selected section (the key deletes it at once)";
+            tooltip: "Delete the selected section (the key deletes it at once)";
             shortcut: Sections.key-delete;
             clicked => { Sections.delete(); }
         }

@@ -8,7 +8,7 @@ use super::ExportBridge;
 use super::dialog::{Choice, ConflictDialog, Tab};
 use super::save::Pending;
 use crate::ui::queue::title as state_title;
-use crate::{ConflictJobView, ConflictOptionView, Export, RichTooltip};
+use crate::{ConflictJobView, ConflictOptionView, Export, GlobalTooltip};
 
 /// The titles of the tabs with what they hold ("Similar files (12)").
 pub(super) fn tab_titles(dialog: &ConflictDialog) -> Vec<String> {
@@ -42,7 +42,7 @@ impl ExportBridge {
             drop(pending);
             self.stop_previews();
             // Closed by a button under a details tooltip: the tooltip's area is gone and cannot hide it.
-            window.global::<RichTooltip<'_>>().invoke_hide();
+            window.global::<GlobalTooltip<'_>>().invoke_hide_cold();
             e.set_dialog_open(false);
             return;
         };

@@ -22,7 +22,8 @@ import { Timeline, TimelineBlock, TimelineStrip, TimelineTick } from "timeline_v
 import { SectionRowView, Sections } from "sections_card.slint";
 import { FilterRowView, Filters } from "filters_card.slint";
 import { CropOverlay } from "crop_overlay.slint";
-import { RichTooltip, TipRow, TooltipLayer } from "tooltip.slint";
+import { GlobalTooltip, Tip, TipKey, TipKeys, TipPlacement, TipRect, TipRow, TipSide, TooltipLogic } from "tooltip.slint";
+import { TooltipLayer } from "tooltip_layer.slint";
 import { DialogState } from "dialog_frame.slint";
 import { OptionRowView, Probe, RenderIssueView, RenderSettings } from "render_types.slint";
 import { ProbeBanner } from "probe_banner.slint";
@@ -47,7 +48,8 @@ export {
     Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
     MediaInfoRow, MediaInfoSection, KnownSource, Shortcuts, Timeline, TimelineBlock, TimelineTick, Sections,
     SectionRowView, Filters, FilterRowView, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe, Export,
-    ConflictJobView, ConflictOptionView, PreviewView, TipRow, RichTooltip, DialogState, Queue, QueueRowView, QueueColumnView, QueueChipView, TagRate, TagNodeView,
+    ConflictJobView, ConflictOptionView, PreviewView, TipRow, Tip, TipKey, TipKeys, TipPlacement, TipRect, TipSide,
+    GlobalTooltip, TooltipLogic, DialogState, Queue, QueueRowView, QueueColumnView, QueueChipView, TagRate, TagNodeView,
     TagColumnView, TagHistoryItemModel, TagHistoryRowModel, Job, JobRowView, JobSectionView, Logs, LogLineView, JobLoad,
     ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderRowView,
     ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power, AppTray

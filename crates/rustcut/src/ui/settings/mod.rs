@@ -288,6 +288,7 @@ impl SettingsBridge {
             f32::from(u16::try_from(state.height).unwrap_or(660)),
         ));
         Self::apply_look(&window, &self.writer.current());
+        crate::ui::tooltip::install(&window);
         Ok(window)
     }
 

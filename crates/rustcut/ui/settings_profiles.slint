@@ -108,7 +108,7 @@ export component SettingsProfiles inherits VerticalLayout {
                 icon: IconId.profile-delete;
                 hold: true;
                 enabled: !SettingsUi.profile-builtin;
-                tooltip: SettingsUi.profile-builtin ? "Built-in profiles cannot be deleted" : "Hold to delete this profile";
+                tooltip: SettingsUi.profile-builtin ? "Built-in profiles cannot be deleted" : "Delete this profile";
                 clicked => { SettingsUi.delete-profile(); }
             }
         }

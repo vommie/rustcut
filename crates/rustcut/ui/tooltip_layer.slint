@@ -1,0 +1,381 @@
+// The tooltip bubble (M5.5): one per window, on the highest level, drawn for `GlobalTooltip` (tooltip.slint). Short
+// tips are one line, long ones wrap at `TooltipSettings.max-width` (Q-T2); a title, rows and a note make a rich tip;
+// the hold badge and the key caps sit on their own line at the bottom (Q-T1). `TooltipLogic.place` puts the bubble
+// next to its element (centered below, shifted at the window's edges, above, beside, over; Q-T3) and is evaluated in a
+// binding, so the bubble moves whenever its size, the window or the element changes. It fades in with a small slide
+// away from its element and glides to the next element when it was still showing (Q-T4).
+
+import { AppIcon, IconId } from "icons.slint";
+import { HoldConfirm } from "hold.slint";
+import { GlobalTooltip, TipKeys, TipPlacement, TipRect, TipSide, TooltipLogic, TooltipSettings } from "tooltip.slint";
+
+/// One key cap.
+component KeyCap inherits Rectangle {
+    in property <string> text;
+    in property <IconId> icon: IconId.none;
+
+    height: 18px;
+    width: Math.max(18px, root.icon != IconId.none ? 18px : label.preferred-width + 10px);
+    border-radius: 4px;
+    background: #313244;
+    border-width: 1px;
+    border-color: #585b70;
+
+    // The key's lower edge, a little darker, so it reads as a key.
+    Rectangle {
+        y: parent.height - 2px;
+        height: 1px;
+        x: 2px;
+        width: parent.width - 4px;
+        background: #11111b88;
+    }
+
+    if root.icon != IconId.none: AppIcon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - 1px - self.height) / 2;
+        icon: root.icon;
+        size: 12px;
+        color: TooltipSettings.text;
+    }
+
+    label := Text {
+        visible: root.icon == IconId.none;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - 1px - self.height) / 2;
+        text: root.text;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: TooltipSettings.text;
+    }
+}
+
+/// The hold badge: the element acts only when held for this long.
+component HoldBadge inherits Rectangle {
+    height: 18px;
+    width: badge-row.preferred-width;
+    border-radius: 4px;
+    background: HoldConfirm.color.with-alpha(0.18);
+
+    badge-row := HorizontalLayout {
+        padding-left: 5px;
+        padding-right: 6px;
+        spacing: 3px;
+
+        AppIcon {
+            y: (parent.height - self.height) / 2;
+            icon: IconId.tip-hold;
+            size: 12px;
+            color: HoldConfirm.color;
+        }
+
+        Text {
+            text: "Hold " + Math.round(HoldConfirm.duration / 100ms) / 10 + " s";
+            font-size: TooltipSettings.small-font-size;
+            color: HoldConfirm.color;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component TooltipLayer inherits Rectangle {
+    property <bool> active: GlobalTooltip.is-visible && (TooltipSettings.enabled || GlobalTooltip.tip.forced);
+    property <TipKeys> keys: TooltipLogic.key-caps(GlobalTooltip.tip.shortcut);
+    property <bool> show-hold: GlobalTooltip.tip.hold && HoldConfirm.duration > 0ms;
+    property <bool> has-footer: root.show-hold || root.keys.caps.length > 0;
+    property <bool> has-head: GlobalTooltip.tip.title != "";
+    property <bool> has-rows: GlobalTooltip.tip.rows.length > 0;
+
+    // The content's width: as wide as its longest line, at most `max-width` and the window.
+    property <length> pad-h: TooltipSettings.padding-h;
+    property <length> pad-v: TooltipSettings.padding-v;
+    property <length> room: Math.max(40px, root.width - 12px - 2 * root.pad-h);
+    property <length> content-w: Math.max(24px, Math.min(Math.min(TooltipSettings.max-width, root.room),
+        measure.preferred-width));
+    property <length> label-w: Math.min(110px, labels.preferred-width);
+
+    // The element in layer coordinates (the hosts report window coordinates; the layer may start below a menu bar).
+    property <TipRect> anchor: {
+        x: GlobalTooltip.anchor.x - root.absolute-position.x,
+        y: GlobalTooltip.anchor.y - root.absolute-position.y,
+        width: GlobalTooltip.anchor.width,
+        height: GlobalTooltip.anchor.height,
+    };
+    property <TipPlacement> placement: TooltipLogic.place(root.anchor, bubble.width, bubble.height, root.width,
+        root.height, GlobalTooltip.tip.beside);
+    property <TipSide> side: root.placement.side;
+
+    // Fades in with a short slide away from the element; fades out a bit faster.
+    property <length> slide: root.active ? 0px : 3px;
+    animate slide { duration: 120ms; easing: ease-out; }
+
+    visible: root.active || bubble.opacity > 0;
+    background: transparent;
+
+    // A tooltip closed: for a moment the next one shows at once (warm), and right after the close it glides (recent).
+    cool := Timer {
+        interval: TooltipSettings.warm-up;
+        running: false;
+        triggered => {
+            self.running = false;
+            if !GlobalTooltip.is-visible {
+                GlobalTooltip.warm = false;
+            }
+        }
+    }
+
+    fade := Timer {
+        interval: 140ms;
+        running: false;
+        triggered => {
+            self.running = false;
+            GlobalTooltip.recent = false;
+        }
+    }
+
+    changed active => {
+        if root.active {
+            cool.stop();
+            fade.stop();
+            GlobalTooltip.recent = false;
+        } else {
+            // `restart()` only restarts a running timer.
+            GlobalTooltip.recent = true;
+            if cool.running {
+                cool.restart();
+            } else {
+                cool.start();
+            }
+            if fade.running {
+                fade.restart();
+            } else {
+                fade.start();
+            }
+        }
+    }
+
+    // The natural width of every line (nothing wraps here).
+    measure := VerticalLayout {
+        visible: false;
+        x: 0;
+        y: 0;
+
+        Text {
+            text: GlobalTooltip.tip.title;
+            font-size: TooltipSettings.font-size;
+            font-weight: 700;
+        }
+
+        Text {
+            text: GlobalTooltip.tip.text;
+            font-size: TooltipSettings.font-size;
+        }
+
+        for row in GlobalTooltip.tip.rows: HorizontalLayout {
+            spacing: 10px;
+
+            Rectangle { width: row.heading ? 0px : root.label-w; }
+
+            Text {
+                text: row.heading ? row.label : row.value;
+                font-size: TooltipSettings.small-font-size;
+            }
+        }
+
+        Text {
+            text: GlobalTooltip.tip.note;
+            font-size: TooltipSettings.small-font-size;
+        }
+
+        footer-measure := HorizontalLayout {
+            spacing: 4px;
+
+            if root.show-hold: HoldBadge { }
+
+            if root.keys.keys: Text {
+                text: root.keys.alternatives ? "Keys" : "Key";
+                font-size: TooltipSettings.small-font-size;
+            }
+
+            for cap in root.keys.caps: HorizontalLayout {
+                spacing: 4px;
+
+                if cap.alternative: Text {
+                    text: "or";
+                    font-size: TooltipSettings.small-font-size;
+                }
+
+                KeyCap {
+                    text: cap.text;
+                    icon: cap.icon;
+                }
+            }
+        }
+    }
+
+    labels := VerticalLayout {
+        visible: false;
+        x: 0;
+        y: 0;
+
+        for row in GlobalTooltip.tip.rows: Text {
+            text: row.heading ? "" : row.label;
+            font-size: TooltipSettings.small-font-size;
+        }
+    }
+
+    bubble := Rectangle {
+        x: root.placement.x + (root.side == TipSide.right ? -root.slide : root.side == TipSide.left ? root.slide : 0px);
+        y: root.placement.y + (root.side == TipSide.below ? -root.slide : root.side == TipSide.above ? root.slide : 0px);
+        width: root.content-w + 2 * root.pad-h;
+        height: content.preferred-height;
+        opacity: root.active ? 1 : 0;
+        background: TooltipSettings.background;
+        border-radius: 6px;
+        border-width: 1px;
+        border-color: TooltipSettings.border;
+        drop-shadow-blur: 10px;
+        drop-shadow-color: #00000099;
+        drop-shadow-offset-y: 2px;
+
+        animate opacity { duration: root.active ? 110ms : 80ms; easing: ease-out; }
+        animate x, y { duration: GlobalTooltip.glide ? 90ms : 0ms; easing: ease-out; }
+
+        // The arrow points at the element (placement.rs: 7 px out, 14 px wide): a filled triangle that also covers the
+        // bubble's border under its base, and its two outer edges.
+        arrow := Rectangle {
+            property <bool> across: root.side == TipSide.below || root.side == TipSide.above;
+            visible: root.side != TipSide.over;
+            width: self.across ? 14px : 9px;
+            height: self.across ? 9px : 14px;
+            x: self.across ? root.placement.arrow - 7px : root.side == TipSide.right ? -7px : parent.width - 2px;
+            y: !self.across ? root.placement.arrow - 7px : root.side == TipSide.below ? -7px : parent.height - 2px;
+
+            Path {
+                width: 100%;
+                height: 100%;
+                viewbox-width: arrow.across ? 14 : 9;
+                viewbox-height: arrow.across ? 9 : 14;
+                commands: root.side == TipSide.below ? "M 0 7.5 L 7 0.5 L 14 7.5 L 14 9 L 0 9 Z"
+                    : root.side == TipSide.above ? "M 0 1.5 L 7 8.5 L 14 1.5 L 14 0 L 0 0 Z"
+                    : root.side == TipSide.right ? "M 7.5 0 L 0.5 7 L 7.5 14 L 9 14 L 9 0 Z"
+                    : "M 1.5 0 L 8.5 7 L 1.5 14 L 0 14 L 0 0 Z";
+                fill: TooltipSettings.background;
+            }
+
+            Path {
+                width: 100%;
+                height: 100%;
+                viewbox-width: arrow.across ? 14 : 9;
+                viewbox-height: arrow.across ? 9 : 14;
+                commands: root.side == TipSide.below ? "M 0 7.5 L 7 0.5 L 14 7.5"
+                    : root.side == TipSide.above ? "M 0 1.5 L 7 8.5 L 14 1.5"
+                    : root.side == TipSide.right ? "M 7.5 0 L 0.5 7 L 7.5 14" : "M 1.5 0 L 8.5 7 L 1.5 14";
+                stroke: TooltipSettings.border;
+                stroke-width: 1px;
+            }
+        }
+
+        content := VerticalLayout {
+            padding-left: root.pad-h;
+            padding-right: root.pad-h;
+            padding-top: root.pad-v;
+            padding-bottom: root.pad-v;
+            spacing: 3px;
+
+            if root.has-head: Text {
+                width: root.content-w;
+                text: GlobalTooltip.tip.title;
+                font-size: TooltipSettings.font-size;
+                font-weight: 700;
+                color: TooltipSettings.text;
+                overflow: elide;
+            }
+
+            if GlobalTooltip.tip.text != "": Text {
+                width: root.content-w;
+                text: GlobalTooltip.tip.text;
+                font-size: TooltipSettings.font-size;
+                color: root.has-head ? TooltipSettings.muted : TooltipSettings.text;
+                wrap: word-wrap;
+            }
+
+            if root.has-head && root.has-rows: Rectangle {
+                height: 1px;
+                background: TooltipSettings.border;
+            }
+
+            for row in GlobalTooltip.tip.rows: HorizontalLayout {
+                spacing: 10px;
+                padding-top: row.heading ? 3px : 0px;
+
+                if row.heading: Text {
+                    width: root.content-w;
+                    text: row.label;
+                    font-size: TooltipSettings.small-font-size;
+                    font-weight: 700;
+                    color: TooltipSettings.muted;
+                }
+
+                if !row.heading: Text {
+                    width: root.label-w;
+                    text: row.label;
+                    font-size: TooltipSettings.small-font-size;
+                    color: TooltipSettings.muted;
+                }
+
+                if !row.heading: Text {
+                    width: root.content-w - root.label-w - 10px;
+                    text: row.value;
+                    font-size: TooltipSettings.small-font-size;
+                    color: TooltipSettings.text;
+                    wrap: word-wrap;
+                }
+            }
+
+            if GlobalTooltip.tip.note != "": Text {
+                width: root.content-w;
+                text: GlobalTooltip.tip.note;
+                font-size: TooltipSettings.small-font-size;
+                color: TooltipSettings.accent;
+                wrap: word-wrap;
+            }
+
+            if root.has-footer: Rectangle {
+                height: 1px;
+                background: #ffffff14;
+            }
+
+            if root.has-footer: HorizontalLayout {
+                spacing: 4px;
+                alignment: start;
+
+                if root.show-hold: HoldBadge { }
+
+                if root.show-hold && root.keys.caps.length > 0: Rectangle { width: 4px; }
+
+                if root.keys.keys: Text {
+                    text: root.keys.alternatives ? "Keys" : "Key";
+                    font-size: TooltipSettings.small-font-size;
+                    color: TooltipSettings.muted;
+                    vertical-alignment: center;
+                }
+
+                for cap in root.keys.caps: HorizontalLayout {
+                    spacing: 4px;
+
+                    if cap.alternative: Text {
+                        text: "or";
+                        font-size: TooltipSettings.small-font-size;
+                        color: TooltipSettings.muted;
+                        vertical-alignment: center;
+                    }
+
+                    KeyCap {
+                        text: cap.text;
+                        icon: cap.icon;
+                    }
+                }
+            }
+        }
+    }
+}

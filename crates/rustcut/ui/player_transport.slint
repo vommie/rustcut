@@ -5,11 +5,14 @@ import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Playback } from "player_types.slint";
 import { PlayerSeekBar } from "player_seek_bar.slint";
+import { TooltipHost } from "tooltip.slint";
 
 component TransportButton inherits Rectangle {
     in property <IconId> icon;
     in property <bool> enabled: true;
     in property <length> icon-size: IconSize.md;
+    in property <string> tooltip;
+    in property <string> shortcut;
     callback clicked();
 
     width: 30px;
@@ -19,9 +22,31 @@ component TransportButton inherits Rectangle {
         : touch.pressed ? Theme.surface-selected
         : touch.has-hover ? Theme.surface-hover : transparent;
 
+    host := TooltipHost {
+        text: root.tooltip;
+        shortcut: root.shortcut;
+    }
+
+    // Enabled even when the button is not, so a disabled button still explains itself.
     touch := TouchArea {
-        enabled: root.enabled;
-        clicked => { root.clicked(); }
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                host.press();
+            }
+        }
+        clicked => {
+            if root.enabled {
+                root.clicked();
+            }
+        }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
     }
 
     AppIcon {
@@ -63,6 +88,8 @@ export component PlayerTransport inherits Rectangle {
                 icon: Playback.paused ? IconId.play : IconId.pause;
                 icon-size: IconSize.lg;
                 enabled: Playback.has-file;
+                tooltip: Playback.paused ? "Play" : "Pause";
+                shortcut: Playback.key-toggle-pause;
                 clicked => { Playback.toggle-pause(); }
             }
         }
@@ -72,6 +99,8 @@ export component PlayerTransport inherits Rectangle {
             TransportButton {
                 icon: IconId.frame-back;
                 enabled: Playback.has-video;
+                tooltip: "One frame back";
+                shortcut: Playback.key-frame-back;
                 clicked => { Playback.frame-step(true); }
             }
         }
@@ -81,6 +110,8 @@ export component PlayerTransport inherits Rectangle {
             TransportButton {
                 icon: IconId.frame-forward;
                 enabled: Playback.has-video;
+                tooltip: "One frame forward";
+                shortcut: Playback.key-frame-forward;
                 clicked => { Playback.frame-step(false); }
             }
         }
@@ -128,6 +159,8 @@ export component PlayerTransport inherits Rectangle {
             alignment: center;
             TransportButton {
                 icon: Playback.muted ? IconId.volume-muted : IconId.volume;
+                tooltip: Playback.muted ? "Sound on" : "Mute";
+                shortcut: Playback.key-toggle-mute;
                 clicked => { Playback.toggle-mute(); }
             }
         }

@@ -169,7 +169,7 @@ component LastRatingButton inherits Rectangle {
     touch := TouchArea {
         mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
         clicked => {
-            host.leave();
+            host.press();
             if root.enabled {
                 root.clicked();
             }
@@ -206,7 +206,7 @@ component TagToolbar inherits HorizontalLayout {
         icon: IconId.tags-clear;
         hold: true;
         enabled: TagRate.can-clear;
-        tooltip: "Hold to clear the tags and the rating (locked tags stay)";
+        tooltip: "Clear the tags and the rating (locked tags stay)";
         clicked => { TagRate.clear(); }
     }
 

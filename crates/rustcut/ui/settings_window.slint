@@ -6,7 +6,7 @@ import { ScrollView } from "std-widgets.slint";
 import { Theme } from "styles.slint";
 import { IconId } from "icons.slint";
 import { IconButton } from "controls.slint";
-import { TooltipLayer } from "tooltip.slint";
+import { TooltipLayer } from "tooltip_layer.slint";
 import { SettingsSidebar } from "settings_sidebar.slint";
 import { SettingsCard } from "settings_card.slint";
 import { SettingsRow } from "settings_row.slint";
@@ -80,7 +80,7 @@ export component SettingsWindow inherits Window {
                             IconButton {
                                 icon: IconId.settings-reset;
                                 hold: true;
-                                tooltip: "Hold to put every option of this page back to its default";
+                                tooltip: "Put every option of this page back to its default";
                                 clicked => { SettingsUi.reset-page(); }
                             }
                         }
