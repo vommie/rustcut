@@ -18,8 +18,8 @@ pub use file::{FileError, LoadOutcome, MigrationStep, VersionedFile, backup_file
 pub use paths::AppPaths;
 pub use schema::{
     AdvancedSettings, AppearanceSettings, AutoSection, DesktopSettings, DraftOnLoad, EditorSettings, ExportSettings,
-    FilterDefaults, GeneralSettings, NotificationSettings, PlayerSettings, QueueSettings, RenderSettings,
-    RustViewSettings, Settings, TargetFolder, TraySettings, WarningSettings, WhenDone, WriteTiming,
+    FilterDefaults, GeneralSettings, HashingSettings, NotificationSettings, PlayerSettings, QueueSettings,
+    RenderSettings, RustViewSettings, Settings, TargetFolder, TraySettings, WarningSettings, WhenDone, WriteTiming,
 };
 pub use ui_state::{
     ExportPanelState, JobPanelState, LogPanelState, LogSource, ProbeState, QueuePanelState, SettingsWindowState,

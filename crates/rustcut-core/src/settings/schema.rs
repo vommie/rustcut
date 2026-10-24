@@ -32,6 +32,8 @@ pub struct Settings {
     pub advanced: AdvancedSettings,
     /// How the dialogs behave (0.0.20).
     pub dialogs: DialogSettings,
+    /// The MD5 of sources (0.0.20).
+    pub hashing: HashingSettings,
     /// Key bindings by action id (`set_start = ["I", "Home"]`); a missing action keeps its default, an empty list unbinds
     /// it. Owned, validated and sanitized by the app's keymap (key names are Slint's); the core only stores it. A value
     /// that is neither a string nor a list of strings reads as missing, so a typo never resets the other settings.
@@ -294,6 +296,21 @@ impl Default for RustViewSettings {
             timeout_secs: 10,
             tag_history_size: 20,
         }
+    }
+}
+
+/// The MD5 of sources (RustView's known-source check).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HashingSettings {
+    /// A video RustCut reads to hash it gets a sidecar `.<name>.md5` (md5sum format) when it has none, so RustCut and
+    /// other programs need not read it again (user request 2026-10-24). An existing sidecar is never replaced.
+    pub write_sidecar: bool,
+}
+
+impl Default for HashingSettings {
+    fn default() -> Self {
+        Self { write_sidecar: true }
     }
 }
 

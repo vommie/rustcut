@@ -3,7 +3,10 @@
 //! MD5 is computed in 1 MiB chunks with a cancel check between chunks and progress at most every [`PROGRESS_INTERVAL`].
 //! One file is hashed at a time (two parallel reads of big files only slow each other down); requests for the file being
 //! hashed or already waiting share its result. Computed hashes are remembered for the session by size and modification
-//! time, so opening a file again costs nothing.
+//! time, so opening a file again costs nothing; with `SetWriteSidecar(true)` a computed hash also goes into a new sidecar
+//! next to the video, the place other programs share (user decision 2026-10-24; an existing sidecar is never replaced).
+//! A read tells the kernel it is sequential (`posix_fadvise`: larger read-ahead) and runs at the lowest best-effort drive
+//! priority, so the player reading the same video comes first.
 
 use std::collections::{HashMap, VecDeque};
 use std::io::Read as _;
@@ -45,6 +48,7 @@ pub fn spawn_hash_service(runtime: &tokio::runtime::Handle) -> (HashService, Joi
         waiting: VecDeque::new(),
         active: None,
         computed: Arc::new(parking_lot::Mutex::new(HashMap::new())),
+        write_sidecar: false,
     };
     let task = runtime.spawn(actor.run(rx));
     (HashService { handle, events }, task)
@@ -85,6 +89,8 @@ struct Actor {
     waiting: VecDeque<Waiting>,
     active: Option<Active>,
     computed: Memory,
+    /// A computed hash goes into a new sidecar.
+    write_sidecar: bool,
 }
 
 enum Step {
@@ -111,6 +117,7 @@ impl Actor {
             match step {
                 Step::Command(Some(HashCommand::Hash { path, reply })) => self.enqueue(path, reply),
                 Step::Command(Some(HashCommand::Cancel { path })) => self.cancel(&path),
+                Step::Command(Some(HashCommand::SetWriteSidecar(on))) => self.write_sidecar = on,
                 Step::Command(Some(HashCommand::Shutdown { reply })) => {
                     self.shut_down().await;
                     let _ = reply.send(());
@@ -163,10 +170,11 @@ impl Actor {
         let memory = Arc::clone(&self.computed);
         let path = next.path.clone();
         let flag = Arc::clone(&cancel);
+        let write_sidecar = self.write_sidecar;
         tracing::debug!(path = %path.display(), "[Hash] Started");
         let task = tokio::task::spawn_blocking(move || {
             let mut last = None::<Instant>;
-            hash_file(&path, &flag, &memory, |done, total| {
+            hash_file(&path, &flag, &memory, write_sidecar, |done, total| {
                 let due = last.is_none_or(|t| t.elapsed() >= PROGRESS_INTERVAL) || done == total;
                 if due {
                     last = Some(Instant::now());
@@ -247,6 +255,7 @@ fn hash_file(
     path: &Path,
     cancel: &AtomicBool,
     memory: &Memory,
+    write_sidecar: bool,
     mut progress: impl FnMut(u64, u64),
 ) -> Result<Hashed, HashError> {
     let io = |error: std::io::Error| HashError::Io {
@@ -272,10 +281,24 @@ fn hash_file(
             from_sidecar: false,
         });
     }
-    let md5 = md5_of(file, len, cancel, &mut progress).map_err(|e| match e {
-        ReadError::Canceled => HashError::Canceled,
-        ReadError::Io(e) => io(e),
-    })?;
+    // Sequential: the kernel reads further ahead (fewer, larger requests); the drive serves the player first.
+    if let Err(e) = rustix::fs::fadvise(&file, 0, None, rustix::fs::Advice::Sequential) {
+        tracing::debug!(error = %e, "[Hash] No read-ahead advice");
+    }
+    let md5 = {
+        let _low = LowDrivePriority::here();
+        md5_of(file, len, cancel, &mut progress).map_err(|e| match e {
+            ReadError::Canceled => HashError::Canceled,
+            ReadError::Io(e) => io(e),
+        })?
+    };
+    if write_sidecar {
+        match write_new_sidecar(path, &md5) {
+            Ok(Some(sidecar)) => tracing::info!(sidecar = %sidecar.display(), "[Hash] Sidecar written"),
+            Ok(None) => tracing::debug!(path = %path.display(), "[Hash] A sidecar appeared meanwhile; kept"),
+            Err(e) => tracing::warn!(path = %path.display(), error = %e, "[Hash] Sidecar not written"),
+        }
+    }
     memory.lock().insert(
         path.to_path_buf(),
         Remembered {
@@ -304,6 +327,68 @@ fn read_sidecar(video: &Path) -> Option<String> {
         tracing::warn!(sidecar = %sidecar.display(), "[Hash] Sidecar holds no MD5; computing instead");
     }
     hash
+}
+
+/// Writes `.<name>.md5` next to `video` in md5sum's format (`<md5>  <name>`, so `md5sum -c` checks it), through a hidden
+/// temp file and a rename that never replaces: an existing sidecar stays (`Ok(None)`). Blocking.
+fn write_new_sidecar(video: &Path, md5: &str) -> Result<Option<PathBuf>, String> {
+    let sidecar = sidecar_path(video).ok_or("the file name is not UTF-8")?;
+    if sidecar.symlink_metadata().is_ok() {
+        return Ok(None);
+    }
+    let name = video
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or("the file name is not UTF-8")?;
+    let temp = sidecar.with_file_name(format!(".{name}.md5.rustcut-part"));
+    let written = (|| {
+        let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&temp)?;
+        std::io::Write::write_all(&mut file, format!("{md5}  {name}\n").as_bytes())?;
+        file.sync_all()
+    })();
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(&temp);
+        return Err(e.to_string());
+    }
+    let renamed = crate::render::rename_no_replace(&temp, &sidecar);
+    let _ = std::fs::remove_file(&temp);
+    match renamed {
+        Ok(()) => Ok(Some(sidecar)),
+        Err(crate::render::FinalizeError::TargetExists(_)) => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// The calling thread at the lowest best-effort drive priority until dropped: a blocking-pool thread gets its old
+/// priority back (the niceness is left alone, since raising it again would need privileges).
+struct LowDrivePriority(Option<(ioprio::Target, ioprio::Priority)>);
+
+impl LowDrivePriority {
+    fn here() -> Self {
+        let tid = rustix::thread::gettid();
+        let target = ioprio::Target::Process(ioprio::Pid::from_raw(tid.as_raw_nonzero().get()));
+        let Ok(old) = ioprio::get_priority(target) else {
+            return Self(None);
+        };
+        let low = ioprio::Priority::new(ioprio::Class::BestEffort(ioprio::BePriorityLevel::lowest()));
+        match ioprio::set_priority(target, low) {
+            Ok(()) => Self(Some((target, old))),
+            Err(e) => {
+                tracing::debug!(error = %e, "[Hash] Drive priority not lowered");
+                Self(None)
+            }
+        }
+    }
+}
+
+impl Drop for LowDrivePriority {
+    fn drop(&mut self) {
+        if let Some((target, old)) = self.0
+            && let Err(e) = ioprio::set_priority(target, old)
+        {
+            tracing::debug!(error = %e, "[Hash] Drive priority not restored");
+        }
+    }
 }
 
 enum ReadError {

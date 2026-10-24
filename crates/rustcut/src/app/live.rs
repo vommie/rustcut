@@ -128,6 +128,11 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
     {
         media.set_known_source(after.warnings.known_source);
     }
+    if before.hashing != after.hashing
+        && let Some(media) = p.media.upgrade()
+    {
+        media.set_write_sidecar(after.hashing.write_sidecar);
+    }
     if before.general.single_instance != after.general.single_instance {
         (p.instance)(after.general.single_instance);
     }

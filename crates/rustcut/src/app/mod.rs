@@ -241,6 +241,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         Some(sync.handle.clone()),
         &loaded.settings,
     );
+    media.set_write_sidecar(loaded.settings.hashing.write_sidecar);
     let filters = FiltersBridge::install(
         &main,
         &player,

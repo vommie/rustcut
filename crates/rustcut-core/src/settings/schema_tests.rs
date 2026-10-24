@@ -283,3 +283,12 @@ fn dialog_settings_have_defaults_bad_values_read_as_defaults_and_ranges_are_kept
     assert!(written.contains("[dialogs.conflict]"), "{written}");
     assert_eq!(toml::from_str::<Settings>(&written).unwrap(), s, "round trip");
 }
+
+#[test]
+fn sidecar_writing_is_on_by_default_and_old_files_load() {
+    // 0.0.19 wrote no `[hashing]`.
+    let s: Settings = toml::from_str("version = 1\n[queue]\nworkers = 2\n").unwrap();
+    assert!(s.hashing.write_sidecar);
+    let s: Settings = toml::from_str("version = 1\n[hashing]\nwrite_sidecar = false\n").unwrap();
+    assert!(!s.hashing.write_sidecar);
+}

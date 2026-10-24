@@ -262,3 +262,76 @@ async fn requests_for_the_same_file_share_one_read_and_shutdown_cancels() {
     opener.join().unwrap().unwrap();
     assert!(service.handle.is_closed());
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_computed_hash_goes_into_a_new_sidecar_and_an_existing_one_stays() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = vec![5u8; CHUNK + 3];
+    let video = write_file(dir.path(), "Urlaub 1.mkv", &data);
+    let other = write_file(dir.path(), "other.mkv", b"other");
+    let (service, task) = start();
+    let hash = |path: PathBuf| {
+        let handle = service.handle.clone();
+        async move {
+            handle
+                .request(|reply| HashCommand::Hash {
+                    path,
+                    reply: Some(reply),
+                })
+                .await
+                .unwrap()
+        }
+    };
+    // Off (the default): nothing is written next to the video.
+    assert_eq!(hash(other.clone()).await, Ok(reference_md5(b"other")));
+    assert!(!dir.path().join(".other.mkv.md5").exists());
+
+    service.handle.send(HashCommand::SetWriteSidecar(true)).unwrap();
+    assert_eq!(hash(video.clone()).await, Ok(reference_md5(&data)));
+    let sidecar = dir.path().join(".Urlaub 1.mkv.md5");
+    let text = std::fs::read_to_string(&sidecar).unwrap();
+    assert_eq!(
+        text,
+        format!("{}  Urlaub 1.mkv\n", reference_md5(&data)),
+        "md5sum's format"
+    );
+    let leftovers: Vec<_> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .filter_map(|e| e.ok()?.file_name().into_string().ok())
+        .filter(|n| n.contains("rustcut-part"))
+        .collect();
+    assert!(leftovers.is_empty(), "{leftovers:?}");
+
+    // A sidecar that exists (here a wrong one written by another program) is never replaced: it is the answer.
+    let third = write_file(dir.path(), "third.mkv", b"third");
+    write_file(
+        dir.path(),
+        ".third.mkv.md5",
+        b"0123456789abcdef0123456789abcdef  third.mkv\n",
+    );
+    assert_eq!(hash(third).await, Ok("0123456789abcdef0123456789abcdef".to_owned()));
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join(".third.mkv.md5")).unwrap(),
+        "0123456789abcdef0123456789abcdef  third.mkv\n"
+    );
+    service
+        .handle
+        .request(|reply| HashCommand::Shutdown { reply })
+        .await
+        .unwrap();
+    task.await.unwrap();
+}
+
+#[test]
+fn a_sidecar_that_appears_meanwhile_is_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let video = write_file(dir.path(), "clip.mkv", b"x");
+    assert!(write_new_sidecar(&video, &"a".repeat(32)).unwrap().is_some());
+    assert_eq!(
+        write_new_sidecar(&video, &"b".repeat(32)),
+        Ok(None),
+        "the first one stays"
+    );
+    let text = std::fs::read_to_string(dir.path().join(".clip.mkv.md5")).unwrap();
+    assert!(text.starts_with(&"a".repeat(32)));
+}
