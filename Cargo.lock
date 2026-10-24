@@ -4513,6 +4513,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "procfs"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25485360a54d6861439d60facef26de713b1e126bf015ec8f98239467a2b82f7"
+dependencies = [
+ "bitflags 2.13.2",
+ "procfs-core",
+ "rustix 1.1.5",
+]
+
+[[package]]
+name = "procfs-core"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6401bf7b6af22f78b563665d15a22e9aef27775b79b149a66ca022468a4e405"
+dependencies = [
+ "bitflags 2.13.2",
+ "hex",
+]
+
+[[package]]
 name = "profiling"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5025,7 +5046,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut"
-version = "0.0.29"
+version = "0.0.30"
 dependencies = [
  "arboard",
  "az",
@@ -5061,7 +5082,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-core"
-version = "0.0.29"
+version = "0.0.30"
 dependencies = [
  "atomic-write-file",
  "az",
@@ -5078,6 +5099,7 @@ dependencies = [
  "minijinja",
  "parking_lot",
  "path-clean",
+ "procfs",
  "proptest",
  "quick_cache",
  "rusqlite",
@@ -5096,7 +5118,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-player"
-version = "0.0.29"
+version = "0.0.30"
 dependencies = [
  "glow",
  "hdrhistogram",

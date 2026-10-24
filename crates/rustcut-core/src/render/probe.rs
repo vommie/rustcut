@@ -142,6 +142,11 @@ pub fn probe_env(env: &RenderEnv, folder: &Path) -> RenderEnv {
 /// Empties the probe folder (creates it when missing): earlier probes, also of other containers, and side files of an
 /// interrupted one. Errors are logged; a probe then still overwrites its own file.
 pub async fn clear_probe_dir(folder: &Path) {
+    // A probe render a crashed RustCut left behind may still write here (this instance's own runs are left alone).
+    let owned = folder.to_path_buf();
+    if let Err(e) = tokio::task::spawn_blocking(move || super::stop_orphans(&[owned])).await {
+        tracing::warn!(error = %e, "[Render] The search for orphaned probe renders failed");
+    }
     if let Err(e) = tokio::fs::create_dir_all(folder).await {
         tracing::warn!(folder = %folder.display(), error = %e, "[Render] The probe folder could not be created");
         return;

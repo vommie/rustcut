@@ -3,6 +3,7 @@
 //! `q` -> SIGTERM -> SIGKILL, and a stall watchdog. Dropping the future kills ffmpeg (`kill_on_drop`).
 
 mod log;
+mod orphans;
 mod process;
 mod supervise;
 
@@ -18,6 +19,7 @@ use tokio::time::Instant;
 
 pub(crate) use log::without_context;
 pub use log::{HEAD_LINES, JobLog, MAX_LINE_CHARS, TAIL_LINES};
+pub use orphans::stop_orphans;
 use process::ProcessGroup;
 pub use process::RenderPriority;
 pub use supervise::{Action, Control, GroupSignal, QUIT_GRACE, StopReason, Supervisor, TERMINATE_GRACE};

@@ -15,6 +15,7 @@ mod tests;
 mod work;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -27,7 +28,7 @@ use super::summary::{StaleFiles, summarize};
 use super::{QueueCommand, QueueError, QueueEvent};
 use crate::actor::{EventBus, Handle, Mailbox, Reply, mailbox};
 use crate::job::{JobId, JobState};
-use crate::render::RenderEnv;
+use crate::render::{RenderEnv, stop_orphans};
 use crate::rustview::{SyncHandle, SyncRecords};
 use crate::settings::WhenDone;
 use crate::store::{StoreCommand, StoreError, StoreHandle};
@@ -194,10 +195,30 @@ impl Actor {
     }
 
     async fn clean_recovered(&self, recovered: &[JobId]) {
-        for id in recovered {
-            if let Some(record) = self.model.get(*id) {
-                StaleFiles::of(record, &self.env.dirs).remove().await;
+        let stale: Vec<StaleFiles> = recovered
+            .iter()
+            .filter_map(|id| self.model.get(*id))
+            .map(|record| StaleFiles::of(record, &self.env.dirs))
+            .collect();
+        // An ffmpeg run the crashed RustCut left behind still writes these files: it goes first.
+        let paths: Vec<PathBuf> = stale
+            .iter()
+            .flat_map(|s| s.temp.iter().chain([&s.transform, &s.passlog]).cloned())
+            .collect();
+        if !paths.is_empty() {
+            match tokio::task::spawn_blocking(move || stop_orphans(&paths)).await {
+                Ok(stopped) if !stopped.is_empty() => {
+                    tracing::info!(
+                        runs = stopped.len(),
+                        "[Queue] Orphaned renders of recovered jobs stopped"
+                    );
+                }
+                Ok(_) => {}
+                Err(e) => tracing::warn!(error = %e, "[Queue] The search for orphaned renders failed"),
             }
+        }
+        for files in &stale {
+            files.remove().await;
         }
     }
 
