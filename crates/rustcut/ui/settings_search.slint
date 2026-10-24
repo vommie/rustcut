@@ -1,0 +1,87 @@
+// The Settings window's search field (M6.5b, user decision Q-N10: one component, used by the Hotkeys page and the
+// Messages page's lists, ready for more pages): a magnifier, the text that follows the typing, a placeholder and a
+// clear button.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+
+export component SettingsSearch inherits Rectangle {
+    // The text it starts with (the kept search).
+    in property <string> initial;
+    in property <string> placeholder: "Search";
+    callback edited(string);
+
+    height: 26px;
+    border-radius: 4px;
+    background: Theme.background;
+    border-width: 1px;
+    border-color: input.has-focus ? Theme.primary : Theme.border;
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 4px;
+        spacing: 6px;
+
+        VerticalLayout {
+            alignment: center;
+
+            AppIcon {
+                icon: IconId.search;
+                size: IconSize.sm;
+                color: Theme.text-muted;
+            }
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+
+            if input.text == "": Text {
+                x: 0;
+                width: parent.width;
+                text: root.placeholder;
+                color: Theme.status-deleted;
+                font-size: 12px;
+                vertical-alignment: center;
+            }
+
+            input := TextInput {
+                width: parent.width;
+                height: parent.height;
+                single-line: true;
+                color: Theme.text;
+                font-size: 12px;
+                vertical-alignment: center;
+                init => { self.text = root.initial; }
+                edited => { root.edited(self.text); }
+            }
+        }
+
+        if input.text != "": VerticalLayout {
+            alignment: center;
+
+            Rectangle {
+                width: 18px;
+                height: 18px;
+                border-radius: 3px;
+                background: clear.has-hover ? Theme.surface-hover : transparent;
+
+                clear := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => {
+                        input.text = "";
+                        root.edited("");
+                        input.focus();
+                    }
+                }
+
+                AppIcon {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    icon: IconId.close;
+                    size: IconSize.sm;
+                    color: clear.has-hover ? Theme.text : Theme.text-muted;
+                }
+            }
+        }
+    }
+}

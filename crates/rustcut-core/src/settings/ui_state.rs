@@ -54,6 +54,9 @@ pub struct SettingsWindowState {
     pub profile: Option<String>,
     /// The Hotkeys page's filter.
     pub hotkey_search: String,
+    /// The Messages page's tab (0 look, 1 kinds, 2 muted) and its search (0.0.26).
+    pub messages_tab: u8,
+    pub messages_search: String,
 }
 
 impl SettingsWindowState {
@@ -69,6 +72,8 @@ impl Default for SettingsWindowState {
             page: String::new(),
             profile: None,
             hotkey_search: String::new(),
+            messages_tab: 0,
+            messages_search: String::new(),
         }
     }
 }
@@ -418,6 +423,10 @@ impl VersionedFile for UiState {
             notes.push(format!("settings window size {}x{} reset", s.width, s.height));
             let fresh = SettingsWindowState::default();
             (s.width, s.height) = (fresh.width, fresh.height);
+        }
+        if s.messages_tab > 2 {
+            notes.push(format!("settings messages tab {} reset", s.messages_tab));
+            s.messages_tab = 0;
         }
         self.dialogs.sanitize(&mut notes);
         notes

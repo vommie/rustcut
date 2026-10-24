@@ -9,6 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Settings > Messages (0.0.26), a page with three tabs. "Look & behavior": where toasts appear, how several stack,
+  how many show, their order, animation and time per level; how banners come and whether a new error lights up; the
+  bell and its number; desktop notifications and their time. "Message kinds": every kind of message RustCut shows,
+  grouped, with an example, where it appears (only the places that suit it; critical messages are locked), whether it
+  also goes to the desktop, a test button that shows the real message at its real place (the row says where it went)
+  and "Don't show again" for hints and confirmations. "Muted": what you muted, with "Show again". A search filters the
+  kinds and the muted list; the tab and the search are remembered. The page's held reset button also resets every
+  kind's place and the muted list.
+
 - A notice system for every message (0.0.25). **Toasts**: short cards at the top right of the window that leave by
   themselves (hints and confirmations after 5 s, warnings after 8 s, errors stay until closed). Each shows its symbol,
   a title, a detail line, its buttons, the time, a line with the time left and "×3" when the same message came again.
@@ -65,6 +74,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   sidecar" (`[hashing] write_sidecar`, on).
 
 ### Changed
+
+- The desktop notification switches (Desktop Integration) and the warning about a source cut before (Warnings &
+  Confirmations) moved to Settings > Messages; their old places have a button that opens it (0.0.26).
+- The Hotkeys page's search field got a clear button (the same field as on the Messages page).
 
 - Messages appear where their kind belongs (0.0.25) instead of all in the status line, which keeps only quiet
   confirmations ("Section 2 added", "Filters reset", "Ready"). Loading or leaving a job in the editor says nothing

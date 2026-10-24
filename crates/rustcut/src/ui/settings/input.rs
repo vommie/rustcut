@@ -99,4 +99,17 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     ui.on_reset_hotkey(move |id| with(&t, |b| b.reset_hotkey(&id)));
     let t = this.clone();
     ui.on_reset_hotkeys(move || with(&t, SettingsBridge::reset_hotkeys));
+
+    let t = this.clone();
+    ui.on_messages_tab_selected(move |i| with(&t, |b| b.select_messages_tab(i)));
+    let t = this.clone();
+    ui.on_messages_search_edited(move |text| with(&t, |b| b.messages_search_edited(&text)));
+    let t = this.clone();
+    ui.on_kind_place(move |id, i| with(&t, |b| b.kind_place(&id, i)));
+    let t = this.clone();
+    ui.on_kind_desktop(move |id| with(&t, |b| b.kind_desktop(&id)));
+    let t = this.clone();
+    ui.on_kind_mute(move |id| with(&t, |b| b.kind_mute(&id)));
+    let t = this.clone();
+    ui.on_kind_test(move |id| with(&t, |b| b.kind_test(&id)));
 }

@@ -16,6 +16,7 @@ import { SettingsFolders } from "settings_folders.slint";
 import { SettingsProfiles } from "settings_profiles.slint";
 import { SettingsHotkeys } from "settings_hotkeys.slint";
 import { SettingsAbout } from "settings_about.slint";
+import { SettingsMessages } from "settings_messages.slint";
 
 export component SettingsWindow inherits Window {
     title: "RustCut - Settings";
@@ -120,12 +121,17 @@ export component SettingsWindow inherits Window {
                         spacing: 16px;
                         alignment: start;
 
-                        for card in SettingsUi.cards: SettingsCard {
-                            title: card.title;
-                            description: card.description;
+                        // The Messages page shows its cards on its first tab.
+                        if SettingsUi.special != 5: VerticalLayout {
+                            spacing: 16px;
 
-                            for option in card.rows: SettingsRow {
-                                option: option;
+                            for card in SettingsUi.cards: SettingsCard {
+                                title: card.title;
+                                description: card.description;
+
+                                for option in card.rows: SettingsRow {
+                                    option: option;
+                                }
                             }
                         }
 
@@ -136,6 +142,8 @@ export component SettingsWindow inherits Window {
                         if SettingsUi.special == 3: SettingsHotkeys { }
 
                         if SettingsUi.special == 4: SettingsAbout { }
+
+                        if SettingsUi.special == 5: SettingsMessages { }
                     }
                 }
 

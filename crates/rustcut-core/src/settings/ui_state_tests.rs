@@ -260,6 +260,8 @@ fn the_settings_window_round_trips_and_old_files_load() {
             page: "hotkeys".into(),
             profile: Some("my-hevc".into()),
             hotkey_search: "crop".into(),
+            messages_tab: 1,
+            messages_search: "failed".into(),
         },
         ..UiState::default()
     };
@@ -273,6 +275,24 @@ fn the_settings_window_round_trips_and_old_files_load() {
     state.settings.page = "queue".into();
     assert_eq!(state.sanitize().len(), 1);
     assert_eq!((state.settings.width, state.settings.page.as_str()), (900, "queue"));
+    state.settings.messages_tab = 7;
+    assert_eq!(state.sanitize().len(), 1);
+    assert_eq!(state.settings.messages_tab, 0);
+    // 0.0.25 wrote no messages tab: it starts on the first.
+    std::fs::write(
+        dir.path().join("ui-state.toml"),
+        "version = 1
+[settings]
+page = \"messages\"
+hotkey_search = \"x\"
+",
+    )
+    .unwrap();
+    let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+    assert_eq!(
+        (read.settings.messages_tab, read.settings.hotkey_search.as_str()),
+        (0, "x")
+    );
     std::fs::write(dir.path().join("ui-state.toml"), "version = 1\nsettings = 3\n").unwrap();
     let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
     assert_eq!(read.settings, SettingsWindowState::default());

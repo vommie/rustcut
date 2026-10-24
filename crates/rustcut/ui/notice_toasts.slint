@@ -361,8 +361,9 @@ export component ToastLayer inherits Rectangle {
                 alignment: end;
                 spacing: 6px;
 
-                if Notices.pages > 1: StackChip {
-                    text: "‹";
+                if Notices.pages > 1: NoticeIcon {
+                    icon: IconId.chevron-left;
+                    tooltip: "Previous message";
                     clicked => { Notices.page-toasts(-1); }
                 }
 
@@ -373,8 +374,9 @@ export component ToastLayer inherits Rectangle {
                     vertical-alignment: center;
                 }
 
-                if Notices.pages > 1: StackChip {
-                    text: "›";
+                if Notices.pages > 1: NoticeIcon {
+                    icon: IconId.chevron-right;
+                    tooltip: "Next message";
                     clicked => { Notices.page-toasts(1); }
                 }
 

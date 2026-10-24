@@ -38,6 +38,9 @@ impl SettingsBridge {
                 field.reset(s);
             }
         });
+        if page == Page::Messages {
+            self.reset_kinds();
+        }
         self.errors.borrow_mut().clear();
         tracing::info!(page = page.id(), "[Settings] Page reset to its defaults");
         self.publish();
@@ -90,6 +93,11 @@ impl SettingsBridge {
     /// A button option.
     pub(super) fn action(&self, key: &str) {
         match key {
+            // Options that moved to the Messages page (M6.5b): their old places lead there.
+            "page.messages" | "page.messages.desktop" => {
+                self.state.borrow_mut().messages_tab = u8::from(key == "page.messages");
+                self.select_page(Some(Page::Messages.index()));
+            }
             "open.logs" => self.open_folder("logs"),
             "open.config" => self.open_folder("config"),
             "open.data" => self.open_folder("data"),

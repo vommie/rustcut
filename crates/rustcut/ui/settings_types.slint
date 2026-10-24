@@ -64,11 +64,33 @@ export struct HotkeyRowView {
     defaults: string,
 }
 
+// A kind of message on the Messages page (M6.5b).
+export struct MessageKindView {
+    id: string,
+    // The group's title on its first row ("" on the others).
+    header: string,
+    title: string,
+    // "Job 3 queued · basic_h264_720p - 03.mkv".
+    sample: string,
+    level: int,
+    // The places it can go and the chosen one.
+    places: [string],
+    place-index: int,
+    // Critical: always at its place, never muted.
+    locked: bool,
+    desktop: bool,
+    // "Don't show again" is offered (hints and confirmations).
+    mutable: bool,
+    muted: bool,
+    // What the last test showed, for a few seconds ("" = none).
+    tested: string,
+}
+
 export global SettingsUi {
     in property <[string]> pages;
     in property <int> page;
     in property <string> page-title;
-    // 0 none, 1 target folders, 2 render profiles, 3 hotkeys, 4 About.
+    // 0 none, 1 target folders, 2 render profiles, 3 hotkeys, 4 About, 5 Messages.
     in property <int> special;
     in property <[SettingCardView]> cards;
     // The page has generic options that can go back to their defaults.
@@ -132,6 +154,20 @@ export global SettingsUi {
     callback unbind(/* action id */ string, /* key text */ string);
     callback reset-hotkey(/* action id */ string);
     callback reset-hotkeys();
+
+    // Messages: the tab (0 look, 1 kinds, 2 muted), the search of the lists, the lists.
+    in property <int> messages-tab;
+    in property <string> messages-search;
+    in property <int> kinds-count;
+    in property <int> muted-count;
+    in property <[MessageKindView]> kinds;
+    in property <[MessageKindView]> muted;
+    callback messages-tab-selected(int);
+    callback messages-search-edited(string);
+    callback kind-place(/* kind id */ string, /* place index */ int);
+    callback kind-desktop(/* kind id */ string);
+    callback kind-mute(/* kind id */ string);
+    callback kind-test(/* kind id */ string);
 
     // About.
     in property <string> app-name;
