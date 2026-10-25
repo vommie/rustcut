@@ -51,6 +51,7 @@ import { BellPopup, NoticeBell } from "notice_bell.slint";
 import { BubbleButtonView, BubbleView, Bubbles } from "bubble.slint";
 import { NewerFileDialog, Problems, QueueDatabaseDialog } from "problem_dialogs.slint";
 import { TextLogic, TextSplit } from "controls_text.slint";
+import { DragLogic, DragState } from "drag.slint";
 
 export {
     Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
@@ -62,7 +63,7 @@ export {
     ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderRowView,
     ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power, AppTray, Jump, Notices,
     ToastView, BannerView, HistoryView, MessageKindView, Bubbles, BubbleView, BubbleButtonView, Problems, ColorCodec, ColorPickerWindow, TagFilterWindow, TagFilterRowView,
-    TextLogic, TextSplit
+    TextLogic, TextSplit, DragLogic, DragState
 }
 
 export component MainWindow inherits Window {
@@ -440,6 +441,11 @@ export component MainWindow inherits Window {
         height: parent.height;
 
         key-pressed(event) => {
+            // A drag of list rows runs: Escape cancels it (P9.4).
+            if event.text == Key.Escape && DragState.active {
+                DragState.cancel();
+                return accept;
+            }
             if Shortcuts.key-pressed(event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift,
                 event.modifiers.meta, event.repeat) {
                 return accept;

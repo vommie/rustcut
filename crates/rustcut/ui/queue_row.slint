@@ -10,6 +10,7 @@ import { TooltipHost } from "tooltip.slint";
 import { MiddleText } from "controls_text.slint";
 import { Queue, QueueColumnView, QueueRowView } from "queue_types.slint";
 import { JumpFlash } from "jump.slint";
+import { DragMotion } from "drag.slint";
 
 // waiting, held, rendering, paused, finished, failed, canceled
 export global QueueColors {
@@ -43,134 +44,157 @@ component Progress inherits Rectangle {
 export component QueueRow inherits Rectangle {
     in property <QueueRowView> job;
     in property <int> index;
-    // The pointer moved while pressed (in the row's coordinates); the list turns it into a drop position.
-    callback drag-moved(/* row */ int, /* y in the row */ length);
+    // Drag & drop (P9.4): how far the row moves aside while jobs are dragged and whether it is one of them (the ghost
+    // shows it under the pointer, so it is hidden here). The drag reports window coordinates.
+    in property <length> drag-shift;
+    in property <bool> lifted;
+    callback drag-started(/* window y of the press */ length);
+    callback drag-moved(/* window y */ length);
     callback drag-ended();
 
     property <color> state-color: QueueColors.of(root.job.kind);
     property <bool> ctrl;
     property <bool> shift;
     property <bool> dragging;
+    // This press became a drag: its release is no click.
+    property <bool> dragged;
     property <length> press-y;
+    property <length> press-window-y;
 
     height: Queue.row-height;
-    border-radius: 4px;
-    // The job loaded into the editor stays highlighted until the editing ends (M6.5e, Q-N8 #33).
-    background: root.job.selected ? (root.job.editing ? Theme.accent.with-alpha(0.22) : Theme.surface-selected)
-        : root.job.editing ? Theme.accent.with-alpha(0.12)
-        : touch.has-hover && !root.dragging ? Theme.surface-hover : transparent;
-    border-width: root.job.editing ? 1px : 0px;
-    border-color: Theme.accent.with-alpha(0.75);
 
-    host := TooltipHost {
-        text: root.job.tooltip;
-    }
+    body := Rectangle {
+        y: root.drag-shift;
+        animate y { duration: Queue.drag-instant ? 0ms : DragMotion.shift; easing: ease-out; }
+        width: parent.width;
+        height: parent.height;
+        opacity: root.lifted ? 0 : 1;
 
-    // The job the Job and Logs panels show.
-    if root.job.current: Rectangle {
-        x: 0;
-        y: 4px;
-        width: 2px;
-        height: parent.height - 8px;
-        border-radius: 1px;
-        background: Theme.primary;
-    }
+        border-radius: 4px;
+        // The job loaded into the editor stays highlighted until the editing ends (M6.5e, Q-N8 #33).
+        background: root.job.selected ? (root.job.editing ? Theme.accent.with-alpha(0.22) : Theme.surface-selected)
+            : root.job.editing ? Theme.accent.with-alpha(0.12)
+            : touch.has-hover && !root.dragging ? Theme.surface-hover : transparent;
+        border-width: root.job.editing ? 1px : 0px;
+        border-color: Theme.accent.with-alpha(0.75);
 
-    if Queue.compact: VerticalLayout {
-        padding-left: 8px;
-        padding-right: 8px;
-        padding-top: 4px;
-        padding-bottom: 4px;
-        spacing: 2px;
-
-        HorizontalLayout {
-            spacing: 6px;
-
-            if root.job.editing: AppIcon {
-                icon: IconId.job-edit;
-                size: IconSize.sm;
-                color: Theme.accent;
-            }
-
-            MiddleText {
-                horizontal-stretch: 1;
-                text: root.job.name;
-                font-weight: 600;
-            }
-
-            Text {
-                text: root.job.state;
-                color: root.state-color;
-                font-size: 11px;
-                font-weight: 600;
-            }
+        host := TooltipHost {
+            text: root.job.tooltip;
         }
 
-        Text {
-            text: root.job.detail;
-            color: root.job.kind == 5 ? Theme.status-corrupt : Theme.text-muted;
-            font-size: 11px;
-            overflow: elide;
+        // The job the Job and Logs panels show.
+        if root.job.current: Rectangle {
+            x: 0;
+            y: 4px;
+            width: 2px;
+            height: parent.height - 8px;
+            border-radius: 1px;
+            background: Theme.primary;
         }
 
-        Progress {
-            value: root.job.progress;
-            bar: root.state-color;
-        }
-    }
+        if Queue.compact: VerticalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            padding-top: 4px;
+            padding-bottom: 4px;
+            spacing: 2px;
 
-    if !Queue.compact: Rectangle {
-        x: 8px;
-        width: parent.width - 16px;
+            HorizontalLayout {
+                spacing: 6px;
 
-        for column[i] in Queue.columns: Rectangle {
-            x: column.x;
-            width: column.width;
+                if root.job.editing: AppIcon {
+                    icon: IconId.job-edit;
+                    size: IconSize.sm;
+                    color: Theme.accent;
+                }
 
-            if column.id == "state": Rectangle {
-                y: parent.height - 6px;
-                height: 3px;
+                MiddleText {
+                    horizontal-stretch: 1;
+                    text: root.job.name;
+                    font-weight: 600;
+                }
 
-                Progress {
-                    width: parent.width;
-                    value: root.job.progress;
-                    bar: root.state-color;
+                Text {
+                    text: root.job.state;
+                    color: root.state-color;
+                    font-size: 11px;
+                    font-weight: 600;
                 }
             }
 
-            if column.id == "name" && root.job.editing: AppIcon {
-                x: 0;
-                y: (parent.height - self.height) / 2;
-                icon: IconId.job-edit;
-                size: IconSize.sm;
-                color: Theme.accent;
-            }
-
-            // Names and folders are cut in the middle (P9.1).
-            if column.id == "name" || column.id == "folder": MiddleText {
-                x: column.id == "name" && root.job.editing ? 18px : 0px;
-                width: parent.width - self.x;
-                height: parent.height;
-                text: root.job.cells[i];
-                color: column.id == "name" ? Theme.text : Theme.text-muted;
-                font-weight: column.id == "name" ? 600 : 400;
-            }
-
-            if column.id != "name" && column.id != "folder": Text {
-                width: parent.width;
-                text: root.job.cells[i];
-                color: column.id == "state" ? root.state-color
-                    : column.id == "name" ? Theme.text : Theme.text-muted;
-                font-size: 12px;
-                font-weight: column.id == "name" || column.id == "state" ? 600 : 400;
-                horizontal-alignment: column.right ? right : left;
-                vertical-alignment: center;
+            Text {
+                text: root.job.detail;
+                color: root.job.kind == 5 ? Theme.status-corrupt : Theme.text-muted;
+                font-size: 11px;
                 overflow: elide;
             }
+
+            Progress {
+                value: root.job.progress;
+                bar: root.state-color;
+            }
+        }
+
+        if !Queue.compact: Rectangle {
+            x: 8px;
+            width: parent.width - 16px;
+
+            for column[i] in Queue.columns: Rectangle {
+                x: column.x;
+                width: column.width;
+
+                if column.id == "state": Rectangle {
+                    y: parent.height - 6px;
+                    height: 3px;
+
+                    Progress {
+                        width: parent.width;
+                        value: root.job.progress;
+                        bar: root.state-color;
+                    }
+                }
+
+                if column.id == "name" && root.job.editing: AppIcon {
+                    x: 0;
+                    y: (parent.height - self.height) / 2;
+                    icon: IconId.job-edit;
+                    size: IconSize.sm;
+                    color: Theme.accent;
+                }
+
+                // Names and folders are cut in the middle (P9.1).
+                if column.id == "name" || column.id == "folder": MiddleText {
+                    x: column.id == "name" && root.job.editing ? 18px : 0px;
+                    width: parent.width - self.x;
+                    height: parent.height;
+                    text: root.job.cells[i];
+                    color: column.id == "name" ? Theme.text : Theme.text-muted;
+                    font-weight: column.id == "name" ? 600 : 400;
+                }
+
+                if column.id != "name" && column.id != "folder": Text {
+                    width: parent.width;
+                    text: root.job.cells[i];
+                    color: column.id == "state" ? root.state-color
+                        : column.id == "name" ? Theme.text : Theme.text-muted;
+                    font-size: 12px;
+                    font-weight: column.id == "name" || column.id == "state" ? 600 : 400;
+                    horizontal-alignment: column.right ? right : left;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+        }
+
+
+        // A failed job's toast leads here (M6.5e): the row flashes once it is in view.
+        JumpFlash {
+            key: "queue:" + root.job.id;
         }
     }
 
-    // On top of the texts: selection, double click, context menu, drag.
+    // On top of the texts: selection, double click, context menu, drag. Outside the moving body, so a row that moves
+    // aside or is lifted keeps the pointer it holds (P9.4).
     touch := TouchArea {
         pointer-event(event) => {
             if event.kind == PointerEventKind.down {
@@ -185,7 +209,9 @@ export component QueueRow inherits Rectangle {
                     root.ctrl = event.modifiers.control;
                     root.shift = event.modifiers.shift;
                     root.press-y = self.mouse-y;
+                    root.press-window-y = self.absolute-position.y + self.mouse-y;
                     root.dragging = false;
+                    root.dragged = false;
                 }
             }
             if event.kind == PointerEventKind.up && event.button == PointerEventButton.left && root.dragging {
@@ -197,15 +223,17 @@ export component QueueRow inherits Rectangle {
             if self.pressed && (root.dragging || Math.abs(self.mouse-y - root.press-y) > 6px) {
                 if !root.dragging {
                     root.dragging = true;
+                    root.dragged = true;
                     if !root.job.selected {
                         Queue.select(root.job.id, false, false);
                     }
+                    root.drag-started(root.press-window-y);
                 }
-                root.drag-moved(root.index, self.mouse-y);
+                root.drag-moved(self.absolute-position.y + self.mouse-y);
             }
         }
         clicked => {
-            if !root.dragging {
+            if !root.dragged {
                 Queue.select(root.job.id, root.ctrl, root.shift);
             }
         }
@@ -219,11 +247,6 @@ export component QueueRow inherits Rectangle {
                 host.leave();
             }
         }
-    }
-
-    // A failed job's toast leads here (M6.5e): the row flashes once it is in view.
-    JumpFlash {
-        key: "queue:" + root.job.id;
     }
 }
 

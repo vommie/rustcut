@@ -13,6 +13,7 @@ import { Export } from "export_types.slint";
 import { Queue, QueueChipView } from "queue_types.slint";
 import { QueueColors, QueueHeader, QueueRow } from "queue_row.slint";
 import { Jump } from "jump.slint";
+import { DragGhost, DragLogic, DropGap } from "drag.slint";
 
 component Chip inherits Rectangle {
     in property <QueueChipView> chip;
@@ -68,9 +69,9 @@ component Chip inherits Rectangle {
 }
 
 export component QueuePanel inherits Rectangle {
-    // Where a drag would put the selection (an index into the shown rows; -1 = no drag).
-    property <int> drop-index: -1;
     property <length> row-step: Queue.row-height + 2px;
+    // The pointer of a drag, from the list's top edge (the edge scrolling asks with it).
+    property <length> drag-pointer;
 
     // The width reaches Rust once more after the panel was created: a `changed width` during the dock's first layout
     // can come before the handler is connected (M3.2).
@@ -222,6 +223,8 @@ export component QueuePanel inherits Rectangle {
 
             flick := Flickable {
                 content-height: list.preferred-height;
+                // While jobs are dragged the list does not take the gesture for scrolling (the edges scroll it).
+                interactive: !Queue.dragging;
 
                 // A jump mark reached a job of this list: it scrolls into view (`jump.slint`).
                 property <int> jump: Jump.target-serial;
@@ -238,33 +241,53 @@ export component QueuePanel inherits Rectangle {
                     for job[i] in Queue.rows: QueueRow {
                         job: job;
                         index: i;
-                        drag-moved(row, y) => {
-                            root.drop-index = Math.clamp(Math.round((row * root.row-step + y) / root.row-step), 0,
-                                Queue.rows.length);
-                            // Near the edges the list scrolls along.
-                            if row * root.row-step + y + flick.content-y < 16px {
-                                flick.content-y = Math.min(0px, flick.content-y + root.row-step / 2);
-                            } else if row * root.row-step + y + flick.content-y > flick.height - 16px {
-                                flick.content-y = Math.max(flick.height - flick.content-height,
-                                    flick.content-y - root.row-step / 2);
-                            }
+                        drag-shift: i < Queue.drag-shifts.length ? Queue.drag-shifts[i] : 0px;
+                        lifted: Queue.dragging && job.selected;
+                        // Drag & drop (P9.4): window coordinates turn into the list's content coordinates.
+                        drag-started(y) => {
+                            Queue.drag-start(i, y - list.absolute-position.y, root.row-step, Queue.row-height);
                         }
-                        drag-ended => {
-                            if root.drop-index >= 0 {
-                                Queue.drop-rows(root.drop-index);
-                            }
-                            root.drop-index = -1;
+                        drag-moved(y) => {
+                            root.drag-pointer = y - flick.absolute-position.y;
+                            Queue.drag-move(y - list.absolute-position.y);
                         }
+                        drag-ended => { Queue.drag-end(); }
                     }
                 }
 
-                // Where the dragged jobs land.
-                if root.drop-index >= 0: Rectangle {
+                // Where the dragged jobs would land (the other rows moved aside).
+                if Queue.dragging: DropGap {
                     x: 4px;
-                    y: Math.max(0px, root.drop-index * root.row-step - 2px);
+                    y: Queue.drag-gap-y;
                     width: parent.width - 8px;
-                    height: 2px;
-                    background: Theme.primary;
+                    height: Math.max(0px, Queue.drag-gap-height - 2px);
+                }
+            }
+
+            // The dragged jobs under the pointer.
+            if Queue.dragging: DragGhost {
+                x: 4px;
+                y: Queue.drag-ghost-y + flick.content-y;
+                width: parent.width - 8px;
+                height: Queue.row-height;
+                title: Queue.drag-title;
+                detail: Queue.drag-detail;
+                count: Queue.drag-count;
+            }
+
+            // Near the top and bottom edge the list scrolls along, faster toward the edge.
+            Timer {
+                interval: 16ms;
+                running: Queue.dragging;
+                triggered => {
+                    let step = DragLogic.scroll-step(root.drag-pointer, flick.height);
+                    let to = Math.max(Math.min(0px, flick.height - flick.content-height),
+                        Math.min(0px, flick.content-y - step));
+                    // Only a real move: setting the same place again would end the row's pointer grab.
+                    if to != flick.content-y {
+                        flick.content-y = to;
+                        Queue.drag-move(root.drag-pointer - flick.content-y);
+                    }
                 }
             }
 

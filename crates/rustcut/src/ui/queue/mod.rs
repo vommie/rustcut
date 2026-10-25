@@ -6,6 +6,7 @@
 
 mod actions;
 mod columns;
+mod drag;
 mod filter;
 mod menu;
 mod pause;
@@ -147,6 +148,9 @@ pub struct QueueBridge {
     /// The pause as the panel last saw it (`None` before the first snapshot) and as `ui-state.toml` had it at the start.
     last_paused: Cell<Option<bool>>,
     paused_before: bool,
+    /// Dragging jobs (P9.4, `drag.rs`) and how far each shown row moves aside meanwhile.
+    drag: RefCell<Option<drag::QueueDrag>>,
+    drag_shifts: Rc<VecModel<f32>>,
 }
 
 impl QueueBridge {
@@ -190,6 +194,8 @@ impl QueueBridge {
             },
             last_paused: Cell::new(None),
             paused_before: saved.paused,
+            drag: RefCell::new(None),
+            drag_shifts: Rc::new(VecModel::default()),
         });
         BRIDGE.with(|b| *b.borrow_mut() = Rc::downgrade(&bridge));
         let q = window.global::<Queue<'_>>();
@@ -200,6 +206,7 @@ impl QueueBridge {
         q.set_key_move_up(bridge.keys.move_up.as_str().into());
         q.set_key_move_down(bridge.keys.move_down.as_str().into());
         actions::connect(&bridge, window);
+        drag::connect(&bridge, window);
         runtime.spawn(follow(
             service.clone(),
             Arc::clone(&bridge.shared),
@@ -362,6 +369,7 @@ impl QueueBridge {
             .collect();
         let row_count = rows.len();
         sync(&self.rows, rows);
+        self.drag_rows_changed(&visible);
         let column_views = layout
             .slots
             .iter()

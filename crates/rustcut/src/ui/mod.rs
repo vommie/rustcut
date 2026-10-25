@@ -4,6 +4,7 @@ pub mod color_picker;
 pub mod controls;
 pub mod dispatcher;
 pub mod dock;
+pub mod drag;
 pub mod editing;
 pub mod editor;
 pub mod export;

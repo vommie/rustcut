@@ -147,6 +147,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Dragging jobs in the queue is a real drag (0.0.39, your UI review): the selected jobs lift off as one
+  semi-transparent ghost with a dashed outline that follows the pointer ("2 jobs" and a "+1" badge when several move),
+  the other jobs slide aside to open a gap where they will land, and near the top or bottom edge the list scrolls
+  along, faster the closer the pointer gets to the edge. Escape cancels the drag; tooltips stay hidden while you drag;
+  releasing a drag no longer changes the selection. The same drag comes to the sections and the filters later.
 - Dialogs, your UI review round 1 (0.0.38): every dialog's symbol sits vertically centered beside its title, and
   every dialog you can cancel has an × in the top right corner (Escape does the same; the start dialogs keep none).
   Radio marks and key numbers of the choices are centered on their rows, and the start dialogs mark the recommended

@@ -94,8 +94,21 @@ export global Queue {
     callback double-clicked(/* job id */ int);
     // A right click on a row (it is selected first unless it already is) or on the empty list (-1).
     callback context-menu(/* job id */ int, /* window x */ length, /* window y */ length);
-    // Drag and drop: the selection goes in front of row `index` of the shown rows (the row count = the end).
-    callback drop-rows(/* index */ int);
+    // Dragging the selected jobs (P9.4, src/ui/queue/drag.rs with the model of src/ui/drag/): the rows' moves aside
+    // (by shown row), the gap where the jobs would land, the ghost under the pointer (content coordinates) with the
+    // grabbed job's name and how many move; `drag-instant` makes the rows snap without animation (the new order came).
+    in property <bool> dragging;
+    in property <[length]> drag-shifts;
+    in property <bool> drag-instant;
+    in property <length> drag-gap-y;
+    in property <length> drag-gap-height;
+    in property <length> drag-ghost-y;
+    in property <string> drag-title;
+    in property <string> drag-detail;
+    in property <int> drag-count;
+    callback drag-start(/* row */ int, /* pointer, content y */ length, /* row pitch */ length, /* row height */ length);
+    callback drag-move(/* pointer, content y */ length);
+    callback drag-end();
     callback column-resize-started(/* column id */ string);
     callback column-resized(/* column id */ string, /* delta */ length);
     callback toggle-chip(/* chip id */ string);
