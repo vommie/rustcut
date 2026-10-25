@@ -264,9 +264,36 @@ component TagToolbar inherits HorizontalLayout {
         enabled: TagRate.has-tree;
         checked: TagRate.hide-mode;
         tooltip: TagRate.hide-mode ? "Done: a click on a tag assigns it again"
-            : TagRate.hidden-count > 0 ? "Hidden branches (" + TagRate.hidden-count + "): show them and choose with a click"
+            : TagRate.hidden-count > 0 ? "Hidden tags (" + TagRate.hidden-count + "): show them here and choose with a click"
             : "Hide branches: show every tag and choose with a click";
         clicked => { TagRate.toggle-hide-mode(); }
+    }
+
+    // The filter window; the number says how many tags are hidden (user decision Q-P8b).
+    IconButton {
+        icon: IconId.tags-filter;
+        checked: TagRate.hidden-count > 0;
+        tooltip: TagRate.hidden-count > 0 ? TagRate.hidden-count + " hidden: choose the tags the tree shows in a window with the whole tree"
+            : "Choose the tags the tree shows in a window with the whole tree";
+        clicked => { TagRate.open-filter(); }
+
+        if TagRate.hidden-count > 0: Rectangle {
+            x: parent.width - self.width / 2 - 3px;
+            y: -5px;
+            height: 13px;
+            width: Math.max(13px, badge.preferred-width + 6px);
+            border-radius: 6.5px;
+            background: Theme.accent;
+
+            badge := Text {
+                text: TagRate.hidden-count > 99 ? "99+" : TagRate.hidden-count;
+                font-size: 9px;
+                font-weight: 700;
+                color: Theme.background;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
     }
 }
 
@@ -352,7 +379,7 @@ export component TagRatePanel inherits Rectangle {
         }
 
         if TagRate.hide-mode: Text {
-            text: "A click hides a branch or shows it again. Hidden branches are dimmed here and left out of the tree.";
+            text: "A click hides a branch or shows it again (a tag inside a hidden branch on its own). Hidden tags are dimmed here and left out of the tree.";
             font-size: 10px;
             color: Theme.text-muted;
             wrap: word-wrap;

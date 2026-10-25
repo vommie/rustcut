@@ -1,0 +1,317 @@
+// The tag filter (P8b, user decision Q-P8b): RustView's whole tag tree with a check box per tag, in a window of its own
+// that belongs to the main window (X11: a dialog of it, src/ui/tags/filter_window.rs). Unchecked = hidden in the Tag &
+// Rate panel; a check box acts on its whole branch (tags RustView adds there later follow), a tag below can be checked
+// again on its own. A search shows the tags whose names contain the text with the way to them. Every change shows in
+// the panel at once; "Show all" (held) clears the filter, Done or Escape closes the window. Rust fills everything.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { IconButton } from "controls.slint";
+import { SearchField } from "search_field.slint";
+import { TooltipHost } from "tooltip.slint";
+import { TooltipLayer } from "tooltip_layer.slint";
+import { HoldConfirm, HoldLogic, HoldRing } from "hold.slint";
+import { ListView } from "std-widgets.slint";
+
+export struct TagFilterRowView {
+    id: int,
+    name: string,
+    depth: int,
+    has-children: bool,
+    expanded: bool,
+    /// 0 = hidden, 1 = shown, 2 = mixed (the branch below differs).
+    check: int,
+    /// Only on the way to a tag the search found.
+    dimmed: bool,
+}
+
+/// A check box that is checked, empty or mixed.
+component CheckBox inherits Rectangle {
+    in property <int> check;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border-width: 1px;
+    border-color: root.check == 0 ? Theme.text-muted : Theme.primary;
+    background: root.check == 1 ? Theme.primary : root.check == 2 ? Theme.primary.with-alpha(0.25) : transparent;
+
+    if root.check != 0: AppIcon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        icon: root.check == 1 ? IconId.check : IconId.minus;
+        size: 10px;
+        color: root.check == 1 ? Theme.background : Theme.primary;
+    }
+}
+
+component FilterRow inherits Rectangle {
+    in property <TagFilterRowView> item;
+    callback toggled(int);
+    callback expand(int);
+
+    height: 24px;
+    background: touch.has-hover ? Theme.surface-hover : transparent;
+    border-radius: 3px;
+
+    host := TooltipHost {
+        text: root.item.check == 0 ? "Hidden in the Tag & Rate panel with everything below it: a click shows the branch"
+            : root.item.check == 2 ? "Some tags below differ: a click makes the whole branch follow this tag"
+            : "Shown in the Tag & Rate panel: a click hides it with everything below it";
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => {
+            host.press();
+            root.toggled(root.item.id);
+        }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: 4px + root.item.depth * 16px;
+        padding-right: 6px;
+        spacing: 6px;
+
+        Rectangle {
+            width: 16px;
+
+            if root.item.has-children: AppIcon {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                icon: root.item.expanded ? IconId.chevron-down : IconId.chevron-right;
+                size: IconSize.sm;
+                color: Theme.text-muted;
+            }
+
+            if root.item.has-children: TouchArea {
+                mouse-cursor: MouseCursor.pointer;
+                clicked => { root.expand(root.item.id); }
+            }
+        }
+
+        CheckBox {
+            y: (parent.height - self.height) / 2;
+            check: root.item.check;
+        }
+
+        Text {
+            text: root.item.name;
+            font-size: 12px;
+            font-weight: root.item.has-children ? 600 : 400;
+            color: root.item.dimmed ? Theme.text-muted.with-alpha(0.6) : root.item.check == 0 ? Theme.text-muted : Theme.text;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+    }
+}
+
+/// A text button; `hold` makes it act only after it was held (`HoldConfirm.duration`).
+component TextButton inherits Rectangle {
+    in property <string> text;
+    in property <string> tooltip;
+    in property <bool> primary;
+    in property <bool> hold;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 28px;
+    min-width: label.preferred-width + 24px;
+    border-radius: 4px;
+    border-width: root.primary ? 0 : 1px;
+    border-color: touch.has-hover && root.enabled ? Theme.primary : Theme.border;
+    background: root.primary ? (touch.has-hover ? Theme.primary.brighter(0.15) : Theme.primary)
+        : touch.has-hover && root.enabled ? Theme.surface-hover : Theme.surface-variant;
+    clip: root.hold;
+
+    host := TooltipHost {
+        text: root.tooltip;
+        hold: root.hold && root.enabled;
+    }
+
+    logic := HoldLogic {
+        pressed: touch.pressed;
+        enabled: root.enabled;
+        hold: root.hold;
+        confirmed => { root.clicked(); }
+        short-click => { host.reveal(); }
+    }
+
+    if root.hold: HoldRing {
+        progress: logic.progress;
+        flash: logic.flash;
+        border-radius: root.border-radius;
+    }
+
+    label := Text {
+        x: (parent.width - self.width) / 2 + logic.nudge;
+        text: root.text;
+        color: !root.enabled ? Theme.status-deleted : root.primary ? Theme.background : Theme.text;
+        font-size: 12px;
+        font-weight: root.primary ? 700 : 400;
+        vertical-alignment: center;
+        height: parent.height;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                host.press();
+                logic.pressed-down();
+            }
+        }
+        clicked => { logic.released-click(); }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+}
+
+export component TagFilterWindow inherits Window {
+    in property <[TagFilterRowView]> rows;
+    in-out property <string> search;
+    /// How many tags the panel hides now.
+    in property <int> hidden-count;
+    /// RustView offers no tags (yet).
+    in property <string> empty-text;
+
+    callback toggled(int);
+    callback expand(int);
+    callback search-changed(string);
+    callback show-all();
+    callback done();
+    callback resized(length, length);
+
+    title: "Tag filter - RustCut";
+    background: Theme.background;
+    min-width: 260px;
+    min-height: 240px;
+    preferred-width: 380px;
+    preferred-height: 560px;
+
+    changed width => { root.resized(self.width, self.height); }
+    changed height => { root.resized(self.width, self.height); }
+
+    forward-focus: keys;
+    keys := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.done();
+                return accept;
+            }
+            return reject;
+        }
+
+        VerticalLayout {
+            padding: 12px;
+            spacing: 8px;
+
+            Text {
+                text: "Tags in the Tag & Rate panel";
+                font-size: 13px;
+                font-weight: 700;
+                color: Theme.text;
+            }
+
+            Text {
+                text: "Unchecked tags are hidden there, with everything below them (also tags added later). A tag below a hidden one can be checked on its own.";
+                font-size: 11px;
+                color: Theme.text-muted;
+                wrap: word-wrap;
+            }
+
+            search-box := Rectangle {
+                height: 26px;
+
+                SearchField {
+                    width: parent.width;
+                    height: 26px;
+                    field-width: parent.width;
+                    field-height: 26px;
+                    text <=> root.search;
+                    placeholder-text: "Search tags...";
+                    enable-regex-toggle: false;
+                    show-search-icon: true;
+                    clear-tooltip: "Clear the search (Esc)";
+                    search-changed(text) => { root.search-changed(text); }
+                    escape-pressed => { keys.focus(); }
+                    accepted(text) => { keys.focus(); }
+                }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                border-radius: 4px;
+                border-width: 1px;
+                border-color: Theme.border;
+                background: Theme.surface;
+
+                list := ListView {
+                    for entry in root.rows: FilterRow {
+                        item: entry;
+                        toggled(id) => { root.toggled(id); }
+                        expand(id) => { root.expand(id); }
+                    }
+                }
+
+                if root.rows.length == 0: Text {
+                    x: 12px;
+                    width: parent.width - 24px;
+                    text: root.search != "" ? "No tag matches the search." : root.empty-text;
+                    font-size: 11px;
+                    color: Theme.text-muted;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 8px;
+
+                Text {
+                    text: root.hidden-count == 0 ? "Every tag is shown" : root.hidden-count == 1 ? "1 tag hidden"
+                        : root.hidden-count + " tags hidden";
+                    font-size: 11px;
+                    color: Theme.text-muted;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                    overflow: elide;
+                }
+
+                TextButton {
+                    text: "Show all";
+                    hold: true;
+                    enabled: root.hidden-count > 0;
+                    tooltip: "Show every tag in the panel again";
+                    clicked => { root.show-all(); }
+                }
+
+                TextButton {
+                    text: "Done";
+                    primary: true;
+                    tooltip: "Close the filter (Esc); every change is in the panel already";
+                    clicked => { root.done(); }
+                }
+            }
+        }
+    }
+
+    TooltipLayer {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+    }
+}

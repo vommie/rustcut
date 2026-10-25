@@ -58,6 +58,7 @@ fn flatten(
         assigned: &empty,
         locked: &empty,
         hidden: &empty,
+        shown: &empty,
         show_hidden: false,
     };
     let mut rows = Vec::new();

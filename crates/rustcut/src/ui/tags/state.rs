@@ -181,6 +181,23 @@ impl TagPanel {
         self.by_id.len()
     }
 
+    /// RustView's tags as it sent them.
+    pub fn tags(&self) -> impl Iterator<Item = &TagItem> {
+        self.tree.iter().flat_map(|t| t.tags.iter())
+    }
+
+    pub fn tag(&self, id: u32) -> Option<&TagItem> {
+        self.by_id.get(&id)
+    }
+
+    /// Every tag below `id`.
+    pub fn below(&self, id: u32) -> HashSet<u32> {
+        self.tree
+            .as_ref()
+            .map(|tree| descendants(&tree.tags, id))
+            .unwrap_or_default()
+    }
+
     pub fn name(&self, id: u32) -> Option<&str> {
         self.by_id.get(&id).map(|t| t.name.trim())
     }
@@ -204,9 +221,7 @@ impl TagPanel {
             return;
         }
         if self.hide_mode {
-            if !self.hidden.remove(&id) {
-                self.hidden.insert(id);
-            }
+            self.toggle_branch(id);
             return;
         }
         let assigned = self.choice_mut().toggle(id);
@@ -331,6 +346,7 @@ impl TagPanel {
             assigned: &assigned,
             locked: &locked,
             hidden: &self.hidden,
+            shown: &self.shown,
             show_hidden: self.hide_mode,
         };
         let mut rows = Vec::new();
@@ -345,12 +361,10 @@ impl TagPanel {
 
     /// Tags of the choice that a hidden branch keeps out of the tree (they are still assigned).
     pub fn assigned_in_hidden(&self) -> usize {
-        let Some(tree) = &self.tree else { return 0 };
-        let mut hidden_ids = self.hidden.clone();
-        for id in &self.hidden {
-            hidden_ids.extend(descendants(&tree.tags, *id));
+        if self.hidden.is_empty() {
+            return 0;
         }
-        self.choice().tags.iter().filter(|t| hidden_ids.contains(t)).count()
+        self.choice().tags.iter().filter(|t| !self.visible(**t)).count()
     }
 
     /// The draft as the next job's metadata (tags sorted, as RustView stores them).

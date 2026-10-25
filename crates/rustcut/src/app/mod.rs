@@ -527,6 +527,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     render.save_into(&mut ui_state.export);
     probe.save_into(&mut ui_state.export);
     export.save_into(&mut ui_state.export);
+    tags.close_filter();
     tags.save_into(&mut ui_state.tags);
     queue.save_into(&mut ui_state.queue);
     power.save_into(&mut ui_state.queue);
