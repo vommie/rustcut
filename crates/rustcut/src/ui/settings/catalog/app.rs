@@ -90,16 +90,12 @@ pub static WARNINGS: &[Card] = &[
                 warnings.base_name_in_folder
             ),
             switch!(
-                "warnings.no_tags",
-                "Ask when the job has no tags",
-                "Only while the RustView link is on and RustView offers tags.",
-                warnings.no_tags
-            ),
-            switch!(
-                "warnings.no_rating",
-                "Ask when the job has no rating",
-                "Only while the RustView link is on. The question holds the rating bar: one click saves with it.",
-                warnings.no_rating
+                "warnings.missing_metadata",
+                "Warn about missing tags or rating",
+                "The Tag & Rate panel's \"Warn\" switch: asks before a job without tags or rating is saved (tags only \
+                 when RustView offers some), while the RustView link and the panel's \"Active\" switch are on. The \
+                 question holds the rating bar: one click saves with it.",
+                warnings.missing_metadata
             ),
         ],
     },

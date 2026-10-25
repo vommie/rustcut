@@ -46,6 +46,11 @@ export component HoldLogic {
         if !root.enabled {
             return;
         }
+        // The hold acted already; a switch that needs no hold in its new state (the Tag & Rate panel's "Active") must
+        // not take the release as a second click.
+        if root.fired {
+            return;
+        }
         if !root.hold || HoldConfirm.duration <= 0ms {
             root.confirmed();
             return;

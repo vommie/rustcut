@@ -178,7 +178,7 @@ fn hold_time_and_job_load_have_defaults_and_are_tolerant() {
     assert_eq!(value.editor.auto_section, AutoSection::WholeVideo);
 
     // A value of a later version reads as the default; the rest of the section stays.
-    let text = "version = 3\n[editor]\nseek_step_secs = 4\non_job_load = \"teleport\"\n";
+    let text = "version = 4\n[editor]\nseek_step_secs = 4\non_job_load = \"teleport\"\n";
     std::fs::write(dir.path().join("config.toml"), text).unwrap();
     let value = load::<Settings>(dir.path(), &dir.path().join("b"))
         .unwrap()
@@ -309,8 +309,8 @@ fn a_file_of_0_0_24_moves_its_notice_options_with_a_backup() {
         "the old file is backed up first"
     );
     assert!(
-        !value.warnings.no_tags && !value.desktop.taskbar_progress,
-        "the other values stay"
+        value.warnings.missing_metadata && !value.desktop.taskbar_progress,
+        "the other values stay (the rating question was still on, so the one warning stays on)"
     );
     assert_eq!(value.notices.desktop.timeout_secs, 12);
     assert_eq!(
@@ -333,7 +333,7 @@ fn a_file_of_0_0_24_moves_its_notice_options_with_a_backup() {
     );
     save(dir.path(), &value).unwrap();
     let text = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
-    assert!(text.starts_with("version = 3"), "{text}");
+    assert!(text.starts_with("version = 4"), "{text}");
     assert!(
         !text.contains("[desktop.notifications]") && !text.contains("known_source = false"),
         "{text}"
@@ -375,7 +375,7 @@ fn a_file_of_0_0_28_loads_its_job_without_a_draft() {
         );
         save(dir.path(), &value).unwrap();
         let text = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
-        assert!(text.starts_with("version = 3") && !text.contains("draft"), "{text}");
+        assert!(text.starts_with("version = 4") && !text.contains("draft"), "{text}");
     }
     // Without the key nothing changes but the version.
     std::fs::write(dir.path().join("config.toml"), "version = 2\n[queue]\nworkers = 2\n").unwrap();
@@ -383,4 +383,54 @@ fn a_file_of_0_0_28_loads_its_job_without_a_draft() {
         .unwrap()
         .into_value();
     assert_eq!((value.editor.on_job_load, value.queue.workers), (OnJobLoad::Replace, 2));
+}
+
+#[test]
+fn a_file_of_0_0_32_gets_one_metadata_warning() {
+    // Settings version 3: the two questions become one switch, on when either was on; the old file is backed up first.
+    let dir = tempfile::tempdir().unwrap();
+    for (warnings, wanted) in [
+        ("no_tags = false\nno_rating = false\n", false),
+        ("no_tags = false\nno_rating = true\n", true),
+        ("no_tags = true\nno_rating = false\n", true),
+        ("no_tags = false\n", true),
+        ("no_rating = false\n", true),
+    ] {
+        let old = format!("version = 3\n[warnings]\ntarget_exists = false\n{warnings}");
+        std::fs::write(dir.path().join("config.toml"), &old).unwrap();
+        let outcome = load::<Settings>(dir.path(), &dir.path().join("b")).unwrap();
+        let LoadOutcome::Migrated {
+            value,
+            from: 3,
+            backup,
+            notes,
+        } = outcome
+        else {
+            panic!("{outcome:?}")
+        };
+        assert!(notes.is_empty(), "{notes:?}");
+        assert_eq!(
+            std::fs::read_to_string(&backup).unwrap(),
+            old,
+            "the old file is backed up first"
+        );
+        assert_eq!(
+            (value.warnings.missing_metadata, value.warnings.target_exists),
+            (wanted, false),
+            "{warnings}"
+        );
+        save(dir.path(), &value).unwrap();
+        let text = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
+        assert!(
+            text.starts_with("version = 4") && !text.contains("no_tags") && !text.contains("no_rating"),
+            "{text}"
+        );
+    }
+    // Without the keys nothing changes but the version.
+    std::fs::write(dir.path().join("config.toml"), "version = 3\n[queue]\nworkers = 2\n").unwrap();
+    let value = load::<Settings>(dir.path(), &dir.path().join("b"))
+        .unwrap()
+        .into_value();
+    assert!(value.warnings.missing_metadata);
+    assert_eq!(value.queue.workers, 2);
 }

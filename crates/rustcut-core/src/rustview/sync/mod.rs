@@ -195,6 +195,7 @@ mod tests {
                 tags: vec![1],
                 rating: Some(3),
                 source_hash: None,
+                without_rustview: false,
             }),
             preexisting: Some(true),
             previous_tags: Some(vec![9]),

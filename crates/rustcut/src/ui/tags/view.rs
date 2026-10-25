@@ -1,4 +1,4 @@
-//! The panel's texts: RustView's connection state in the header (the one place it is shown, ADR-6), the line that
+//! The panel's texts: RustView's connection state in the tree's place (the one place it is shown, ADR-6), the line that
 //! sums up the job's tags and rating, and what the tree area says while it has no rows.
 
 use std::fmt::Write as _;
@@ -9,11 +9,12 @@ use super::state::TagPanel;
 use crate::ui::jump::JumpTarget;
 use crate::ui::settings::page::Page;
 
-/// The header line.
+/// The card in the tree's place while RustView is unavailable or switched off (connecting and connected show none).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConnectionView {
     pub text: String,
-    pub tooltip: String,
+    /// What the state means (the reason once, then what RustCut does about it).
+    pub detail: String,
     /// 0 = unknown, 1 = connected, 2 = unavailable, 3 = switched off (`TagRate.connection-kind`).
     pub kind: i32,
     pub can_retry: bool,
@@ -35,21 +36,21 @@ pub fn connection(state: &ConnectionState) -> ConnectionView {
     match state {
         ConnectionState::Unknown => ConnectionView {
             text: "Connecting to RustView...".into(),
-            tooltip: "RustCut asks RustView (`rustview api`) for its tags.".into(),
+            detail: String::new(),
             kind: 0,
             can_retry: false,
             jump: None,
         },
         ConnectionState::Connected => ConnectionView {
             text: "RustView connected".into(),
-            tooltip: "RustCut writes the tags and the rating of its jobs into RustView's library.".into(),
+            detail: String::new(),
             kind: 1,
             can_retry: false,
             jump: None,
         },
         ConnectionState::Unavailable { reason, retry_in_secs } => ConnectionView {
-            text: format!("RustView unavailable: {reason}"),
-            tooltip: format!(
+            text: "RustView unavailable".into(),
+            detail: format!(
                 "{reason}\nRustCut tries again by itself (the next try was {retry_in_secs} s after this failure, the pause \
                  doubles up to 2 minutes); Retry tries now.\n{WRITES}"
             ),
@@ -59,7 +60,7 @@ pub fn connection(state: &ConnectionState) -> ConnectionView {
         },
         ConnectionState::Disabled => ConnectionView {
             text: "RustView is switched off".into(),
-            tooltip:
+            detail:
                 "The RustView link is switched off in the settings (`[rustview] enabled`): jobs are not written into \
                       RustView's library."
                     .into(),
@@ -70,8 +71,12 @@ pub fn connection(state: &ConnectionState) -> ConnectionView {
     }
 }
 
-/// "2 tags, rating 4" (with the locked and hidden ones named when there are any).
+/// "2 tags, rating 4" (with the locked and hidden ones named when there are any); "Saved without RustView" while the
+/// "Active" switch is off.
 pub fn summary(panel: &TagPanel) -> String {
+    if !panel.active && panel.editing.is_none() {
+        return "Saved without RustView".to_owned();
+    }
     let choice = panel.choice();
     let tags = match choice.tags.len() {
         0 => "No tags".to_owned(),
@@ -133,7 +138,12 @@ mod tests {
             reason: "RustView cannot be started: not installed".into(),
             retry_in_secs: 4,
         });
-        assert!(down.can_retry && down.text.ends_with("not installed") && down.tooltip.contains("4 s"));
+        assert!(down.can_retry && down.text == "RustView unavailable" && down.detail.contains("4 s"));
+        assert_eq!(
+            down.detail.matches("not installed").count(),
+            1,
+            "the reason is said once (P8b audit)"
+        );
         assert!(!connection(&ConnectionState::Disabled).can_retry);
     }
 
@@ -149,5 +159,7 @@ mod tests {
         assert!(empty_text(&panel, &ConnectionState::Connected).contains("no tags yet"));
         panel.click_rating(4);
         assert_eq!(summary(&panel), "No tags, rating 4");
+        panel.active = false;
+        assert_eq!(summary(&panel), "Saved without RustView");
     }
 }

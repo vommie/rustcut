@@ -75,6 +75,8 @@ pub struct TagPanel {
     pub history_collapsed: bool,
     pub history_height: u32,
     pub hidden: HashSet<u32>,
+    /// Tags shown again inside a hidden branch (with everything below them).
+    pub shown: HashSet<u32>,
     pub locked: Vec<u32>,
     pub last_tags: Vec<u32>,
     pub last_rating: Option<u8>,
@@ -83,6 +85,11 @@ pub struct TagPanel {
     pub editing: Option<Editing>,
     /// Choosing the branches to hide (a click hides or shows one).
     pub hide_mode: bool,
+    /// The "Active" switch (user decision Q-P8b): off = the next jobs are saved without RustView.
+    pub active: bool,
+    /// The tag filter window: its folded branches and its size.
+    pub filter_collapsed: HashSet<u32>,
+    pub filter_size: (u32, u32),
     /// How many tags the history keeps (`rustview.tag_history_size`).
     history_size: usize,
 }
@@ -97,6 +104,7 @@ impl TagPanel {
             history_collapsed: saved.history_collapsed,
             history_height: saved.history_height,
             hidden: saved.hidden.iter().copied().collect(),
+            shown: saved.shown.iter().copied().collect(),
             locked: saved.locked.clone(),
             last_tags: saved.last_tags.clone(),
             last_rating: saved.last_rating,
@@ -104,6 +112,9 @@ impl TagPanel {
                 tags: saved.locked.clone(),
                 rating: None,
             },
+            active: saved.active,
+            filter_collapsed: saved.filter_collapsed.iter().copied().collect(),
+            filter_size: (saved.filter_width, saved.filter_height),
             history_size: TagPanelState::HISTORY_DEFAULT,
             ..Self::default()
         }
@@ -130,9 +141,14 @@ impl TagPanel {
             history_collapsed: self.history_collapsed,
             history_height: self.history_height,
             hidden: sorted(&self.hidden),
+            shown: sorted(&self.shown),
             locked: self.locked.clone(),
             last_tags: self.last_tags.clone(),
             last_rating: self.last_rating,
+            active: self.active,
+            filter_collapsed: sorted(&self.filter_collapsed),
+            filter_width: self.filter_size.0,
+            filter_height: self.filter_size.1,
         };
     }
 
@@ -142,8 +158,14 @@ impl TagPanel {
         self.forest = TagTreeBuilder::build_hierarchy(&tree.tags);
         self.by_id = tree.tags.iter().map(|t| (t.id, t.clone())).collect();
         let valid: HashSet<u32> = self.by_id.keys().copied().collect();
-        self.expanded.retain(|id| valid.contains(id));
-        self.hidden.retain(|id| valid.contains(id));
+        for set in [
+            &mut self.expanded,
+            &mut self.hidden,
+            &mut self.shown,
+            &mut self.filter_collapsed,
+        ] {
+            set.retain(|id| valid.contains(id));
+        }
         TagHistoryManager::prune_invalid(&mut self.history, &valid);
         for list in [&mut self.locked, &mut self.last_tags, &mut self.draft.tags] {
             list.retain(|id| valid.contains(id));
@@ -388,6 +410,7 @@ impl TagPanel {
                 tags,
                 rating: e.choice.rating,
                 source_hash: e.original.source_hash.clone(),
+                without_rustview: e.original.without_rustview,
             },
         ))
     }
@@ -487,6 +510,7 @@ mod tests {
             tags: vec![3],
             rating: Some(1),
             source_hash: Some("abc".into()),
+            without_rustview: false,
         };
         p.begin_edit(JobId(7), "Clip - 01".into(), original);
         assert_eq!(p.choice().tags, [3]);
@@ -501,7 +525,8 @@ mod tests {
             JobMetadata {
                 tags: vec![2, 3],
                 rating: Some(4),
-                source_hash: Some("abc".into())
+                source_hash: Some("abc".into()),
+                without_rustview: false,
             }
         );
         p.clear();

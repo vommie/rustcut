@@ -90,6 +90,10 @@ pub struct JobMetadata {
     pub rating: Option<u8>,
     /// MD5 of the source (hex), registered in RustView's hash list when the job is created.
     pub source_hash: Option<String>,
+    /// Saved while the Tag & Rate panel's "Active" switch was off (P8b, user decision Q-P8b): RustView learns nothing
+    /// about the job, neither a record nor the source hash, also when it finishes or is edited later.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub without_rustview: bool,
 }
 
 /// What the probe found about the source.
@@ -136,6 +140,7 @@ pub(crate) mod tests {
                 tags: vec![3, 9],
                 rating: Some(4),
                 source_hash: None,
+                without_rustview: false,
             },
         }
     }
@@ -160,6 +165,10 @@ pub(crate) mod tests {
         assert_eq!(read.version, 1);
         assert_eq!(read.filters, FilterChain::default());
         assert_eq!(read.metadata, JobMetadata::default());
+        assert!(
+            !read.metadata.without_rustview,
+            "rows of 0.0.32 and older were saved with RustView"
+        );
         assert!(!read.target.overwrite);
         assert_eq!(read.target.naming, None, "rows of 0.0.12 have no naming");
     }

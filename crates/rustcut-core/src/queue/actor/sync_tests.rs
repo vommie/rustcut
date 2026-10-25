@@ -35,6 +35,7 @@ fn tagged(dir: &Path, stem: &str) -> Box<crate::job::JobSpec> {
         tags: vec![2],
         rating: Some(4),
         source_hash: Some("8f618d1ebd606025257057ee18536e64".into()),
+        without_rustview: false,
     };
     spec
 }
@@ -93,6 +94,76 @@ async fn a_queued_job_gets_a_stub_that_follows_it() {
     })
     .await;
     assert!(fake.media(&b.display().to_string()).is_none());
+}
+
+#[tokio::test]
+async fn a_job_saved_without_rustview_is_never_sent() {
+    // The Tag & Rate panel's "Active" switch was off (user decision Q-P8b): no record, no tags, no source hash, also
+    // when the job is edited, canceled or removed.
+    let dir = tempfile::tempdir().unwrap();
+    let (store, _thread) = spawn_store(Store::open_in_memory().unwrap()).unwrap();
+    let fake = FakeRustView::new();
+    let (queue, _sync) = start(&store, dir.path(), &fake, true);
+    let mut events = queue.events.subscribe();
+    let mut private = spec_in(dir.path(), "private");
+    private.metadata.without_rustview = true;
+    private.metadata.source_hash = Some("0123456789abcdef0123456789abcdef".into());
+    let private = enqueue(&queue, private).await.unwrap();
+    // A job behind it is synced: the sync actor works in id order, so the first one was looked at before.
+    let linked = enqueue(&queue, tagged(dir.path(), "linked")).await.unwrap();
+    wait_for(&mut events, linked, |row| row.sync == SyncState::Synced).await;
+    let metadata = JobMetadata {
+        tags: vec![3],
+        rating: Some(2),
+        source_hash: None,
+        without_rustview: true,
+    };
+    queue
+        .handle
+        .request(|reply| QueueCommand::UpdateMetadata {
+            id: private,
+            metadata,
+            reply,
+        })
+        .await
+        .unwrap()
+        .unwrap();
+    queue.handle.send(QueueCommand::Cancel { ids: vec![private] }).unwrap();
+    wait_for(&mut events, private, |row| row.state == JobState::Canceled).await;
+    queue
+        .handle
+        .request(|reply| QueueCommand::Remove {
+            ids: vec![private],
+            reply,
+        })
+        .await
+        .unwrap()
+        .unwrap();
+    // The linked job is removed after it: once its stub is gone, everything before it was handled.
+    queue
+        .handle
+        .request(|reply| QueueCommand::Remove {
+            ids: vec![linked],
+            reply,
+        })
+        .await
+        .unwrap()
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while !fake.0.lock().media.is_empty() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let calls = fake.calls();
+    assert!(
+        calls
+            .iter()
+            .all(|c| !c.contains("private") && !c.contains("0123456789abcdef")),
+        "{calls:?}"
+    );
+    assert!(calls.iter().any(|c| c.contains("linked")), "{calls:?}");
 }
 
 #[tokio::test]

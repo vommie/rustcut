@@ -23,6 +23,7 @@ impl Wanted {
             tags: self.tags.clone(),
             rating: Some(self.rating),
             source_hash: source_hash.map(str::to_owned),
+            without_rustview: false,
         }
     }
 }
@@ -192,6 +193,7 @@ mod tests {
             tags: tags.to_vec(),
             rating,
             source_hash: Some("8f618d1ebd606025257057ee18536e64".into()),
+            without_rustview: false,
         }
     }
 

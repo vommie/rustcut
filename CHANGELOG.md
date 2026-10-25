@@ -9,6 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The Tag & Rate panel has PyCutRv's switches in a row under the tag history (0.0.33): **Active** (the tag symbol)
+  and **Warn** (the warning triangle). Switched off, Active saves the next jobs without RustView: RustView gets no
+  entry, no tags, no rating and not the video's MD5, also when the job finishes; the panel is dimmed meanwhile and the
+  Job panel says "Saved without RustView". Warn asks before a job without tags or rating is saved. Both are switched
+  off by holding them and stay red while off (a click switches them on again); Active stays off after a restart. When
+  one of them is still off as RustView answers for the first time after a start, a banner says so once, with "Switch
+  on" for both (Settings > Messages > "Tagging switched off at the start" can make it a toast).
+
 - A color picker for the colors of the Settings window (0.0.31, taken over from RustView): the Background row shows
   the color as a swatch; a click opens the picker in its own window over the Settings window (it stays above it),
   with a saturation/value area, hue slider, hex, RGB and HSV fields, a palette, the original color and "Default".
@@ -120,6 +128,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The Tag & Rate panel's layout follows PyCutRv (0.0.33): the rating bar on top, expand and collapse beside the tag
+  filter, and one row under the tag history with the last rating, the last tags, clearing, Active, Warn and hiding
+  branches. The line "RustView connected" is gone: while RustView is unavailable or switched off, its card (the
+  reason, the settings button and Retry) takes the tag tree's place, and the reason is no longer said twice.
+- **Settings:** "Ask when the job has no tags" and "Ask when the job has no rating" are one switch now, "Warn about
+  missing tags or rating" (`warnings.missing_metadata`, the panel's Warn), on when either was on (0.0.33). The
+  settings file is migrated to version 4 (`one-metadata-warning`); the old file is backed up first. "Don't ask again"
+  in the question switches Warn off.
 - New defaults like PyCutRv (0.0.31): a gray background around the video (#444444: a video's own black borders stand
   out), the queue starts paused when jobs are waiting, and Save without sections takes the marked range or the whole
   video. A `config.toml` that already holds these settings keeps its values (change them in the Settings window).
@@ -515,6 +531,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The status line no longer keeps "Not saved: …" of an earlier attempt after the job was saved (0.0.33).
 - "Render Again" of a finished job failed at once ("exists already and overwriting was not chosen") (0.0.31): the job
   renders again and replaces its own output once the new render is verified (a failed or canceled job still never
   overwrites a file).

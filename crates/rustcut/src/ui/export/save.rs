@@ -130,7 +130,15 @@ impl ExportBridge {
             .as_deref()
             .and_then(source_summary)
             .or_else(|| edited.as_ref().and_then(|e| e.spec.source_info));
-        let (tags, rating) = self.tags.upgrade().map(|t| t.draft_metadata()).unwrap_or_default();
+        // The Tag & Rate panel's "Active" switch is off: RustView learns nothing of this job (user decision Q-P8b).
+        let panel = self.tags.upgrade();
+        let without_rustview = panel.as_ref().is_some_and(|t| !t.active());
+        let (tags, rating) = if without_rustview {
+            (Vec::new(), None)
+        } else {
+            panel.map(|t| t.draft_metadata()).unwrap_or_default()
+        };
+        let source_hash = source_hash.filter(|_| !without_rustview);
         let facts = JobFacts::new(&profile, sections.len(), sections.total_duration());
         let st = self.state.borrow();
         let folder = st.target_folder().ok_or("Choose a target folder.")?;
@@ -157,6 +165,7 @@ impl ExportBridge {
                 tags,
                 rating,
                 source_hash,
+                without_rustview,
             },
         };
         Ok(Draft {
@@ -281,6 +290,7 @@ impl ExportBridge {
         let counter = outcome.counter;
         let source = spec.source.clone();
         let with_hash = spec.metadata.source_hash.is_some();
+        let without_rustview = spec.metadata.without_rustview;
         let (tags, rating) = (spec.metadata.tags.clone(), spec.metadata.rating);
         let handle = queue.handle().clone();
         let remove = outcome.remove;
@@ -308,11 +318,14 @@ impl ExportBridge {
             bridge.saving.set(false);
             match result {
                 Ok(id) => {
-                    if let Some(media) = bridge.media.upgrade() {
-                        media.job_saved(&source, with_hash);
-                    }
-                    if let Some(panel) = bridge.tags.upgrade() {
-                        panel.job_saved(&tags, rating);
+                    // Saved without RustView: no late hash registration, and the panel's choice stays for later.
+                    if !without_rustview {
+                        if let Some(media) = bridge.media.upgrade() {
+                            media.job_saved(&source, with_hash);
+                        }
+                        if let Some(panel) = bridge.tags.upgrade() {
+                            panel.job_saved(&tags, rating);
+                        }
                     }
                     bridge.saved(id, &file, counter);
                     // A new job made while another one was edited ends the editing (that job stays as it was).
@@ -342,6 +355,8 @@ impl ExportBridge {
         }
         notices::clear_kind(Kind::SaveRefused);
         notices::clear_kind(Kind::SaveFailed);
+        // "Not saved" of an earlier attempt must not stay in the status line (found in the P8b audit).
+        notices::clear_kind(Kind::SaveCanceled);
         Self::tell(Notice::new(Kind::JobQueued, format!("Job {id} queued")).detail(file));
     }
 

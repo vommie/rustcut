@@ -125,6 +125,7 @@ async fn the_sync_actor_keeps_a_real_rustview_library_in_step() {
         tags: tags.clone(),
         rating: Some(4),
         source_hash: Some(HASH.into()),
+        without_rustview: false,
     };
 
     // 1. Queued: a pending stub with RustCut as its source and the source hash; the hash is in the hash list.

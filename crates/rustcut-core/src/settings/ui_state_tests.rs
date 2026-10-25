@@ -32,9 +32,14 @@ fn the_tag_panel_round_trips_is_sanitized_and_old_files_load() {
             history_collapsed: true,
             history_height: 120,
             hidden: vec![9],
+            shown: vec![11],
             locked: vec![3],
             last_tags: vec![3, 5],
             last_rating: Some(4),
+            active: false,
+            filter_collapsed: vec![1],
+            filter_width: 400,
+            filter_height: 600,
         },
         ..UiState::default()
     };
@@ -49,7 +54,9 @@ fn the_tag_panel_round_trips_is_sanitized_and_old_files_load() {
     bad.tags.locked = vec![4, 4, 2];
     bad.tags.history_height = 9;
     bad.tags.last_rating = Some(9);
-    assert_eq!(bad.sanitize().len(), 3);
+    bad.tags.filter_width = 10;
+    assert_eq!(bad.sanitize().len(), 4);
+    assert_eq!(bad.tags.filter_width, 260);
     assert_eq!(bad.tags.history.len(), TagPanelState::HISTORY_MAX);
     assert_eq!(bad.tags.locked, vec![4, 2]);
     assert_eq!((bad.tags.history_height, bad.tags.last_rating), (40, None));
@@ -64,6 +71,16 @@ fn the_tag_panel_round_trips_is_sanitized_and_old_files_load() {
         let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
         assert_eq!((read.timeline.zoom, read.tags.clone()), (4.0, TagPanelState::default()));
     }
+    // A `[tags]` of 0.0.32 has no "Active" switch, no shown tags and no filter window: active, nothing shown, defaults.
+    std::fs::write(
+        dir.path().join("ui-state.toml"),
+        "version = 1\n[tags]\nhidden = [3]\nlocked = [2]\n",
+    )
+    .unwrap();
+    let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+    assert!(read.tags.active && read.tags.shown.is_empty());
+    assert_eq!((read.tags.hidden.clone(), read.tags.locked.clone()), (vec![3], vec![2]));
+    assert_eq!((read.tags.filter_width, read.tags.filter_height), (380, 560));
 }
 
 #[test]

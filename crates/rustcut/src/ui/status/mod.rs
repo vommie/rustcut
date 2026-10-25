@@ -12,3 +12,10 @@ pub(crate) fn show(window: &MainWindow, level: Level, message: &str) {
     status.set_level(level.index());
     status.set_message(message.into());
 }
+
+/// Empties the status message: what it said is over (UI thread; the notice center's `clear`).
+pub(crate) fn clear(window: &MainWindow) {
+    let status = window.global::<Status<'_>>();
+    status.set_level(Level::Info.index());
+    status.set_message(slint::SharedString::new());
+}

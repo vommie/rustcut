@@ -78,7 +78,8 @@ pub struct Extras<'a> {
 /// Every section of the Job panel for `row` and its `spec` (`None` while it is read, or when this version cannot read
 /// it).
 pub fn details(row: &JobSummary, spec: Option<&JobSpec>, extras: &Extras<'_>) -> Vec<DetailSection> {
-    let mut sections = vec![job_section(row)];
+    let without_rustview = spec.is_some_and(|s| s.metadata.without_rustview);
+    let mut sections = vec![job_section(row, without_rustview)];
     let Some(spec) = spec else {
         return sections;
     };
@@ -91,7 +92,7 @@ pub fn details(row: &JobSummary, spec: Option<&JobSpec>, extras: &Extras<'_>) ->
     sections
 }
 
-fn job_section(row: &JobSummary) -> DetailSection {
+fn job_section(row: &JobSummary, without_rustview: bool) -> DetailSection {
     let mut rows = vec![DetailRow::new("State", title(row.state.kind()))];
     if let JobState::Failed { reason } = &row.state {
         rows.push(DetailRow {
@@ -120,6 +121,8 @@ fn job_section(row: &JobSummary) -> DetailSection {
         rows.push(DetailRow::new("Ended", value));
     }
     let (sync, tone) = match &row.sync {
+        // The Tag & Rate panel's "Active" switch was off (user decision Q-P8b).
+        _ if without_rustview => ("Saved without RustView".to_owned(), Tone::Muted),
         SyncState::NotSynced => ("Not written".to_owned(), Tone::Muted),
         SyncState::Pending => ("Waiting to be written".to_owned(), Tone::Muted),
         SyncState::Synced => ("Written".to_owned(), Tone::Normal),
@@ -410,6 +413,7 @@ mod tests {
                 tags: vec![3, 4],
                 rating: Some(4),
                 source_hash: None,
+                without_rustview: false,
             },
         }
     }

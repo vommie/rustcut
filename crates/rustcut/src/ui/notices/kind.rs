@@ -230,6 +230,10 @@ kinds! {
         critical false, ("Tags and rating of \"Clip\" updated", "");
     TagsFailed = "tags_failed", "Tags not changed", Tags, Error, Toast, EVENT, desktop true, critical false,
         ("The job's tags were not changed", "RustView unavailable: not installed");
+    /// At the start, once RustView answers for the first time: "Active" or "Warn" of the Tag & Rate panel is still
+    /// off from an earlier run (user decision Q-P8b: a banner by default, or a toast), with a button that switches both on.
+    TaggingOff = "tagging_off", "Tagging switched off at the start", Tags, Warning, Banner, LOUD, desktop false,
+        critical false, ("Tagging is off", "Jobs are saved without RustView. Switched off in an earlier run.");
     LogCopied = "log_copied", "Log copied", Logs, Success, Toast, EVENT, desktop false, critical false,
         ("143 log lines copied", "");
     ClipboardFailed = "clipboard_failed", "Clipboard unusable", Logs, Warning, Toast, EVENT, desktop false,

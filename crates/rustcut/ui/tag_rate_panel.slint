@@ -1,8 +1,9 @@
-// The Tag & Rate panel (M3.2): RustCut's wrapper around RustView's copied components (ADR-10). RustView's `TagPanel`
-// holds a mode toolbar for its library; RustCut's panel is always in assign mode for one job (the next one, or a queued
-// job while it is edited, user decision Q-G3) and holds RustCut's own parts: the connection state of RustView (the one
-// place it is shown, ADR-6) with Retry, the editing banner, and the toolbar (last tags, last rating, clear, expand,
-// collapse, hide branches). Everything comes from the `TagRate` global (src/ui/tags/).
+// The Tag & Rate panel (M3.2, P8b): RustCut's wrapper around RustView's copied components (ADR-10). RustView's
+// `TagPanel` holds a mode toolbar for its library; RustCut's panel is always in assign mode for one job (the next one,
+// or a queued job while it is edited, user decision Q-G3) and holds RustCut's own parts: the editing banner, expand and
+// collapse beside the filter, RustView's state in the tree's place while it is unavailable or off (the one place it is
+// shown, ADR-6), and PyCutRv's row under the history (user decision Q-P8b: last rating, last tags, clear, the "Active"
+// and "Warn" switches, hide branches). Everything comes from the `TagRate` global (src/ui/tags/).
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
@@ -16,55 +17,17 @@ import { TagTreeList } from "tag_tree.slint";
 import { TagHistoryPanel } from "tag_history_panel.slint";
 import { ResizerBar } from "resizer_bar.slint";
 
-/// RustView's state and the Retry button: one slim line while RustView is connected or being reached; while it is
-/// unavailable or switched off a small card with RustView's gray symbol, the reason below it and a button to the
-/// RustView settings (M6.5e, user request Q-N8 #35).
-component ConnectionHeader inherits Rectangle {
-    property <bool> card: TagRate.connection-kind == 2 || TagRate.connection-kind == 3;
-
-    height: root.card ? block.preferred-height : 26px;
+/// RustView's state while it is unavailable or switched off, in the tree's place (user request Q-P8b): RustView's gray
+/// symbol, the state, what it means, a button to the RustView settings (at the option behind the state when there is
+/// one) and Retry. Connecting and connected show nothing: the tree area says "Loading" until the tags arrive.
+component ConnectionCard inherits Rectangle {
     border-radius: 4px;
-    background: Theme.surface-variant;
+    border-width: 1px;
+    border-color: Theme.border;
+    background: Theme.background;
 
-    host := TooltipHost {
-        text: TagRate.connection-tooltip;
-    }
-
-    touch := TouchArea {
-        changed has-hover => {
-            if self.has-hover {
-                host.enter();
-            } else {
-                host.leave();
-            }
-        }
-    }
-
-    if !root.card: HorizontalLayout {
-        padding-left: 6px;
-        padding-right: 2px;
-        spacing: 6px;
-
-        AppIcon {
-            y: (parent.height - self.height) / 2;
-            icon: TagRate.connection-kind == 1 ? IconId.rustview-connected : IconId.rustview-unavailable;
-            size: IconSize.sm;
-            color: TagRate.connection-kind == 1 ? Theme.status-ok : Theme.text-muted;
-        }
-
-        Text {
-            text: TagRate.connection-text;
-            font-size: 11px;
-            color: Theme.text-muted;
-            vertical-alignment: center;
-            horizontal-stretch: 1;
-            overflow: elide;
-        }
-    }
-
-    block := VerticalLayout {
-        visible: root.card;
-        padding: 10px;
+    VerticalLayout {
+        padding: 12px;
         spacing: 6px;
         alignment: center;
 
@@ -87,8 +50,8 @@ component ConnectionHeader inherits Rectangle {
             wrap: word-wrap;
         }
 
-        if TagRate.connection-tooltip != "": Text {
-            text: TagRate.connection-tooltip;
+        if TagRate.connection-detail != "": Text {
+            text: TagRate.connection-detail;
             font-size: 11px;
             color: Theme.text-muted;
             horizontal-alignment: center;
@@ -235,22 +198,24 @@ component LastRatingButton inherits Rectangle {
     }
 }
 
+/// The row under the history (PyCutRv's place, user decision Q-P8b): the last rating, the last tags and clearing on
+/// the left, what the job gets in the middle, the switches on the right.
 component TagToolbar inherits HorizontalLayout {
     spacing: 4px;
     height: 24px;
 
+    LastRatingButton {
+        enabled: TagRate.last-rating >= 0 && (TagRate.active || TagRate.editing-job);
+        rating: Math.max(0, TagRate.last-rating);
+        clicked => { TagRate.apply-last-rating(); }
+    }
+
     IconButton {
         icon: IconId.tags-last;
-        enabled: TagRate.has-last-tags;
+        enabled: TagRate.has-last-tags && (TagRate.active || TagRate.editing-job);
         tooltip: TagRate.has-last-tags ? "Apply the last saved job's tags: " + TagRate.last-tags-tooltip
             : "No job was saved with tags yet";
         clicked => { TagRate.apply-last-tags(); }
-    }
-
-    LastRatingButton {
-        enabled: TagRate.last-rating >= 0;
-        rating: Math.max(0, TagRate.last-rating);
-        clicked => { TagRate.apply-last-rating(); }
     }
 
     IconButton {
@@ -268,25 +233,30 @@ component TagToolbar inherits HorizontalLayout {
             width: 100%;
             text: TagRate.summary;
             font-size: 11px;
-            color: Theme.text-muted;
+            color: TagRate.active || TagRate.editing-job ? Theme.text-muted : Theme.status-corrupt;
             vertical-alignment: center;
             horizontal-alignment: center;
             overflow: elide;
         }
     }
 
+    // On: a hold switches it off (it changes what RustView learns); off: red, a click switches it on (Q-P8).
     IconButton {
-        icon: IconId.tags-expand;
-        enabled: TagRate.has-tree;
-        tooltip: "Expand every branch";
-        clicked => { TagRate.expand-all(); }
+        icon: TagRate.active ? IconId.tagging-on : IconId.tagging-off;
+        alert: !TagRate.active;
+        hold: TagRate.active;
+        tooltip: TagRate.active ? "Active: saved jobs go to RustView with their tags and rating. Switch it off for a video RustView should not learn about."
+            : "Not active: jobs are saved without RustView (no entry, tags, rating or source hash). A click switches it on.";
+        clicked => { TagRate.toggle-active(); }
     }
 
     IconButton {
-        icon: IconId.tags-collapse;
-        enabled: TagRate.has-tree;
-        tooltip: "Collapse every branch";
-        clicked => { TagRate.collapse-all(); }
+        icon: TagRate.warn ? IconId.warn-on : IconId.warn-off;
+        alert: !TagRate.warn;
+        hold: TagRate.warn;
+        tooltip: TagRate.warn ? "Warn: saving asks when the job has no tags or no rating (while Active is on)."
+            : "No warning: jobs without tags or rating are saved without asking. A click switches it on.";
+        clicked => { TagRate.toggle-warn(); }
     }
 
     IconButton {
@@ -315,33 +285,63 @@ export component TagRatePanel inherits Rectangle {
         }
     }
 
-    VerticalLayout {
+    // Not active (and no queued job edited): the job gets nothing of this, so it is dimmed and takes no input.
+    property <bool> closed: !TagRate.active && !TagRate.editing-job;
+
+    layout := VerticalLayout {
         padding: 6px;
         spacing: 6px;
 
-        ConnectionHeader { }
-
         if TagRate.editing-job: EditingBanner { }
 
-        TagToolbar { }
-
         // Always in assign mode for one job (RustView's file selection is RustCut's job).
-        RatingBar {
+        rating := RatingBar {
+            opacity: root.closed ? 0.4 : 1;
             selected-rating <=> TagRate.rating;
             is-assign-mode: true;
             has-selection: true;
             rating-selected(r) => { TagRate.rating-clicked(r); }
         }
 
-        filter := TagSearchFilter {
-            text <=> TagRate.filter-text;
-            is-regex <=> TagRate.filter-regex;
-            placeholder-text: "Filter tags...";
-            search-changed(text) => { TagRate.filter-changed(text); }
-            regex-toggled(r) => { TagRate.filter-regex-toggled(r); }
-            escape-pressed => { Shortcuts.release-focus(); }
-            accepted(text) => { Shortcuts.release-focus(); }
-            changed has-focus => { Shortcuts.editing-changed(self.has-focus); }
+        Rectangle {
+            height: 26px;
+            opacity: root.closed ? 0.4 : 1;
+
+            HorizontalLayout {
+                spacing: 4px;
+
+                // The copied filter fills its parent: a plain rectangle gives it the row's rest.
+                Rectangle {
+                    horizontal-stretch: 1;
+
+                    filter := TagSearchFilter {
+                        text <=> TagRate.filter-text;
+                        is-regex <=> TagRate.filter-regex;
+                        placeholder-text: "Filter tags...";
+                        search-changed(text) => { TagRate.filter-changed(text); }
+                        regex-toggled(r) => { TagRate.filter-regex-toggled(r); }
+                        escape-pressed => { Shortcuts.release-focus(); }
+                        accepted(text) => { Shortcuts.release-focus(); }
+                        changed has-focus => { Shortcuts.editing-changed(self.has-focus); }
+                    }
+                }
+
+                IconButton {
+                    y: 1px;
+                    icon: IconId.tags-expand;
+                    enabled: TagRate.has-tree;
+                    tooltip: "Expand every branch";
+                    clicked => { TagRate.expand-all(); }
+                }
+
+                IconButton {
+                    y: 1px;
+                    icon: IconId.tags-collapse;
+                    enabled: TagRate.has-tree;
+                    tooltip: "Collapse every branch";
+                    clicked => { TagRate.collapse-all(); }
+                }
+            }
         }
 
         if TagRate.filter-invalid: Text {
@@ -358,21 +358,29 @@ export component TagRatePanel inherits Rectangle {
             wrap: word-wrap;
         }
 
-        // The tree, and what the area says while it has no rows (no tree yet, no tags, no match, all hidden).
+        // The tree, RustView's state in its place while RustView is unavailable or switched off (Q-P8b), and what
+        // the area says while it has no rows (no tree yet, no tags, no match, all hidden).
         // The copied list reports its height only when it changes, and it is made only when the tree arrives, after
         // its height was laid out: the columns were split for no height and every tag got a column of its own (user
         // report Q-N5). The area, which always exists, reports the height instead; the list's own report stays.
         tree-area := Rectangle {
             vertical-stretch: 1;
+            property <bool> card: TagRate.connection-kind == 2 || TagRate.connection-kind == 3;
             changed height => {
                 if self.height > 10px {
                     TagRate.tree-height-changed(self.height);
                 }
             }
 
-            if TagRate.has-tree: TagTreeList {
+            if self.card: ConnectionCard {
                 width: 100%;
                 height: 100%;
+            }
+
+            if !self.card && TagRate.has-tree: TagTreeList {
+                width: 100%;
+                height: 100%;
+                opacity: root.closed ? 0.4 : 1;
                 columns: TagRate.columns;
                 is-assign-mode: true;
                 has-selection: true;
@@ -382,14 +390,14 @@ export component TagRatePanel inherits Rectangle {
                 tag-context-menu(id, x, y) => { TagRate.tag-right-clicked(id); }
             }
 
-            if !TagRate.has-tree: Rectangle {
+            if !self.card && !TagRate.has-tree: Rectangle {
                 border-radius: 4px;
                 border-width: 1px;
                 border-color: Theme.border;
                 background: Theme.background;
             }
 
-            if !TagRate.has-tree || TagRate.columns.length == 0: Text {
+            if !self.card && (!TagRate.has-tree || TagRate.columns.length == 0): Text {
                 x: 12px;
                 width: parent.width - 24px;
                 text: TagRate.empty-text;
@@ -420,6 +428,7 @@ export component TagRatePanel inherits Rectangle {
 
         history-panel := TagHistoryPanel {
             vertical-stretch: 0;
+            opacity: root.closed ? 0.4 : 1;
             body-height: TagRate.history-height;
             is-dragging: history-resizer.is-dragging;
             rows: TagRate.history-rows;
@@ -429,6 +438,33 @@ export component TagRatePanel inherits Rectangle {
             collapsed-toggled(c) => { TagRate.history-collapsed-changed(c); }
             tag-clicked(id) => { TagRate.history-tag-clicked(id); }
             geometry-changed(w) => { TagRate.history-width-changed(w); }
+        }
+
+        TagToolbar { }
+    }
+
+    // Over the dimmed part (rating, filter, tree, history; not the switches below): no click, no hover, no wheel
+    // reaches it, and its tooltip says why.
+    if root.closed: Rectangle {
+        x: layout.x + rating.x;
+        y: layout.y + rating.y;
+        width: rating.width;
+        height: history-panel.y + history-panel.height - rating.y;
+
+        closed-host := TooltipHost {
+            text: "Active is off: jobs are saved without RustView. The tag button at the bottom switches it on.";
+        }
+
+        TouchArea {
+            mouse-cursor: MouseCursor.not-allowed;
+            scroll-event(event) => { reject }
+            changed has-hover => {
+                if self.has-hover {
+                    closed-host.enter();
+                } else {
+                    closed-host.leave();
+                }
+            }
         }
     }
 }

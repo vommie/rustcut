@@ -1,7 +1,8 @@
-//! The question before a job without tags or rating is saved (`warnings.no_tags` / `warnings.no_rating`; user decision
-//! Q-G1): one modal dialog that names what is missing, offers the rating bar (a click saves with that rating), "Save
-//! without", "Back to tagging" and "Don't ask again". Asked only while the RustView link is on; missing tags only when
-//! RustView has tags to choose from.
+//! The question before a job without tags or rating is saved (`warnings.missing_metadata`, the Tag & Rate panel's
+//! "Warn" switch; user decisions Q-G1, Q-P8b): one modal dialog that names what is missing, offers the rating bar (a
+//! click saves with that rating), "Save without", "Back to tagging" and "Don't ask again" (switches "Warn" off). Asked
+//! only while the RustView link and the panel's "Active" switch are on; missing tags only when RustView has tags to
+//! choose from.
 
 use std::rc::Rc;
 
@@ -44,13 +45,10 @@ impl Missing {
         }
     }
 
-    /// The warnings "Don't ask again" switches off: the ones that asked.
+    /// "Don't ask again" switches the one warning off (the panel's "Warn" turns red).
     pub fn silence(self, warnings: &mut WarningSettings) {
-        if self.tags {
-            warnings.no_tags = false;
-        }
-        if self.rating {
-            warnings.no_rating = false;
+        if self.any() {
+            warnings.missing_metadata = false;
         }
     }
 }
@@ -60,6 +58,8 @@ impl Missing {
 pub struct MetadataFacts {
     /// The RustView link is on.
     pub enabled: bool,
+    /// The Tag & Rate panel's "Active" switch is on (off: the job is saved without RustView, Q-P8b).
+    pub active: bool,
     /// RustView offered at least one tag.
     pub can_choose_tags: bool,
     pub has_tags: bool,
@@ -67,12 +67,12 @@ pub struct MetadataFacts {
 }
 
 pub fn missing(facts: MetadataFacts, warnings: &WarningSettings) -> Missing {
-    if !facts.enabled {
+    if !facts.enabled || !facts.active || !warnings.missing_metadata {
         return Missing::default();
     }
     Missing {
-        tags: warnings.no_tags && facts.can_choose_tags && !facts.has_tags,
-        rating: warnings.no_rating && !facts.has_rating,
+        tags: facts.can_choose_tags && !facts.has_tags,
+        rating: !facts.has_rating,
     }
 }
 
@@ -98,6 +98,7 @@ impl ExportBridge {
         let tags = self.tags.upgrade();
         let facts = MetadataFacts {
             enabled: tags.as_ref().is_some_and(|t| t.enabled()),
+            active: !draft.spec.metadata.without_rustview,
             can_choose_tags: tags.as_ref().is_some_and(|t| t.can_choose_tags()),
             has_tags: !draft.spec.metadata.tags.is_empty(),
             has_rating: draft.spec.metadata.rating.is_some(),
@@ -214,6 +215,7 @@ mod tests {
     fn facts(has_tags: bool, has_rating: bool) -> MetadataFacts {
         MetadataFacts {
             enabled: true,
+            active: true,
             can_choose_tags: true,
             has_tags,
             has_rating,
@@ -251,20 +253,22 @@ mod tests {
             ..facts(false, true)
         };
         assert!(!missing(no_tree, &on).any(), "no tags to choose: not asked about tags");
-        let mut quiet = WarningSettings { no_rating: false, ..on };
-        assert_eq!(
-            missing(facts(false, false), &quiet),
-            Missing {
-                tags: true,
-                rating: false
-            }
+        let inactive = MetadataFacts {
+            active: false,
+            ..facts(false, false)
+        };
+        assert!(
+            !missing(inactive, &on).any(),
+            "nothing is asked while the panel's Active switch is off"
         );
+        let mut quiet = on.clone();
         Missing {
             tags: true,
             rating: false,
         }
         .silence(&mut quiet);
-        assert!(!quiet.no_tags && !quiet.no_rating && quiet.target_exists);
+        assert!(!quiet.missing_metadata && quiet.target_exists);
+        assert!(!missing(facts(false, false), &quiet).any(), "Warn off asks nothing");
     }
 
     #[test]
