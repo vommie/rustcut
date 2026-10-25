@@ -147,6 +147,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The Codecs panel, your UI review round 1 (0.0.44): the profile choice takes the whole row up to its buttons, and the
+  audio bit rate is a slider over the bit rates the audio codec offers (Opus 48 to 512 kbit/s, AAC, MP3 and Vorbis
+  64 to 320 kbit/s), with the value under it and "(default)" at the codec's default; it is hidden for FLAC and copied
+  audio as before. The same slider is in Settings > Render Profiles. A profile that names no bit rate keeps the
+  codec's default, and a bit rate the slider does not offer (written by hand) stands at the nearest step and says
+  "outside the slider" until the slider is moved.
 - The Tag & Rate panel, your UI review round 1 (0.0.43): without an open video (and while no queued job's tags are
   edited) the rating, tagging in the tree, the history's tags and the last rating and tags are dimmed and locked;
   filtering, opening and folding branches, folding the history, clearing, the switches, the eye and the tag filter

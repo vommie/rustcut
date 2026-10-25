@@ -28,7 +28,7 @@ mod validate;
 mod verify;
 
 pub use args::{ArgsError, EncodeContext, VideoPass, audio_args, profile_args, video_args};
-pub use audio::{AudioCodec, AudioSpec};
+pub use audio::{AudioCodec, AudioSpec, BitrateSlider};
 pub use audio_copy::{AudioCopyProblem, audio_copy_problem};
 pub use builtin::{DEFAULT_PROFILE_ID, builtin_profiles, is_builtin_id};
 pub use capability::{

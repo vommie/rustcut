@@ -30,6 +30,44 @@ pub struct AudioSpec {
     pub required_sample_rate: Option<u32>,
 }
 
+/// Where a bit rate stands on the Codecs panel's slider (P9.10, D-P9i): one step per bit rate the codec offers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BitrateSlider {
+    /// The last position (one fewer than the offered bit rates).
+    pub steps: u16,
+    pub position: u16,
+    /// The bit rate the encoder gets (the codec's default when none is set).
+    pub kbps: u32,
+    /// The bit rate is one of the offered ones (any other stands at the nearest step).
+    pub inside: bool,
+}
+
+impl AudioSpec {
+    /// The slider for bit rate `kbps` (`None` = the codec's default); `None` for codecs without bit rates.
+    pub fn bitrate_slider(&self, kbps: Option<u32>) -> Option<BitrateSlider> {
+        let kbps = kbps.or(self.default_bitrate)?;
+        let last = self.bitrates.len().checked_sub(1)?;
+        let (index, nearest) = self
+            .bitrates
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, offered)| offered.abs_diff(kbps))?;
+        Some(BitrateSlider {
+            steps: u16::try_from(last).unwrap_or(u16::MAX),
+            position: u16::try_from(index).unwrap_or(u16::MAX),
+            kbps,
+            inside: *nearest == kbps,
+        })
+    }
+
+    /// The bit rate at slider `position` (clamped to the slider); `None` for codecs without bit rates. Always the
+    /// number, also at the default's step, as the built-in profiles store it (a step and back is no change).
+    pub fn bitrate_at(&self, position: u16) -> Option<u32> {
+        let last = self.bitrates.len().checked_sub(1)?;
+        self.bitrates.get(usize::from(position).min(last)).copied()
+    }
+}
+
 const LOSSY_RATES: &[u32] = &[64, 96, 128, 160, 192, 256, 320];
 
 const SPECS: [AudioSpec; 6] = [
@@ -121,5 +159,39 @@ mod tests {
             Some(128),
             "PyCutRv default"
         );
+    }
+
+    #[test]
+    fn the_bit_rate_slider_steps_through_the_offered_rates() {
+        let aac = AudioCodec::Aac.spec();
+        let default = aac.bitrate_slider(None).unwrap();
+        assert_eq!(
+            (default.steps, default.position, default.kbps, default.inside),
+            (6, 4, 192, true)
+        );
+        assert_eq!(aac.bitrate_at(4), Some(192), "the default's step is the number");
+        assert_eq!(
+            (aac.bitrate_at(0), aac.bitrate_at(6), aac.bitrate_at(99)),
+            (Some(64), Some(320), Some(320))
+        );
+        let odd = aac.bitrate_slider(Some(100)).unwrap();
+        assert_eq!(
+            (odd.position, odd.kbps, odd.inside),
+            (1, 100, false),
+            "the nearest step, marked outside"
+        );
+        for codec in AudioCodec::ALL {
+            let spec = codec.spec();
+            assert_eq!(spec.bitrate_slider(None).is_some(), codec.takes_bitrate());
+            for (i, &kbps) in spec.bitrates.iter().enumerate() {
+                let at = u16::try_from(i).unwrap();
+                assert_eq!(spec.bitrate_at(at), Some(kbps));
+                assert_eq!(
+                    spec.bitrate_slider(Some(kbps)).map(|s| (s.position, s.inside)),
+                    Some((at, true))
+                );
+            }
+        }
+        assert_eq!(AudioCodec::Flac.spec().bitrate_at(0), None);
     }
 }

@@ -48,9 +48,9 @@ pub(super) fn connect(bridge: &Rc<RenderSettingsBridge>, window: &MainWindow) {
         }
     });
     let this = Rc::downgrade(bridge);
-    rs.on_slide(move |_key, position| {
-        if let (Some(b), Ok(position)) = (this.upgrade(), u16::try_from(position)) {
-            let changed = b.state.borrow_mut().slide(position);
+    rs.on_slide(move |key, position| {
+        if let (Some(b), Some(row), Ok(position)) = (this.upgrade(), Row::from_key(&key), u16::try_from(position)) {
+            let changed = b.state.borrow_mut().slide(row, position);
             b.edited(changed);
         }
     });

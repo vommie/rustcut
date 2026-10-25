@@ -1,7 +1,9 @@
 //! What the Render Settings panel shows, computed from its state (pure, tested); the bridge copies it into the
 //! `RenderSettings` global. Rows exist only for options the current encoder has.
 
-use rustcut_core::render::{AudioCodec, OptionId, ProfileField, ProfileIssue, RateControl, Severity, VideoEncoder};
+use rustcut_core::render::{
+    AudioCodec, BitrateSlider, OptionId, ProfileField, ProfileIssue, RateControl, Severity, VideoEncoder,
+};
 
 use super::state::{CheckStatus, PanelState, Row, params_text};
 
@@ -250,6 +252,14 @@ fn row_view(state: &PanelState, row: Row, issues: &[ProfileIssue]) -> Option<Row
                 view.text = format!("{} (see Expert)", rate_summary(v.encoder, v.rate_control));
             }
         }
+        Row::AudioBitrate => {
+            if let Some(slider) = p.audio.codec.spec().bitrate_slider(p.audio.bitrate_kbps) {
+                view.kind = RowKind::Slider;
+                view.steps = slider.steps;
+                view.position = slider.position;
+                view.text = bitrate_caption(slider, p.audio.codec.spec().default_bitrate == Some(slider.kbps));
+            }
+        }
         Row::Speed => view.enabled = spec.speeds.is_some(),
         Row::AudioSampleRate if p.audio.codec == AudioCodec::Opus => {
             view.enabled = false;
@@ -309,6 +319,13 @@ fn mark_of(issues: &[ProfileIssue], field: ProfileField) -> Mark {
         })
         .max()
         .unwrap_or_default()
+}
+
+/// The audio bit rate slider's caption: "128 kbit/s (default)", "100 kbit/s, outside the slider".
+fn bitrate_caption(slider: BitrateSlider, default: bool) -> String {
+    let default = if default { " (default)" } else { "" };
+    let outside = if slider.inside { "" } else { ", outside the slider" };
+    format!("{} kbit/s{default}{outside}", slider.kbps)
 }
 
 /// A short text of a rate control that is not constant quality.
@@ -405,5 +422,34 @@ mod tests {
             (value.label.as_str(), value.text.as_str(), value.unit),
             ("Bit rate", "4000", "kbit/s")
         );
+    }
+
+    #[test]
+    fn the_audio_bit_rate_is_a_slider_over_the_codecs_rates() {
+        let mut st = state();
+        let bitrate = |st: &PanelState| panel(st).audio.into_iter().find(|r| r.row == Row::AudioBitrate);
+        let row = bitrate(&st).unwrap();
+        assert_eq!(row.kind, RowKind::Slider);
+        assert_eq!(
+            (row.steps, row.position, row.text.as_str()),
+            (8, 3, "128 kbit/s (default)")
+        );
+        assert!(st.slide(Row::AudioBitrate, 4));
+        let row = bitrate(&st).unwrap();
+        assert_eq!((row.position, row.text.as_str()), (4, "160 kbit/s"));
+        assert_eq!(st.profile().audio.bitrate_kbps, Some(160));
+        assert!(st.slide(Row::AudioBitrate, 3), "back on the default's step");
+        assert_eq!(st.profile().audio.bitrate_kbps, Some(128));
+        assert!(!panel(&st).modified, "a step and back is no change");
+        st.selection.working.audio.bitrate_kbps = None;
+        assert_eq!(
+            bitrate(&st).unwrap().text,
+            "128 kbit/s (default)",
+            "no bit rate = the codec's default"
+        );
+        st.selection.working.audio.bitrate_kbps = Some(100);
+        assert_eq!(bitrate(&st).unwrap().text, "100 kbit/s, outside the slider");
+        st.selection.working.audio.codec = AudioCodec::Flac;
+        assert!(bitrate(&st).is_none(), "no bit rate for lossless audio");
     }
 }
