@@ -182,7 +182,7 @@ mod tests {
             ..ExportPanelState::default()
         };
         let mut st = ExportState::new(&ExportSettings::default(), &panel);
-        st.file_opened(std::path::Path::new("/in/Holiday.mp4"));
+        st.file_opened(Path::new("/in/Holiday.mp4"));
         st.set_counter(4);
         (
             st,

@@ -69,8 +69,11 @@ pub struct BubbleCenter {
     opacity: Cell<f32>,
     /// Each bubble's buttons as one model that lives as long as they stay the same: the layer re-publishes every
     /// epoch, and a new model would make its buttons again under a resting pointer (no hover, no tooltip).
-    button_models: RefCell<HashMap<u64, (Vec<BubbleButton>, ModelRc<BubbleButtonView>)>>,
+    button_models: RefCell<ButtonModels>,
 }
+
+/// Per bubble id: its buttons and their model.
+type ButtonModels = HashMap<u64, (Vec<BubbleButton>, ModelRc<BubbleButtonView>)>;
 
 impl BubbleCenter {
     pub fn new(opacity_percent: u8) -> Rc<Self> {
@@ -303,11 +306,7 @@ impl BubbleCenter {
 }
 
 /// The buttons' model of bubble `id`: the same one while they stay the same.
-fn button_model(
-    models: &mut HashMap<u64, (Vec<BubbleButton>, ModelRc<BubbleButtonView>)>,
-    id: u64,
-    buttons: &[BubbleButton],
-) -> ModelRc<BubbleButtonView> {
+fn button_model(models: &mut ButtonModels, id: u64, buttons: &[BubbleButton]) -> ModelRc<BubbleButtonView> {
     if let Some((known, model)) = models.get(&id)
         && known.as_slice() == buttons
     {
