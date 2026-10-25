@@ -154,6 +154,11 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
     {
         tags.set_history_size(after.rustview.tag_history_size);
     }
+    if before.warnings.missing_metadata != after.warnings.missing_metadata
+        && let Some(tags) = p.tags.upgrade()
+    {
+        tags.set_warn(after.warnings.missing_metadata);
+    }
     if link(&before.rustview) != link(&after.rustview)
         && p.sync
             .send(SyncCommand::Reconfigure {

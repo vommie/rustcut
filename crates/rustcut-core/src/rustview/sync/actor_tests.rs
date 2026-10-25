@@ -37,6 +37,7 @@ fn metadata(tags: &[u32], rating: Option<u8>) -> JobMetadata {
         tags: tags.to_vec(),
         rating,
         source_hash: Some(HASH.into()),
+        without_rustview: false,
     }
 }
 

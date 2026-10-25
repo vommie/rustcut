@@ -79,6 +79,8 @@ pub struct NoticeCenter {
     banner_runs: RefCell<HashMap<String, Runs>>,
     /// The title of keyed messages that show nowhere in the window (the history notes only a new title).
     quiet_keys: RefCell<HashMap<String, String>>,
+    /// The key (or kind id) of the message the status line shows: clearing it empties the line.
+    status_key: RefCell<Option<String>>,
     desktop_runs: RefCell<HashMap<u64, Rc<dyn Fn()>>>,
     next_desktop: Cell<u64>,
     toast_model: Rc<VecModel<ToastView>>,
@@ -114,6 +116,7 @@ impl NoticeCenter {
             toast_runs: RefCell::default(),
             banner_runs: RefCell::default(),
             quiet_keys: RefCell::default(),
+            status_key: RefCell::default(),
             desktop_runs: RefCell::default(),
             next_desktop: Cell::new(0),
             toast_model: Rc::new(VecModel::default()),
@@ -183,6 +186,7 @@ impl NoticeCenter {
                 if let Some(window) = self.window.upgrade() {
                     status::show(&window, notice.level, &notice.text());
                 }
+                *self.status_key.borrow_mut() = Some(bubble_key());
                 self.quiet_fresh(&notice)
             }
             NoticePlace::Bubble | NoticePlace::Dialog | NoticePlace::Nothing => self.quiet_fresh(&notice),
@@ -251,6 +255,12 @@ impl NoticeCenter {
         let banner = self.banners.borrow_mut().clear(key);
         self.banner_runs.borrow_mut().remove(key);
         self.quiet_keys.borrow_mut().remove(key);
+        if self.status_key.borrow().as_deref() == Some(key) {
+            self.status_key.borrow_mut().take();
+            if let Some(window) = self.window.upgrade() {
+                status::clear(&window);
+            }
+        }
         if toast {
             self.publish_toasts();
         }

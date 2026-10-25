@@ -144,6 +144,10 @@ tags_expand = { tabler = "fold-down", doc = "Expand every tag branch" }
 tags_collapse = { tabler = "fold-up", doc = "Collapse every tag branch" }
 tags_hide = { tabler = "eye-off", doc = "Choose the tag branches to hide" }
 job_tags = { tabler = "tag", doc = "Edit the tags and the rating of the job" }
+tagging_on = { tabler = "tag", doc = "Active: saved jobs go to RustView (held to switch off)" }
+tagging_off = { tabler = "tag-off", doc = "Not active: jobs are saved without RustView" }
+warn_on = { tabler = "alert-triangle", doc = "Warn about missing tags or rating (held to switch off)" }
+warn_off = { tabler = "alert-triangle-off", doc = "No warning about missing tags or rating" }
 
 # Queue panel, Job panel, Logs panel (M4.1)
 panel_job = { tabler = "file-info", doc = "Job panel (the inspector of the queue's current job)" }

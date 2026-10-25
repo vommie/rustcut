@@ -184,10 +184,8 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     );
     let tags = TagsBridge::install(
         &main,
-        &ui,
-        runtime.handle().clone(),
-        &sync,
-        queue_service.handle.clone(),
+        (&ui, runtime.handle().clone(), &sync, queue_service.handle.clone()),
+        writer.clone(),
         loaded.settings.rustview.enabled,
         &loaded.ui_state.tags,
     );

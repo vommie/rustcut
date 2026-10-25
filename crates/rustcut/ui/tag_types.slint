@@ -37,9 +37,10 @@ export struct TagHistoryRowModel {
 }
 
 export global TagRate {
-    // The header: RustView's connection state (the one place it is shown, ADR-6).
+    // RustView's connection state (the one place it is shown, ADR-6): while RustView is unavailable or switched off a
+    // card takes the tree's place (user request Q-P8b); connecting and connected need no words.
     in property <string> connection-text;
-    in property <string> connection-tooltip;
+    in property <string> connection-detail;
     /// 0 = unknown/checking, 1 = connected, 2 = unavailable, 3 = switched off.
     in property <int> connection-kind;
     in property <bool> can-retry;
@@ -60,6 +61,11 @@ export global TagRate {
     /// -1 = no job was saved with a rating yet.
     in property <int> last-rating: -1;
     in property <bool> can-clear;
+    /// The "Active" switch (user decision Q-P8b): off = jobs are saved without RustView; red while off, held to switch
+    /// off. The tree, the rating and the history are dimmed while it is off (unless a queued job's entry is edited).
+    in property <bool> active: true;
+    /// The "Warn" switch = `warnings.missing_metadata`: red while off, held to switch off.
+    in property <bool> warn: true;
     /// The tree was loaded at least once (tags can be chosen).
     in property <bool> has-tree;
     in property <string> empty-text;
@@ -101,4 +107,6 @@ export global TagRate {
     callback expand-all();
     callback collapse-all();
     callback toggle-hide-mode();
+    callback toggle-active();
+    callback toggle-warn();
 }

@@ -114,6 +114,7 @@ mod tests {
                 tags: vec![2, 7],
                 rating: Some(3),
                 source_hash: None,
+                without_rustview: false,
             },
         }
     }
@@ -179,6 +180,7 @@ mod tests {
                 tags: tag_ids,
                 rating,
                 source_hash: None,
+                without_rustview: false,
             },
         };
         assert_eq!(saved, job);

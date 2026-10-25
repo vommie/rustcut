@@ -330,8 +330,9 @@ pub struct WarningSettings {
     pub target_queued: bool,
     /// Show the files in the target folder whose names start with the typed name (a hint, never a question).
     pub base_name_in_folder: bool,
-    pub no_tags: bool,
-    pub no_rating: bool,
+    /// Ask before a job without tags or rating is saved: the Tag & Rate panel's "Warn" switch (one switch since
+    /// settings version 4, user decision Q-P8b; it asks only while the panel's "Active" switch is on).
+    pub missing_metadata: bool,
 }
 
 impl Default for WarningSettings {
@@ -340,8 +341,7 @@ impl Default for WarningSettings {
             target_exists: true,
             target_queued: true,
             base_name_in_folder: true,
-            no_tags: true,
-            no_rating: true,
+            missing_metadata: true,
         }
     }
 }
@@ -443,9 +443,30 @@ fn migrate_job_load(table: &mut toml::Table) -> Result<(), String> {
     Ok(())
 }
 
+/// Settings version 3 -> 4 (P8b, user decision Q-P8b): `warnings.no_tags` and `warnings.no_rating` became one switch,
+/// `warnings.missing_metadata` (the Tag & Rate panel's "Warn" button). It stays on when either question was on (a key
+/// that is not written was on, its default), so no warning the user kept is lost.
+fn migrate_metadata_warning(table: &mut toml::Table) -> Result<(), String> {
+    let Some(warnings) = table.get_mut("warnings") else {
+        return Ok(());
+    };
+    let warnings = warnings
+        .as_table_mut()
+        .ok_or_else(|| "warnings is not a table".to_owned())?;
+    let tags = warnings.remove("no_tags");
+    let rating = warnings.remove("no_rating");
+    if tags.is_none() && rating.is_none() {
+        return Ok(());
+    }
+    let on = |value: Option<toml::Value>| value.and_then(|v| v.as_bool()).unwrap_or(true);
+    let wanted = on(tags) || on(rating);
+    warnings.insert("missing_metadata".to_owned(), toml::Value::Boolean(wanted));
+    Ok(())
+}
+
 impl VersionedFile for Settings {
     const FILE_NAME: &'static str = "config.toml";
-    const VERSION: u32 = 3;
+    const VERSION: u32 = 4;
 
     fn steps() -> &'static [MigrationStep] {
         &[
@@ -458,6 +479,11 @@ impl VersionedFile for Settings {
                 from: 2,
                 reason: "job-load-without-draft",
                 apply: migrate_job_load,
+            },
+            MigrationStep {
+                from: 3,
+                reason: "one-metadata-warning",
+                apply: migrate_metadata_warning,
             },
         ]
     }

@@ -19,11 +19,15 @@ export component IconButton inherits Rectangle {
     in property <bool> enabled: true;
     in property <bool> checked;
     in property <bool> hold;
+    // A switch that is off although it is normally on (the Tag & Rate panel's "Active" and "Warn", user decision
+    // Q-P8): red until it is switched on again.
+    in property <bool> alert;
     in property <length> icon-size: IconSize.md;
     callback clicked();
 
     property <color> content-color: !root.enabled ? Theme.status-deleted
         : logic.progress > 0 ? HoldConfirm.color.mix(Theme.text, logic.progress)
+        : root.alert ? Theme.status-corrupt
         : root.checked ? Theme.primary : Theme.text;
 
     height: 24px;
@@ -31,10 +35,13 @@ export component IconButton inherits Rectangle {
     horizontal-stretch: 0;
     vertical-stretch: 0;
     border-radius: 4px;
-    background: !root.enabled ? transparent : root.checked ? Theme.primary.with-alpha(0.22)
+    background: !root.enabled ? transparent
+        : root.alert ? Theme.status-corrupt.with-alpha(touch.has-hover ? 0.3 : 0.18)
+        : root.checked ? Theme.primary.with-alpha(0.22)
         : touch.pressed ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : Theme.surface;
     border-width: 1px;
-    border-color: root.checked && root.enabled ? Theme.primary : Theme.border;
+    border-color: root.alert && root.enabled ? Theme.status-corrupt
+        : root.checked && root.enabled ? Theme.primary : Theme.border;
     clip: root.hold;
 
     host := TooltipHost {

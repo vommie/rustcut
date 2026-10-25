@@ -23,10 +23,15 @@ impl Actor {
         }
     }
 
-    /// Asks the sync actor to make RustView match what the job wants now.
+    /// Asks the sync actor to make RustView match what the job wants now. A job saved without RustView (the Tag & Rate
+    /// panel's "Active" switch was off, user decision Q-P8b) is never sent.
     pub(super) fn sync_job(&self, id: JobId, phase: SyncPhase) {
         let Some(record) = self.model.get(id) else { return };
         let SpecSlot::Decoded(spec) = &record.spec else { return };
+        if spec.metadata.without_rustview {
+            tracing::debug!(job = id.0, "[Queue] Saved without RustView; nothing is sent");
+            return;
+        }
         self.sync_send(SyncCommand::Job {
             id,
             target: record.target_path.clone(),
@@ -36,8 +41,12 @@ impl Actor {
         });
     }
 
-    /// Asks the sync actor to undo what it wrote for the job (a job that ended without a file, or was removed).
+    /// Asks the sync actor to undo what it wrote for the job (a job that ended without a file, or was removed). Nothing
+    /// was written for a job saved without RustView.
     pub(super) fn sync_cleanup(&self, record: &JobRecord) {
+        if record.sync.is_none() && without_rustview(record) {
+            return;
+        }
         self.sync_send(SyncCommand::Cleanup {
             id: record.id,
             record: JobSyncRecord::from_column(record.sync.as_deref()),
@@ -106,6 +115,11 @@ impl Actor {
         }
         self.publish_row(id);
     }
+}
+
+/// Whether the job was saved without RustView (an unreadable spec counts as with: its record, if any, is cleaned up).
+fn without_rustview(record: &JobRecord) -> bool {
+    matches!(&record.spec, SpecSlot::Decoded(spec) if spec.metadata.without_rustview)
 }
 
 /// The next record the sync actor reports; never for a queue without a sync actor.

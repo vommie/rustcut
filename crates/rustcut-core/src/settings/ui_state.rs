@@ -312,13 +312,24 @@ pub struct TagPanelState {
     pub history_collapsed: bool,
     /// Height of the tag history's body in logical pixels.
     pub history_height: u32,
-    /// Branches hidden from the tree (the tag and everything below it).
+    /// Branches hidden from the tree (the tag and everything below it, also tags created there later).
     pub hidden: Vec<u32>,
+    /// Tags shown again inside a hidden branch (with everything below them; P8b, user decision Q-P8b: "a single tag
+    /// below can be switched on again").
+    pub shown: Vec<u32>,
     /// Tags that stay assigned from one job to the next (right click, user decision Q-G2).
     pub locked: Vec<u32>,
     /// Tags and rating of the last saved job ("apply last tags", "last rating").
     pub last_tags: Vec<u32>,
     pub last_rating: Option<u8>,
+    /// The panel's "Active" switch: off = jobs are saved without RustView (no record, tags, rating or source hash;
+    /// user decision Q-P8b). It stays off after a restart (PyCutRv), and the start says so.
+    pub active: bool,
+    /// Branches folded in the tag filter window (P8b; the window starts with every branch open).
+    pub filter_collapsed: Vec<u32>,
+    /// The tag filter window's size in logical pixels.
+    pub filter_width: u32,
+    pub filter_height: u32,
 }
 
 impl TagPanelState {
@@ -328,14 +339,19 @@ impl TagPanelState {
     pub const HISTORY_DEFAULT: usize = 20;
     /// Smallest and largest height of the tag history's body (RustView's limits).
     pub const HISTORY_HEIGHT: std::ops::RangeInclusive<u32> = 40..=500;
+    /// Smallest and largest size of the tag filter window.
+    pub const FILTER_WIDTH: std::ops::RangeInclusive<u32> = 260..=2_000;
+    pub const FILTER_HEIGHT: std::ops::RangeInclusive<u32> = 240..=2_000;
 
     fn sanitize(&mut self, notes: &mut Vec<String>) {
         for list in [
             &mut self.expanded,
             &mut self.history,
             &mut self.hidden,
+            &mut self.shown,
             &mut self.locked,
             &mut self.last_tags,
+            &mut self.filter_collapsed,
         ] {
             let mut seen = std::collections::HashSet::new();
             list.retain(|id| seen.insert(*id));
@@ -354,6 +370,15 @@ impl TagPanelState {
             notes.push("last rating dropped".into());
             self.last_rating = None;
         }
+        if !Self::FILTER_WIDTH.contains(&self.filter_width) || !Self::FILTER_HEIGHT.contains(&self.filter_height) {
+            notes.push("tag filter window size brought into range".into());
+            self.filter_width = self
+                .filter_width
+                .clamp(*Self::FILTER_WIDTH.start(), *Self::FILTER_WIDTH.end());
+            self.filter_height = self
+                .filter_height
+                .clamp(*Self::FILTER_HEIGHT.start(), *Self::FILTER_HEIGHT.end());
+        }
     }
 }
 
@@ -367,9 +392,14 @@ impl Default for TagPanelState {
             history_collapsed: false,
             history_height: 96,
             hidden: Vec::new(),
+            shown: Vec::new(),
             locked: Vec::new(),
             last_tags: Vec::new(),
             last_rating: None,
+            active: true,
+            filter_collapsed: Vec::new(),
+            filter_width: 380,
+            filter_height: 560,
         }
     }
 }
