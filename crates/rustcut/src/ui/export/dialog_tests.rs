@@ -113,7 +113,10 @@ fn an_existing_file_offers_a_number_and_overwrite_first_then_other_names() {
     );
     assert!(d.options_of(Tab::Similar).is_empty());
     d.type_name("Clip - 02");
-    assert!(d.options[3].detail.contains("taken"));
+    assert_eq!(
+        (d.options[3].detail_name.as_str(), d.options[3].detail.as_str()),
+        ("Clip - 02.mkv", "already exists.")
+    );
     d.type_name("Holiday");
     d.set_tab(Tab::Similar);
     d.select(3);
