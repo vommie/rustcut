@@ -2,6 +2,13 @@
 // panel (the job's stored log; src/ui/logs/ fills `Logs`) and of the question before a job replaces the editor's
 // open video (src/ui/editing/ fills `JobLoad`; setting `editor.on_job_load = "ask"`).
 
+// A button on a row's right (P9.11): kind 0 play the file, 1 show it in the file manager, 2 open the folder, 3 show
+// the profile in Settings.
+export struct JobRowButton {
+    kind: int,
+    tooltip: string,
+}
+
 // One label/value row of a section; tone 0 normal, 1 muted, 2 error.
 export struct JobRowView {
     label: string,
@@ -10,6 +17,13 @@ export struct JobRowView {
     tone: int,
     // A file name or folder, cut in the middle.
     path: bool,
+    // The value as a badge in the job state's color (the state row, P9.11).
+    badge: bool,
+    // A status symbol before the value: 0 none, 1 done, 2 failed, 3 waiting, 4 off, 5 removed (RustView, P9.11).
+    icon: int,
+    // An attribute of the row before it (the codecs' video and audio attributes).
+    indent: bool,
+    buttons: [JobRowButton],
 }
 
 export struct JobSectionView {
@@ -36,6 +50,7 @@ export global Job {
     in property <string> empty-text;
 
     callback toggle-section(/* id */ string);
+    callback row-button(/* section id */ string, /* row */ int, /* button */ int);
     callback edit();
     callback play();
     callback reveal();

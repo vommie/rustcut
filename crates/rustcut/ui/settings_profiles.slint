@@ -5,6 +5,7 @@
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { IconButton, NumberField } from "controls.slint";
+import { JumpFlash } from "jump.slint";
 import { SettingsCard } from "settings_card.slint";
 import { OptionRow } from "render_option_row.slint";
 import { OptionRowView } from "render_types.slint";
@@ -48,6 +49,11 @@ export component SettingsProfiles inherits VerticalLayout {
 
             touch := TouchArea {
                 clicked => { SettingsUi.select-profile(index); }
+            }
+
+            // The Job panel's profile row leads here (P9.11): the selected row flashes.
+            JumpFlash {
+                key: index == SettingsUi.profile-index ? "settings:profiles.selected" : "";
             }
 
             HorizontalLayout {

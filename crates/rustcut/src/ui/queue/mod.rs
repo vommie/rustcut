@@ -29,6 +29,7 @@ use rustcut_core::settings::QueuePanelState;
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 use tokio::sync::broadcast::error::RecvError;
 
+pub use self::actions::open_file;
 pub use self::columns::{Column, Layout, layout};
 pub use self::filter::{CHIPS, Chip, Filter, FilterChoice, FilterKind};
 pub use self::menu::{MenuKeys, QueueAction, queue_menu, targets};

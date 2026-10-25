@@ -66,7 +66,7 @@ impl PanelId {
             PanelId::RenderSettings => "Codecs",
             PanelId::Queue => "Queue",
             PanelId::TagRate => "Tag & Rate",
-            PanelId::MediaInfo => "Media Info",
+            PanelId::MediaInfo => "Info",
             PanelId::Logs => "Logs",
             PanelId::Job => "Job",
         }

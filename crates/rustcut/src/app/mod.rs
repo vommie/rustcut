@@ -457,6 +457,22 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     // Jump marks lead from messages to the options (Q-N6); held until the event loop ends.
     let _jump = JumpBridge::install(&main, &dock, &settings_window, &queue);
     {
+        // The Job panel's profile row (P9.11): a jump to the job's profile when the library holds it unchanged.
+        let writer = writer.clone();
+        let settings = Rc::downgrade(&settings_window);
+        inspector.set_profile_hooks(
+            move |profile| {
+                rustcut_core::render::ProfileLibrary::new(writer.current().render.profiles).get(&profile.id)
+                    == Some(profile)
+            },
+            move |id| {
+                if let Some(settings) = settings.upgrade() {
+                    settings.show_profile(id);
+                }
+            },
+        );
+    }
+    {
         let mut hooks = settings_window.hooks();
         let sync_handle = sync.handle.clone();
         hooks.probe_rustview = Some(Box::new(move || {

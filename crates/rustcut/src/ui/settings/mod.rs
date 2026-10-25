@@ -36,6 +36,9 @@ use crate::ui::keymap::Keymap;
 use crate::ui::notices::{self, Kind, Notice};
 use crate::ui::render_settings::state::Encoders;
 use crate::util::model::{sync, sync_with};
+/// The jump mark on the selected profile's row of Settings > Render Profiles (`settings_profiles.slint`).
+const PROFILE_JUMP_KEY: &str = "settings:profiles.selected";
+
 use crate::{
     FolderRowView, HoldConfirm, HotkeyChipView, HotkeyRowView, MainWindow, MessageKindView, OptionRowView,
     ProfileItemView, RenderIssueView, SettingCardView, SettingRowView, SettingsUi, SettingsWindow, TooltipSettings,
@@ -219,6 +222,19 @@ impl SettingsBridge {
         self.open(Some(page));
         if let Some(window) = self.window.borrow().as_ref() {
             crate::ui::jump::flash(&window.global::<crate::Jump<'_>>(), key);
+        }
+    }
+
+    /// Shows render profile `id` in Settings > Render Profiles: selected, its row flashes (the Job panel's profile
+    /// row, P9.11).
+    pub fn show_profile(&self, id: &str) {
+        self.open(Some(Page::Profiles));
+        let index = self.profiles.borrow().index_of(id);
+        if let Some(index) = index {
+            self.select_profile(index);
+        }
+        if let Some(window) = self.window.borrow().as_ref() {
+            crate::ui::jump::flash(&window.global::<crate::Jump<'_>>(), PROFILE_JUMP_KEY);
         }
     }
 

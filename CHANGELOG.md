@@ -147,6 +147,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The Job panel, the Info panel and the Logs panel, your UI review round 1 (0.0.45): the job's state is a badge in its
+  color, the render time has its own row under "Ended", and the RustView row starts with a symbol (written, failed,
+  waiting, not written, removed). The source's file row has buttons on its right that play the video in the default
+  player and show it in the file manager, its folder row one that opens the folder; the output has the same once it
+  is rendered. A profile the library still holds unchanged gets a button that shows it in Settings > Render Profiles
+  (selected, its row flashes). The source and the codecs have one row per attribute (size, frame rate, duration;
+  video codec, quality, preset, bit depth, audio codec, bit rate, channels, sample rate, container), the attributes
+  indented under their codec. The Media Info tab is called "Info", and each of its cards folds with a click on its
+  title (for this run). The Logs panel shows no line numbers.
 - The Codecs panel, your UI review round 1 (0.0.44): the profile choice takes the whole row up to its buttons, and the
   audio bit rate is a slider over the bit rates the audio codec offers (Opus 48 to 512 kbit/s, AAC, MP3 and Vorbis
   64 to 320 kbit/s), with the value under it and "(default)" at the codec's default; it is hidden for FLAC and copied

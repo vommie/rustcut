@@ -1,6 +1,6 @@
 // The Logs panel (src/ui/logs/ fills `Logs`; user decision Q-Q1, M4.3): the stored log of the queue's current job
 // (RustCut's notes and ffmpeg's lines), RustCut's own log of this run, or its RustView part; errors red and warnings
-// yellow, with a search, "errors only", following the newest line and Copy.
+// yellow, with a search, "errors only", following the newest line and Copy. No line numbers (P9.11).
 
 import { ListView } from "std-widgets.slint";
 import { Theme } from "styles.slint";
@@ -23,16 +23,6 @@ component LogLine inherits Rectangle {
         padding-left: 4px;
         padding-right: 4px;
         spacing: 6px;
-
-        Text {
-            width: 34px;
-            text: root.line.number;
-            color: Theme.status-deleted;
-            font-size: 10px;
-            font-family: "monospace";
-            horizontal-alignment: right;
-            vertical-alignment: center;
-        }
 
         Text {
             horizontal-stretch: 1;
