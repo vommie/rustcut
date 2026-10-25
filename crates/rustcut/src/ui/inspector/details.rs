@@ -4,6 +4,7 @@
 //! a badge (the state), carry a status symbol (RustView) and buttons on its right (play, show in the file manager, open
 //! the folder, the profile), and the codecs have one row per attribute.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use rustcut_core::edit::{DeinterlaceRate, Filter, FilterChain};
@@ -339,32 +340,47 @@ fn filters_section(chain: &FilterChain) -> DetailSection {
 /// The parameters of one filter in a few words.
 pub fn filter_text(filter: &Filter) -> String {
     match filter {
-        Filter::Deinterlace { deinterlacer, rate } => {
+        Filter::Deinterlace {
+            deinterlacer,
+            rate,
+            field_order,
+            only_interlaced,
+        } => {
             let rate = match rate {
                 DeinterlaceRate::Frame => "one frame per frame",
                 DeinterlaceRate::Field => "one frame per field",
             };
-            format!("{}, {rate}", deinterlacer.ffmpeg_name())
+            let mut text = format!("{}, {rate}", deinterlacer.ffmpeg_name());
+            if deinterlacer.has_field_options() {
+                match field_order {
+                    rustcut_core::edit::FieldParity::Auto => {}
+                    rustcut_core::edit::FieldParity::TopFirst => text.push_str(", top field first"),
+                    rustcut_core::edit::FieldParity::BottomFirst => text.push_str(", bottom field first"),
+                }
+                if *only_interlaced {
+                    text.push_str(", only interlaced frames");
+                }
+            }
+            text
         }
         Filter::Crop(c) => format!("top {}, right {}, bottom {}, left {}", c.top, c.right, c.bottom, c.left),
-        Filter::Deshake(d) => format!(
-            "shakiness {}, accuracy {}, smoothing {}{}",
-            d.shakiness,
-            d.accuracy,
-            d.smoothing,
-            if d.tripod { ", tripod" } else { "" }
-        ),
-        Filter::Rotate { rotation } => match rotation {
-            rustcut_core::edit::Rotation::Clockwise => "a quarter clockwise".to_owned(),
-            rustcut_core::edit::Rotation::CounterClockwise => "a quarter counter-clockwise".to_owned(),
-            rustcut_core::edit::Rotation::UpsideDown => "upside down".to_owned(),
-        },
-        Filter::Mirror(m) => match (m.horizontal, m.vertical) {
-            (true, true) => "left-right and top-bottom".to_owned(),
-            (true, false) => "left-right".to_owned(),
-            (false, true) => "top-bottom".to_owned(),
-            (false, false) => "none".to_owned(),
-        },
+        Filter::Deshake(d) => {
+            let mut text = format!(
+                "shakiness {}, accuracy {}, smoothing {}{}",
+                d.shakiness,
+                d.accuracy,
+                d.smoothing,
+                if d.tripod { ", tripod" } else { "" }
+            );
+            if let Some(shift) = d.max_shift {
+                let _ = write!(text, ", at most {shift} px");
+            }
+            if let Some(angle) = d.max_angle {
+                let _ = write!(text, ", at most {angle}°");
+            }
+            text
+        }
+        Filter::Orientation(o) => o.label().to_owned(),
         Filter::Resize {
             width,
             height,

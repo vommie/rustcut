@@ -322,6 +322,10 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         loaded.ui_state.export.probe,
         &editor.key_label(Action::ProbeRender),
     );
+    {
+        let editor = Rc::downgrade(&editor);
+        filters.set_sections_source(move || editor.upgrade().map(|e| e.section_ranges()).unwrap_or_default());
+    }
     editor.set_probe(&probe);
     editor.set_tags(&tags);
     editor.set_queue(&queue);

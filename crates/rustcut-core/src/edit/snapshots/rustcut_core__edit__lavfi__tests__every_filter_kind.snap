@@ -10,6 +10,9 @@ crop=w=iw-24:h=ih-20:x=14:y=8
 transpose=dir=clock
 transpose=dir=cclock
 hflip,vflip
-hflip,vflip
+hflip
+vflip
+transpose=dir=cclock_flip
+transpose=dir=clock_flip
 scale=w=1280:h=-2:flags=lanczos,setsar=1
 scale=w=1280:h=720:flags=bicubic,setsar=1

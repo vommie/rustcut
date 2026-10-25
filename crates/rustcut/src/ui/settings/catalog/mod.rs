@@ -4,6 +4,7 @@
 mod app;
 mod dialogs;
 mod editing;
+mod filters;
 mod messages;
 mod work;
 
@@ -25,7 +26,7 @@ pub fn cards(page: Page) -> &'static [Card] {
         Page::General => app::GENERAL,
         Page::Player => editing::PLAYER,
         Page::Editor => editing::EDITOR,
-        Page::Filters => editing::FILTERS,
+        Page::Filters => filters::FILTERS,
         Page::Export => editing::EXPORT,
         Page::Profiles | Page::Hotkeys | Page::About => &[],
         Page::Queue => work::QUEUE,
@@ -78,7 +79,9 @@ mod tests {
                         f.key
                     );
                 }
-                Kind::Text { .. } | Kind::Path { .. } => assert!(matches!(value, Value::Text(_)), "{}", f.key),
+                Kind::Text { .. } | Kind::Amount { .. } | Kind::Path { .. } => {
+                    assert!(matches!(value, Value::Text(_)), "{}", f.key);
+                }
                 Kind::Color => {
                     assert!(
                         matches!(&value, Value::Text(t) if crate::util::hex_color::parse_rgb(t).is_some()),
@@ -97,6 +100,7 @@ mod tests {
         // The switches that sub-options wait for, on (most are on by default).
         let mut masters = Settings::default();
         masters.desktop.tray.enabled = true;
+        masters.filters.deshake.optzoom = 2;
         for f in all() {
             let base = if (f.enabled)(&Settings::default()) {
                 Settings::default()
@@ -115,6 +119,7 @@ mod tests {
                     Edit::Type(if n == max { min } else { max }.to_string())
                 }
                 Kind::Path { .. } => Edit::Type("/usr/bin/true".into()),
+                Kind::Amount { .. } => Edit::Type("3".into()),
                 Kind::Color => Edit::Type("#12ab3c".into()),
                 Kind::Text { .. } | Kind::Button(_) => continue,
             };

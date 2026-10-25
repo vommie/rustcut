@@ -127,16 +127,14 @@ fn the_timeline_zoom_is_kept_in_range_and_old_files_load() {
 
 #[test]
 fn kept_filters_round_trip_and_bad_values_read_as_missing() {
-    use crate::edit::{Crop, Filter, FilterKind, Rotation};
+    use crate::edit::{Crop, Filter, FilterKind, Orientation};
     let dir = tempfile::tempdir().unwrap();
     let mut state = UiState::default();
     let mut chain = FilterChain::default();
     chain.set(Filter::Crop(Crop::new(2, 4, 6, 8)));
     chain.set_enabled(FilterKind::Crop, true);
-    chain.set(Filter::Rotate {
-        rotation: Rotation::CounterClockwise,
-    });
-    chain.move_up(FilterKind::Rotate);
+    chain.set(Filter::Orientation(Orientation::COUNTER_CLOCKWISE.into()));
+    chain.move_up(FilterKind::Orientation);
     state.export.keep_filters = true;
     state.export.filters = Some(chain);
     state.export.crop_aspect = CropAspect::Wide;
@@ -147,6 +145,30 @@ fn kept_filters_round_trip_and_bad_values_read_as_missing() {
         load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value(),
         state
     );
+
+    // The kept filters of 0.0.47 (TOML): the Rotate and Mirror become one Orientation, nothing else changes.
+    std::fs::write(
+        dir.path().join("ui-state.toml"),
+        "version = 1\n[export]\nkeep_filters = true\n\
+         [[export.filters]]\nenabled = true\n[export.filters.filter]\nkind = \"crop\"\ntop = 8\nright = 0\nbottom = 8\nleft = 0\n\
+         [[export.filters]]\nenabled = true\n[export.filters.filter]\nkind = \"rotate\"\nrotation = \"clockwise\"\n\
+         [[export.filters]]\nenabled = true\n[export.filters.filter]\nkind = \"mirror\"\nhorizontal = true\nvertical = false\n",
+    )
+    .unwrap();
+    let value = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+    let kept = value.export.filters.expect("the old chain loads");
+    assert_eq!(
+        kept.order().take(2).collect::<Vec<_>>(),
+        vec![FilterKind::Crop, FilterKind::Orientation]
+    );
+    assert_eq!(
+        kept.get(FilterKind::Orientation).map(|s| (s.enabled, s.filter)),
+        Some((
+            true,
+            Filter::Orientation(Orientation::CLOCKWISE.then(Orientation::MIRROR_HORIZONTAL).into())
+        ))
+    );
+    assert_eq!(value.export.crop_search, None);
 
     // A file of 0.0.6 has neither field; a broken chain or aspect does not reset the rest.
     std::fs::write(

@@ -222,6 +222,17 @@ impl Editor {
         Ok(vec![st.sections.auto_section(auto)?].into())
     }
 
+    /// The sections' time ranges (auto-crop may look only there).
+    pub fn section_ranges(&self) -> Vec<(Timestamp, Timestamp)> {
+        self.state
+            .borrow()
+            .sections
+            .list()
+            .sections()
+            .map(|s| (s.start(), s.end()))
+            .collect()
+    }
+
     /// How many sections the open video has (the question before a job replaces it).
     pub fn section_count(&self) -> usize {
         self.state.borrow().sections.list().len()

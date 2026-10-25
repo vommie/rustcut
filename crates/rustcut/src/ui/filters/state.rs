@@ -2,10 +2,10 @@
 //! gets, and the crop session on the video (the edit mode with handles, or the quick mode while Ctrl is held).
 
 use rustcut_core::edit::{
-    Crop, CropAspect, DeinterlaceRate, Deinterlacer, DeshakeParams, Filter, FilterChain, FilterKind, Mirror,
-    ResizeAlgorithm, Rotation, Size,
+    Crop, CropAspect, DeinterlaceRate, Deinterlacer, DeshakeParams, FieldParity, Filter, FilterChain, FilterKind,
+    OrientationParams, ResizeAlgorithm, Size,
 };
-use rustcut_core::media::{IdetCounts, Interlacing};
+use rustcut_core::media::{CropSearch, IdetCounts, Interlacing};
 use rustcut_core::settings::FilterDefaults;
 use rustcut_core::time::Timestamp;
 use rustcut_player::VideoFilter;
@@ -88,21 +88,17 @@ pub struct FiltersState {
     pub keep: bool,
     pub aspect: CropAspect,
     pub interlace: InterlaceHint,
+    /// How auto-crop searches (kept and reset with the chain).
+    pub search: CropSearch,
     pub auto_crop_running: bool,
     pub(super) crop: Option<CropSession>,
     /// The video area in logical pixels.
     view: (f32, f32),
 }
 
-/// A fresh chain with the configured defaults (deinterlacer, deshake parameters), every filter off.
+/// A fresh chain with the configured defaults (Settings > Filters), every filter off.
 pub fn default_chain(defaults: &FilterDefaults) -> FilterChain {
-    let mut chain = FilterChain::default();
-    chain.set(Filter::Deinterlace {
-        deinterlacer: defaults.deinterlacer,
-        rate: DeinterlaceRate::Frame,
-    });
-    chain.set(Filter::Deshake(defaults.deshake.sanitized()));
-    chain
+    defaults.chain()
 }
 
 impl FiltersState {
@@ -111,15 +107,16 @@ impl FiltersState {
         self.defaults = defaults;
     }
 
-    /// The state at startup: the kept chain when "keep" was on, else the defaults.
+    /// The state at startup: the kept chain and search when "keep" was on, else the defaults.
     pub fn new(
         defaults: FilterDefaults,
         preview: bool,
         keep: bool,
-        kept: Option<FilterChain>,
+        kept: (Option<FilterChain>, Option<CropSearch>),
         aspect: CropAspect,
     ) -> Self {
-        let chain = kept.filter(|_| keep).unwrap_or_else(|| default_chain(&defaults));
+        let chain = kept.0.filter(|_| keep).unwrap_or_else(|| default_chain(&defaults));
+        let search = kept.1.filter(|_| keep).unwrap_or(defaults.crop_search).sanitized();
         Self {
             chain,
             defaults,
@@ -128,6 +125,7 @@ impl FiltersState {
             keep,
             aspect,
             interlace: InterlaceHint::None,
+            search,
             auto_crop_running: false,
             crop: None,
             view: (0.0, 0.0),
@@ -151,6 +149,15 @@ impl FiltersState {
         self.keep.then(|| self.chain.clone())
     }
 
+    /// The auto-crop search to keep for the next start (only while "keep" is on).
+    pub fn kept_search(&self) -> Option<CropSearch> {
+        self.keep.then_some(self.search)
+    }
+
+    pub const fn defaults(&self) -> &FilterDefaults {
+        &self.defaults
+    }
+
     /// Another video is opening: a crop session ends (kept), the picture checks start over, and the filters go back to
     /// the defaults unless "keep" is on.
     pub fn file_opened(&mut self) {
@@ -160,6 +167,7 @@ impl FiltersState {
         self.auto_crop_running = false;
         if !self.keep {
             self.chain = default_chain(&self.defaults);
+            self.search = self.defaults.crop_search.sanitized();
         }
     }
 
@@ -180,24 +188,18 @@ impl FiltersState {
 
     // --- The card ----------------------------------------------------------------------------------------------------
 
-    /// Switches a filter on or off (a mirror without an axis gets the horizontal one).
+    /// Switches a filter on or off; its values stay.
     pub fn toggle(&mut self, kind: FilterKind) {
         let on = !self.chain.is_enabled(kind);
-        if on
-            && kind == FilterKind::Mirror
-            && let Some(Filter::Mirror(m)) = self.filter(kind)
-            && !m.horizontal
-            && !m.vertical
-        {
-            self.chain.set(Filter::Mirror(Mirror {
-                horizontal: true,
-                vertical: false,
-            }));
-        }
         self.chain.set_enabled(kind, on);
         if kind == FilterKind::Crop && !on {
             self.crop = None;
         }
+    }
+
+    /// Switches a filter on (an action that wants to show its result: a key, auto-crop, the notice's button).
+    pub fn switch_on(&mut self, kind: FilterKind) {
+        self.chain.set_enabled(kind, true);
     }
 
     pub fn move_filter(&mut self, kind: FilterKind, up: bool) -> bool {
@@ -211,6 +213,7 @@ impl FiltersState {
     /// Every filter back to the defaults and off, in the default order.
     pub fn reset(&mut self) {
         self.chain = default_chain(&self.defaults);
+        self.search = self.defaults.crop_search.sanitized();
         self.crop = None;
     }
 
@@ -218,37 +221,68 @@ impl FiltersState {
         self.chain.get(kind).map(|slot| slot.filter)
     }
 
-    /// Sets a filter's parameters and switches it on.
-    fn set_on(&mut self, filter: Filter) {
-        self.chain.set(filter);
-        self.chain.set_enabled(filter.kind(), true);
+    /// The deinterlace filter's values (whether it is on or not).
+    pub fn deinterlace(&self) -> Filter {
+        match self.filter(FilterKind::Deinterlace) {
+            Some(f @ Filter::Deinterlace { .. }) => f,
+            _ => self.defaults.deinterlace(),
+        }
+    }
+
+    /// Changes the deinterlace filter's values; a filter that is off stays off (user decision Q-P9.13).
+    fn change_deinterlace(
+        &mut self,
+        change: impl FnOnce(&mut Deinterlacer, &mut DeinterlaceRate, &mut FieldParity, &mut bool),
+    ) {
+        if let Filter::Deinterlace {
+            mut deinterlacer,
+            mut rate,
+            mut field_order,
+            mut only_interlaced,
+        } = self.deinterlace()
+        {
+            change(&mut deinterlacer, &mut rate, &mut field_order, &mut only_interlaced);
+            self.chain.set(Filter::Deinterlace {
+                deinterlacer,
+                rate,
+                field_order,
+                only_interlaced,
+            });
+        }
     }
 
     pub fn set_deinterlacer(&mut self, deinterlacer: Deinterlacer) {
-        let rate = self.deinterlace_rate();
-        self.set_on(Filter::Deinterlace { deinterlacer, rate });
+        self.change_deinterlace(|d, _, _, _| *d = deinterlacer);
     }
 
     pub fn set_field_rate(&mut self, field: bool) {
-        let deinterlacer = self.deinterlacer();
-        let rate = if field {
-            DeinterlaceRate::Field
-        } else {
-            DeinterlaceRate::Frame
-        };
-        self.set_on(Filter::Deinterlace { deinterlacer, rate });
+        self.change_deinterlace(|_, rate, _, _| {
+            *rate = if field {
+                DeinterlaceRate::Field
+            } else {
+                DeinterlaceRate::Frame
+            };
+        });
+    }
+
+    pub fn set_field_order(&mut self, order: FieldParity) {
+        self.change_deinterlace(|_, _, field_order, _| *field_order = order);
+    }
+
+    pub fn set_only_interlaced(&mut self, only: bool) {
+        self.change_deinterlace(|_, _, _, only_interlaced| *only_interlaced = only);
     }
 
     pub fn deinterlacer(&self) -> Deinterlacer {
-        match self.filter(FilterKind::Deinterlace) {
-            Some(Filter::Deinterlace { deinterlacer, .. }) => deinterlacer,
+        match self.deinterlace() {
+            Filter::Deinterlace { deinterlacer, .. } => deinterlacer,
             _ => self.defaults.deinterlacer,
         }
     }
 
     pub fn deinterlace_rate(&self) -> DeinterlaceRate {
-        match self.filter(FilterKind::Deinterlace) {
-            Some(Filter::Deinterlace { rate, .. }) => rate,
+        match self.deinterlace() {
+            Filter::Deinterlace { rate, .. } => rate,
             _ => DeinterlaceRate::Frame,
         }
     }
@@ -272,14 +306,10 @@ impl FiltersState {
         self.chain.orientation_after(FilterKind::Crop).map_crop(self.crop())
     }
 
-    /// Sets a crop (in the crop filter's orientation), limited to the frame; a crop that removes something switches
-    /// the filter on.
+    /// Sets a crop (in the crop filter's orientation), limited to the frame; a filter that is off stays off.
     pub fn set_crop(&mut self, crop: Crop) {
         let crop = self.crop_frame().map_or(crop, |frame| crop.clamped(frame, 2));
         self.chain.set(Filter::Crop(crop));
-        if !crop.is_identity() {
-            self.chain.set_enabled(FilterKind::Crop, true);
-        }
     }
 
     /// Sets one edge as seen in the output.
@@ -313,56 +343,28 @@ impl FiltersState {
         self.set_shown_edge(edge, value);
     }
 
-    /// The rotation as quarter turns clockwise (0 when the filter is off).
-    pub fn quarter_turns(&self) -> u8 {
-        match (
-            self.chain.is_enabled(FilterKind::Rotate),
-            self.filter(FilterKind::Rotate),
-        ) {
-            (true, Some(Filter::Rotate { rotation })) => match rotation {
-                Rotation::Clockwise => 1,
-                Rotation::UpsideDown => 2,
-                Rotation::CounterClockwise => 3,
-            },
-            _ => 0,
+    /// The orientation's values (whether it is on or not).
+    pub fn orientation(&self) -> OrientationParams {
+        match self.filter(FilterKind::Orientation) {
+            Some(Filter::Orientation(p)) => p,
+            _ => OrientationParams::UPRIGHT,
         }
     }
 
-    /// Turns the output a quarter further (clockwise or not); a full turn switches the filter off.
-    pub fn rotate(&mut self, clockwise: bool) {
-        let turns = (self.quarter_turns() + if clockwise { 1 } else { 3 }) % 4;
-        let rotation = match turns {
-            1 => Some(Rotation::Clockwise),
-            2 => Some(Rotation::UpsideDown),
-            3 => Some(Rotation::CounterClockwise),
-            _ => None,
-        };
-        match rotation {
-            Some(rotation) => self.set_on(Filter::Rotate { rotation }),
-            None => self.chain.set_enabled(FilterKind::Rotate, false),
-        }
+    /// The turn buttons and keys: a quarter to the right or the left, like radio buttons (the one that is on switches
+    /// off); Orientation switches on (user decision Q-P9.13b: its buttons and keys show their result at once).
+    pub fn turn(&mut self, clockwise: bool) {
+        self.chain
+            .set(Filter::Orientation(self.orientation().pick_turn(clockwise)));
+        self.switch_on(FilterKind::Orientation);
     }
 
-    pub fn mirror(&self) -> Mirror {
-        match (
-            self.chain.is_enabled(FilterKind::Mirror),
-            self.filter(FilterKind::Mirror),
-        ) {
-            (true, Some(Filter::Mirror(m))) => m,
-            _ => Mirror::default(),
-        }
-    }
-
-    /// Flips one mirror axis; without an axis the filter is off.
-    pub fn toggle_mirror(&mut self, horizontal: bool) {
-        let mut m = self.mirror();
-        if horizontal {
-            m.horizontal = !m.horizontal;
-        } else {
-            m.vertical = !m.vertical;
-        }
-        self.chain.set(Filter::Mirror(m));
-        self.chain.set_enabled(FilterKind::Mirror, m.horizontal || m.vertical);
+    /// The mirror buttons and keys: switch the mirror left to right (`horizontal`) or top to bottom; Orientation
+    /// switches on.
+    pub fn flip(&mut self, horizontal: bool) {
+        self.chain
+            .set(Filter::Orientation(self.orientation().toggle_mirror(horizontal)));
+        self.switch_on(FilterKind::Orientation);
     }
 
     /// The resize's width, height and algorithm.
@@ -373,7 +375,7 @@ impl FiltersState {
                 height,
                 algorithm,
             }) => (width, height, algorithm),
-            _ => (None, None, ResizeAlgorithm::default()),
+            _ => (None, None, self.defaults.resize_algorithm),
         }
     }
 
@@ -387,7 +389,7 @@ impl FiltersState {
         } else {
             height = value;
         }
-        self.set_on(Filter::Resize {
+        self.chain.set(Filter::Resize {
             width,
             height,
             algorithm,
@@ -414,7 +416,7 @@ impl FiltersState {
             reason = "clamped to the resize limits"
         )]
         let height = height.clamp(2.0, f64::from(MAX_RESIZE)) as u32;
-        self.set_on(Filter::Resize {
+        self.chain.set(Filter::Resize {
             width: Some(width),
             height: Some(height),
             algorithm,

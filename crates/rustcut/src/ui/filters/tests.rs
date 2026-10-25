@@ -190,7 +190,7 @@ fn source(size: Size, rotation: u16) -> Source {
 }
 
 fn state() -> FiltersState {
-    let mut s = FiltersState::new(FilterDefaults::default(), true, false, None, CropAspect::Free);
+    let mut s = FiltersState::new(FilterDefaults::default(), true, false, (None, None), CropAspect::Free);
     s.file_opened();
     s.source_known(source(HD, 0));
     s.set_view(960.0, 540.0);
@@ -198,35 +198,71 @@ fn state() -> FiltersState {
 }
 
 #[test]
-fn rotation_buttons_turn_in_quarters_and_mirrors_flip_axes() {
+fn orientation_buttons_turn_in_quarters_switch_mirrors_and_switch_it_on() {
     let mut s = state();
-    s.rotate(true);
-    assert_eq!(s.quarter_turns(), 1);
-    s.rotate(true);
-    s.rotate(true);
-    assert_eq!(s.quarter_turns(), 3);
-    s.rotate(true);
-    assert_eq!(s.quarter_turns(), 0);
-    assert!(!s.chain().is_enabled(FilterKind::Rotate));
-    s.rotate(false);
-    assert_eq!(s.quarter_turns(), 3);
-    s.toggle_mirror(true);
-    s.toggle_mirror(false);
-    assert!(s.mirror().horizontal && s.mirror().vertical);
-    s.toggle_mirror(true);
-    s.toggle_mirror(false);
-    assert!(!s.chain().is_enabled(FilterKind::Mirror));
+    assert!(!s.chain().is_enabled(FilterKind::Orientation));
+    s.turn(true);
+    assert!(
+        s.chain().is_enabled(FilterKind::Orientation),
+        "a button shows its result at once"
+    );
+    assert_eq!(s.orientation().turns, 1);
+    s.turn(false);
+    assert_eq!(s.orientation().turns, 3, "left replaces right");
+    s.turn(false);
+    assert_eq!(s.orientation().turns, 0, "a second click takes the turn back");
+    assert!(
+        s.chain().is_enabled(FilterKind::Orientation),
+        "it stays on (D-P9a: nothing switches itself off)"
+    );
+    s.flip(true);
+    s.flip(false);
+    assert!(s.orientation().mirror_horizontal && s.orientation().mirror_vertical);
+    assert_eq!(s.orientation().orientation(), Orientation::UPSIDE_DOWN);
+    s.flip(true);
+    assert!(!s.orientation().mirror_horizontal && s.orientation().mirror_vertical);
+    // Switched off, the values stay.
+    s.toggle(FilterKind::Orientation);
+    assert!(s.orientation().mirror_vertical && s.chain().active().count() == 0);
+}
+
+#[test]
+fn editing_a_filter_that_is_off_keeps_it_off() {
+    let mut s = state();
+    s.set_shown_edge(Edge::Bottom, 90);
+    s.set_resize_side(0, Some(1280));
+    s.set_deinterlacer(rustcut_core::edit::Deinterlacer::Yadif);
+    s.set_field_order(rustcut_core::edit::FieldParity::BottomFirst);
+    s.set_only_interlaced(true);
+    assert_eq!(
+        s.chain().active().count(),
+        0,
+        "user decision Q-P9.13: the value is kept, the filter stays off"
+    );
+    assert_eq!(s.shown_crop().bottom, 90);
+    assert_eq!(s.resize().0, Some(1280));
+    s.toggle(FilterKind::Crop);
+    assert_eq!(view::card(&s).output, "Output 1920×990");
+    s.switch_on(FilterKind::Deinterlace);
+    assert_eq!(
+        s.chain().get(FilterKind::Deinterlace).map(|slot| slot.filter),
+        Some(rustcut_core::edit::Filter::Deinterlace {
+            deinterlacer: rustcut_core::edit::Deinterlacer::Yadif,
+            rate: rustcut_core::edit::DeinterlaceRate::Frame,
+            field_order: rustcut_core::edit::FieldParity::BottomFirst,
+            only_interlaced: true,
+        })
+    );
 }
 
 #[test]
 fn crop_fields_are_the_edges_seen_in_the_output() {
     let mut s = state();
-    s.rotate(true);
-    // Crop comes before rotate by default: the shown top is the frame's left edge.
+    s.turn(true);
+    // Crop comes before the orientation by default: the shown top is the frame's left edge.
     s.set_shown_edge(Edge::Top, 120);
     assert_eq!(s.crop(), Crop::new(0, 0, 0, 120));
     assert_eq!(s.shown_crop(), Crop::new(120, 0, 0, 0));
-    assert!(s.chain().is_enabled(FilterKind::Crop));
     // Too large: limited so two pixels stay.
     s.set_shown_edge(Edge::Bottom, 5000);
     assert_eq!(s.crop().kept(HD).unwrap().width, 2);
@@ -251,8 +287,9 @@ fn resize_helpers_take_the_height_from_the_width() {
 
 #[test]
 fn the_preview_follows_the_toggle_the_source_rotation_and_crop_editing() {
-    let mut s = FiltersState::new(FilterDefaults::default(), true, false, None, CropAspect::Free);
+    let mut s = FiltersState::new(FilterDefaults::default(), true, false, (None, None), CropAspect::Free);
     s.set_crop(Crop::new(0, 0, 0, 100));
+    s.switch_on(FilterKind::Crop);
     assert_eq!(s.preview_filter().lavfi, "", "nothing before the probe");
     s.source_known(source(HD, 90));
     s.set_view(960.0, 540.0);
@@ -267,7 +304,7 @@ fn the_preview_follows_the_toggle_the_source_rotation_and_crop_editing() {
     assert!(s.begin_crop(CropMode::Edit));
     assert_eq!(s.preview_filter(), rustcut_player::VideoFilter::default());
     // ... and turned like the output.
-    s.toggle_mirror(true);
+    s.flip(true);
     let p = s.preview_filter();
     assert_eq!(
         (p.lavfi.as_str(), p.rotates_source),
@@ -302,18 +339,21 @@ fn a_crop_session_drags_and_escape_restores() {
 #[test]
 fn keep_carries_the_chain_to_the_next_video_and_start() {
     let mut s = state();
-    s.rotate(true);
+    s.turn(true);
+    s.search.limit = 60;
     s.file_opened();
-    assert_eq!(s.quarter_turns(), 0, "without keep the next video starts clean");
+    assert_eq!(s.orientation().turns, 0, "without keep the next video starts clean");
+    assert_eq!(s.search.limit, 24);
     s.keep = true;
-    s.rotate(false);
+    s.turn(false);
+    s.search.limit = 60;
     s.file_opened();
-    assert_eq!(s.quarter_turns(), 3);
-    let kept = s.kept_chain();
+    assert_eq!(s.orientation().turns, 3);
+    let kept = (s.kept_chain(), s.kept_search());
     let restarted = FiltersState::new(FilterDefaults::default(), true, true, kept.clone(), CropAspect::Free);
-    assert_eq!(restarted.quarter_turns(), 3);
+    assert_eq!((restarted.orientation().turns, restarted.search.limit), (3, 60));
     let off = FiltersState::new(FilterDefaults::default(), true, false, kept, CropAspect::Free);
-    assert_eq!(off.quarter_turns(), 0);
+    assert_eq!((off.orientation().turns, off.search.limit), (0, 24));
 }
 
 #[test]
@@ -321,6 +361,7 @@ fn the_card_tells_the_output_size_and_the_interlace_check() {
     let mut s = state();
     assert_eq!(view::card(&s).output, "Output 1920×1080");
     s.set_crop(Crop::new(1, 0, 0, 3));
+    s.switch_on(FilterKind::Crop);
     assert_eq!(view::card(&s).output, "Output 1917×1079 (rendered 1916×1078)");
     s.interlace = InterlaceHint::Known(
         Interlacing::Interlaced { top_field_first: true },
@@ -337,7 +378,7 @@ fn the_card_tells_the_output_size_and_the_interlace_check() {
         card.interlace_rows.first(),
         Some(&("Top field first".to_owned(), "250 frames".to_owned()))
     );
-    assert_eq!(card.rows.len(), 6);
+    assert_eq!(card.rows.len(), 5);
     assert!(!card.rows[0].can_up && card.rows[0].can_down);
     assert_eq!(view::card(&s).resize_auto_height, "auto (1079)");
 }

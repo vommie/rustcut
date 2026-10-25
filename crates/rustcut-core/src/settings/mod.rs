@@ -4,6 +4,7 @@
 mod dialog_ui;
 mod dialogs;
 mod file;
+mod filters;
 mod notices;
 mod paths;
 mod schema;
@@ -17,6 +18,7 @@ mod unknown;
 pub use dialog_ui::{DialogSize, DialogUiState};
 pub use dialogs::{ConflictDialogSettings, ConflictPreselect, DialogSettings, PictureScope, TileSize};
 pub use file::{FileError, LoadOutcome, MigrationStep, VersionedFile, backup_file, load, save};
+pub use filters::FilterDefaults;
 pub use notices::{
     BannerAnimation, BannerAttention, BannerSettings, BellBadge, BubbleSettings, DesktopNoticeSettings,
     HistorySettings, KindRoute, NoticePlace, NoticeSettings, ToastAnimation, ToastOrder, ToastPosition, ToastSettings,
@@ -24,7 +26,7 @@ pub use notices::{
 };
 pub use paths::AppPaths;
 pub use schema::{
-    AdvancedSettings, AppearanceSettings, AutoSection, DesktopSettings, EditorSettings, ExportSettings, FilterDefaults,
+    AdvancedSettings, AppearanceSettings, AutoSection, DesktopSettings, EditorSettings, ExportSettings,
     GeneralSettings, HashingSettings, OnJobLoad, PlayerSettings, QueueSettings, RenderSettings, RustViewSettings,
     Settings, TargetFolder, TraySettings, WarningSettings, WhenDone, WriteTiming,
 };

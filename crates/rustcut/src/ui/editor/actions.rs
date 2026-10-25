@@ -181,10 +181,10 @@ impl Editor {
             Action::AutoCrop => self.with_filters(FiltersBridge::auto_crop),
             Action::ToggleFilterPreview => self.with_filters(FiltersBridge::toggle_preview),
             Action::ToggleKeepFilters => self.with_filters(FiltersBridge::toggle_keep),
-            Action::RotateLeft => self.with_filters(|f| f.rotate(false)),
-            Action::RotateRight => self.with_filters(|f| f.rotate(true)),
-            Action::MirrorHorizontal => self.with_filters(|f| f.mirror(true)),
-            Action::MirrorVertical => self.with_filters(|f| f.mirror(false)),
+            Action::RotateLeft => self.with_filters(|f| f.turn(false)),
+            Action::RotateRight => self.with_filters(|f| f.turn(true)),
+            Action::MirrorHorizontal => self.with_filters(|f| f.flip(true)),
+            Action::MirrorVertical => self.with_filters(|f| f.flip(false)),
             Action::ResetFilters => self.with_filters(FiltersBridge::reset),
             Action::ProbeRender => {
                 let probe = self.probe.borrow().upgrade();

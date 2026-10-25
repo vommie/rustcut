@@ -147,6 +147,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Settings > Filters has new defaults (0.0.48, your filter questionnaire): Deinterlace "Output" (frames or fields),
+  "Field order" (auto, top or bottom first) and "Only interlaced frames"; a new "Auto-crop" card with "Black up to"
+  (how bright a border may be: 24 finds black bars, around 50 also dark gray ones), "Search" (all edges, top and
+  bottom, or the sides), "Sample points" and "Only inside the sections" (on); Deshake "Max shift", "Max angle" and
+  "Zoom speed" (for the adaptive zoom); a "Resize" card with the scaler. Each was checked against ffmpeg's manual and
+  tried with the real ffmpeg. The Filters card's own menus for them follow in the next versions; older settings files
+  load with these defaults.
+
 - A play or pause symbol flashes in the middle of the video when a key plays or pauses it (0.0.47, your UI review round
   1 and your answers): a dark translucent disc with the white symbol that fades in, stands briefly and fades out
   (0.6 s), for the play/pause key and J, K and L (not for the menu or the button under the video, not at the end of a
@@ -154,6 +162,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   "Play and pause" switches either off (both are on; older settings files load unchanged).
 
 ### Changed
+
+- Rotate and Mirror are one filter, Orientation (0.0.48, your UI review round 1 and your answers): turn right or left
+  (one or none, like radio buttons; a second click takes the turn back) and mirror left to right and top to bottom
+  (each a switch of its own; both together turn the picture upside down). Pressed buttons show what is on, and a
+  small "F" shows how the picture ends up (its tooltip says it in words). Every button and the keys R, Shift+R and the
+  mirror keys switch Orientation on. Saved jobs and kept filters of older versions load with their rotation and mirror
+  in one Orientation and render exactly as before.
+- Changing a value of a filter that is off keeps it off; the value waits until you switch the filter on (0.0.48, your
+  answer). Auto-crop, editing the crop on the video and the Orientation buttons and keys switch their filter on.
+- Auto-crop looks only inside the sections when there are any (0.0.48), and new videos resize with lanczos, the
+  sharpest scaler for shrinking.
 
 - The player without a video shows a faint, colorless RustCut symbol with "Open a video with File > Open (Ctrl+O)" and
   "or drop it here." on two lines; the title and the version are gone (0.0.47).

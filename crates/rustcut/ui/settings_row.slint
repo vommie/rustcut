@@ -116,6 +116,20 @@ export component SettingsRow inherits Rectangle {
                 canceled => { SettingsUi.text-canceled(root.option.key); }
             }
 
+            // A number typed as text (an empty field or a decimal means something): drawn like a number.
+            if root.option.kind == 8: NumberField {
+                width: ControlMetrics.field-max-width;
+                spin: false;
+                text: root.option.text;
+                placeholder: root.option.placeholder;
+                unit: root.option.suffix;
+                enabled: root.option.enabled;
+                bubble: "settings:" + root.option.key;
+                committed(text) => { return SettingsUi.type-text(root.option.key, text); }
+                typed(text) => { SettingsUi.text-typed(root.option.key, text); }
+                canceled => { SettingsUi.text-canceled(root.option.key); }
+            }
+
             if root.option.kind == 3: NumberField {
                 width: 260px;
                 text: root.option.text;

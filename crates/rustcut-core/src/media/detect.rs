@@ -11,17 +11,13 @@ use std::time::Duration;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
+use super::crop_search::CropSearch;
 use super::probe::{ProbeError, run};
 use crate::edit::{Crop, Size};
 use crate::time::Timestamp;
 
-/// How many points of the video auto-crop looks at.
-pub const CROP_SAMPLES: usize = 8;
 /// Frames decoded per crop sample (the first two are skipped by `cropdetect`, they may be half-decoded after the seek).
 const CROP_SAMPLE_FRAMES: u32 = 8;
-/// Darkest value that still counts as picture, as a fraction of the full range (PyCutRv's 24 of 255, so 10-bit
-/// sources use the same threshold).
-const CROP_LIMIT: &str = "0.094";
 /// Crop samples running at the same time.
 const CROP_PARALLEL: usize = 3;
 /// Frames `idet` looks at.
@@ -95,29 +91,10 @@ pub struct CropDetection {
     pub samples_taken: usize,
 }
 
-/// Where auto-crop looks: [`CROP_SAMPLES`] points spread evenly over the video without its first and last 5 % (titles,
-/// fades); a short video gets fewer points, at least one. Without a known duration only the start is used.
-pub fn crop_sample_times(duration: Option<Timestamp>) -> Vec<Timestamp> {
-    let Some(duration) = duration.filter(|d| d.as_micros() > 0) else {
-        return vec![Timestamp::ZERO];
-    };
-    let micros = duration.as_micros();
-    // One point per two seconds of video at most.
-    let count = usize::try_from(micros / 2_000_000)
-        .unwrap_or(CROP_SAMPLES)
-        .clamp(1, CROP_SAMPLES);
-    let start = micros / 20;
-    let span = micros - 2 * start;
-    let count_i = i64::try_from(count).unwrap_or(1);
-    (0..count_i)
-        .map(|i| Timestamp::from_micros(start + span * (2 * i + 1) / (2 * count_i)))
-        .collect()
-}
-
 /// The ffmpeg arguments of one crop sample at `at`: the filters before the crop (`prefix`, lavfi text, may be empty) so
 /// the borders are found in the frame the crop gets, then `cropdetect` over a few frames.
-pub fn cropdetect_args(file: &Path, at: Timestamp, prefix: &str) -> Vec<OsString> {
-    let detect = format!("cropdetect=limit={CROP_LIMIT}:round=2:reset=0");
+pub fn cropdetect_args(file: &Path, at: Timestamp, prefix: &str, search: &CropSearch) -> Vec<OsString> {
+    let detect = format!("cropdetect=limit={}:round=2:reset=0", search.limit_fraction());
     let filters = if prefix.is_empty() {
         detect
     } else {
@@ -166,19 +143,19 @@ pub fn combine_crop_samples(boxes: &[CropBox], frame: Size) -> Option<Crop> {
 }
 
 /// Finds the black borders of `file`'s frames as they reach the crop (`frame` big, after the `prefix` filters), sampled
-/// at [`crop_sample_times`]. Must run on the tokio runtime.
+/// at `times` ([`super::crop_sample_times`]), on the sides `search` allows. Must run on the tokio runtime.
 pub async fn detect_crop(
     file: &Path,
     frame: Size,
-    duration: Option<Timestamp>,
+    times: &[Timestamp],
     prefix: &str,
+    search: &CropSearch,
     options: &DetectOptions,
 ) -> Result<CropDetection, ProbeError> {
-    let times = crop_sample_times(duration);
     let gate = Arc::new(Semaphore::new(CROP_PARALLEL));
     let mut samples = JoinSet::new();
-    for at in &times {
-        let args = cropdetect_args(file, *at, prefix);
+    for at in times {
+        let args = cropdetect_args(file, *at, prefix, search);
         let program = options.program().to_path_buf();
         let timeout = options.sample_timeout;
         let gate = Arc::clone(&gate);
@@ -203,7 +180,7 @@ pub async fn detect_crop(
     }
     match (combine_crop_samples(&boxes, frame), first_error) {
         (Some(crop), _) => Ok(CropDetection {
-            crop,
+            crop: search.sides.keep(crop),
             samples_used: boxes.len(),
             samples_taken: times.len(),
         }),
@@ -325,17 +302,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn samples_spread_over_the_middle_of_the_video() {
-        let times = crop_sample_times(Some(Timestamp::from_secs(100)));
-        assert_eq!(times.len(), CROP_SAMPLES);
-        assert_eq!(times.first(), Some(&Timestamp::from_micros(10_625_000)));
-        assert_eq!(times.last(), Some(&Timestamp::from_micros(89_375_000)));
-        assert_eq!(crop_sample_times(Some(Timestamp::from_secs(5))).len(), 2);
-        assert_eq!(crop_sample_times(Some(Timestamp::from_millis(400))).len(), 1);
-        assert_eq!(crop_sample_times(None), vec![Timestamp::ZERO]);
-    }
-
-    #[test]
     fn cropdetect_lines_are_read_and_black_samples_dropped() {
         let stderr = "\
 [Parsed_cropdetect_0 @ 0x1] x1:2 x2:637 y1:61 y2:419 w:636 h:358 x:2 y:62 pts:1 t:0.04 limit:0.094 crop=636:358:2:62
@@ -415,11 +381,22 @@ mod tests {
 
     #[test]
     fn arguments_keep_the_path_a_path_and_chain_the_prefix() {
-        let args = cropdetect_args(Path::new("-a.mkv"), Timestamp::from_secs(5), "transpose=dir=clock");
+        let args = cropdetect_args(
+            Path::new("-a.mkv"),
+            Timestamp::from_secs(5),
+            "transpose=dir=clock",
+            &CropSearch::default(),
+        );
         let text: Vec<String> = args.iter().map(|a| a.to_string_lossy().into_owned()).collect();
         let i = text.iter().position(|a| a == "-i").unwrap();
         assert_eq!(text.get(i + 1).map(String::as_str), Some("-a.mkv"));
         assert!(text.contains(&"transpose=dir=clock,cropdetect=limit=0.094:round=2:reset=0".to_owned()));
+        let gray = CropSearch {
+            limit: 51,
+            ..CropSearch::default()
+        };
+        let args = cropdetect_args(Path::new("/v/a.mkv"), Timestamp::ZERO, "", &gray);
+        assert!(args.iter().any(|a| a == "cropdetect=limit=0.200:round=2:reset=0"));
         assert!(
             idet_args(Path::new("/v/a.mpg"), Timestamp::ZERO)
                 .iter()

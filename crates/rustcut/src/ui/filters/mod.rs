@@ -25,6 +25,7 @@ use std::time::Duration;
 use rustcut_core::edit::{CropAspect, FilterKind};
 use rustcut_core::media::{DetectOptions, MediaInfo};
 use rustcut_core::settings::{ExportPanelState, Settings};
+use rustcut_core::time::Timestamp;
 use rustcut_player::VideoFilter;
 use slint::{ComponentHandle as _, ModelRc, SharedString, VecModel};
 
@@ -73,7 +74,12 @@ pub struct FiltersBridge {
     ctrl: Cell<bool>,
     hover: Cell<Option<(f32, f32)>>,
     quick_timer: slint::Timer,
+    /// The sections' time ranges (from the editor), for auto-crop.
+    sections: RefCell<Option<SectionsSource>>,
 }
+
+/// Where the bridge reads the sections' time ranges.
+type SectionsSource = Box<dyn Fn() -> Vec<(Timestamp, Timestamp)>>;
 
 impl FiltersBridge {
     /// Takes over the Filters card and the crop overlay. The app owns the only strong reference.
@@ -88,7 +94,7 @@ impl FiltersBridge {
             settings.filters.clone(),
             export.preview_filters,
             export.keep_filters,
-            export.filters.clone(),
+            (export.filters.clone(), export.crop_search),
             export.crop_aspect,
         );
         let bridge = Rc::new_cyclic(|me| Self {
@@ -111,6 +117,7 @@ impl FiltersBridge {
             ctrl: Cell::new(false),
             hover: Cell::new(None),
             quick_timer: slint::Timer::default(),
+            sections: RefCell::new(None),
         });
         let filters = window.global::<Filters<'_>>();
         filters.set_rows(ModelRc::from(Rc::clone(&bridge.rows)));
@@ -172,7 +179,11 @@ impl FiltersBridge {
         self.publish();
     }
 
-    /// What `ui-state.toml` keeps of the filters.
+    /// Where auto-crop reads the sections (the editor, connected after both exist).
+    pub fn set_sections_source(&self, source: impl Fn() -> Vec<(Timestamp, Timestamp)> + 'static) {
+        *self.sections.borrow_mut() = Some(Box::new(source));
+    }
+
     /// The ffmpeg that auto-crop and the interlace check run (changed in the Settings window).
     pub fn set_ffmpeg(&self, program: Option<PathBuf>) {
         self.detect.borrow_mut().program = program;
@@ -183,11 +194,13 @@ impl FiltersBridge {
         self.state.borrow_mut().set_defaults(defaults);
     }
 
+    /// What `ui-state.toml` keeps of the filters.
     pub fn save_into(&self, export: &mut ExportPanelState) {
         let st = self.state.borrow();
         export.preview_filters = st.preview;
         export.keep_filters = st.keep;
         export.filters = st.kept_chain();
+        export.crop_search = st.kept_search();
         export.crop_aspect = st.aspect;
     }
 
@@ -227,12 +240,14 @@ impl FiltersBridge {
         Self::tell(Notice::new(Kind::FiltersReset, "Filters reset"));
     }
 
-    pub fn rotate(&self, clockwise: bool) {
-        self.update(|s| s.rotate(clockwise));
+    /// The rotate keys: turn the picture a quarter (Orientation switches on).
+    pub fn turn(&self, clockwise: bool) {
+        self.update(|s| s.turn(clockwise));
     }
 
-    pub fn mirror(&self, horizontal: bool) {
-        self.update(|s| s.toggle_mirror(horizontal));
+    /// The mirror keys: mirror the picture (Orientation switches on).
+    pub fn flip(&self, horizontal: bool) {
+        self.update(|s| s.flip(horizontal));
     }
 
     /// Starts or finishes editing the crop on the video (the button, the key).
@@ -380,9 +395,14 @@ impl FiltersBridge {
         f.set_can_edit_crop(card.can_edit_crop);
         f.set_auto_crop_running(card.auto_crop_running);
         f.set_aspect(index(card.aspect));
-        f.set_quarter_turns(i32::from(card.quarter_turns));
-        f.set_mirror_horizontal(card.mirror_horizontal);
-        f.set_mirror_vertical(card.mirror_vertical);
+        // The glyph shows the result (turns, then a mirror left to right); the buttons show the mirrors as set.
+        let (turns, mirrored) = card.orientation.orientation().turns_and_mirror();
+        f.set_orientation_turns(i32::from(turns));
+        f.set_orientation_mirrored(mirrored);
+        f.set_orientation_turn(i32::from(card.orientation.normalized().turns));
+        f.set_orientation_mirror_horizontal(card.orientation.mirror_horizontal);
+        f.set_orientation_mirror_vertical(card.orientation.mirror_vertical);
+        f.set_orientation_label(card.orientation.label().into());
         f.set_resize_width(card.resize_width.as_str().into());
         f.set_resize_height(card.resize_height.as_str().into());
         f.set_resize_auto_width(card.resize_auto_width.as_str().into());
@@ -464,8 +484,7 @@ pub fn kind_id(kind: FilterKind) -> &'static str {
         FilterKind::Deinterlace => "deinterlace",
         FilterKind::Crop => "crop",
         FilterKind::Deshake => "deshake",
-        FilterKind::Rotate => "rotate",
-        FilterKind::Mirror => "mirror",
+        FilterKind::Orientation => "orientation",
         FilterKind::Resize => "resize",
     }
 }
@@ -482,8 +501,7 @@ const fn kind_tooltip(kind: FilterKind) -> &'static str {
         }
         FilterKind::Crop => "Cuts pixels off the edges. The fields are the edges as seen in the output.",
         FilterKind::Deshake => "Stabilizes shaky footage with vid.stab in two render passes.",
-        FilterKind::Rotate => "Turns the picture in quarter turns.",
-        FilterKind::Mirror => "Mirrors the picture left and right or top and bottom.",
+        FilterKind::Orientation => "Turns and mirrors the picture (all eight ways a picture can lie).",
         FilterKind::Resize => "Scales the picture; an empty side keeps the aspect ratio. The output has square pixels.",
     }
 }

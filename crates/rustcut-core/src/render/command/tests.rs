@@ -2,7 +2,7 @@ use std::ffi::OsString;
 use std::fmt::Write as _;
 
 use super::*;
-use crate::edit::{Crop, DeshakeParams, Filter, FilterChain, Mirror, Rotation, SectionList};
+use crate::edit::{Crop, DeshakeParams, Filter, FilterChain, Orientation, SectionList};
 use crate::job::sample_spec;
 use crate::media::{AudioStream, Container as MediaContainer, Stream, VideoStream};
 use crate::render::{Container, RateControl, VideoEncoder};
@@ -172,13 +172,7 @@ fn three_sections_two_tracks_with_filters() {
     spec.sections = sections(&[(1_000, 4_000), (30_500, 31_250), (10_000, 12_000)]);
     spec.filters = chain(&[
         Filter::Crop(Crop::new(10, 20, 30, 40)),
-        Filter::Rotate {
-            rotation: Rotation::Clockwise,
-        },
-        Filter::Mirror(Mirror {
-            horizontal: true,
-            vertical: false,
-        }),
+        Filter::Orientation(Orientation::CLOCKWISE.then(Orientation::MIRROR_HORIZONTAL).into()),
     ]);
     spec.target.stem = "Ärger: [cut], 'x'".into();
     let plan = build(&spec, &source(1920, 1080, 0, 2), &HardwareContext::default()).unwrap();
@@ -209,9 +203,7 @@ fn deshake_and_two_pass_add_passes() {
     let mut spec = sample_spec();
     spec.filters = chain(&[
         Filter::Deshake(DeshakeParams::default()),
-        Filter::Rotate {
-            rotation: Rotation::UpsideDown,
-        },
+        Filter::Orientation(Orientation::UPSIDE_DOWN.into()),
     ]);
     spec.profile.video.encoder = VideoEncoder::X264;
     spec.profile.video.preset = None;
@@ -239,10 +231,7 @@ fn vaapi_uploads_after_the_chain() {
     spec.profile.video.codec_params.clear();
     spec.profile.video.film_grain = None;
     spec.profile.video.rate_control = RateControl::Quality { value: 25 };
-    spec.filters = chain(&[Filter::Mirror(Mirror {
-        horizontal: false,
-        vertical: true,
-    })]);
+    spec.filters = chain(&[Filter::Orientation(Orientation::MIRROR_VERTICAL.into())]);
     let src = source(1280, 720, 0, 1);
     assert_eq!(
         build(&spec, &src, &HardwareContext::default()),
