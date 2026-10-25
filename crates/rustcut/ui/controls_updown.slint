@@ -1,0 +1,104 @@
+// One design for every up/down pair (P9.1, the review's general note and 15#6): a slim button split into an upper and a
+// lower half. `UpDownButton` moves things (queue jobs, folders, sections); the halves are also a number field's spin
+// arrows (controls_number.slint).
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId } from "icons.slint";
+import { TooltipHost } from "tooltip.slint";
+
+/// One half of an up/down pair: its chevron, hover, tooltip and click. Shift while pressing = a big step.
+export component UpDownHalf inherits Rectangle {
+    in property <bool> up;
+    in property <bool> enabled: true;
+    in property <string> tooltip;
+    in property <string> shortcut;
+    in property <length> icon-size: 10px;
+    callback clicked(/* big */ bool);
+
+    background: !root.enabled ? transparent
+        : touch.pressed ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : transparent;
+
+    host := TooltipHost {
+        text: root.tooltip;
+        shortcut: root.shortcut;
+    }
+
+    touch := TouchArea {
+        property <bool> big;
+
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                self.big = event.modifiers.shift;
+                host.press();
+            }
+        }
+        clicked => {
+            if root.enabled {
+                root.clicked(self.big);
+            }
+        }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+
+    AppIcon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2 + (root.up ? 0.5px : -0.5px);
+        icon: root.up ? IconId.chevron-up : IconId.chevron-down;
+        size: root.icon-size;
+        color: root.enabled ? (touch.has-hover ? Theme.text : Theme.text-muted) : Theme.status-deleted;
+    }
+}
+
+/// Moves something one place up or down: one button whose upper half goes up and whose lower half goes down.
+export component UpDownButton inherits Rectangle {
+    in property <string> up-tooltip;
+    in property <string> down-tooltip;
+    in property <string> up-shortcut;
+    in property <string> down-shortcut;
+    in property <bool> up-enabled: true;
+    in property <bool> down-enabled: true;
+    callback up();
+    callback down();
+
+    width: 22px;
+    height: 24px;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    border-radius: 4px;
+    background: Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+    clip: true;
+
+    VerticalLayout {
+        padding: 1px;
+
+        UpDownHalf {
+            up: true;
+            enabled: root.up-enabled;
+            tooltip: root.up-tooltip;
+            shortcut: root.up-shortcut;
+            clicked => { root.up(); }
+        }
+
+        Rectangle {
+            height: 1px;
+            background: Theme.border;
+        }
+
+        UpDownHalf {
+            up: false;
+            enabled: root.down-enabled;
+            tooltip: root.down-tooltip;
+            shortcut: root.down-shortcut;
+            clicked => { root.down(); }
+        }
+    }
+}

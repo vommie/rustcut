@@ -22,6 +22,7 @@ tabler_version = "3.49.0"
 # --- Generic UI glyphs -------------------------------------------------------------------------------------------
 chevron_down = { tabler = "chevron-down", doc = "Chevron pointing down (expanded)" }
 chevron_right = { tabler = "chevron-right", doc = "Chevron pointing right (collapsed)" }
+chevron_up = { tabler = "chevron-up", doc = "Chevron pointing up (the upper half of spin arrows and up/down buttons)" }
 maximize = { tabler = "arrows-maximize", doc = "Maximize a panel group inside its sidebar" }
 restore = { tabler = "arrows-minimize", doc = "Restore a maximized panel group" }
 close = { tabler = "x", doc = "Dismiss a banner" }

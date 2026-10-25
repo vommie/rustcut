@@ -94,6 +94,11 @@ impl Timestamp {
         format::format(self, precision)
     }
 
+    /// The compact form of a length for summaries (`05.500s`, `02:33.100`, `3:02:33.000`; see [`format::compact`]).
+    pub fn format_compact(self) -> String {
+        format::compact(self)
+    }
+
     /// Seconds with six decimals, the form ffmpeg's `-ss`/`-to`/`-t` accept exactly (`12.345678`).
     pub fn to_ffmpeg_arg(self) -> String {
         let sign = if self.0 < 0 { "-" } else { "" };

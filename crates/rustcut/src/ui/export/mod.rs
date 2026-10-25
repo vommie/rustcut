@@ -403,7 +403,7 @@ impl ExportBridge {
                         .detail(problem.tooltip.as_str())
                         .key(SAVE_BLOCKED)
                         .jump(jump)
-                        .action("Show the option", move || crate::ui::jump::go(jump)),
+                        .jump_action("Show the option", jump),
                 );
             }
             None => notices::clear(SAVE_BLOCKED),

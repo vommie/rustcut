@@ -1,0 +1,226 @@
+// Choices shared by every panel and the Settings window (P9.1, review notes 08#1, 09#1, 09#2): a choice button that
+// stretches up to the common width, cuts its text with "…" and opens a list as wide as its longest entry, and a
+// segmented choice for at most three short entries (decided by Rust, `util::choice::segmented`).
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { TipRow, TooltipHost } from "tooltip.slint";
+import { BubbleAnchor } from "bubble.slint";
+import { ControlMetrics } from "controls_base.slint";
+
+/// The current choice of a list; a click opens the list below it.
+export component ChoiceButton inherits Rectangle {
+    in property <[string]> items;
+    in property <int> current;
+    in property <string> tooltip;
+    // A rich tooltip: a title and rows (one per choice, say) above `tooltip`.
+    in property <string> tip-title;
+    in property <[TipRow]> tip-rows;
+    in property <bool> enabled: true;
+    in property <IconId> icon: IconId.none;
+    // The key of the bubble about this choice (`bubble.slint`; empty = none).
+    in property <string> bubble;
+    callback selected(int);
+
+    height: 24px;
+    // Stretches up to the common width; a narrow sidebar cuts the chosen text.
+    min-width: 48px;
+    preferred-width: ControlMetrics.field-max-width;
+    max-width: ControlMetrics.field-max-width;
+    horizontal-stretch: 1;
+    border-radius: 4px;
+    background: !root.enabled ? transparent : touch.pressed ? Theme.surface-selected
+        : touch.has-hover ? Theme.surface-hover : Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    host := TooltipHost {
+        text: root.tooltip;
+        title: root.tip-title;
+        rows: root.tip-rows;
+    }
+
+    BubbleAnchor {
+        key: root.bubble;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.pointer;
+        clicked => {
+            host.press();
+            popup.show();
+        }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 4px;
+        spacing: 3px;
+
+        if root.icon != IconId.none: VerticalLayout {
+            alignment: center;
+            AppIcon {
+                icon: root.icon;
+                size: IconSize.sm;
+                color: root.enabled ? Theme.text-muted : Theme.status-deleted;
+            }
+        }
+
+        Text {
+            text: root.items[root.current];
+            color: root.enabled ? Theme.text : Theme.status-deleted;
+            font-size: 12px;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+            min-width: 16px;
+        }
+
+        VerticalLayout {
+            alignment: center;
+            AppIcon {
+                icon: IconId.chevron-down;
+                size: IconSize.xs;
+                color: Theme.text-muted;
+            }
+        }
+    }
+
+    // As wide as its longest entry (never cut), at least as wide as the button.
+    popup := PopupWindow {
+        x: 0;
+        y: root.height + 2px;
+        width: Math.max(root.width, list.preferred-width);
+        height: list.preferred-height;
+        close-policy: close-on-click;
+
+        Rectangle {
+            background: Theme.surface;
+            border-radius: 4px;
+            border-width: 1px;
+            border-color: Theme.border;
+            drop-shadow-blur: 10px;
+            drop-shadow-color: #000000aa;
+
+            list := VerticalLayout {
+                padding: 3px;
+                spacing: 1px;
+
+                for item[index] in root.items: Rectangle {
+                    height: 22px;
+                    border-radius: 3px;
+                    background: index == root.current ? Theme.surface-selected
+                        : item-touch.has-hover ? Theme.surface-hover : transparent;
+
+                    item-touch := TouchArea {
+                        clicked => {
+                            root.selected(index);
+                            popup.close();
+                        }
+                    }
+
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 12px;
+
+                        Text {
+                            text: item;
+                            color: Theme.text;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// At most three short choices side by side, the chosen one pressed in (D-P9j). Every part is equally wide, so the
+/// bold chosen text never moves the others.
+export component SegmentedChoice inherits Rectangle {
+    in property <[string]> items;
+    in property <int> current;
+    in property <string> tooltip;
+    in property <bool> enabled: true;
+    // The key of the bubble about this choice (`bubble.slint`; empty = none).
+    in property <string> bubble;
+    callback selected(int);
+
+    height: 24px;
+    min-width: root.items.length * 34px;
+    preferred-width: ControlMetrics.field-max-width;
+    max-width: ControlMetrics.field-max-width;
+    horizontal-stretch: 1;
+    border-radius: 4px;
+    background: Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    host := TooltipHost {
+        text: root.tooltip;
+    }
+
+    BubbleAnchor {
+        key: root.bubble;
+    }
+
+    area := TouchArea {
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+
+        HorizontalLayout {
+            padding: 2px;
+            spacing: 2px;
+
+            for item[index] in root.items: Rectangle {
+                horizontal-stretch: 1;
+                min-width: 30px;
+                border-radius: 3px;
+                background: index == root.current ? Theme.primary.with-alpha(root.enabled ? 0.22 : 0.08)
+                    : part.has-hover && root.enabled ? Theme.surface-hover : transparent;
+                border-width: index == root.current ? 1px : 0px;
+                border-color: root.enabled ? Theme.primary : Theme.border;
+
+                part := TouchArea {
+                    mouse-cursor: root.enabled && index != root.current ? MouseCursor.pointer : MouseCursor.default;
+                    pointer-event(event) => {
+                        if event.kind == PointerEventKind.down {
+                            host.press();
+                        }
+                    }
+                    clicked => {
+                        if root.enabled && index != root.current {
+                            root.selected(index);
+                        }
+                    }
+                }
+
+                Text {
+                    x: 4px;
+                    width: parent.width - 8px;
+                    text: item;
+                    color: !root.enabled ? Theme.status-deleted : index == root.current ? Theme.text : Theme.text-muted;
+                    font-size: 11px;
+                    font-weight: index == root.current ? 600 : 400;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+        }
+    }
+}

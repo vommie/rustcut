@@ -215,6 +215,7 @@ impl InspectorBridge {
                                 Tone::Muted => 1,
                                 Tone::Error => 2,
                             },
+                            path: r.path,
                         })
                         .collect::<Vec<_>>(),
                 )),

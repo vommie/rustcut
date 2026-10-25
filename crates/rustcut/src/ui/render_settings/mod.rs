@@ -26,7 +26,7 @@ use slint::{ComponentHandle as _, ModelRc, SharedString, VecModel};
 use tokio::sync::watch;
 
 use self::state::{Check, CheckStatus, Encoders, PanelState};
-use self::view::RowView;
+use self::view::{RowKind, RowView};
 use crate::app::SettingsWriter;
 use crate::ui::notices::{self, Notice};
 use crate::util::model::sync;
@@ -347,9 +347,9 @@ impl RenderSettingsBridge {
         rs.set_check_text(panel.check_text.as_str().into());
         rs.set_check_running(panel.check_running);
         rs.set_encoders_note(panel.encoders_note.as_str().into());
-        sync(&self.video, panel.video.iter().map(row).collect());
-        sync(&self.audio, panel.audio.iter().map(row).collect());
-        sync(&self.expert, panel.expert.iter().map(row).collect());
+        sync(&self.video, panel.video.iter().map(option_row).collect());
+        sync(&self.audio, panel.audio.iter().map(option_row).collect());
+        sync(&self.expert, panel.expert.iter().map(option_row).collect());
         self.publish_bubbles(&panel);
         if let Some(changed) = self.changed.borrow().as_ref() {
             changed();
@@ -362,7 +362,8 @@ fn index(i: usize) -> i32 {
     i32::try_from(i).unwrap_or(0)
 }
 
-fn row(r: &RowView) -> OptionRowView {
+/// The Slint form of an option row (the Codecs panel and the Settings window's profile editor).
+pub fn option_row(r: &RowView) -> OptionRowView {
     OptionRowView {
         key: r.row.key().into(),
         kind: r.kind as i32,
@@ -382,5 +383,7 @@ fn row(r: &RowView) -> OptionRowView {
         position: i32::from(r.position),
         enabled: r.enabled,
         mark: r.mark as i32,
+        unit: r.unit.into(),
+        segmented: r.kind == RowKind::Choice && crate::util::choice::segmented(&r.items),
     }
 }

@@ -131,8 +131,10 @@ component KindRow inherits VerticalLayout {
             if !root.muted-list && !root.kind.locked: VerticalLayout {
                 alignment: center;
 
+                // As wide as the locked place beside it, so the column lines up.
                 place-choice := ChoiceButton {
-                    min-width: 110px;
+                    width: 110px;
+                    horizontal-stretch: 0;
                     items: root.kind.places;
                     current: root.kind.place-index;
                     tooltip: "Where this message appears";

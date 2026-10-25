@@ -426,7 +426,7 @@ fn show_failure(window: &MainWindow, view: &PlaybackView) {
                     window.global::<Playback<'_>>().invoke_reload();
                 }
             })
-            .action("Show log", notices::show_app_log),
+            .leading_action("Show log", notices::show_app_log),
     );
 }
 

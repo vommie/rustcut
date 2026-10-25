@@ -51,9 +51,7 @@ impl ExportBridge {
                 let has_video = self.player.upgrade().is_some_and(|p| p.current_file().is_some());
                 if has_video && self.editor.upgrade().is_some_and(|e| e.section_count() == 0) {
                     let target = JumpTarget::Sections;
-                    notice = notice
-                        .jump(target)
-                        .action("Show the sections", move || crate::ui::jump::go(target));
+                    notice = notice.jump(target).jump_action("Show the sections", target);
                 }
                 Self::tell(notice);
                 return;

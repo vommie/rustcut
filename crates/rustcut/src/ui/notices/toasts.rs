@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use rustcut_core::settings::{ToastOrder, ToastSettings, ToastStacking};
 
 use super::kind::{Kind, Level};
+use super::notice::Label;
 
 /// How long a closed card fades out before it is removed (the Slint side animates it).
 pub const LEAVE: Duration = Duration::from_millis(220);
@@ -38,7 +39,7 @@ pub struct Toast {
     pub key: Option<String>,
     pub progress: Option<f32>,
     /// The labels of its buttons (the runs stay with the center).
-    pub actions: Vec<String>,
+    pub actions: Vec<Label>,
     pub clickable: bool,
     /// How often it came ("×3").
     pub count: u32,
@@ -61,7 +62,7 @@ pub struct NewToast {
     pub detail: String,
     pub key: Option<String>,
     pub progress: Option<f32>,
-    pub actions: Vec<String>,
+    pub actions: Vec<Label>,
     pub clickable: bool,
     pub time: String,
     /// `None` = stays until closed.

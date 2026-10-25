@@ -19,6 +19,25 @@ pub struct Action {
     pub closes: bool,
     /// A bubble shows it as an icon button (P8b); toasts and banners show the words.
     pub icon: Option<crate::icons::Icon>,
+    /// It leads somewhere (a jump mark): its button or link shows the jump symbol (P9.1, review note 37).
+    pub jump: bool,
+}
+
+impl Action {
+    /// What a toast or banner shows of it.
+    pub fn shown(&self) -> Label {
+        Label {
+            text: self.label.clone(),
+            jump: self.jump,
+        }
+    }
+}
+
+/// A button's words and whether it jumps, as the toast and banner models keep them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Label {
+    pub text: String,
+    pub jump: bool,
 }
 
 impl fmt::Debug for Action {
@@ -27,6 +46,7 @@ impl fmt::Debug for Action {
             .field("label", &self.label)
             .field("closes", &self.closes)
             .field("icon", &self.icon)
+            .field("jump", &self.jump)
             .finish_non_exhaustive()
     }
 }
@@ -136,6 +156,26 @@ impl Notice {
             run: Rc::new(run),
             closes: true,
             icon: None,
+            jump: false,
+        });
+        self
+    }
+
+    /// A button that leads to `target` (a jump mark); the message closes after it ran.
+    #[must_use]
+    pub fn jump_action(self, label: impl Into<String>, target: JumpTarget) -> Self {
+        self.leading_action(label, move || crate::ui::jump::go(target))
+    }
+
+    /// A button that shows something elsewhere in RustCut (a panel, a log): it shows the jump symbol like a jump mark.
+    #[must_use]
+    pub fn leading_action(mut self, label: impl Into<String>, run: impl Fn() + 'static) -> Self {
+        self.actions.push(Action {
+            label: label.into(),
+            run: Rc::new(run),
+            closes: true,
+            icon: None,
+            jump: true,
         });
         self
     }
@@ -153,6 +193,7 @@ impl Notice {
             run: Rc::new(run),
             closes: true,
             icon: Some(icon),
+            jump: false,
         });
         self
     }
@@ -165,6 +206,7 @@ impl Notice {
             run: Rc::new(run),
             closes: false,
             icon: None,
+            jump: false,
         });
         self
     }

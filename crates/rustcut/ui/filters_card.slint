@@ -289,6 +289,7 @@ component ResizeParams inherits VerticalLayout {
         NumberField {
             text: Filters.resize-width;
             placeholder: Filters.resize-auto-width;
+            unit: "px";
             tooltip: "Width in pixels (empty = automatic)";
             committed(text) => { return Filters.edit-resize(0, text); }
             stepped(steps) => { Filters.step-resize(0, steps); }
@@ -302,6 +303,7 @@ component ResizeParams inherits VerticalLayout {
         NumberField {
             text: Filters.resize-height;
             placeholder: Filters.resize-auto-height;
+            unit: "px";
             tooltip: "Height in pixels (empty = automatic)";
             committed(text) => { return Filters.edit-resize(1, text); }
             stepped(steps) => { Filters.step-resize(1, steps); }
@@ -361,7 +363,7 @@ component DeshakeField inherits HorizontalLayout {
     }
 
     NumberField {
-        width: 44px;
+        width: 58px;
         horizontal-stretch: 0;
         text: Filters.deshake-values[root.param];
         tooltip: root.tooltip;

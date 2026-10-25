@@ -35,6 +35,8 @@ pub struct RowView {
     /// A number or text field's value; the slider's caption.
     pub text: String,
     pub placeholder: String,
+    /// A number's unit, shown inside its field.
+    pub unit: &'static str,
     pub checked: bool,
     pub steps: u16,
     pub position: u16,
@@ -220,6 +222,7 @@ fn row_view(state: &PanelState, row: Row, issues: &[ProfileIssue]) -> Option<Row
         index: 0,
         text: String::new(),
         placeholder: String::new(),
+        unit: "",
         checked: false,
         steps: 1,
         position: 0,
@@ -257,21 +260,23 @@ fn row_view(state: &PanelState, row: Row, issues: &[ProfileIssue]) -> Option<Row
             view.kind = RowKind::Number;
             let (value, _, min, max) = super::state::rate_value(v.encoder, v.rate_control);
             view.text = value.to_string();
-            view.label = match v.rate_control {
-                RateControl::Quality { .. } => spec.quality.label.to_owned(),
-                RateControl::ConstantQp { .. } => "QP".to_owned(),
-                RateControl::AverageBitrate { .. } | RateControl::TwoPass { .. } => "Bit rate (kbit/s)".to_owned(),
-                RateControl::TargetSize { .. } => "Target size (MiB)".to_owned(),
+            (view.label, view.unit) = match v.rate_control {
+                RateControl::Quality { .. } => (spec.quality.label.to_owned(), ""),
+                RateControl::ConstantQp { .. } => ("QP".to_owned(), ""),
+                RateControl::AverageBitrate { .. } | RateControl::TwoPass { .. } => ("Bit rate".to_owned(), "kbit/s"),
+                RateControl::TargetSize { .. } => ("Target size".to_owned(), "MiB"),
             };
             view.placeholder = format!("{min}-{max}");
         }
+        // A text like "4.1": no steps, so no spin arrows.
         Row::Level => {
-            view.kind = RowKind::Number;
+            view.kind = RowKind::Text;
             view.text = v.level.clone().unwrap_or_default();
             "auto".clone_into(&mut view.placeholder);
         }
         Row::Keyint => {
             view.kind = RowKind::Number;
+            view.unit = "frames";
             view.text = v.keyint.map(|k| k.to_string()).unwrap_or_default();
             "auto".clone_into(&mut view.placeholder);
         }
@@ -397,8 +402,8 @@ mod tests {
         assert_eq!(quality.text, "4000 kbit/s (see Expert)");
         let value = view.expert.iter().find(|r| r.row == Row::RateValue).unwrap();
         assert_eq!(
-            (value.label.as_str(), value.text.as_str()),
-            ("Bit rate (kbit/s)", "4000")
+            (value.label.as_str(), value.text.as_str(), value.unit),
+            ("Bit rate", "4000", "kbit/s")
         );
     }
 }

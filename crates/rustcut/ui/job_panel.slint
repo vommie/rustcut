@@ -4,7 +4,7 @@
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
-import { IconButton } from "controls.slint";
+import { IconButton, MiddleText } from "controls.slint";
 import { TooltipHost } from "tooltip.slint";
 import { Job, JobRowView, JobSectionView } from "job_types.slint";
 import { QueueColors } from "queue_row.slint";
@@ -30,13 +30,19 @@ component DetailRow inherits Rectangle {
             overflow: elide;
         }
 
-        Text {
+        if !root.item.path: Text {
             horizontal-stretch: 1;
             text: root.item.value;
             color: root.item.tone == 2 ? Theme.status-corrupt : root.item.tone == 1 ? Theme.text-muted : Theme.text;
             font-size: 12px;
             vertical-alignment: center;
             overflow: elide;
+        }
+
+        if root.item.path: MiddleText {
+            horizontal-stretch: 1;
+            text: root.item.value;
+            color: root.item.tone == 2 ? Theme.status-corrupt : root.item.tone == 1 ? Theme.text-muted : Theme.text;
         }
     }
 

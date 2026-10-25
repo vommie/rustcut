@@ -7,6 +7,7 @@
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { TooltipHost } from "tooltip.slint";
+import { MiddleText } from "controls_text.slint";
 import { Queue, QueueColumnView, QueueRowView } from "queue_types.slint";
 import { JumpFlash } from "jump.slint";
 
@@ -91,13 +92,10 @@ export component QueueRow inherits Rectangle {
                 color: Theme.accent;
             }
 
-            Text {
+            MiddleText {
                 horizontal-stretch: 1;
                 text: root.job.name;
-                color: Theme.text;
-                font-size: 12px;
                 font-weight: 600;
-                overflow: elide;
             }
 
             Text {
@@ -148,9 +146,18 @@ export component QueueRow inherits Rectangle {
                 color: Theme.accent;
             }
 
-            Text {
+            // Names and folders are cut in the middle (P9.1).
+            if column.id == "name" || column.id == "folder": MiddleText {
                 x: column.id == "name" && root.job.editing ? 18px : 0px;
                 width: parent.width - self.x;
+                height: parent.height;
+                text: root.job.cells[i];
+                color: column.id == "name" ? Theme.text : Theme.text-muted;
+                font-weight: column.id == "name" ? 600 : 400;
+            }
+
+            if column.id != "name" && column.id != "folder": Text {
+                width: parent.width;
                 text: root.job.cells[i];
                 color: column.id == "state" ? root.state-color
                     : column.id == "name" ? Theme.text : Theme.text-muted;

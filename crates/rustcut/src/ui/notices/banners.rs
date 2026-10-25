@@ -4,6 +4,7 @@
 //! the next event of the kind replaces the last one.
 
 use super::kind::{Kind, Level};
+use super::notice::Label;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Banner {
@@ -12,7 +13,7 @@ pub struct Banner {
     pub level: Level,
     pub title: String,
     pub detail: String,
-    pub actions: Vec<String>,
+    pub actions: Vec<Label>,
     pub clickable: bool,
     pub progress: Option<f32>,
     /// "since 15:40".
@@ -29,7 +30,7 @@ pub struct NewBanner {
     pub level: Level,
     pub title: String,
     pub detail: String,
-    pub actions: Vec<String>,
+    pub actions: Vec<Label>,
     pub clickable: bool,
     pub progress: Option<f32>,
     pub since: String,

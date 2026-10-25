@@ -3,7 +3,7 @@
 // forwards the callbacks to its own global.
 
 import { Theme } from "styles.slint";
-import { ChoiceButton, NumberField, Switch } from "controls.slint";
+import { ChoiceButton, ControlMetrics, NumberField, SegmentedChoice, Switch } from "controls.slint";
 import { TooltipArea } from "tooltip.slint";
 import { PlayerSeekBar } from "player_seek_bar.slint";
 import { OptionRowView } from "render_types.slint";
@@ -64,7 +64,7 @@ export component OptionRow inherits Rectangle {
         horizontal-stretch: 1;
         min-width: 60px;
 
-        if root.option.kind == 0: ChoiceButton {
+        if root.option.kind == 0 && !root.option.segmented: ChoiceButton {
             items: root.option.items;
             current: root.option.index;
             tooltip: root.option.tooltip;
@@ -72,15 +72,18 @@ export component OptionRow inherits Rectangle {
             selected(index) => { root.choose(root.option.key, index); }
         }
 
-        // Keeps a choice or a switch at its own width on the left.
-        if root.option.kind == 0 || root.option.kind == 2: Rectangle {
-            horizontal-stretch: 1;
-            min-width: 0;
+        if root.option.kind == 0 && root.option.segmented: SegmentedChoice {
+            items: root.option.items;
+            current: root.option.index;
+            tooltip: root.option.tooltip;
+            enabled: root.option.enabled;
+            selected(index) => { root.choose(root.option.key, index); }
         }
 
         if root.option.kind == 1: NumberField {
             text: root.option.text;
             placeholder: root.option.placeholder;
+            unit: root.option.unit;
             tooltip: root.option.tooltip;
             enabled: root.option.enabled;
             committed(text) => { return root.type-text(root.option.key, text); }
@@ -113,6 +116,8 @@ export component OptionRow inherits Rectangle {
 
         if root.option.kind == 4: VerticalLayout {
             spacing: 0px;
+            horizontal-stretch: 1;
+            max-width: ControlMetrics.field-max-width;
 
             slider := PlayerSeekBar {
                 height: 20px;
@@ -138,6 +143,12 @@ export component OptionRow inherits Rectangle {
                     overflow: elide;
                 }
             }
+        }
+
+        // Takes what is left once a control reached the common width (P9.1), so every control starts on the left.
+        Rectangle {
+            horizontal-stretch: 0;
+            min-width: 0;
         }
     }
     }

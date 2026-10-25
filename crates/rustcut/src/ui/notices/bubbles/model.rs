@@ -58,6 +58,8 @@ pub struct NewBubble {
     pub detail: String,
     /// What a click on it does ("Show the files"); empty = nothing.
     pub link: String,
+    /// The link leads somewhere: it shows the jump symbol (P9.1).
+    pub link_jump: bool,
     pub buttons: Vec<BubbleButton>,
     pub area: Area,
     /// The anchors in order of preference: it stands at the first one that is shown.
@@ -89,6 +91,7 @@ pub struct Row {
     pub title: String,
     pub detail: String,
     pub link: String,
+    pub link_jump: bool,
     pub buttons: Vec<BubbleButton>,
     pub place: Place,
     /// The epoch its anchor reported in (-1 = none yet: not drawn).
@@ -200,6 +203,7 @@ impl BubbleBoard {
                     title: s.bubble.title.clone(),
                     detail: s.bubble.detail.clone(),
                     link: s.bubble.link.clone(),
+                    link_jump: s.bubble.link_jump,
                     buttons: s.bubble.buttons.clone(),
                     place,
                     seen,
@@ -240,6 +244,7 @@ mod tests {
             title: title.to_owned(),
             detail: String::new(),
             link: String::new(),
+            link_jump: false,
             buttons: Vec::new(),
             area: Area::Codecs,
             anchors: anchors.iter().map(|a| (*a).to_owned()).collect(),

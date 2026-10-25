@@ -5,7 +5,7 @@ use std::rc::Weak;
 
 use rustcut_core::render::{DEFAULT_PROFILE_ID, LibraryError};
 use rustcut_core::settings::Settings;
-use slint::{ComponentHandle as _, ModelRc, SharedString, VecModel};
+use slint::ComponentHandle as _;
 
 use super::field::{Edit, Kind, Value};
 use super::hotkeys::{self, Recorded};
@@ -16,7 +16,7 @@ use crate::ui::keymap::{Action, Chord, KeyPress, Keymap};
 use crate::ui::notices::{self, Area, Notice, TYPING};
 use crate::ui::render_settings::state::Row;
 use crate::util::model::{sync, sync_with};
-use crate::{OptionRowView, ProfileItemView, RenderIssueView, SettingsUi};
+use crate::{ProfileItemView, RenderIssueView, SettingsUi};
 
 impl SettingsBridge {
     pub(super) fn select_page(&self, index: Option<usize>) {
@@ -355,9 +355,22 @@ impl SettingsBridge {
                 .collect(),
         );
         ui.set_encoders_note(panel.encoders_note.as_str().into());
-        sync(&self.models.video, panel.video.iter().map(option_row).collect());
-        sync(&self.models.audio, panel.audio.iter().map(option_row).collect());
-        sync(&self.models.expert, panel.expert.iter().map(option_row).collect());
+        sync(
+            &self.models.video,
+            panel.video.iter().map(crate::ui::render_settings::option_row).collect(),
+        );
+        sync(
+            &self.models.audio,
+            panel.audio.iter().map(crate::ui::render_settings::option_row).collect(),
+        );
+        sync(
+            &self.models.expert,
+            panel
+                .expert
+                .iter()
+                .map(crate::ui::render_settings::option_row)
+                .collect(),
+        );
     }
 
     // --- Hotkeys ------------------------------------------------------------------------------------------------
@@ -481,29 +494,6 @@ fn pick_path(
     } else {
         let picked = dialog.pick_file();
         Box::pin(async move { picked.await.map(|f| f.path().to_path_buf()) })
-    }
-}
-
-fn option_row(r: &crate::ui::render_settings::view::RowView) -> OptionRowView {
-    OptionRowView {
-        key: r.row.key().into(),
-        kind: r.kind as i32,
-        label: r.label.as_str().into(),
-        tooltip: r.tooltip.as_str().into(),
-        items: ModelRc::new(VecModel::from(
-            r.items
-                .iter()
-                .map(|i| SharedString::from(i.as_str()))
-                .collect::<Vec<_>>(),
-        )),
-        index: i32::try_from(r.index).unwrap_or(0),
-        text: r.text.as_str().into(),
-        placeholder: r.placeholder.as_str().into(),
-        checked: r.checked,
-        steps: i32::from(r.steps),
-        position: i32::from(r.position),
-        enabled: r.enabled,
-        mark: r.mark as i32,
     }
 }
 

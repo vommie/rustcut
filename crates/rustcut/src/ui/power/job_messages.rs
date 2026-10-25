@@ -55,7 +55,7 @@ impl PowerBridge {
                     Notice::new(Kind::JobFailed, "Job failed")
                         .detail(failed_text(row, reason))
                         .jump(JumpTarget::QueueJob(id))
-                        .action("Show log", move || show_log(id)),
+                        .leading_action("Show log", move || show_log(id)),
                 );
             }
             _ => {}

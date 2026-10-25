@@ -1,5 +1,6 @@
-//! Text form of [`Timestamp`]: `H:MM:SS.mmm` for display, exact microseconds when needed, and a forgiving parser for what
-//! users type into section fields (hours are unbounded: PyCutRv's `%H:%M:%S.%f` broke at 24 h).
+//! Text form of [`Timestamp`]: `H:MM:SS.mmm` for display, exact microseconds when needed, the compact form of lengths
+//! (`05.500s`, `02:33.100`, `3:02:33.000`), and a forgiving parser for what users type into section fields (hours are
+//! unbounded: PyCutRv's `%H:%M:%S.%f` broke at 24 h).
 
 use super::Timestamp;
 
@@ -36,6 +37,25 @@ pub(super) fn format(t: Timestamp, precision: Precision) -> String {
     match precision {
         Precision::Millis => format!("{sign}{h}:{m:02}:{s:02}.{:03}", frac / 1_000),
         Precision::Micros => format!("{sign}{h}:{m:02}:{s:02}.{frac:06}"),
+    }
+}
+
+/// The compact form (user decision Q-P9): only the units a length needs, but never a width that changes within a unit
+/// range: always three decimals, seconds and minutes always two digits, hours one digit or more. Below a minute `SS.mmm`
+/// with an `s` (`05.500s`), below an hour `MM:SS.mmm` (`02:33.100`), else `H:MM:SS.mmm` (`3:02:33.000`); truncated toward
+/// zero like [`Precision::Millis`].
+pub(super) fn compact(t: Timestamp) -> String {
+    let sign = if t.is_negative() { "-" } else { "" };
+    let us = t.as_micros().unsigned_abs();
+    let total_secs = us / 1_000_000;
+    let millis = (us % 1_000_000) / 1_000;
+    let (h, m, s) = (total_secs / 3600, (total_secs / 60) % 60, total_secs % 60);
+    if h > 0 {
+        format!("{sign}{h}:{m:02}:{s:02}.{millis:03}")
+    } else if m > 0 {
+        format!("{sign}{m:02}:{s:02}.{millis:03}")
+    } else {
+        format!("{sign}{s:02}.{millis:03}s")
     }
 }
 
@@ -127,6 +147,20 @@ mod tests {
     }
 
     #[test]
+    fn compact_keeps_its_width_in_each_range() {
+        assert_eq!(compact(t(0)), "00.000s");
+        assert_eq!(compact(t(5_500_000)), "05.500s");
+        assert_eq!(compact(t(10_500_000)), "10.500s");
+        assert_eq!(compact(t(59_999_999)), "59.999s");
+        assert_eq!(compact(t(60_000_000)), "01:00.000");
+        assert_eq!(compact(t(153_100_000)), "02:33.100");
+        assert_eq!(compact(t(3_599_999_999)), "59:59.999");
+        assert_eq!(compact(t(10_953_000_000)), "3:02:33.000");
+        assert_eq!(compact(Timestamp::from_secs(100 * 3600)), "100:00:00.000");
+        assert_eq!(compact(t(-1_500_000)), "-01.500s");
+    }
+
+    #[test]
     fn hours_beyond_a_day_work() {
         let long = Timestamp::from_secs(100 * 3600);
         assert_eq!(long.to_string(), "100:00:00.000");
@@ -179,6 +213,21 @@ mod tests {
         fn millis_format_truncates_to_the_millisecond(us in 0i64..i64::MAX) {
             let ts = t(us);
             prop_assert_eq!(Timestamp::parse(&ts.to_string()).unwrap(), t(us - us % 1_000));
+        }
+
+        #[test]
+        fn compact_has_one_width_per_range(a in 0i64..60_000_000, b in 0i64..60_000_000, m in 1i64..60, h in 1i64..10) {
+            prop_assert_eq!(compact(t(a)).len(), compact(t(b)).len());
+            let in_minutes = |us: i64| compact(t(m * 60_000_000 + us % 60_000_000)).len();
+            prop_assert_eq!(in_minutes(a), in_minutes(b));
+            let in_hours = |us: i64| compact(t(h * 3_600_000_000 + us)).len();
+            prop_assert_eq!(in_hours(a), in_hours(b));
+        }
+
+        #[test]
+        fn compact_parses_back_to_the_millisecond(us in 0i64..360_000_000_000) {
+            let text = compact(t(us));
+            prop_assert_eq!(Timestamp::parse(text.trim_end_matches('s')).unwrap(), t(us - us % 1_000));
         }
 
         #[test]

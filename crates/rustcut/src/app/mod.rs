@@ -153,6 +153,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     let queue_service = start_queue(&runtime, &store, &loaded, &encoders, sync_link);
     live::look(&main, &loaded.settings);
     crate::ui::tooltip::install(&main);
+    crate::ui::controls::install(&main);
     let menu = ContextMenuBridge::install(&main);
     // Every message goes through the notice center (M6.5); what came before it is shown now.
     let notice_center = notices::install(

@@ -6,12 +6,17 @@ use rustcut_core::settings::{BannerAnimation, ToastAnimation, ToastPosition, Toa
 
 use super::banners::Banner;
 use super::history::Entry;
+use super::notice::Label;
 use super::route::can_mute;
 use super::toasts::{Shown, Summary, Timer, Toast, ToastStack};
 use crate::{BannerView, HistoryView, ToastView};
 
-fn action(actions: &[String], index: usize) -> slint::SharedString {
-    actions.get(index).map(String::as_str).unwrap_or_default().into()
+fn action(actions: &[Label], index: usize) -> slint::SharedString {
+    actions.get(index).map(|a| a.text.as_str()).unwrap_or_default().into()
+}
+
+fn jumps(actions: &[Label], index: usize) -> bool {
+    actions.get(index).is_some_and(|a| a.jump)
 }
 
 pub fn toast(t: &Toast, shown: Shown, now: Instant) -> ToastView {
@@ -38,6 +43,9 @@ pub fn toast(t: &Toast, shown: Shown, now: Instant) -> ToastView {
         action_1: action(&t.actions, 0),
         action_2: action(&t.actions, 1),
         action_3: action(&t.actions, 2),
+        jump_1: jumps(&t.actions, 0),
+        jump_2: jumps(&t.actions, 1),
+        jump_3: jumps(&t.actions, 2),
         clickable: t.clickable,
         mutable: can_mute(t.kind) && t.level.is_quiet(),
         leaving: t.leaving.is_some(),
@@ -53,6 +61,9 @@ pub fn banner(b: &Banner) -> BannerView {
         action_1: action(&b.actions, 0),
         action_2: action(&b.actions, 1),
         action_3: action(&b.actions, 2),
+        jump_1: jumps(&b.actions, 0),
+        jump_2: jumps(&b.actions, 1),
+        jump_3: jumps(&b.actions, 2),
         clickable: b.clickable,
         progress: b.progress.unwrap_or(-1.0),
         since: if b.since.is_empty() {

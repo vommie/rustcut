@@ -1,0 +1,229 @@
+// The number field shared by every panel and the Settings window (P9.1, review notes 09#3 and 71#1): it edits on a
+// click, shows its unit dimmed inside the field, steps with compact spin arrows, and steps with the mouse wheel only
+// while it has the keyboard focus (clicked into, user decision Q-P9), so scrolling a panel never changes a value. The
+// owner decides how far one step goes (each field has its own step).
+
+import { Theme } from "styles.slint";
+import { Shortcuts } from "shortcuts.slint";
+import { TooltipHost } from "tooltip.slint";
+import { BubbleAnchor } from "bubble.slint";
+import { ControlMetrics } from "controls_base.slint";
+import { UpDownHalf } from "controls_updown.slint";
+
+/// A number that turns into a text field on click (Enter keeps, Escape cancels, leaving keeps a valid value). The
+/// arrows step it (Shift: ten steps); the wheel steps it while the field is open. Free text (`alignment: left`) has no
+/// arrows.
+export component NumberField inherits Rectangle {
+    in property <string> text;
+    in property <string> placeholder;
+    in property <string> tooltip;
+    in property <bool> enabled: true;
+    // Numbers sit on the right; free text (codec parameters) on the left.
+    in property <TextHorizontalAlignment> alignment: right;
+    // The unit, dimmed inside the field after the number ("px", "s", "frames").
+    in property <string> unit;
+    // Spin arrows on the right; numbers have them, free text not.
+    in property <bool> spin: root.alignment == TextHorizontalAlignment.right;
+    // The key of the bubble that explains a refused text (`bubble.slint`; empty = none).
+    in property <string> bubble;
+    callback committed(string) -> bool;
+    callback stepped(/* steps */ int);
+    // The text changed while the field is open (the owner checks it again after a refusal).
+    callback typed(string);
+    // The field closed without keeping a value (Escape, or left with a refused text).
+    callback canceled();
+
+    property <bool> editing;
+    property <bool> invalid;
+    // A step while the field is open: the owner's new text goes into the open field.
+    property <bool> follow-step;
+    property <length> arrows-width: root.spin ? ControlMetrics.spin-width : 0px;
+    // The unit belongs to a value: a placeholder ("auto", "off") stands alone.
+    property <bool> unit-shown: root.unit != "" && (root.text != "" || root.editing);
+    property <length> unit-width: root.unit-shown ? unit-label.preferred-width + 3px : 0px;
+    property <length> text-right: root.width - root.arrows-width - root.unit-width - 5px;
+
+    min-width: 34px + root.arrows-width;
+    max-width: root.spin ? ControlMetrics.field-max-width : 100000px;
+    height: 24px;
+    horizontal-stretch: 1;
+    border-radius: 4px;
+    background: root.editing ? Theme.background : touch.has-hover && root.enabled ? Theme.surface-hover : Theme.surface;
+    border-width: 1px;
+    border-color: root.invalid ? Theme.status-corrupt : root.editing ? Theme.primary : Theme.border;
+    clip: true;
+
+    function start-edit() {
+        input.text = root.text;
+        root.invalid = false;
+        root.editing = true;
+        input.focus();
+        input.select-all();
+    }
+
+    function finish(keep: bool) {
+        if keep && !root.committed(input.text) {
+            root.invalid = true;
+            return;
+        }
+        root.editing = false;
+        root.invalid = false;
+        if !keep {
+            root.canceled();
+        }
+        Shortcuts.release-focus();
+    }
+
+    // Steps from the shown value; an open field first keeps what was typed (a refused text stops the step).
+    function step(steps: int) {
+        if root.editing && input.text != root.text {
+            if !root.committed(input.text) {
+                root.invalid = true;
+                return;
+            }
+        }
+        root.follow-step = root.editing;
+        root.stepped(steps);
+    }
+
+    changed text => {
+        if root.follow-step && root.editing {
+            input.text = root.text;
+            input.set-selection-offsets(input.text.character-count, input.text.character-count);
+        }
+        root.follow-step = false;
+    }
+
+    host := TooltipHost {
+        text: root.tooltip;
+    }
+
+    BubbleAnchor {
+        key: root.bubble;
+    }
+
+    if !root.editing: Text {
+        x: 5px;
+        width: root.text-right - 5px;
+        text: root.text == "" ? root.placeholder : root.text;
+        color: !root.enabled || root.text == "" ? Theme.status-deleted : Theme.text;
+        font-size: 12px;
+        horizontal-alignment: root.alignment;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    unit-label := Text {
+        x: root.width - root.arrows-width - self.width - 5px;
+        visible: root.unit-shown;
+        text: root.unit;
+        color: Theme.status-deleted;
+        font-size: 11px;
+        vertical-alignment: center;
+        height: parent.height;
+    }
+
+    // Under the open field, so a wheel the text input does not take reaches it.
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.text;
+        clicked => {
+            if !root.editing {
+                host.press();
+                root.start-edit();
+            }
+        }
+        scroll-event(event) => {
+            if !root.editing || !root.spin || event.delta-y == 0 {
+                return reject;
+            }
+            root.step((event.delta-y > 0 ? 1 : -1) * (event.modifiers.shift ? 10 : 1));
+            accept
+        }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+
+    input := TextInput {
+        x: 5px;
+        width: root.text-right - 5px;
+        height: parent.height;
+        visible: root.editing;
+        enabled: root.editing;
+        single-line: true;
+        color: Theme.text;
+        font-size: 12px;
+        horizontal-alignment: root.alignment;
+        vertical-alignment: center;
+        selection-background-color: Theme.primary.with-alpha(0.4);
+
+        accepted => { root.finish(true); }
+        edited => {
+            root.invalid = false;
+            root.typed(self.text);
+        }
+
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.finish(false);
+                return accept;
+            }
+            if event.text == Key.UpArrow || event.text == Key.DownArrow {
+                root.step((event.text == Key.UpArrow ? 1 : -1) * (event.modifiers.shift ? 10 : 1));
+                return accept;
+            }
+            reject
+        }
+
+        changed has-focus => {
+            Shortcuts.editing-changed(self.has-focus);
+            if !self.has-focus && root.editing {
+                if !root.committed(self.text) {
+                    root.invalid = false;
+                    root.canceled();
+                }
+                root.editing = false;
+            }
+        }
+    }
+
+    if root.spin: Rectangle {
+        x: root.width - root.arrows-width;
+        width: root.arrows-width;
+        height: root.height;
+        border-width: 0px;
+
+        Rectangle {
+            x: 0;
+            width: 1px;
+            height: parent.height;
+            background: Theme.border;
+        }
+
+        VerticalLayout {
+            x: 1px;
+            width: parent.width - 1px;
+            padding-top: 1px;
+            padding-bottom: 1px;
+
+            UpDownHalf {
+                up: true;
+                enabled: root.enabled;
+                icon-size: 9px;
+                clicked(big) => { root.step(big ? 10 : 1); }
+            }
+
+            UpDownHalf {
+                up: false;
+                enabled: root.enabled;
+                icon-size: 9px;
+                clicked(big) => { root.step(big ? -10 : -1); }
+            }
+        }
+    }
+}

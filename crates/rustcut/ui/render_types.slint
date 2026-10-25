@@ -17,6 +17,10 @@ export struct OptionRowView {
     position: int,
     enabled: bool,
     mark: int,
+    // A number's unit, shown inside its field ("kbit/s", "frames").
+    unit: string,
+    // A choice of at most three short entries, drawn side by side (`util::choice::segmented`).
+    segmented: bool,
 }
 
 // An issue of a profile (the Settings window's profile editor lists them; the Codecs panel shows bubbles).

@@ -29,6 +29,8 @@ pub struct DetailRow {
     pub value: String,
     pub tooltip: String,
     pub tone: Tone,
+    /// A file name or folder: cut in the middle when it does not fit (P9.1).
+    pub path: bool,
 }
 
 impl DetailRow {
@@ -39,6 +41,7 @@ impl DetailRow {
             tooltip: value.clone(),
             value,
             tone: Tone::Normal,
+            path: false,
         }
     }
 
@@ -51,6 +54,11 @@ impl DetailRow {
 
     fn tip(mut self, tooltip: impl Into<String>) -> Self {
         self.tooltip = tooltip.into();
+        self
+    }
+
+    const fn path(mut self) -> Self {
+        self.path = true;
         self
     }
 }
@@ -194,8 +202,8 @@ fn path_rows(path: &Path) -> Vec<DetailRow> {
         .unwrap_or_default();
     let folder = path.parent().map(|p| p.display().to_string()).unwrap_or_default();
     vec![
-        DetailRow::new("File", name).tip(path.display().to_string()),
-        DetailRow::muted("Folder", folder),
+        DetailRow::new("File", name).tip(path.display().to_string()).path(),
+        DetailRow::muted("Folder", folder).path(),
     ]
 }
 
@@ -207,12 +215,17 @@ fn sections_section(spec: &JobSpec) -> DetailSection {
         .map(|(i, s)| {
             DetailRow::new(
                 &(i + 1).to_string(),
-                format!("{} – {}  ({})", s.start(), s.end(), s.duration()),
+                format!(
+                    "{} – {}  ({})",
+                    s.start().format_compact(),
+                    s.end().format_compact(),
+                    s.duration().format_compact()
+                ),
             )
         })
         .collect();
     if rows.len() > 1 {
-        rows.push(DetailRow::muted("Total", spec.output_duration().to_string()));
+        rows.push(DetailRow::muted("Total", spec.output_duration().format_compact()));
     }
     DetailSection {
         id: "sections",
@@ -456,8 +469,8 @@ mod tests {
         assert!(output.rows.iter().any(|r| r.label == "Existing file"));
         let sections = find(&all, "sections");
         assert_eq!(sections.title, "Sections (2)");
-        assert_eq!(sections.rows[0].value, "0:00:01.000 – 0:00:03.000  (0:00:02.000)");
-        assert_eq!(sections.rows[2].value, "0:00:05.000");
+        assert_eq!(sections.rows[0].value, "01.000s – 03.000s  (02.000s)");
+        assert_eq!(sections.rows[2].value, "05.000s");
         assert_eq!(find(&all, "filters").rows[0].value, "top 2, right 0, bottom 2, left 0");
         let render = find(&all, "render");
         assert_eq!(render.rows[0].value, "AV1 balanced");
