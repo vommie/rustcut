@@ -21,6 +21,7 @@ pub enum RowKind {
     File = 5,
     Button = 6,
     Color = 7,
+    Amount = 8,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,6 +95,7 @@ pub fn row(field: &Field, settings: &Settings, errors: &BTreeMap<String, String>
         Kind::Choice(items) => (RowKind::Choice, items.to_vec(), "", ""),
         Kind::Number { unit, .. } => (RowKind::Number, Vec::new(), "", unit),
         Kind::Text { placeholder } => (RowKind::Text, Vec::new(), placeholder, ""),
+        Kind::Amount { placeholder, unit } => (RowKind::Amount, Vec::new(), placeholder, unit),
         Kind::Path { placeholder, folder } => (
             if folder { RowKind::Folder } else { RowKind::File },
             Vec::new(),

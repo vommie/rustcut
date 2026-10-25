@@ -13,8 +13,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use rustcut_core::edit::{
-    ConcatInput, Crop, DeinterlaceRate, Deinterlacer, DeshakeParams, DeshakePass, Filter, FilterChain, LavfiTarget,
-    Mirror, ResizeAlgorithm, Rotation, Size, concat_graph,
+    ConcatInput, Crop, DeinterlaceRate, Deinterlacer, DeshakeParams, DeshakePass, FieldParity, Filter, FilterChain,
+    LavfiTarget, Orientation, OrientationParams, ResizeAlgorithm, Size, concat_graph,
 };
 use rustcut_core::render::{
     EncodeContext, RateControl, RenderProfile, VideoEncoder, VideoPass, builtin_profiles, profile_args, video_args,
@@ -102,36 +102,32 @@ fn every_filter_runs_and_the_output_size_is_predicted() {
         chain_with(&[Filter::Deinterlace {
             deinterlacer: Deinterlacer::Bwdif,
             rate: DeinterlaceRate::Field,
+            field_order: FieldParity::TopFirst,
+            only_interlaced: false,
         }]),
         chain_with(&[Filter::Deinterlace {
             deinterlacer: Deinterlacer::Yadif,
             rate: DeinterlaceRate::Frame,
+            field_order: FieldParity::BottomFirst,
+            only_interlaced: true,
         }]),
         chain_with(&[Filter::Deinterlace {
             deinterlacer: Deinterlacer::W3fdif,
             rate: DeinterlaceRate::Field,
+            field_order: FieldParity::Auto,
+            only_interlaced: true,
         }]),
         chain_with(&[Filter::Deinterlace {
             deinterlacer: Deinterlacer::Kerndeint,
             rate: DeinterlaceRate::Frame,
+            field_order: FieldParity::TopFirst,
+            only_interlaced: true,
         }]),
         chain_with(&[Filter::Crop(Crop::new(3, 10, 4, 7))]),
         chain_with(&[
-            Filter::Rotate {
-                rotation: Rotation::Clockwise,
-            },
+            Filter::Orientation(Orientation::CLOCKWISE.into()),
             Filter::Crop(Crop::new(1, 2, 3, 4)),
         ]),
-        chain_with(&[Filter::Rotate {
-            rotation: Rotation::CounterClockwise,
-        }]),
-        chain_with(&[Filter::Rotate {
-            rotation: Rotation::UpsideDown,
-        }]),
-        chain_with(&[Filter::Mirror(Mirror {
-            horizontal: true,
-            vertical: true,
-        })]),
         chain_with(&[Filter::Resize {
             width: Some(200),
             height: None,
@@ -144,9 +140,7 @@ fn every_filter_runs_and_the_output_size_is_predicted() {
         }]),
         chain_with(&[
             Filter::Crop(Crop::new(20, 0, 20, 0)),
-            Filter::Rotate {
-                rotation: Rotation::Clockwise,
-            },
+            Filter::Orientation(Orientation::CLOCKWISE.into()),
             Filter::Resize {
                 width: Some(150),
                 height: None,
@@ -154,7 +148,17 @@ fn every_filter_runs_and_the_output_size_is_predicted() {
             },
         ]),
     ];
-    for (i, chain) in chains.iter().enumerate() {
+    // Every orientation (the odd source shows when width and height trade places).
+    let orientations = (0..4).flat_map(|turns| {
+        [false, true].map(|mirrored| {
+            chain_with(&[Filter::Orientation(OrientationParams {
+                turns,
+                mirror_horizontal: mirrored,
+                mirror_vertical: false,
+            })])
+        })
+    });
+    for (i, chain) in chains.into_iter().chain(orientations).enumerate() {
         let lavfi = chain
             .to_lavfi(LavfiTarget::Render {
                 source: source_size,
@@ -187,9 +191,16 @@ fn deshake_two_passes_with_a_hostile_path() {
     let odd_dir = dir.path().join("a: b, [c]; 'd'");
     std::fs::create_dir(&odd_dir).unwrap();
     let trf = odd_dir.join("job-1.trf");
+    // The limits and the adaptive zoom's speed are in vid.stab's ranges (maxangle in radians).
     let chain = chain_with(&[
         Filter::Crop(Crop::new(0, 0, 40, 0)),
-        Filter::Deshake(DeshakeParams::default()),
+        Filter::Deshake(DeshakeParams {
+            optzoom: 2,
+            zoom_speed: DeshakeParams::ZOOM_SPEED_MAX,
+            max_shift: Some(DeshakeParams::MAX_SHIFT),
+            max_angle: Some(DeshakeParams::MAX_ANGLE),
+            ..DeshakeParams::default()
+        }),
         Filter::Resize {
             width: Some(160),
             height: None,

@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use rustcut_core::edit::{Crop, DeshakeParams, Filter, FilterChain, Rotation, Section, SectionList};
+use rustcut_core::edit::{Crop, DeshakeParams, Filter, FilterChain, Orientation, Section, SectionList};
 use rustcut_core::job::{JobId, JobMetadata, JobSpec, TargetSpec};
 use rustcut_core::media::{ProbeOptions, probe};
 use rustcut_core::render::{
@@ -208,10 +208,9 @@ async fn a_rotated_source_is_cropped_in_its_shown_orientation() {
 async fn odd_sizes_audio_that_ends_early_and_hostile_names() {
     let fx = Fixture::new();
     let mut spec = fx.spec("odd_size_853x479_yuv444.mp4", &[(0, 2_000)], "odd");
-    spec.filters.set(Filter::Rotate {
-        rotation: Rotation::Clockwise,
-    });
-    spec.filters.set_enabled(rustcut_core::edit::FilterKind::Rotate, true);
+    spec.filters.set(Filter::Orientation(Orientation::CLOCKWISE.into()));
+    spec.filters
+        .set_enabled(rustcut_core::edit::FilterKind::Orientation, true);
     let (result, log) = render_simply(&fx, &spec).await;
     let done = result.unwrap_or_else(|e| panic!("{e}\n{}", log.to_text()));
     let info = probe(&done.path, &ProbeOptions::default()).await.unwrap();

@@ -174,6 +174,34 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn a_row_of_0_0_47_with_rotate_and_mirror_reads() {
+        let profile = serde_json::to_string(&sample().profile).unwrap();
+        let row = format!(
+            r#"{{"version":1,"source":"/a.mkv","sections":[{{"start":0,"end":1000000}}],"profile":{profile},
+            "target":{{"folder":"/o","stem":"a"}},"filters":[
+            {{"enabled":true,"filter":{{"kind":"deinterlace","deinterlacer":"bwdif","rate":"field"}}}},
+            {{"enabled":false,"filter":{{"kind":"crop","top":0,"right":0,"bottom":0,"left":0}}}},
+            {{"enabled":false,"filter":{{"kind":"deshake","shakiness":5,"accuracy":10,"stepsize":12,"smoothing":10,
+              "zoom":0,"optzoom":0,"crop":"black","interpolation":"bicubic","tripod":false}}}},
+            {{"enabled":true,"filter":{{"kind":"rotate","rotation":"upside_down"}}}},
+            {{"enabled":false,"filter":{{"kind":"mirror","horizontal":true,"vertical":false}}}},
+            {{"enabled":true,"filter":{{"kind":"resize","width":640,"height":null,"algorithm":"bicubic"}}}}]}}"#
+        );
+        let read: JobSpec = serde_json::from_str(&row).unwrap();
+        let render = read
+            .filters
+            .to_lavfi(crate::edit::LavfiTarget::Render {
+                source: Size::new(1920, 1080),
+                deshake: crate::edit::DeshakePass::None,
+            })
+            .unwrap();
+        assert_eq!(
+            render, "bwdif=mode=send_field,hflip,vflip,scale=w=640:h=-2:flags=bicubic,setsar=1",
+            "the same filters as 0.0.47 rendered"
+        );
+    }
+
+    #[test]
     fn a_profile_snapshot_of_0_0_8_still_reads() {
         // What 0.0.8 stored: no AQ mode, scene cuts, variance boost or color fields.
         let row = r#"{"source":"/a.mkv","sections":[{"start":0,"end":1000000}],"target":{"folder":"/o","stem":"a"},

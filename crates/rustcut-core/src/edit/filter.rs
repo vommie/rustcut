@@ -1,8 +1,9 @@
-//! The filters RustCut offers and their parameters (PyCutRv parity plus mirror and configurable deshake).
+//! The filters RustCut offers and their parameters (PyCutRv parity plus orientation, field order and configurable
+//! deshake).
 
 use serde::{Deserialize, Serialize};
 
-use super::Crop;
+use super::{Crop, Orientation, OrientationParams};
 
 /// The kind of a filter; a chain holds each kind exactly once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -11,20 +12,20 @@ pub enum FilterKind {
     Deinterlace,
     Crop,
     Deshake,
-    Rotate,
-    Mirror,
+    /// Turns and mirrors in one (0.0.48; replaces Rotate and Mirror, which old data still names).
+    #[serde(alias = "rotate", alias = "mirror")]
+    Orientation,
     Resize,
 }
 
 impl FilterKind {
     /// Default order of a new chain: deinterlace first (it needs the original fields), crop before deshake (black bars would
     /// pull the motion estimate toward zero), resize last (the output size is exactly what was typed).
-    pub const DEFAULT_ORDER: [Self; 6] = [
+    pub const DEFAULT_ORDER: [Self; 5] = [
         Self::Deinterlace,
         Self::Crop,
         Self::Deshake,
-        Self::Rotate,
-        Self::Mirror,
+        Self::Orientation,
         Self::Resize,
     ];
 
@@ -33,8 +34,7 @@ impl FilterKind {
             Self::Deinterlace => "Deinterlace",
             Self::Crop => "Crop",
             Self::Deshake => "Deshake",
-            Self::Rotate => "Rotate",
-            Self::Mirror => "Mirror",
+            Self::Orientation => "Orientation",
             Self::Resize => "Resize",
         }
     }
@@ -49,13 +49,18 @@ pub enum Filter {
         deinterlacer: Deinterlacer,
         #[serde(default)]
         rate: DeinterlaceRate,
+        /// Which field comes first (0.0.48; auto = what the frames say).
+        #[serde(default)]
+        field_order: FieldParity,
+        /// Leaves frames alone that are not marked as interlaced (0.0.48; ffmpeg's `deint=interlaced`).
+        #[serde(default)]
+        only_interlaced: bool,
     },
     Crop(Crop),
     Deshake(DeshakeParams),
-    Rotate {
-        rotation: Rotation,
-    },
-    Mirror(Mirror),
+    /// How the picture is turned and mirrored
+    /// (`{"kind":"orientation","turns":1,"mirror_horizontal":false,"mirror_vertical":true}`).
+    Orientation(OrientationParams),
     Resize {
         #[serde(default)]
         width: Option<u32>,
@@ -72,28 +77,23 @@ impl Filter {
             Self::Deinterlace { .. } => FilterKind::Deinterlace,
             Self::Crop(_) => FilterKind::Crop,
             Self::Deshake(_) => FilterKind::Deshake,
-            Self::Rotate { .. } => FilterKind::Rotate,
-            Self::Mirror(_) => FilterKind::Mirror,
+            Self::Orientation(_) => FilterKind::Orientation,
             Self::Resize { .. } => FilterKind::Resize,
         }
     }
 
-    /// The filter of `kind` with its default parameters (rotate: clockwise, mirror: horizontal, resize: unchanged size).
+    /// The filter of `kind` with its default parameters (orientation: upright, resize: unchanged size).
     pub fn default_for(kind: FilterKind) -> Self {
         match kind {
             FilterKind::Deinterlace => Self::Deinterlace {
                 deinterlacer: Deinterlacer::default(),
                 rate: DeinterlaceRate::default(),
+                field_order: FieldParity::default(),
+                only_interlaced: false,
             },
             FilterKind::Crop => Self::Crop(Crop::default()),
             FilterKind::Deshake => Self::Deshake(DeshakeParams::default()),
-            FilterKind::Rotate => Self::Rotate {
-                rotation: Rotation::Clockwise,
-            },
-            FilterKind::Mirror => Self::Mirror(Mirror {
-                horizontal: true,
-                vertical: false,
-            }),
+            FilterKind::Orientation => Self::Orientation(OrientationParams::UPRIGHT),
             FilterKind::Resize => Self::Resize {
                 width: None,
                 height: None,
@@ -102,13 +102,31 @@ impl Filter {
         }
     }
 
-    /// Whether the filter changes nothing (zero crop, no mirror axis, resize without a size).
+    /// Whether the filter changes nothing (zero crop, upright orientation, resize without a size).
     pub const fn is_identity(&self) -> bool {
         match self {
             Self::Crop(c) => c.is_identity(),
-            Self::Mirror(m) => !m.horizontal && !m.vertical,
+            Self::Orientation(o) => o.is_identity(),
             Self::Resize { width, height, .. } => width.is_none() && height.is_none(),
-            Self::Deinterlace { .. } | Self::Deshake(_) | Self::Rotate { .. } => false,
+            Self::Deinterlace { .. } | Self::Deshake(_) => false,
+        }
+    }
+
+    /// The same filter placed after `turn` instead of before it: `self` then `turn` equals `turn` then the result. A crop
+    /// keeps the same pixels, a resize trades its sides with a quarter turn; the others do not depend on the turn.
+    pub fn seen_through(self, turn: Orientation) -> Self {
+        match self {
+            Self::Crop(c) => Self::Crop(turn.map_crop(c)),
+            Self::Resize {
+                width,
+                height,
+                algorithm,
+            } if turn.swaps_axes() => Self::Resize {
+                width: height,
+                height: width,
+                algorithm,
+            },
+            other => other,
         }
     }
 }
@@ -144,6 +162,11 @@ impl Deinterlacer {
     pub const fn supports_field_rate(self) -> bool {
         !matches!(self, Self::Kerndeint)
     }
+
+    /// Whether the filter takes the field order and "only interlaced frames" (`parity`, `deint`; kerndeint has neither).
+    pub const fn has_field_options(self) -> bool {
+        !matches!(self, Self::Kerndeint)
+    }
 }
 
 /// Output rate of a deinterlacer.
@@ -157,7 +180,30 @@ pub enum DeinterlaceRate {
     Field,
 }
 
-/// Rotation in 90 degree steps (PyCutRv: left, right, 180).
+/// Which field of an interlaced frame comes first (`parity` of bwdif, yadif and w3fdif).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FieldParity {
+    /// What the frames say (ffmpeg's default).
+    #[default]
+    Auto,
+    TopFirst,
+    BottomFirst,
+}
+
+impl FieldParity {
+    /// The `parity` value; `None` = automatic (left out).
+    pub const fn ffmpeg_parity(self) -> Option<&'static str> {
+        match self {
+            Self::Auto => None,
+            Self::TopFirst => Some("tff"),
+            Self::BottomFirst => Some("bff"),
+        }
+    }
+}
+
+/// Rotation in 90 degree steps (PyCutRv: left, right, 180): the Rotate filter of 0.0.47 and older, read from old jobs
+/// and kept filters ([`Orientation::from_rotation`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Rotation {
@@ -173,7 +219,8 @@ impl Rotation {
     }
 }
 
-/// Mirror axes (PyCutRv had a mirror button without function).
+/// Mirror axes (PyCutRv had a mirror button without function): the Mirror filter of 0.0.47 and older, read from old jobs
+/// and kept filters ([`Orientation::from_mirror`]).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Mirror {
@@ -227,6 +274,13 @@ pub struct DeshakeParams {
     pub interpolation: DeshakeInterpolation,
     /// Virtual tripod: keep the camera fixed on the first frame.
     pub tripod: bool,
+    /// The largest shift in pixels, 0 to 500 (`maxshift`); `None` = no limit (0.0.48).
+    pub max_shift: Option<u16>,
+    /// The largest turn in degrees, 0 to 90 (`maxangle`, which ffmpeg takes in radians); `None` = no limit (0.0.48).
+    pub max_angle: Option<u8>,
+    /// How fast the adaptive zoom (`optzoom` 2) may change, in hundredths of a percent per frame, 0 to 500
+    /// (`zoomspeed` 0 to 5 %; ffmpeg's default 0.25 %; 0.0.48).
+    pub zoom_speed: u16,
 }
 
 impl Default for DeshakeParams {
@@ -241,11 +295,19 @@ impl Default for DeshakeParams {
             crop: DeshakeCrop::Black,
             interpolation: DeshakeInterpolation::Bicubic,
             tripod: false,
+            max_shift: None,
+            max_angle: None,
+            zoom_speed: Self::ZOOM_SPEED_DEFAULT,
         }
     }
 }
 
 impl DeshakeParams {
+    pub const MAX_SHIFT: u16 = 500;
+    pub const MAX_ANGLE: u8 = 90;
+    pub const ZOOM_SPEED_MAX: u16 = 500;
+    pub const ZOOM_SPEED_DEFAULT: u16 = 25;
+
     /// The parameters limited to the ranges vid.stab accepts (`accuracy` raised to `shakiness`).
     pub fn sanitized(self) -> Self {
         let shakiness = self.shakiness.clamp(1, 10);
@@ -256,6 +318,9 @@ impl DeshakeParams {
             smoothing: self.smoothing.min(1000),
             zoom: self.zoom.clamp(-100, 100),
             optzoom: self.optzoom.min(2),
+            max_shift: self.max_shift.map(|v| v.min(Self::MAX_SHIFT)),
+            max_angle: self.max_angle.map(|v| v.min(Self::MAX_ANGLE)),
+            zoom_speed: self.zoom_speed.min(Self::ZOOM_SPEED_MAX),
             ..self
         }
     }
@@ -308,12 +373,27 @@ mod tests {
 
     #[test]
     fn serialized_form_is_tagged() {
-        let f = Filter::Rotate {
-            rotation: Rotation::CounterClockwise,
-        };
+        let f = Filter::Orientation(OrientationParams {
+            turns: 3,
+            mirror_horizontal: false,
+            mirror_vertical: true,
+        });
+        let json = serde_json::to_string(&f).unwrap();
         assert_eq!(
-            serde_json::to_string(&f).unwrap(),
-            r#"{"kind":"rotate","rotation":"counter_clockwise"}"#
+            json,
+            r#"{"kind":"orientation","turns":3,"mirror_horizontal":false,"mirror_vertical":true}"#
+        );
+        assert_eq!(serde_json::from_str::<Filter>(&json).unwrap(), f);
+        let deinterlace: Filter = serde_json::from_str(r#"{"kind":"deinterlace","deinterlacer":"yadif"}"#).unwrap();
+        assert_eq!(
+            deinterlace,
+            Filter::Deinterlace {
+                deinterlacer: Deinterlacer::Yadif,
+                rate: DeinterlaceRate::Frame,
+                field_order: FieldParity::Auto,
+                only_interlaced: false,
+            },
+            "a deinterlace of 0.0.47 reads with the new options at their defaults"
         );
         let crop: Filter = serde_json::from_str(r#"{"kind":"crop","top":8}"#).unwrap();
         assert_eq!(crop, Filter::Crop(Crop::new(8, 0, 0, 0)));
@@ -327,14 +407,41 @@ mod tests {
         );
     }
 
+    #[test]
+    fn seen_through_keeps_the_pixels_and_trades_the_sides() {
+        let crop = Filter::Crop(Crop::new(1, 2, 3, 4));
+        assert_eq!(
+            crop.seen_through(Orientation::CLOCKWISE),
+            Filter::Crop(Crop::new(4, 1, 2, 3))
+        );
+        let resize = Filter::Resize {
+            width: Some(1280),
+            height: None,
+            algorithm: ResizeAlgorithm::Lanczos,
+        };
+        assert_eq!(
+            resize.seen_through(Orientation::COUNTER_CLOCKWISE),
+            Filter::Resize {
+                width: None,
+                height: Some(1280),
+                algorithm: ResizeAlgorithm::Lanczos,
+            }
+        );
+        assert_eq!(resize.seen_through(Orientation::MIRROR_VERTICAL), resize);
+    }
+
     proptest! {
         #[test]
-        fn sanitized_deshake_is_in_range(sh: u8, acc: u8, step: u8, smooth: u16, zoom: i8, opt: u8) {
-            let p = DeshakeParams { shakiness: sh, accuracy: acc, stepsize: step, smoothing: smooth, zoom, optzoom: opt, ..DeshakeParams::default() }.sanitized();
+        fn sanitized_deshake_is_in_range(sh: u8, acc: u8, step: u8, smooth: u16, zoom: i8, opt: u8,
+            shift: Option<u16>, angle: Option<u8>, speed: u16) {
+            let p = DeshakeParams { shakiness: sh, accuracy: acc, stepsize: step, smoothing: smooth, zoom, optzoom: opt,
+                max_shift: shift, max_angle: angle, zoom_speed: speed, ..DeshakeParams::default() }.sanitized();
             prop_assert!((1..=10).contains(&p.shakiness));
             prop_assert!(p.accuracy >= p.shakiness && p.accuracy <= 15);
             prop_assert!((1..=32).contains(&p.stepsize));
             prop_assert!(p.smoothing <= 1000 && (-100..=100).contains(&p.zoom) && p.optzoom <= 2);
+            prop_assert!(p.max_shift.is_none_or(|v| v <= 500) && p.max_angle.is_none_or(|v| v <= 90));
+            prop_assert!(p.zoom_speed <= 500);
             prop_assert_eq!(p.sanitized(), p);
         }
     }

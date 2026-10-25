@@ -1,5 +1,7 @@
-//! Rotations and mirrors as one transform of the picture (the eight symmetries of a rectangle), so a crop, a point or a
-//! rectangle can be followed through every rotate and mirror filter of a chain, and back.
+//! Rotations and mirrors as one transform of the picture (the eight symmetries of a rectangle): the Orientation filter,
+//! and the way a crop, a point or a rectangle is followed through it, and back.
+
+use serde::{Deserialize, Serialize};
 
 use super::chain::Size;
 use super::crop::Crop;
@@ -10,6 +12,127 @@ use super::filter::{Mirror, Rotation};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Orientation {
     m: [[i8; 2]; 2],
+}
+
+/// The Orientation filter's values as the user set them (user decision Q-P9.13b): a quarter turn to the right
+/// (`turns` 1) or to the left (3) or none (0), like radio buttons, then mirrored left to right and top to bottom, two
+/// switches of their own (both on is the picture upside down). Half a turn (2, from an old Rotate) means the same as
+/// both mirrors and is stored as them ([`OrientationParams::normalized`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OrientationParams {
+    /// 0, 1 (right) or 3 (left); more wrap around.
+    pub turns: u8,
+    pub mirror_horizontal: bool,
+    pub mirror_vertical: bool,
+}
+
+impl OrientationParams {
+    pub const UPRIGHT: Self = Self {
+        turns: 0,
+        mirror_horizontal: false,
+        mirror_vertical: false,
+    };
+
+    /// The transform these values make.
+    pub const fn orientation(self) -> Orientation {
+        let mut o = Orientation::turned(self.turns);
+        if self.mirror_horizontal {
+            o = o.then(Orientation::MIRROR_HORIZONTAL);
+        }
+        if self.mirror_vertical {
+            o = o.then(Orientation::MIRROR_VERTICAL);
+        }
+        o
+    }
+
+    /// Whether the picture stays as it is.
+    pub const fn is_identity(self) -> bool {
+        self.orientation().is_identity()
+    }
+
+    /// The same picture with `turns` 0, 1 or 3: half a turn becomes both mirrors switched (it is the same as them).
+    #[must_use]
+    pub const fn normalized(self) -> Self {
+        let turns = self.turns % 4;
+        if turns == 2 {
+            Self {
+                turns: 0,
+                mirror_horizontal: !self.mirror_horizontal,
+                mirror_vertical: !self.mirror_vertical,
+            }
+        } else {
+            Self { turns, ..self }
+        }
+    }
+
+    /// The turn buttons and keys: a quarter to the right (`clockwise`) or to the left; the one that is on switches off.
+    #[must_use]
+    pub const fn pick_turn(self, clockwise: bool) -> Self {
+        let wanted = if clockwise { 1 } else { 3 };
+        let current = self.normalized();
+        Self {
+            turns: if current.turns == wanted { 0 } else { wanted },
+            ..current
+        }
+    }
+
+    /// The mirror buttons and keys: switch the mirror left to right (`horizontal`) or top to bottom.
+    #[must_use]
+    pub const fn toggle_mirror(self, horizontal: bool) -> Self {
+        let mut next = self.normalized();
+        if horizontal {
+            next.mirror_horizontal = !next.mirror_horizontal;
+        } else {
+            next.mirror_vertical = !next.mirror_vertical;
+        }
+        next
+    }
+
+    /// Values that make `o`, with the fewest switches on.
+    pub fn of(o: Orientation) -> Self {
+        let mut best: Option<Self> = None;
+        for turns in [0, 1, 3] {
+            for (mirror_horizontal, mirror_vertical) in [(false, false), (true, false), (false, true), (true, true)] {
+                let params = Self {
+                    turns,
+                    mirror_horizontal,
+                    mirror_vertical,
+                };
+                let count =
+                    |p: Self| u8::from(p.turns != 0) + u8::from(p.mirror_horizontal) + u8::from(p.mirror_vertical);
+                if params.orientation() == o && best.is_none_or(|b| count(params) < count(b)) {
+                    best = Some(params);
+                }
+            }
+        }
+        best.unwrap_or(Self::UPRIGHT)
+    }
+
+    /// These values followed by `next`: kept as set when only turns come before only mirrors (an old Rotate before an
+    /// old Mirror), else the values of the combined transform.
+    pub fn then(self, next: Self) -> Self {
+        if !self.mirror_horizontal && !self.mirror_vertical && next.turns.is_multiple_of(4) {
+            Self {
+                turns: self.turns,
+                ..next
+            }
+            .normalized()
+        } else {
+            Self::of(self.orientation().then(next.orientation()))
+        }
+    }
+
+    /// The result in words ("90° right, mirrored").
+    pub const fn label(self) -> &'static str {
+        self.orientation().label()
+    }
+}
+
+impl From<Orientation> for OrientationParams {
+    fn from(o: Orientation) -> Self {
+        Self::of(o)
+    }
 }
 
 impl Default for Orientation {
@@ -34,6 +157,62 @@ impl Orientation {
             Rotation::Clockwise => Self::CLOCKWISE,
             Rotation::CounterClockwise => Self::COUNTER_CLOCKWISE,
             Rotation::UpsideDown => Self::UPSIDE_DOWN,
+        }
+    }
+
+    /// `turns` quarter turns clockwise (taken modulo 4).
+    pub const fn turned(turns: u8) -> Self {
+        match turns % 4 {
+            1 => Self::CLOCKWISE,
+            2 => Self::UPSIDE_DOWN,
+            3 => Self::COUNTER_CLOCKWISE,
+            _ => Self::IDENTITY,
+        }
+    }
+
+    /// The quarter turns clockwise (0 to 3) and whether a mirror left to right follows them: how a picture of the
+    /// result is drawn (Slint turns first, then scales).
+    pub fn turns_and_mirror(self) -> (u8, bool) {
+        for mirrored in [false, true] {
+            for turns in 0..4 {
+                let mut o = Self::turned(turns);
+                if mirrored {
+                    o = o.then(Self::MIRROR_HORIZONTAL);
+                }
+                if o == self {
+                    return (turns, mirrored);
+                }
+            }
+        }
+        (0, false)
+    }
+
+    /// The ffmpeg filters that produce this orientation (one per case, checked with the real ffmpeg: `transpose`'s
+    /// `cclock_flip` mirrors over the main diagonal, `clock_flip` over the other one); `None` when upright.
+    pub const fn lavfi(self) -> Option<&'static str> {
+        match self.m {
+            [[0, -1], [1, 0]] => Some("transpose=dir=clock"),
+            [[0, 1], [-1, 0]] => Some("transpose=dir=cclock"),
+            [[-1, 0], [0, -1]] => Some("hflip,vflip"),
+            [[-1, 0], [0, 1]] => Some("hflip"),
+            [[1, 0], [0, -1]] => Some("vflip"),
+            [[0, 1], [1, 0]] => Some("transpose=dir=cclock_flip"),
+            [[0, -1], [-1, 0]] => Some("transpose=dir=clock_flip"),
+            _ => None,
+        }
+    }
+
+    /// The orientation in words ("90° right, mirrored").
+    pub const fn label(self) -> &'static str {
+        match self.m {
+            [[0, -1], [1, 0]] => "90° right",
+            [[0, 1], [-1, 0]] => "90° left",
+            [[-1, 0], [0, -1]] => "180°",
+            [[-1, 0], [0, 1]] => "Mirrored left to right",
+            [[1, 0], [0, -1]] => "Mirrored top to bottom",
+            [[0, 1], [1, 0]] => "90° right, mirrored",
+            [[0, -1], [-1, 0]] => "90° left, mirrored",
+            _ => "Upright",
         }
     }
 
@@ -89,8 +268,8 @@ impl Orientation {
         self.m[0][0] == 0
     }
 
-    pub fn is_identity(self) -> bool {
-        self == Self::IDENTITY
+    pub const fn is_identity(self) -> bool {
+        matches!(self.m, [[1, 0], [0, 1]])
     }
 
     /// The size of a `size` picture after the transform.
@@ -215,6 +394,92 @@ mod tests {
         assert_eq!(Orientation::from_degrees_clockwise(45), Orientation::IDENTITY);
     }
 
+    fn arb_params() -> impl Strategy<Value = OrientationParams> {
+        (0u8..8, any::<bool>(), any::<bool>()).prop_map(|(turns, mirror_horizontal, mirror_vertical)| {
+            OrientationParams {
+                turns,
+                mirror_horizontal,
+                mirror_vertical,
+            }
+        })
+    }
+
+    #[test]
+    fn every_orientation_can_be_set_and_has_a_filter_and_a_name() {
+        let mut names = std::collections::HashSet::new();
+        for o in ALL {
+            let params = OrientationParams::of(o);
+            assert!(params.turns != 2, "{params:?}");
+            assert_eq!(params.orientation(), o);
+            assert_eq!(o.lavfi().is_none(), o.is_identity());
+            assert!(names.insert(o.label()), "{o:?}");
+        }
+        // Upside down is both mirrors.
+        assert_eq!(
+            OrientationParams::of(Orientation::UPSIDE_DOWN),
+            OrientationParams {
+                turns: 0,
+                mirror_horizontal: true,
+                mirror_vertical: true
+            }
+        );
+        let five = OrientationParams {
+            turns: 5,
+            ..OrientationParams::UPRIGHT
+        };
+        assert_eq!(five.orientation(), Orientation::CLOCKWISE, "turns wrap around");
+        assert_eq!(Orientation::UPSIDE_DOWN.turns_and_mirror(), (2, false));
+        assert_eq!(Orientation::MIRROR_VERTICAL.turns_and_mirror(), (2, true));
+        assert_eq!(
+            Orientation::CLOCKWISE.then(Orientation::MIRROR_HORIZONTAL).lavfi(),
+            Some("transpose=dir=cclock_flip")
+        );
+        // An old Rotate before an old Mirror keeps both as set; an old half turn becomes both mirrors.
+        let rotate = OrientationParams {
+            turns: 1,
+            ..OrientationParams::UPRIGHT
+        };
+        let mirror = OrientationParams {
+            mirror_vertical: true,
+            ..OrientationParams::UPRIGHT
+        };
+        assert_eq!(
+            rotate.then(mirror),
+            OrientationParams {
+                turns: 1,
+                mirror_horizontal: false,
+                mirror_vertical: true
+            }
+        );
+        let half = OrientationParams {
+            turns: 2,
+            ..OrientationParams::UPRIGHT
+        };
+        assert_eq!(
+            half.then(mirror),
+            OrientationParams {
+                turns: 0,
+                mirror_horizontal: true,
+                mirror_vertical: false
+            }
+        );
+        assert_eq!(
+            serde_json::to_string(&rotate.toggle_mirror(true)).unwrap(),
+            r#"{"turns":1,"mirror_horizontal":true,"mirror_vertical":false}"#
+        );
+    }
+
+    #[test]
+    fn the_turn_buttons_work_like_radio_buttons_and_the_mirrors_like_switches() {
+        let p = OrientationParams::UPRIGHT.pick_turn(true);
+        assert_eq!(p.turns, 1);
+        assert_eq!(p.pick_turn(false).turns, 3, "left replaces right");
+        assert_eq!(p.pick_turn(true).turns, 0, "the one that is on switches off");
+        let both = p.toggle_mirror(true).toggle_mirror(false);
+        assert!(both.mirror_horizontal && both.mirror_vertical && both.turns == 1);
+        assert!(!both.toggle_mirror(true).mirror_horizontal);
+    }
+
     #[test]
     fn a_quarter_turn_inverts_the_sample_aspect() {
         assert!((Orientation::CLOCKWISE.sample_aspect(2.0) - 0.5).abs() < 1e-12);
@@ -237,6 +502,18 @@ mod tests {
             prop_assert!(near(out.width - mapped.right, p1.0.max(p2.0)));
             prop_assert!(near(out.height - mapped.bottom, p1.1.max(p2.1)));
             prop_assert_eq!(o.inverse().map_crop(mapped), crop);
+        }
+
+        #[test]
+        fn normalizing_keeps_the_picture(p in arb_params()) {
+            prop_assert_eq!(p.normalized().orientation(), p.orientation());
+            prop_assert!(p.normalized().turns != 2 && p.normalized().turns < 4);
+            prop_assert!(p.pick_turn(true).turns != 2 && p.toggle_mirror(false).turns != 2);
+        }
+
+        #[test]
+        fn values_followed_by_values_make_both_transforms(a in arb_params(), b in arb_params()) {
+            prop_assert_eq!(a.then(b).orientation(), a.orientation().then(b.orientation()));
         }
 
         #[test]

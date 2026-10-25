@@ -3,6 +3,7 @@
 //! Info panel shows, previews of files (description and one picture, cached), and the picture checks of the filters (black borders with `cropdetect`, interlacing with
 //! `idet`).
 
+mod crop_search;
 mod detect;
 mod ffprobe;
 mod formats;
@@ -12,10 +13,10 @@ mod probe;
 mod summary;
 mod timing;
 
+pub use crop_search::{CROP_SAMPLES, CropSearch, CropSides, crop_sample_times};
 pub use detect::{
-    CROP_SAMPLES, CropBox, CropDetection, DetectOptions, IdetCounts, Interlacing, combine_crop_samples,
-    crop_sample_times, cropdetect_args, detect_crop, detect_interlace, idet_args, idet_start, parse_cropdetect,
-    parse_idet,
+    CropBox, CropDetection, DetectOptions, IdetCounts, Interlacing, combine_crop_samples, cropdetect_args, detect_crop,
+    detect_interlace, idet_args, idet_start, parse_cropdetect, parse_idet,
 };
 pub use ffprobe::{DecodeError, decode, decode_timing};
 pub use formats::{VIDEO_FORMATS, is_video_file, video_extensions};

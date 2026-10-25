@@ -14,12 +14,12 @@ mod section_list;
 pub use chain::{ChainError, FilterChain, FilterSlot, Size};
 pub use crop::{Crop, CropAspect};
 pub use filter::{
-    DeinterlaceRate, Deinterlacer, DeshakeCrop, DeshakeInterpolation, DeshakeParams, Filter, FilterKind, Mirror,
-    ResizeAlgorithm, Rotation,
+    DeinterlaceRate, Deinterlacer, DeshakeCrop, DeshakeInterpolation, DeshakeParams, FieldParity, Filter, FilterKind,
+    Mirror, ResizeAlgorithm, Rotation,
 };
 pub use filter_complex::{ConcatGraph, ConcatInput, concat_graph};
 pub use lavfi::{DeshakePass, LavfiTarget, escape_value};
-pub use orientation::Orientation;
+pub use orientation::{Orientation, OrientationParams};
 pub use preview::{PreviewFilter, source_rotation_lavfi};
 pub use section::{Section, SectionError};
 pub use section_list::{SectionId, SectionList};

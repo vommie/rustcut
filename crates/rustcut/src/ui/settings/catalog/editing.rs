@@ -1,11 +1,10 @@
-//! Player, Editor & Sections, Filters and Export & Naming (the template; the target folders have their own editor).
+//! Player, Editor & Sections and Export & Naming (the template; the target folders have their own editor).
 
-use rustcut_core::edit::{Deinterlacer, DeshakeCrop, DeshakeInterpolation, DeshakeParams};
 use rustcut_core::naming::{NameContext, render_stem};
 use rustcut_core::settings::{AutoSection, OnJobLoad, Settings};
 
 use super::Card;
-use crate::ui::settings::field::{Field, Kind, Value, WRONG_VALUE, always, choice, number, switch};
+use crate::ui::settings::field::{Field, Kind, Value, always, choice, number, switch};
 use crate::util::hex_color;
 
 fn set_background(s: &mut Settings, v: Value) -> Result<(), String> {
@@ -166,137 +165,6 @@ pub static EDITOR: &[Card] = &[
             editor.on_job_load,
             [(OnJobLoad::Replace, "Replace it"), (OnJobLoad::Ask, "Ask first")]
         )],
-    },
-];
-
-/// A deshake parameter: kept in vid.stab's ranges (accuracy is never below shakiness).
-macro_rules! deshake {
-    ($key:literal, $label:literal, $help:literal, $field:ident : $t:ty, $min:literal..=$max:literal, $step:literal, $unit:literal) => {
-        Field {
-            key: $key,
-            label: $label,
-            help: $help,
-            kind: Kind::Number {
-                min: $min,
-                max: $max,
-                step: $step,
-                unit: $unit,
-            },
-            live: true,
-            get: |s| Value::Number(i64::from(s.filters.deshake.$field)),
-            set: |s, v| {
-                let mut params = s.filters.deshake;
-                params.$field = <$t>::try_from(v.as_number()?).map_err(|_out_of_range| WRONG_VALUE.to_owned())?;
-                s.filters.deshake = DeshakeParams::sanitized(params);
-                Ok(())
-            },
-            enabled: always,
-            indent: false,
-        }
-    };
-}
-
-pub static FILTERS: &[Card] = &[
-    Card {
-        title: "Deinterlace",
-        description: "",
-        fields: &[choice!(
-            "filters.deinterlacer",
-            "Deinterlacer",
-            "Chosen when the filter is switched on. bwdif: good quality at a moderate cost; yadif: faster, a little \
-             softer; w3fdif: sharp, for little motion; kerndeint: fast.",
-            filters.deinterlacer,
-            [
-                (Deinterlacer::Bwdif, "bwdif"),
-                (Deinterlacer::Yadif, "yadif"),
-                (Deinterlacer::W3fdif, "w3fdif"),
-                (Deinterlacer::Kerndeint, "kerndeint")
-            ]
-        )],
-    },
-    Card {
-        title: "Deshake",
-        description: "What a new deshake filter starts with (vid.stab, two passes). The Filters card changes them per \
-                      job.",
-        fields: &[
-            deshake!(
-                "filters.deshake.shakiness",
-                "Shakiness",
-                "How shaky the video is, 1 (little) to 10 (very). Higher is slower.",
-                shakiness: u8,
-                1..=10,
-                1,
-                ""
-            ),
-            deshake!(
-                "filters.deshake.accuracy",
-                "Accuracy",
-                "Detection accuracy, at least the shakiness. Higher is slower.",
-                accuracy: u8,
-                1..=15,
-                1,
-                ""
-            ),
-            deshake!(
-                "filters.deshake.stepsize",
-                "Search step",
-                "In pixels. Smaller is more accurate and slower.",
-                stepsize: u8,
-                1..=32,
-                1,
-                "px"
-            ),
-            deshake!(
-                "filters.deshake.smoothing",
-                "Smoothing",
-                "Frames used to smooth the camera path. Higher is steadier but follows pans later.",
-                smoothing: u16,
-                0..=1000,
-                5,
-                "frames"
-            ),
-            deshake!(
-                "filters.deshake.zoom",
-                "Zoom",
-                "Extra zoom against the moving borders.",
-                zoom: i8,
-                -100..=100,
-                1,
-                "%"
-            ),
-            choice!(
-                "filters.deshake.optzoom",
-                "Automatic zoom",
-                "None, one zoom for the whole video, or a zoom that follows the motion.",
-                filters.deshake.optzoom,
-                [(0, "None"), (1, "Static"), (2, "Adaptive")]
-            ),
-            choice!(
-                "filters.deshake.crop",
-                "Borders",
-                "What shows where the stabilized picture left the frame.",
-                filters.deshake.crop,
-                [(DeshakeCrop::Black, "Black"), (DeshakeCrop::Keep, "Previous frame")]
-            ),
-            choice!(
-                "filters.deshake.interpolation",
-                "Interpolation",
-                "How moved pixels are computed. Bicubic is the sharpest and the slowest.",
-                filters.deshake.interpolation,
-                [
-                    (DeshakeInterpolation::No, "None"),
-                    (DeshakeInterpolation::Linear, "Linear"),
-                    (DeshakeInterpolation::Bilinear, "Bilinear"),
-                    (DeshakeInterpolation::Bicubic, "Bicubic")
-                ]
-            ),
-            switch!(
-                "filters.deshake.tripod",
-                "Virtual tripod",
-                "Keeps the camera fixed on the first frame instead of smoothing its path.",
-                filters.deshake.tripod
-            ),
-        ],
     },
 ];
 

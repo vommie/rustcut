@@ -5,7 +5,7 @@
 use std::rc::Weak;
 
 use rustcut_core::edit::{FilterKind, LavfiTarget};
-use rustcut_core::media::{detect_crop, detect_interlace};
+use rustcut_core::media::{crop_sample_times, detect_crop, detect_interlace};
 
 use super::FiltersBridge;
 use super::state::{Edge, InterlaceHint, Source};
@@ -66,10 +66,7 @@ impl FiltersBridge {
                 ))
                 .action("Switch Deinterlace on", move || {
                     if let Some(bridge) = bridge.upgrade() {
-                        bridge.update(|s| {
-                            let deinterlacer = s.deinterlacer();
-                            s.set_deinterlacer(deinterlacer);
-                        });
+                        bridge.update(|s| s.switch_on(FilterKind::Deinterlace));
                     }
                 }),
         );
@@ -93,12 +90,30 @@ impl FiltersBridge {
             tracing::debug!("[Filters] No video: no black border detection");
             return;
         };
+        let search = self.state.borrow().search;
+        let ranges = if search.sections_only {
+            self.sections
+                .borrow()
+                .as_ref()
+                .map(|source| source())
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let times = crop_sample_times(duration, usize::from(search.samples), &ranges);
+        tracing::info!(
+            samples = times.len(),
+            in_sections = !ranges.is_empty(),
+            limit = search.limit,
+            sides = ?search.sides,
+            "[Filters] Auto-crop"
+        );
         self.state.borrow_mut().auto_crop_running = true;
         self.publish_card();
         let options = self.detect.borrow().clone();
         let task = self
             .runtime
-            .spawn(async move { detect_crop(&file, frame, duration, &prefix, &options).await });
+            .spawn(async move { detect_crop(&file, frame, &times, &prefix, &search, &options).await });
         *self.crop_task.borrow_mut() = Some(task.abort_handle());
         let generation = self.generation.get();
         let bridge = Weak::clone(&self.me);
@@ -124,7 +139,10 @@ impl FiltersBridge {
                 }
                 Ok(found) => {
                     tracing::info!(crop = ?found.crop, samples = found.samples_used, "[Filters] Black borders");
-                    bridge.update(|s| s.set_crop(found.crop));
+                    bridge.update(|s| {
+                        s.set_crop(found.crop);
+                        s.switch_on(FilterKind::Crop);
+                    });
                     let shown = bridge.state.borrow().shown_crop();
                     let parts: Vec<String> = [
                         (Edge::Top, "top"),

@@ -46,9 +46,15 @@ export global Filters {
     in property <[string]> aspects;
     in property <int> aspect;
 
-    in property <int> quarter-turns;
-    in property <bool> mirror-horizontal;
-    in property <bool> mirror-vertical;
+    // The orientation's result for the glyph (quarter turns clockwise, then mirrored left to right) and in words; the
+    // two mirror switches as set.
+    in property <int> orientation-turns;
+    in property <bool> orientation-mirrored;
+    in property <string> orientation-label;
+    in property <bool> orientation-mirror-horizontal;
+    in property <bool> orientation-mirror-vertical;
+    // The turn that is on: 0 none, 1 right, 3 left.
+    in property <int> orientation-turn;
 
     in property <string> resize-width;
     in property <string> resize-height;
@@ -89,6 +95,7 @@ export global Filters {
     callback crop-edit();
     callback auto-crop();
     callback set-aspect(int);
+    // The orientation's buttons: a quarter turn, a mirror of the result.
     callback rotate(/* clockwise */ bool);
     callback mirror(/* horizontal */ bool);
     // 0 = width, 1 = height; empty = automatic.
@@ -229,47 +236,87 @@ component CropParams inherits VerticalLayout {
     }
 }
 
-component RotateParams inherits HorizontalLayout {
+/// The orientation's result: an "F" turned and mirrored like the picture.
+component OrientationGlyph inherits Rectangle {
+    in property <int> turns;
+    in property <bool> mirrored;
+    in property <bool> active: true;
+
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    background: Theme.background;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    // Drawn as lines (a turned text glyph renders smeared); Slint turns first and scales afterwards: the order of the
+    // values (turns, then the mirror).
+    Path {
+        width: parent.width;
+        height: parent.height;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        commands: "M 9 5 L 9 19 M 9 5 L 16 5 M 9 12 L 14.5 12";
+        stroke: root.active ? Theme.primary : Theme.text-muted;
+        stroke-width: 2.4px;
+        stroke-line-cap: round;
+        transform-origin: { x: self.width / 2, y: self.height / 2 };
+        transform-rotation: root.turns * 90deg;
+        transform-scale-x: root.mirrored ? -1 : 1;
+    }
+}
+
+component OrientationParams inherits HorizontalLayout {
+    in property <bool> active;
+
     spacing: 4px;
 
     IconButton {
         icon: IconId.rotate-left;
-        tooltip: "Rotate a quarter turn counter-clockwise";
+        checked: Filters.orientation-turn == 3;
+        tooltip: Filters.orientation-turn == 3 ? "Turned a quarter to the left (click: undo)" : "Turn a quarter to the left";
         shortcut: Filters.key-rotate-left;
         clicked => { Filters.rotate(false); }
     }
 
     IconButton {
         icon: IconId.rotate-right;
-        tooltip: "Rotate a quarter turn clockwise";
+        checked: Filters.orientation-turn == 1;
+        tooltip: Filters.orientation-turn == 1 ? "Turned a quarter to the right (click: undo)" : "Turn a quarter to the right";
         shortcut: Filters.key-rotate-right;
         clicked => { Filters.rotate(true); }
     }
 
-    Label {
-        text: Filters.quarter-turns == 1 ? "90° clockwise" : Filters.quarter-turns == 2 ? "180°"
-            : Filters.quarter-turns == 3 ? "90° counter-clockwise" : "Not rotated";
-        horizontal-stretch: 1;
-    }
-}
-
-component MirrorParams inherits HorizontalLayout {
-    spacing: 4px;
-
     IconButton {
         icon: IconId.mirror-horizontal;
-        checked: Filters.mirror-horizontal;
-        tooltip: "Mirror left and right";
+        checked: Filters.orientation-mirror-horizontal;
+        tooltip: Filters.orientation-mirror-horizontal ? "Mirrored left and right (click: undo)" : "Mirror left and right";
         shortcut: Filters.key-mirror-horizontal;
         clicked => { Filters.mirror(true); }
     }
 
     IconButton {
         icon: IconId.mirror-vertical;
-        checked: Filters.mirror-vertical;
-        tooltip: "Mirror top and bottom";
+        checked: Filters.orientation-mirror-vertical;
+        tooltip: Filters.orientation-mirror-vertical ? "Mirrored top and bottom (click: undo)" : "Mirror top and bottom";
         shortcut: Filters.key-mirror-vertical;
         clicked => { Filters.mirror(false); }
+    }
+
+    VerticalLayout {
+        alignment: center;
+
+        TooltipArea {
+            width: 24px;
+            height: 24px;
+            text: "Result: " + Filters.orientation-label + ". Both mirrors turn the picture upside down.";
+
+            OrientationGlyph {
+                turns: Filters.orientation-turns;
+                mirrored: Filters.orientation-mirrored;
+                active: root.active;
+            }
+        }
     }
 
     Rectangle { horizontal-stretch: 1; }
@@ -567,8 +614,7 @@ component FilterRow inherits Rectangle {
         if root.item.enabled && root.item.kind == "deinterlace": DeinterlaceParams { }
         if root.item.enabled && root.item.kind == "crop": CropParams { }
         if root.item.enabled && root.item.kind == "deshake": DeshakeParams { }
-        if root.item.enabled && root.item.kind == "rotate": RotateParams { }
-        if root.item.enabled && root.item.kind == "mirror": MirrorParams { }
+        if root.item.enabled && root.item.kind == "orientation": OrientationParams { active: true; }
         if root.item.enabled && root.item.kind == "resize": ResizeParams { }
     }
 }

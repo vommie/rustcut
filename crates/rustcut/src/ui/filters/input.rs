@@ -121,8 +121,8 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
             s.set_aspect(*a);
         }
     }));
-    f.on_rotate(change(&this, FiltersState::rotate));
-    f.on_mirror(change(&this, FiltersState::toggle_mirror));
+    f.on_rotate(change(&this, FiltersState::turn));
+    f.on_mirror(change(&this, FiltersState::flip));
     let edit_resize = Weak::clone(&this);
     f.on_edit_resize(move |which, text| {
         let Some(bridge) = edit_resize.upgrade() else {

@@ -10,8 +10,8 @@ use serde_with::{DefaultOnError, OneOrMany, VecSkipError, serde_as};
 
 use super::dialogs::DialogSettings;
 use super::file::{MigrationStep, VersionedFile};
+use super::filters::FilterDefaults;
 use super::notices::{NoticeSettings, migrate_notice_options};
-use crate::edit::{Deinterlacer, DeshakeParams};
 use crate::naming::DEFAULT_TEMPLATE;
 use crate::render::{DEFAULT_PROFILE_ID, RenderProfile, is_builtin_id};
 
@@ -156,24 +156,6 @@ impl Default for EditorSettings {
             seek_step_secs: 2,
             seek_step_long_secs: 10,
             on_job_load: OnJobLoad::Replace,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct FilterDefaults {
-    /// Deinterlacer selected when the filter is switched on.
-    pub deinterlacer: Deinterlacer,
-    /// Defaults of the deshake filter.
-    pub deshake: DeshakeParams,
-}
-
-impl Default for FilterDefaults {
-    fn default() -> Self {
-        Self {
-            deinterlacer: Deinterlacer::Bwdif,
-            deshake: DeshakeParams::default(),
         }
     }
 }
@@ -568,9 +550,9 @@ impl VersionedFile for Settings {
         ) {
             self.export.name_template = DEFAULT_TEMPLATE.into();
         }
-        let deshake = self.filters.deshake.sanitized();
-        if fix("filters.deshake brought into range", deshake != self.filters.deshake) {
-            self.filters.deshake = deshake;
+        let filters = self.filters.sanitized();
+        if fix("filters brought into range", filters != self.filters) {
+            self.filters = filters;
         }
         let before = self.render.profiles.len();
         let mut seen = std::collections::HashSet::new();

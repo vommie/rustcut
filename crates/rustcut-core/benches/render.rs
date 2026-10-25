@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use rustcut_core::edit::{
-    Crop, DeinterlaceRate, Deinterlacer, DeshakeParams, DeshakePass, Filter, FilterChain, LavfiTarget, Mirror,
-    ResizeAlgorithm, Rotation, Section, SectionList, Size,
+    Crop, DeinterlaceRate, Deinterlacer, DeshakeParams, DeshakePass, FieldParity, Filter, FilterChain, LavfiTarget,
+    OrientationParams, ResizeAlgorithm, Section, SectionList, Size,
 };
 use rustcut_core::job::{JobId, JobMetadata, JobSpec, TargetSpec};
 use rustcut_core::media::{MediaInfo, decode};
@@ -27,15 +27,15 @@ fn full_chain() -> FilterChain {
         Filter::Deinterlace {
             deinterlacer: Deinterlacer::Bwdif,
             rate: DeinterlaceRate::Frame,
+            field_order: FieldParity::Auto,
+            only_interlaced: false,
         },
         Filter::Crop(Crop::new(40, 10, 40, 10)),
         Filter::Deshake(DeshakeParams::default()),
-        Filter::Rotate {
-            rotation: Rotation::Clockwise,
-        },
-        Filter::Mirror(Mirror {
-            horizontal: true,
-            vertical: false,
+        Filter::Orientation(OrientationParams {
+            turns: 1,
+            mirror_horizontal: true,
+            mirror_vertical: false,
         }),
         Filter::Resize {
             width: Some(640),

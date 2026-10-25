@@ -1,7 +1,8 @@
 //! What the Filters card shows, computed from the state (pure, tested); the bridge copies it into the `Filters` global.
 
 use rustcut_core::edit::{
-    ChainError, Crop, CropAspect, DeinterlaceRate, Deinterlacer, DeshakeParams, FilterKind, ResizeAlgorithm, Size,
+    ChainError, Crop, CropAspect, DeinterlaceRate, Deinterlacer, DeshakeParams, FilterKind, OrientationParams,
+    ResizeAlgorithm, Size,
 };
 use rustcut_core::media::Interlacing;
 
@@ -11,8 +12,8 @@ use super::state::{CropMode, FiltersState, InterlaceHint};
 pub const DEINTERLACERS: [Deinterlacer; 4] = Deinterlacer::ALL;
 /// The resize algorithms in the order of the card's list.
 pub const ALGORITHMS: [ResizeAlgorithm; 4] = [
-    ResizeAlgorithm::Bicubic,
     ResizeAlgorithm::Lanczos,
+    ResizeAlgorithm::Bicubic,
     ResizeAlgorithm::Spline,
     ResizeAlgorithm::Bilinear,
 ];
@@ -58,9 +59,7 @@ pub struct CardView {
     pub can_edit_crop: bool,
     pub auto_crop_running: bool,
     pub aspect: usize,
-    pub quarter_turns: u8,
-    pub mirror_horizontal: bool,
-    pub mirror_vertical: bool,
+    pub orientation: OrientationParams,
     /// Typed sizes ("" = automatic) and what "automatic" comes to.
     pub resize_width: String,
     pub resize_height: String,
@@ -114,9 +113,7 @@ pub fn card(state: &FiltersState) -> CardView {
         can_edit_crop: state.crop_view().is_some(),
         auto_crop_running: state.auto_crop_running,
         aspect: CropAspect::ALL.iter().position(|a| *a == state.aspect).unwrap_or(0),
-        quarter_turns: state.quarter_turns(),
-        mirror_horizontal: state.mirror().horizontal,
-        mirror_vertical: state.mirror().vertical,
+        orientation: state.orientation(),
         resize_width: width.map(|w| w.to_string()).unwrap_or_default(),
         resize_height: height.map(|h| h.to_string()).unwrap_or_default(),
         resize_auto_width: auto_w,

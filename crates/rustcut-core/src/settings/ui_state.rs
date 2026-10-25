@@ -7,6 +7,7 @@ use serde_with::{DefaultOnError, VecSkipError, serde_as};
 use super::file::VersionedFile;
 use crate::edit::{CropAspect, FilterChain};
 use crate::job::{JobId, JobStateKind};
+use crate::media::CropSearch;
 use crate::render::{DEFAULT_PROBE_SECS, PROBE_SECS, RenderProfile};
 use crate::settings::WhenDone;
 
@@ -124,6 +125,11 @@ pub struct ExportPanelState {
     #[serde_as(as = "DefaultOnError")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filters: Option<FilterChain>,
+    /// How auto-crop searches, kept with the filters (written only while `keep_filters` is on; 0.0.48). A value this
+    /// version cannot read counts as missing.
+    #[serde_as(as = "DefaultOnError")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crop_search: Option<CropSearch>,
     /// The aspect ratio a crop keeps while it is dragged on the video.
     #[serde_as(as = "DefaultOnError")]
     pub crop_aspect: CropAspect,
@@ -153,6 +159,7 @@ impl Default for ExportPanelState {
             preview_filters: true,
             keep_filters: false,
             filters: None,
+            crop_search: None,
             crop_aspect: CropAspect::Free,
             profile: None,
             render: None,

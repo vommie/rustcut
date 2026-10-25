@@ -19,6 +19,12 @@ pub enum Kind {
     Text {
         placeholder: &'static str,
     },
+    /// A number typed as text, drawn like [`Kind::Number`] (its width, its unit) without steps: an empty field or a
+    /// decimal means something (the setter checks it; "No limit", "0.25").
+    Amount {
+        placeholder: &'static str,
+        unit: &'static str,
+    },
     /// A path typed or picked with a dialog (a folder or a file); empty = not set.
     Path {
         placeholder: &'static str,
@@ -164,7 +170,7 @@ impl Field {
             (Kind::Number { min, max, step, .. }, Edit::Step(steps), Value::Number(n)) => {
                 Value::Number(n.saturating_add(step.saturating_mul(i64::from(steps))).clamp(min, max))
             }
-            (Kind::Text { .. } | Kind::Path { .. } | Kind::Color, Edit::Type(text), _) => {
+            (Kind::Text { .. } | Kind::Amount { .. } | Kind::Path { .. } | Kind::Color, Edit::Type(text), _) => {
                 Value::Text(text.trim().to_owned())
             }
             _ => return Ok(false),

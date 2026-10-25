@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use super::chain::{ChainError, FilterChain, Size};
-use super::filter::{DeinterlaceRate, Deinterlacer, DeshakeCrop, DeshakeParams, Filter, FilterKind};
+use super::filter::{DeinterlaceRate, Deinterlacer, DeshakeCrop, DeshakeParams, FieldParity, Filter, FilterKind};
 
 /// Which pass of a two-pass deshake render the text is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,7 +61,12 @@ impl FilterChain {
 
 fn filter_lavfi(filter: &Filter, pass: Option<DeshakePass<'_>>) -> Result<String, ChainError> {
     Ok(match *filter {
-        Filter::Deinterlace { deinterlacer, rate } => deinterlace(deinterlacer, rate),
+        Filter::Deinterlace {
+            deinterlacer,
+            rate,
+            field_order,
+            only_interlaced,
+        } => deinterlace(deinterlacer, rate, field_order, only_interlaced),
         Filter::Crop(c) => format!(
             "crop=w=iw-{}:h=ih-{}:x={}:y={}",
             c.left + c.right,
@@ -70,17 +75,7 @@ fn filter_lavfi(filter: &Filter, pass: Option<DeshakePass<'_>>) -> Result<String
             c.top
         ),
         Filter::Deshake(p) => deshake(p.sanitized(), pass.unwrap_or(DeshakePass::None))?,
-        Filter::Rotate { rotation } => match rotation {
-            super::Rotation::Clockwise => "transpose=dir=clock".to_owned(),
-            super::Rotation::CounterClockwise => "transpose=dir=cclock".to_owned(),
-            super::Rotation::UpsideDown => "hflip,vflip".to_owned(),
-        },
-        Filter::Mirror(m) => match (m.horizontal, m.vertical) {
-            (true, true) => "hflip,vflip".to_owned(),
-            (true, false) => "hflip".to_owned(),
-            (false, true) => "vflip".to_owned(),
-            (false, false) => "null".to_owned(),
-        },
+        Filter::Orientation(p) => p.orientation().lavfi().unwrap_or("null").to_owned(),
         Filter::Resize {
             width,
             height,
@@ -97,9 +92,11 @@ fn filter_lavfi(filter: &Filter, pass: Option<DeshakePass<'_>>) -> Result<String
     })
 }
 
-fn deinterlace(deinterlacer: Deinterlacer, rate: DeinterlaceRate) -> String {
+/// bwdif, yadif and w3fdif take the field order (`parity`) and `deint`; kerndeint has neither (it finds the interlaced
+/// lines itself) and ignores them.
+fn deinterlace(deinterlacer: Deinterlacer, rate: DeinterlaceRate, order: FieldParity, only_interlaced: bool) -> String {
     let field = rate == DeinterlaceRate::Field && deinterlacer.supports_field_rate();
-    match deinterlacer {
+    let mut s = match deinterlacer {
         Deinterlacer::Bwdif | Deinterlacer::Yadif => {
             format!(
                 "{}=mode={}",
@@ -108,8 +105,15 @@ fn deinterlace(deinterlacer: Deinterlacer, rate: DeinterlaceRate) -> String {
             )
         }
         Deinterlacer::W3fdif => format!("w3fdif=mode={}", if field { "field" } else { "frame" }),
-        Deinterlacer::Kerndeint => "kerndeint".to_owned(),
+        Deinterlacer::Kerndeint => return "kerndeint".to_owned(),
+    };
+    if let Some(parity) = order.ffmpeg_parity() {
+        let _ = write!(s, ":parity={parity}");
     }
+    if only_interlaced {
+        s.push_str(":deint=interlaced");
+    }
+    s
 }
 
 fn deshake(p: DeshakeParams, pass: DeshakePass<'_>) -> Result<String, ChainError> {
@@ -141,12 +145,27 @@ fn deshake(p: DeshakeParams, pass: DeshakePass<'_>) -> Result<String, ChainError
                 p.zoom,
                 p.interpolation.ffmpeg_name()
             );
+            if p.optzoom == 2 {
+                let _ = write!(s, ":zoomspeed={}", hundredths(p.zoom_speed));
+            }
+            if let Some(shift) = p.max_shift {
+                let _ = write!(s, ":maxshift={shift}");
+            }
+            if let Some(angle) = p.max_angle {
+                // ffmpeg takes radians (at most 3.14); 90 degrees are 1.5708.
+                let _ = write!(s, ":maxangle={:.4}", f64::from(angle).to_radians());
+            }
             if p.tripod {
                 s.push_str(":tripod=1");
             }
             Ok(s)
         }
     }
+}
+
+/// A number in hundredths as a decimal ("0.25").
+fn hundredths(value: u16) -> String {
+    format!("{}.{:02}", value / 100, value % 100)
 }
 
 fn escape_path(path: &Path) -> Result<String, ChainError> {
@@ -175,7 +194,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::edit::{Crop, DeshakeParams, Mirror, ResizeAlgorithm, Rotation};
+    use crate::edit::{Crop, DeshakeParams, Orientation, ResizeAlgorithm};
 
     const HD: Size = Size::new(1920, 1080);
 
@@ -205,8 +224,11 @@ mod tests {
             chain_with(&[Filter::Deinterlace {
                 deinterlacer: d,
                 rate: r,
+                field_order: FieldParity::Auto,
+                only_interlaced: false,
             }])
         };
+        let orientation = |o: Orientation| render(&chain_with(&[Filter::Orientation(o.into())]), HD, DeshakePass::None);
         let lines = [
             render(
                 &deinterlace(Deinterlacer::Bwdif, DeinterlaceRate::Frame),
@@ -233,35 +255,13 @@ mod tests {
                 HD,
                 DeshakePass::None,
             ),
-            render(
-                &chain_with(&[Filter::Rotate {
-                    rotation: Rotation::Clockwise,
-                }]),
-                HD,
-                DeshakePass::None,
-            ),
-            render(
-                &chain_with(&[Filter::Rotate {
-                    rotation: Rotation::CounterClockwise,
-                }]),
-                HD,
-                DeshakePass::None,
-            ),
-            render(
-                &chain_with(&[Filter::Rotate {
-                    rotation: Rotation::UpsideDown,
-                }]),
-                HD,
-                DeshakePass::None,
-            ),
-            render(
-                &chain_with(&[Filter::Mirror(Mirror {
-                    horizontal: true,
-                    vertical: true,
-                })]),
-                HD,
-                DeshakePass::None,
-            ),
+            orientation(Orientation::CLOCKWISE),
+            orientation(Orientation::COUNTER_CLOCKWISE),
+            orientation(Orientation::UPSIDE_DOWN),
+            orientation(Orientation::MIRROR_HORIZONTAL),
+            orientation(Orientation::MIRROR_VERTICAL),
+            orientation(Orientation::CLOCKWISE.then(Orientation::MIRROR_HORIZONTAL)),
+            orientation(Orientation::COUNTER_CLOCKWISE.then(Orientation::MIRROR_HORIZONTAL)),
             render(
                 &chain_with(&[Filter::Resize {
                     width: Some(1280),
@@ -282,6 +282,47 @@ mod tests {
             ),
         ];
         insta::assert_snapshot!(lines.join("\n"));
+    }
+
+    #[test]
+    fn deinterlace_field_order_and_marked_frames() {
+        let chain = |deinterlacer| {
+            chain_with(&[Filter::Deinterlace {
+                deinterlacer,
+                rate: DeinterlaceRate::Field,
+                field_order: FieldParity::BottomFirst,
+                only_interlaced: true,
+            }])
+        };
+        assert_eq!(
+            render(&chain(Deinterlacer::Bwdif), HD, DeshakePass::None),
+            "bwdif=mode=send_field:parity=bff:deint=interlaced"
+        );
+        assert_eq!(
+            render(&chain(Deinterlacer::W3fdif), HD, DeshakePass::None),
+            "w3fdif=mode=field:parity=bff:deint=interlaced"
+        );
+        assert_eq!(
+            render(&chain(Deinterlacer::Kerndeint), HD, DeshakePass::None),
+            "kerndeint"
+        );
+    }
+
+    #[test]
+    fn deshake_limits_and_zoom_speed() {
+        let trf = PathBuf::from("/t/job.trf");
+        let chain = chain_with(&[Filter::Deshake(DeshakeParams {
+            optzoom: 2,
+            zoom_speed: 50,
+            max_shift: Some(40),
+            max_angle: Some(2),
+            ..DeshakeParams::default()
+        })]);
+        assert_eq!(
+            render(&chain, HD, DeshakePass::Transform { input: &trf }),
+            "vidstabtransform=input=/t/job.trf:smoothing=10:optzoom=2:zoom=0:crop=black:interpol=bicubic:zoomspeed=0.50:\
+             maxshift=40:maxangle=0.0349"
+        );
     }
 
     #[test]
@@ -309,6 +350,8 @@ mod tests {
             Filter::Deinterlace {
                 deinterlacer: Deinterlacer::Bwdif,
                 rate: DeinterlaceRate::Frame,
+                field_order: FieldParity::Auto,
+                only_interlaced: false,
             },
             Filter::Crop(Crop::new(0, 0, 140, 0)),
             Filter::Deshake(DeshakeParams {

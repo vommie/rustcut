@@ -2,8 +2,8 @@
 //! gets, and what it must give.
 
 use rustcut_core::edit::{
-    Crop, DeinterlaceRate, Deinterlacer, DeshakeParams, Filter, FilterChain, FilterKind, Mirror, ResizeAlgorithm,
-    Rotation,
+    Crop, DeinterlaceRate, Deinterlacer, DeshakeParams, FieldParity, Filter, FilterChain, FilterKind, Orientation,
+    OrientationParams, ResizeAlgorithm,
 };
 use rustcut_core::render::{
     AudioCodec, AudioSettings, BitDepth, Container, RateControl, RenderProfile, Severity, VideoEncoder, VideoSettings,
@@ -313,10 +313,25 @@ fn filters() -> Vec<Case> {
             list.push((
                 format!("deinterlace {deinterlacer:?} {rate:?}"),
                 "interlaced_pal_576i.mpg",
-                vec![Filter::Deinterlace { deinterlacer, rate }],
+                vec![Filter::Deinterlace {
+                    deinterlacer,
+                    rate,
+                    field_order: FieldParity::Auto,
+                    only_interlaced: false,
+                }],
             ));
         }
     }
+    list.push((
+        "deinterlace bottom field first, only interlaced frames".into(),
+        "interlaced_pal_576i.mpg",
+        vec![Filter::Deinterlace {
+            deinterlacer: Deinterlacer::Bwdif,
+            rate: DeinterlaceRate::Frame,
+            field_order: FieldParity::BottomFirst,
+            only_interlaced: true,
+        }],
+    ));
     list.push((
         "crop".into(),
         "hd_h264_1080p.mp4",
@@ -332,19 +347,33 @@ fn filters() -> Vec<Case> {
         "shaky_h264_640x360.mp4",
         vec![Filter::Deshake(DeshakeParams::default())],
     ));
-    for rotation in [Rotation::Clockwise, Rotation::CounterClockwise, Rotation::UpsideDown] {
-        list.push((
-            format!("rotate {rotation:?}"),
-            "odd_size_853x479_yuv444.mp4",
-            vec![Filter::Rotate { rotation }],
-        ));
-    }
-    for (horizontal, vertical) in [(true, false), (false, true), (true, true)] {
-        list.push((
-            format!("mirror h={horizontal} v={vertical}"),
-            "basic_h264_720p.mp4",
-            vec![Filter::Mirror(Mirror { horizontal, vertical })],
-        ));
+    list.push((
+        "deshake with limits and the adaptive zoom".into(),
+        "shaky_h264_640x360.mp4",
+        vec![Filter::Deshake(DeshakeParams {
+            optzoom: 2,
+            zoom_speed: 50,
+            max_shift: Some(20),
+            max_angle: Some(1),
+            ..DeshakeParams::default()
+        })],
+    ));
+    for turns in 0..4 {
+        for mirrored in [false, true] {
+            if turns == 0 && !mirrored {
+                continue;
+            }
+            let orientation = OrientationParams {
+                turns,
+                mirror_horizontal: mirrored,
+                mirror_vertical: false,
+            };
+            list.push((
+                format!("orientation {}", orientation.label()),
+                "odd_size_853x479_yuv444.mp4",
+                vec![Filter::Orientation(orientation)],
+            ));
+        }
     }
     for algorithm in [
         ResizeAlgorithm::Bilinear,
@@ -387,16 +416,12 @@ fn filters() -> Vec<Case> {
             Filter::Deinterlace {
                 deinterlacer: Deinterlacer::Bwdif,
                 rate: DeinterlaceRate::Frame,
+                field_order: FieldParity::Auto,
+                only_interlaced: false,
             },
             Filter::Crop(Crop::new(40, 10, 40, 10)),
             Filter::Deshake(DeshakeParams::default()),
-            Filter::Rotate {
-                rotation: Rotation::Clockwise,
-            },
-            Filter::Mirror(Mirror {
-                horizontal: true,
-                vertical: false,
-            }),
+            Filter::Orientation(Orientation::CLOCKWISE.then(Orientation::MIRROR_HORIZONTAL).into()),
             Filter::Resize {
                 width: Some(480),
                 height: None,
@@ -472,17 +497,10 @@ pub fn all(full: bool) -> (Vec<Case>, Vec<String>) {
 
 /// The enabled filters of `chain`, for the report.
 pub fn filter_names(chain: &FilterChain) -> String {
-    let names: Vec<String> = [
-        FilterKind::Deinterlace,
-        FilterKind::Crop,
-        FilterKind::Deshake,
-        FilterKind::Rotate,
-        FilterKind::Mirror,
-        FilterKind::Resize,
-    ]
-    .into_iter()
-    .filter(|kind| chain.is_enabled(*kind))
-    .map(|kind| format!("{kind:?}").to_lowercase())
-    .collect();
+    let names: Vec<String> = FilterKind::DEFAULT_ORDER
+        .into_iter()
+        .filter(|kind| chain.is_enabled(*kind))
+        .map(|kind| format!("{kind:?}").to_lowercase())
+        .collect();
     if names.is_empty() { "-".into() } else { names.join(", ") }
 }
