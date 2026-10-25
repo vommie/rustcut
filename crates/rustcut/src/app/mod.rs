@@ -156,6 +156,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     crate::ui::controls::install(&main);
     crate::ui::drag::install(&main);
     let menu = ContextMenuBridge::install(&main);
+    crate::ui::menu::bar::install(&main);
     // Every message goes through the notice center (M6.5); what came before it is shown now.
     let notice_center = notices::install(
         &main,

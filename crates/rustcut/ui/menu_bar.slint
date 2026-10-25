@@ -1,0 +1,198 @@
+// RustCut's own menu bar (P9.12, user decision Q-P9): Slint's `MenuBar` knows only a click, so the entries that discard
+// something ("Reset Layout", "Reset Filters", "Clear All Sections") could not be held. `AppMenuBar` draws the titles
+// with the metrics of the fluent menu bar it replaces; the open menu is the context menu's `MenuPanel` (the same rows:
+// a held entry fills while it is held, the hold hint is in its tooltip) in `MenuBarLayer` over the window. The keys
+// shown in the entries are the keymap's labels: the keys themselves reach the keymap through the main window's key
+// scope. Mouse: a click on a title opens or closes its menu, moving over another title while one is open switches to
+// it, a click anywhere else closes it. Keys while a menu is open: Up and Down move through the usable entries, Left and
+// Right go to the neighbor menus, Enter or Space acts (a held entry too: keys act at once, user decision Q-Q4), Escape
+// closes. Menus and their entries are built in main.slint from the other globals; what an entry does is decided there.
+
+import { Theme } from "styles.slint";
+import { MenuItemView, MenuPanel } from "context_menu.slint";
+import { GlobalTooltip } from "tooltip.slint";
+
+export struct MenuBarMenu {
+    title: string,
+    items: [MenuItemView],
+}
+
+export global AppMenu {
+    // The open menu (-1 = none) and the left edge of its title in window coordinates (the title reports it).
+    in-out property <int> open: -1;
+    in-out property <length> open-x;
+    // The entry the keys or the pointer stand on (-1 = none).
+    in-out property <int> key-row: -1;
+    // The next usable entry after `row` in direction `step` (1 down, -1 up), wrapping around; -1 when there is none
+    // (src/ui/menu/bar.rs).
+    pure callback next-row(/* items */ [MenuItemView], /* row */ int, /* step */ int) -> int;
+
+    public function show(menu: int) {
+        self.open = menu;
+        self.key-row = -1;
+    }
+
+    public function close() {
+        self.open = -1;
+        self.key-row = -1;
+    }
+}
+
+component MenuTitle inherits Rectangle {
+    in property <string> text;
+    in property <bool> open;
+    callback pressed();
+    callback hovered();
+
+    width: label.preferred-width + 22px;
+    border-radius: 3px;
+
+    // The open menu hangs from its title.
+    changed open => {
+        if self.open {
+            AppMenu.open-x = self.absolute-position.x;
+        }
+    }
+    background: root.open ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : transparent;
+
+    label := Text {
+        x: 11px;
+        y: 4px;
+        height: parent.height - 10px;
+        text: root.text;
+        color: Theme.text;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                root.pressed();
+            }
+        }
+        changed has-hover => {
+            if self.has-hover {
+                root.hovered();
+            }
+        }
+    }
+}
+
+/// The row of menu titles at the top of the main window (40 px like the fluent menu bar).
+export component AppMenuBar inherits Rectangle {
+    in property <[MenuBarMenu]> menus;
+    // A menu opened or closed (main.slint gives the keyboard back to its key scope when it closes).
+    callback changed-open(/* open */ bool);
+
+    height: 40px;
+
+    // A click on the bar beside the titles closes an open menu.
+    TouchArea {
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down && AppMenu.open >= 0 {
+                AppMenu.close();
+                root.changed-open(false);
+            }
+        }
+    }
+
+    HorizontalLayout {
+        alignment: start;
+        spacing: 10px;
+
+        for menu[index] in root.menus: MenuTitle {
+            text: menu.title;
+            open: AppMenu.open == index;
+            pressed => {
+                if AppMenu.open == index {
+                    AppMenu.close();
+                    root.changed-open(false);
+                } else {
+                    GlobalTooltip.hide-cold();
+                    AppMenu.show(index);
+                    root.changed-open(true);
+                }
+            }
+            hovered => {
+                if AppMenu.open >= 0 && AppMenu.open != index {
+                    AppMenu.show(index);
+                }
+            }
+        }
+    }
+}
+
+/// The open menu of the bar, over the window below the bar. It takes the keyboard while it is open.
+export component MenuBarLayer inherits Rectangle {
+    in property <[MenuBarMenu]> menus;
+    callback activated(/* id */ string);
+    callback closed();
+
+    property <[MenuItemView]> items: AppMenu.open >= 0 ? root.menus[AppMenu.open].items : [];
+
+    visible: AppMenu.open >= 0;
+
+    changed visible => {
+        if self.visible {
+            keys.focus();
+        }
+    }
+
+    function close() {
+        AppMenu.close();
+        root.closed();
+    }
+
+    function switch(step: int) {
+        let count = root.menus.length;
+        if count > 0 {
+            AppMenu.show(Math.mod(AppMenu.open + step + count, count));
+        }
+    }
+
+    // A click or a right click outside the menu closes it.
+    TouchArea {
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                root.close();
+            }
+        }
+    }
+
+    keys := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.close();
+            } else if event.text == Key.DownArrow {
+                AppMenu.key-row = AppMenu.next-row(root.items, AppMenu.key-row, 1);
+            } else if event.text == Key.UpArrow {
+                AppMenu.key-row = AppMenu.next-row(root.items, AppMenu.key-row, -1);
+            } else if event.text == Key.RightArrow {
+                root.switch(1);
+            } else if event.text == Key.LeftArrow {
+                root.switch(-1);
+            } else if (event.text == Key.Return || event.text == " ") && AppMenu.key-row >= 0 {
+                let item = root.items[AppMenu.key-row];
+                if item.enabled && item.kind == 0 {
+                    root.close();
+                    root.activated(item.id);
+                }
+            }
+            accept
+        }
+    }
+
+    MenuPanel {
+        x: Math.max(0px, Math.min(AppMenu.open-x - root.absolute-position.x, root.width - self.width - 4px));
+        y: 0px;
+        items: root.items;
+        key-row: AppMenu.key-row;
+        row-hovered(row, level, y) => {
+            AppMenu.key-row = row;
+        }
+        activated(id) => {
+            root.close();
+            root.activated(id);
+        }
+    }
+}

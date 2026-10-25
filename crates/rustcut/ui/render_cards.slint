@@ -99,9 +99,6 @@ component NameField inherits Rectangle {
             reject
         }
 
-        changed has-focus => {
-            Shortcuts.editing-changed(self.has-focus);
-        }
     }
 
     if input.text == "": Text {

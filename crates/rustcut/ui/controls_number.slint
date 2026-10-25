@@ -194,7 +194,6 @@ export component NumberField inherits Rectangle {
         }
 
         changed has-focus => {
-            Shortcuts.editing-changed(self.has-focus);
             if !self.has-focus && root.editing {
                 if !root.committed(self.text) {
                     root.invalid = false;

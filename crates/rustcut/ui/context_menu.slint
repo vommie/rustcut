@@ -205,15 +205,18 @@ component MenuRow inherits Rectangle {
     }
 }
 
-component MenuPanel inherits Rectangle {
+export component MenuPanel inherits Rectangle {
     in property <[MenuItemView]> items;
     // The row whose submenu is open (-1 none).
     in property <int> active-row: -1;
+    // The row the keys stand on (the menu bar's menus, P9.12; -1 none).
+    in property <int> key-row: -1;
     // An arrow to the button it belongs to, above the panel (`arrow-below`) or under it, at `arrow-at` along the edge.
     in property <bool> arrow;
     in property <bool> arrow-below;
     in property <length> arrow-at;
     callback row-hovered(/* row */ int, /* level */ int, /* y of the row */ length);
+    callback activated(/* id */ string);
 
     width: Math.clamp(list.preferred-width, 180px, 380px);
     height: list.preferred-height;
@@ -221,8 +224,6 @@ component MenuPanel inherits Rectangle {
     border-radius: 6px;
     border-width: 1px;
     border-color: Theme.border;
-    drop-shadow-blur: 12px;
-    drop-shadow-color: #00000080;
 
     // Clicks between the rows stay inside the menu.
     TouchArea { }
@@ -233,9 +234,9 @@ component MenuPanel inherits Rectangle {
 
         for item[i] in root.items: MenuRow {
             item: item;
-            active: i == root.active-row;
+            active: i == root.active-row || i == root.key-row;
             hovered => { root.row-hovered(i, item.kind == 2 && item.enabled ? item.level : -1, self.y); }
-            activated => { ContextMenu.activated(item.id); }
+            activated => { root.activated(item.id); }
         }
     }
 
@@ -300,6 +301,7 @@ export component ContextMenuLayer inherits Rectangle {
         arrow-at: root.anchor-x + ContextMenu.anchor-width / 2 - self.x;
         items: ContextMenu.items;
         active-row: root.level-row;
+        activated(id) => { ContextMenu.activated(id); }
         row-hovered(row, level, y) => {
             root.level = level;
             root.level-row = level >= 0 ? row : -1;
@@ -312,5 +314,6 @@ export component ContextMenuLayer inherits Rectangle {
         x: top.x + top.width + self.width + 2px <= root.width ? top.x + top.width - 2px : Math.max(0px, top.x - self.width + 2px);
         y: Math.max(0px, Math.min(top.y + root.level-y, root.height - self.height - 4px));
         items: ContextMenu.levels[root.level].items;
+        activated(id) => { ContextMenu.activated(id); }
     }
 }

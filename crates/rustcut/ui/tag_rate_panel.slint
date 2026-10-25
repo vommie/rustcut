@@ -334,7 +334,6 @@ export component TagRatePanel inherits Rectangle {
                 regex-toggled(r) => { TagRate.filter-regex-toggled(r); }
                 escape-pressed => { Shortcuts.release-focus(); }
                 accepted(text) => { Shortcuts.release-focus(); }
-                changed has-focus => { Shortcuts.editing-changed(self.has-focus); }
             }
         }
 

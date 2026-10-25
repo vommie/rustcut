@@ -73,9 +73,6 @@ component ToastCard inherits Rectangle {
         border-radius: 8px;
         border-width: 1px;
         border-color: touch.has-hover ? root.accent.with-alpha(0.55) : Theme.surface-selected;
-        drop-shadow-blur: 14px;
-        drop-shadow-color: #00000090;
-        drop-shadow-offset-y: 4px;
 
         touch := TouchArea {
             mouse-cursor: root.toast.clickable ? MouseCursor.pointer : MouseCursor.default;
@@ -261,8 +258,6 @@ component StackChip inherits Rectangle {
     background: touch.has-hover ? Theme.surface-hover : Theme.surface;
     border-width: 1px;
     border-color: Theme.surface-selected;
-    drop-shadow-blur: 8px;
-    drop-shadow-color: #00000070;
 
     label := Text {
         text: root.text;

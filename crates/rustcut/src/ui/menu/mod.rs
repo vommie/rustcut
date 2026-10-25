@@ -3,6 +3,8 @@
 //! Q-Q4; the row fills up while it is held). A caller builds the entries ([`MenuItem`]) and gets the chosen entry's id
 //! back on the UI thread. A menu of a button ([`ContextMenuBridge::show_at`]) hangs from it with an arrow (P9.6).
 
+pub mod bar;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
