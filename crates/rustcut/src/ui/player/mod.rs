@@ -67,6 +67,8 @@ pub struct PlayerBridge {
     state: Arc<Mutex<PlaybackState>>,
     window: slint::Weak<MainWindow>,
     auto_play: Cell<bool>,
+    /// "Flash a play or pause symbol" (P9.9).
+    flash: Cell<bool>,
     wheel_step: Cell<u8>,
     /// Wheel movement that has not made a whole notch yet (touchpads send small steps).
     wheel_rest: Cell<f32>,
@@ -140,12 +142,16 @@ impl PlayerBridge {
             state,
             window: window.as_weak(),
             auto_play: Cell::new(settings.auto_play),
+            flash: Cell::new(settings.flash_play_pause),
             wheel_step: Cell::new(settings.wheel_volume_step),
             wheel_rest: Cell::new(0.0),
             reverse: Cell::new(None),
             reverse_timer: slint::Timer::default(),
         });
         bridge.connect(window);
+        window
+            .global::<Playback<'_>>()
+            .set_keep_pause_symbol(settings.keep_pause_symbol);
         bridge.refresh();
         Ok(bridge)
     }
@@ -154,6 +160,12 @@ impl PlayerBridge {
     /// audio filters, the hardware decoding and the background change at once.
     pub fn apply_settings(&self, before: &PlayerSettings, settings: &PlayerSettings) {
         self.auto_play.set(settings.auto_play);
+        self.flash.set(settings.flash_play_pause);
+        if let Some(window) = self.window.upgrade() {
+            window
+                .global::<Playback<'_>>()
+                .set_keep_pause_symbol(settings.keep_pause_symbol);
+        }
         self.wheel_step.set(settings.wheel_volume_step);
         let audio = |s: &PlayerSettings| AudioOptions {
             mute_last_second: s.mute_last_second,

@@ -276,11 +276,19 @@ impl DockLayout {
 
     /// Shows `panel`: active in its group, the group expanded and visible, the sidebar expanded (rail icon, menu).
     pub fn reveal(&mut self, panel: PanelId) {
+        if let Some((at, _)) = self.locate(panel) {
+            self.sidebar_mut(at.side).collapsed = false;
+        }
+        self.show_panel(panel);
+    }
+
+    /// Makes `panel` the active tab of its group (unfolded, not hidden behind a maximized group) without expanding a
+    /// collapsed sidebar: a rail icon shows its sidebar over the video (P9.9, D-P9d / Q-P9.9).
+    pub fn show_panel(&mut self, panel: PanelId) {
         let Some((at, _)) = self.locate(panel) else {
             return;
         };
         let sidebar = self.sidebar_mut(at.side);
-        sidebar.collapsed = false;
         if sidebar.maximized.is_some_and(|m| m != at.index) {
             sidebar.maximized = None;
         }

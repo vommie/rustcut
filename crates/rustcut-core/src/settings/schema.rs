@@ -87,6 +87,10 @@ pub struct PlayerSettings {
     pub mute_last_second: bool,
     /// Normalize the loudness of the preview audio (`loudnorm`; the render is not affected).
     pub loudnorm_preview: bool,
+    /// A play or pause symbol flashes over the video when a key plays or pauses it (P9.9, user decision Q-P9.9).
+    pub flash_play_pause: bool,
+    /// The pause symbol stays (faint) over the video while it is paused (P9.9).
+    pub keep_pause_symbol: bool,
 }
 
 impl Default for PlayerSettings {
@@ -98,6 +102,8 @@ impl Default for PlayerSettings {
             wheel_volume_step: 5,
             mute_last_second: false,
             loudnorm_preview: false,
+            flash_play_pause: true,
+            keep_pause_symbol: true,
         }
     }
 }

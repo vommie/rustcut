@@ -310,9 +310,10 @@ fn connect(dock: &Dock<'_>, bridge: &Rc<DockBridge>) {
         let collapsed = l.sidebar(side).collapsed;
         l.set_sidebar_collapsed(side, !collapsed);
     }));
+    // A rail icon shows its panel in the sidebar over the video (P9.9: the rail's own expand button expands it).
     on!(on_rail_clicked, |b, side, key| {
         match PanelId::from_key(&key) {
-            Some(panel) => b.update(|l| l.reveal(panel)),
+            Some(panel) => b.update(|l| l.show_panel(panel)),
             None => b.update(|l| l.set_sidebar_collapsed(to_side(side), false)),
         }
     });

@@ -203,6 +203,18 @@ fn reveal_expands_a_collapsed_sidebar() {
 }
 
 #[test]
+fn a_rail_icon_shows_its_panel_and_leaves_the_sidebar_collapsed() {
+    let mut layout = DockLayout::default();
+    layout.set_sidebar_collapsed(Side::Right, true);
+    layout.right.groups[0].collapsed = true;
+    layout.show_panel(PanelId::Logs);
+    assert!(layout.right.collapsed, "the overlay shows it; the sidebar stays a rail");
+    assert!(!layout.right.groups[0].collapsed);
+    assert_eq!(layout.right.groups[0].active, PanelId::Logs);
+    assert!(layout.is_valid());
+}
+
+#[test]
 fn widths_are_clamped() {
     let mut layout = DockLayout::default();
     layout.set_sidebar_width(Side::Left, 10.0);

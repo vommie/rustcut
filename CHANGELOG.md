@@ -145,8 +145,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   neither RustCut nor other programs read it again; an existing sidecar is never changed. Settings > RustView > "Write a
   sidecar" (`[hashing] write_sidecar`, on).
 
+### Added
+
+- A play or pause symbol flashes in the middle of the video when a key plays or pauses it (0.0.47, your UI review round
+  1 and your answers): a dark translucent disc with the white symbol that fades in, stands briefly and fades out
+  (0.6 s), for the play/pause key and J, K and L (not for the menu or the button under the video, not at the end of a
+  video or when one opens). While the video is paused a faint pause symbol stays in its middle. Settings > Player >
+  "Play and pause" switches either off (both are on; older settings files load unchanged).
+
 ### Changed
 
+- The player without a video shows a faint, colorless RustCut symbol with "Open a video with File > Open (Ctrl+O)" and
+  "or drop it here." on two lines; the title and the version are gone (0.0.47).
+- A collapsed sidebar's icons show their panel over the video (0.0.47, your answers): hovering an icon for 0.3 s or a
+  click shows the panel's group at the sidebar's width over the full height, sliding in from the rail; it goes away
+  0.4 s after the pointer left the rail and the group. Holding an icon (it fills in the accent color) keeps the group
+  until you click that icon or hold it again. The rail's top button still expands the sidebar.
 - RustCut has its own menu bar, your UI review round 1 and your answers on it (0.0.46): 32 px high instead of 40, every
   title and the bell vertically centered, the open title and its menu one piece in the menu's color. "Reset Layout"
   (View), "Reset Filters" (Filters) and the new "Clear All Sections" (Sections) act only when held (the entry fills

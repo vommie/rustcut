@@ -362,8 +362,6 @@ impl Editor {
         }
     }
 
-    /// The menu items' shortcuts; plain keys are left off while a text field has the keyboard.
-    /// A text field got or lost the keyboard.
     /// A modal dialog opened or closed.
     pub(super) fn set_menu_modal(&self, modal: bool) {
         self.menu_modal.set(modal);

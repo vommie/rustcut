@@ -1,14 +1,16 @@
 // A dock area: its panel groups placed by the plan Rust computed, resizer bars between them, or a rail of panel icons
-// while the sidebar is collapsed.
+// while the sidebar is collapsed (a rail icon shows its group over the video, `DockPeek`, P9.9).
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { ResizerBar } from "resizer_bar.slint";
-import { Dock, DockGroupView, DockMetrics, DockRailItem } from "dock_types.slint";
+import { Dock, DockGroupView, DockMetrics, DockRailItem, RailPeek } from "dock_types.slint";
+import { HoldLogic, HoldRing } from "hold.slint";
+import { TooltipHost } from "tooltip.slint";
 import { DockTabBar } from "dock_tab_bar.slint";
 import { DockPanelContent } from "dock_panels.slint";
 
-component DockGroup inherits Rectangle {
+export component DockGroup inherits Rectangle {
     in property <int> side;
     in property <int> index;
     in property <DockGroupView> group;
@@ -70,38 +72,185 @@ component RailButton inherits Rectangle {
     }
 }
 
+/// A panel's icon on the rail (P9.9, Q-P9.9): hovering 0.3 s or a click shows its group over the video, which goes away
+/// once the pointer left rail and group; holding it (the accent color, nothing is discarded) keeps the group shown
+/// until its icon is clicked or held again.
+component RailPanelButton inherits Rectangle {
+    in property <int> side;
+    in property <DockRailItem> item;
+    property <bool> shown: RailPeek.side == root.side && RailPeek.group == root.item.group && root.item.active;
+    // A click closed the held group: hovering does not show it again until the pointer has left the icon.
+    property <bool> quiet;
+
+    width: DockMetrics.rail-width - 8px;
+    height: DockMetrics.rail-width - 8px;
+    border-radius: 4px;
+    clip: true;
+    background: touch.has-hover ? Theme.surface-hover : (root.item.active ? Theme.surface-selected : transparent);
+
+    function show() {
+        Dock.rail-clicked(root.side, root.item.key);
+        RailPeek.side = root.side;
+        RailPeek.group = root.item.group;
+    }
+
+    host := TooltipHost {
+        text: root.item.title;
+        hold: true;
+        beside: true;
+    }
+
+    logic := HoldLogic {
+        pressed: touch.pressed;
+        hold: true;
+        // Held: the group stays; held again: it goes away like any other once the pointer leaves.
+        confirmed => {
+            if RailPeek.sticky && root.shown {
+                RailPeek.sticky = false;
+            } else {
+                root.show();
+                RailPeek.sticky = true;
+            }
+        }
+        // A click shows it; a click on the shown panel of a held group closes it.
+        short-click => {
+            if RailPeek.sticky && root.shown {
+                RailPeek.sticky = false;
+                RailPeek.side = -1;
+                root.quiet = true;
+            } else {
+                root.show();
+            }
+        }
+    }
+
+    HoldRing {
+        progress: logic.progress;
+        flash: logic.flash;
+        border-radius: root.border-radius;
+        tint: Theme.primary;
+    }
+
+    // Hovering shows it after 0.3 s (not while another group of this side is held).
+    Timer {
+        interval: 300ms;
+        running: touch.has-hover && !touch.pressed && !root.shown && !root.quiet
+            && !(RailPeek.sticky && RailPeek.side == root.side);
+        triggered => { root.show(); }
+    }
+
+    touch := TouchArea {
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                host.press();
+                logic.pressed-down();
+            }
+        }
+        clicked => { logic.released-click(); }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+                root.quiet = false;
+            }
+        }
+    }
+
+    AppIcon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        icon: root.item.icon;
+        size: IconSize.lg;
+        color: root.item.active ? Theme.primary : (touch.has-hover ? Theme.text : Theme.text-muted);
+    }
+}
+
 component DockRail inherits Rectangle {
     in property <int> side;
     in property <[DockRailItem]> items;
 
-    VerticalLayout {
-        padding: 4px;
-        spacing: 4px;
-        alignment: start;
-
-        RailButton {
-            icon: root.side == 0 ? IconId.sidebar-left-expand : IconId.sidebar-right-expand;
-            clicked => { Dock.rail-clicked(root.side, ""); }
+    // Whether the pointer is over this rail (the shown group stays while it is over rail or group); a parent touch
+    // area keeps its hover while the pointer is over the icons.
+    TouchArea {
+        changed has-hover => {
+            if self.has-hover {
+                RailPeek.hover-rail = root.side;
+            } else if RailPeek.hover-rail == root.side {
+                RailPeek.hover-rail = -1;
+            }
         }
 
-        Rectangle {
-            height: 1px;
-            background: Theme.border;
-        }
-
-        for item in root.items: VerticalLayout {
+        VerticalLayout {
+            padding: 4px;
             spacing: 4px;
+            alignment: start;
 
-            if item.group-start: Rectangle {
+            RailButton {
+                icon: root.side == 0 ? IconId.sidebar-left-expand : IconId.sidebar-right-expand;
+                clicked => { Dock.rail-clicked(root.side, ""); }
+            }
+
+            Rectangle {
                 height: 1px;
                 background: Theme.border;
             }
 
-            RailButton {
-                icon: item.icon;
-                active: item.active;
-                clicked => { Dock.rail-clicked(root.side, item.key); }
+            for item in root.items: VerticalLayout {
+                spacing: 4px;
+
+                if item.group-start: Rectangle {
+                    height: 1px;
+                    background: Theme.border;
+                }
+
+                RailPanelButton {
+                    side: root.side;
+                    item: item;
+                }
             }
+        }
+    }
+}
+
+/// The group of a rail icon over the video (P9.9): the sidebar's width, the full height, sliding in from the rail
+/// (0.12 s), flat (no shadow, no border of its own).
+export component DockPeek inherits Rectangle {
+    in property <int> side;
+    in property <DockGroupView> group;
+    property <float> t: 0;
+
+    clip: true;
+    init => {
+        self.t = 1;
+    }
+    animate t {
+        duration: 120ms;
+        easing: ease-out;
+    }
+
+    // Whether the pointer is over the group (a parent touch area keeps its hover over the children).
+    TouchArea {
+        x: (root.side == 0 ? root.t - 1 : 1 - root.t) * root.width;
+        width: root.width;
+        height: root.height;
+
+        changed has-hover => {
+            RailPeek.over-group = self.has-hover;
+        }
+
+        Rectangle {
+            background: Theme.background;
+        }
+
+        DockGroup {
+            x: DockMetrics.sidebar-padding;
+            y: 0;
+            width: parent.width - 2 * DockMetrics.sidebar-padding;
+            height: parent.height - DockMetrics.sidebar-padding;
+            side: root.side;
+            index: RailPeek.group;
+            group: root.group;
         }
     }
 }

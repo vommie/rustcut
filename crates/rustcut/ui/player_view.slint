@@ -1,7 +1,7 @@
 // The video area: mpv's frame as an image (rustcut-player renders it at exactly this element's size), the crop being
-// edited (handles, or the nearest edge while Ctrl is held; the pointer goes to src/ui/filters/), the empty state, the
-// non-modal error overlay with Reload (click or F5), and the hint while a file is dragged over the window. The mouse wheel
-// changes the volume.
+// edited (handles, or the nearest edge while Ctrl is held; the pointer goes to src/ui/filters/), the play and pause
+// symbols (P9.9), the empty state, the non-modal error overlay with Reload (click or F5), and the hint while a file is
+// dragged over the window. The mouse wheel changes the volume.
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
@@ -9,10 +9,26 @@ import { Playback } from "player_types.slint";
 import { Shortcuts } from "shortcuts.slint";
 import { CropCursor, CropOverlay, CropOverlayView } from "crop_overlay.slint";
 
+/// The play or pause symbol over the video (user decision Q-P9.9): a dark translucent disc with the white symbol.
+component PlaySymbol inherits Rectangle {
+    in property <bool> play;
+
+    width: 72px;
+    height: 72px;
+    border-radius: 36px;
+    background: #11111b99;
+
+    AppIcon {
+        x: (parent.width - self.width) / 2 + (root.play ? 2px : 0px);
+        y: (parent.height - self.height) / 2;
+        icon: root.play ? IconId.play : IconId.pause;
+        size: 36px;
+        color: #ffffff;
+    }
+}
+
 export component PlayerView inherits Rectangle {
     in property <image> frame;
-    in property <string> app-name;
-    in property <string> app-version;
 
     background: Theme.fullscreen-background;
     clip: true;
@@ -72,30 +88,79 @@ export component PlayerView inherits Rectangle {
         }
     }
 
+    // While paused a faint pause symbol stays in the middle (setting, Q-P9.9: 40 %).
+    if Playback.has-video && Playback.paused && Playback.keep-pause-symbol: PlaySymbol {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        play: false;
+        opacity: 0.4;
+    }
+
+    // A key played or paused the video: the symbol fades in (0.1 s), stands (0.2 s) and fades out (0.3 s); a new one
+    // replaces it at once (Q-P9.9).
+    flash := PlaySymbol {
+        // 0 = hidden, 1 = fading in and standing, 2 = fading out.
+        property <int> phase;
+
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        play: Playback.flash-play;
+        visible: self.phase != 0 || self.opacity > 0;
+        opacity: self.phase == 1 ? 1 : 0;
+
+        animate opacity {
+            duration: self.phase == 1 ? 100ms : 300ms;
+            easing: ease-out;
+        }
+
+        stand := Timer {
+            interval: 300ms;
+            running: false;
+            triggered => {
+                self.running = false;
+                flash.phase = 2;
+            }
+        }
+    }
+
+    property <int> flash-serial: Playback.flash-serial;
+    changed flash-serial => {
+        flash.phase = 1;
+        // `restart()` alone does nothing on a stopped timer: start it, then time it from now.
+        stand.running = true;
+        stand.restart();
+    }
+
+    // No video open: the colorless symbol (96 px, 12 %) and the hint on two lines (Q-P9.9).
     if !Playback.has-file: VerticalLayout {
         alignment: center;
-        spacing: 6px;
+        spacing: 8px;
 
-        Text {
-            text: root.app-name;
-            color: Theme.text;
-            font-size: 22px;
-            font-weight: 600;
-            horizontal-alignment: center;
+        HorizontalLayout {
+            alignment: center;
+
+            Image {
+                width: 96px;
+                height: 96px;
+                source: @image-url("../assets/app/empty-player.png");
+                opacity: 0.12;
+            }
         }
 
-        Text {
-            text: "Version " + root.app-version;
-            color: Theme.text-muted;
-            horizontal-alignment: center;
-        }
+        VerticalLayout {
+            spacing: 2px;
 
-        Rectangle { height: 10px; }
+            Text {
+                text: Shortcuts.open != "" ? "Open a video with File > Open (" + Shortcuts.open + ")" : "Open a video with File > Open";
+                color: Theme.text-muted;
+                horizontal-alignment: center;
+            }
 
-        Text {
-            text: "Open a video with File > Open (Ctrl+O) or drop it here.";
-            color: Theme.text-muted;
-            horizontal-alignment: center;
+            Text {
+                text: "or drop it here.";
+                color: Theme.text-muted;
+                horizontal-alignment: center;
+            }
         }
     }
 

@@ -45,6 +45,22 @@ export struct DockRailItem {
     active: bool,
     /// First panel of a group after the first one: a separator goes above it.
     group_start: bool,
+    /// The index of its group in the sidebar (the overlay shows that group, P9.9).
+    group: int,
+}
+
+/// A collapsed sidebar's group over the video (P9.9, D-P9d as decided in Q-P9.9): a rail icon shows its panel's group
+/// at the sidebar's width over the full height, after 0.3 s of hovering or at once on a click; it goes away 0.4 s after
+/// the pointer left the rail and the group, unless it was held to stay (`sticky`): then a click on its icon or holding
+/// it again ends that.
+export global RailPeek {
+    // The side shown (-1 = none) and the index of its group.
+    in-out property <int> side: -1;
+    in-out property <int> group;
+    in-out property <bool> sticky;
+    // The side whose rail the pointer is over (-1 = none), and whether it is over the shown group.
+    in-out property <int> hover-rail: -1;
+    in-out property <bool> over-group;
 }
 
 /// A collapsible card inside a panel.
