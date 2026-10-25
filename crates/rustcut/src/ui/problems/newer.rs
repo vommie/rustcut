@@ -19,14 +19,6 @@ impl File {
             Self::UiState => "ui-state.toml",
         }
     }
-
-    /// What the file holds, for the texts.
-    const fn holds(self) -> &'static str {
-        match self {
-            Self::Settings => "settings",
-            Self::UiState => "window and panel settings",
-        }
-    }
 }
 
 /// A file a newer RustCut wrote.
@@ -55,6 +47,8 @@ pub enum Choice {
 
 impl Choice {
     pub const ALL: [Self; 4] = [Self::Continue, Self::SaveThis, Self::Defaults, Self::Quit];
+    /// Preselected and marked "(Recommended)" (review 57/58, P9.3): nothing is written, the newer file stays.
+    pub const RECOMMENDED: Self = Self::Continue;
 
     pub const fn title(self) -> &'static str {
         match self {
@@ -114,7 +108,7 @@ impl NewerDialog {
     /// The dialog for `files` (none = no dialog).
     pub fn new(files: Vec<NewerFile>) -> Option<Self> {
         (!files.is_empty()).then(|| Self {
-            chosen: vec![Choice::Continue; files.len()],
+            chosen: vec![Choice::RECOMMENDED; files.len()],
             files,
             tab: 0,
             unknown_open: false,
@@ -170,22 +164,22 @@ impl NewerDialog {
         let Some(newer) = self.current() else {
             return String::new();
         };
+        // Review 57/58 (P9.3): the facts, then the request to decide.
         format!(
-            "{} was written by a newer RustCut (format {}). This version knows format {}: it reads the {} it knows \
-             and uses defaults for the rest.",
+            "{} was written by a newer RustCut (format {}; this version knows format {}). Decide how to handle the \
+             conflict.",
             newer.file.name(),
             newer.found,
-            newer.known,
-            newer.file.holds()
+            newer.known
         )
     }
 
-    /// "3 settings this version does not know" (empty when there are none).
+    /// "There are 3 settings this version does not know" (empty when there are none).
     pub fn unknown_title(&self) -> String {
         match self.current().map_or(0, |f| f.unknown.len()) {
             0 => String::new(),
-            1 => "1 setting this version does not know".to_owned(),
-            n => format!("{n} settings this version does not know"),
+            1 => "There is 1 setting this version does not know".to_owned(),
+            n => format!("There are {n} settings this version does not know"),
         }
     }
 
@@ -218,11 +212,12 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(d.choice(), Choice::Continue, "the default");
-        assert_eq!(d.unknown_title(), "2 settings this version does not know");
+        assert_eq!(d.unknown_title(), "There are 2 settings this version does not know");
         assert!(
             d.text()
-                .starts_with("config.toml was written by a newer RustCut (format 3)")
+                .starts_with("config.toml was written by a newer RustCut (format 3;")
         );
+        assert!(d.text().ends_with("Decide how to handle the conflict."));
         d.choose(1);
         d.set_tab(1);
         assert_eq!(d.unknown_title(), "");

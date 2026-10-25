@@ -13,7 +13,7 @@ import { SmoothScrollArea } from "smooth_scroll_view.slint";
 import { GlobalTooltip, TooltipArea } from "tooltip.slint";
 import { Export } from "export_types.slint";
 import { DialogButton, DialogTabs, OptionRow, PreviewPicture, PreviewRow, SimilarGroup } from "export_dialog_parts.slint";
-import { DialogFrame, DialogState } from "dialog_frame.slint";
+import { DialogFrame, DialogHeader, DialogState } from "dialog_frame.slint";
 
 export { DialogButton }
 
@@ -82,7 +82,7 @@ component QueuedJobs inherits FactBlock {
     }
 }
 
-/// The existing file: its picture and what it is.
+/// The existing file: its picture and what it is, the buttons on the right (review 50 #5, P9.3).
 component ExistingFile inherits Rectangle {
     border-radius: 5px;
     background: Theme.surface;
@@ -93,15 +93,19 @@ component ExistingFile inherits Rectangle {
         padding: 8px;
         spacing: 12px;
 
-        PreviewPicture {
-            width: 192px;
-            preview: Export.dialog-existing;
-            play => { Export.dialog-open-file(0, 0, false); }
+        VerticalLayout {
+            alignment: center;
+
+            PreviewPicture {
+                width: 192px;
+                preview: Export.dialog-existing;
+                play => { Export.dialog-open-file(0, 0, false); }
+            }
         }
 
         VerticalLayout {
             horizontal-stretch: 1;
-            alignment: start;
+            alignment: center;
             spacing: 4px;
 
             TooltipArea {
@@ -129,9 +133,12 @@ component ExistingFile inherits Rectangle {
                 color: Theme.text-muted;
                 font-size: 11px;
             }
+        }
+
+        VerticalLayout {
+            alignment: center;
 
             HorizontalLayout {
-                alignment: start;
                 spacing: 4px;
 
                 IconButton {
@@ -215,62 +222,42 @@ export component ConflictDialog inherits Rectangle {
                 padding: 14px;
                 spacing: 10px;
 
-                // Header.
-                HorizontalLayout {
-                    spacing: 12px;
+                // Header: the symbol centered with the title, × cancels (or closes when only looking).
+                DialogHeader {
+                    icon: Export.dialog-browse && !Export.dialog-has-existing && !Export.dialog-known-mode ? IconId.target-folder
+                        : IconId.status-warning;
+                    tint: Export.dialog-browse && !Export.dialog-has-existing && !Export.dialog-known-mode ? Theme.text-muted : Theme.accent;
+                    title: Export.dialog-title;
+                    // The known-source dialog: when the video was cut first and how many files came of it.
+                    text: Export.dialog-known-mode ? Export.dialog-text : "";
+                    closable: true;
+                    close-tooltip: Export.dialog-browse ? "Close" : "Cancel";
+                    close => { Export.dialog-cancel(); }
 
-                    AppIcon {
-                        icon: Export.dialog-browse && !Export.dialog-has-existing && !Export.dialog-known-mode ? IconId.target-folder
-                            : IconId.status-warning;
-                        size: IconSize.xl;
-                        color: Export.dialog-browse && !Export.dialog-has-existing && !Export.dialog-known-mode ? Theme.text-muted : Theme.accent;
-                    }
+                    // The whole path; a long folder is cut in the middle so the file name always shows.
+                    if !Export.dialog-known-mode: TooltipArea {
+                        text: Export.dialog-path;
+                        height: 18px;
 
-                    VerticalLayout {
-                        horizontal-stretch: 1;
-                        spacing: 3px;
+                        HorizontalLayout {
+                            alignment: start;
 
-                        Text {
-                            text: Export.dialog-title;
-                            color: Theme.text;
-                            font-size: 15px;
-                            font-weight: 700;
-                            wrap: word-wrap;
-                        }
+                            Text {
+                                horizontal-stretch: 1;
+                                max-width: self.preferred-width;
+                                min-width: 24px;
+                                text: Export.dialog-folder;
+                                color: Theme.text-muted;
+                                font-size: 12px;
+                                overflow: elide;
+                            }
 
-                        // The known-source dialog: when the video was cut first and how many files came of it.
-                        if Export.dialog-known-mode: Text {
-                            text: Export.dialog-text;
-                            color: Theme.text-muted;
-                            font-size: 12px;
-                            wrap: word-wrap;
-                        }
-
-                        // The whole path; a long folder is cut in the middle so the file name always shows.
-                        if !Export.dialog-known-mode: TooltipArea {
-                            text: Export.dialog-path;
-                            height: 18px;
-
-                            HorizontalLayout {
-                                alignment: start;
-
-                                Text {
-                                    horizontal-stretch: 1;
-                                    max-width: self.preferred-width;
-                                    min-width: 24px;
-                                    text: Export.dialog-folder;
-                                    color: Theme.text-muted;
-                                    font-size: 12px;
-                                    overflow: elide;
-                                }
-
-                                Text {
-                                    horizontal-stretch: 0;
-                                    text: Export.dialog-file-tail;
-                                    color: Theme.text;
-                                    font-size: 12px;
-                                    overflow: elide;
-                                }
+                            Text {
+                                horizontal-stretch: 0;
+                                text: Export.dialog-file-tail;
+                                color: Theme.text;
+                                font-size: 12px;
+                                overflow: elide;
                             }
                         }
                     }
@@ -351,11 +338,10 @@ export component ConflictDialog inherits Rectangle {
                         if Export.dialog-tab-kind == 3: QueuedJobs { }
 
                         if Export.dialog-tab-kind == 4: VerticalLayout {
-                            spacing: 2px;
-
-                            for file in Export.dialog-known: PreviewRow {
+                            for file[index] in Export.dialog-known: PreviewRow {
                                 preview: file;
                                 picture-width: Export.dialog-tile-width * 1px;
+                                separated: index > 0;
                             }
                         }
                     }

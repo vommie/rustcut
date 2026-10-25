@@ -23,7 +23,7 @@ pub(super) fn tab_titles(dialog: &ConflictDialog) -> Vec<String> {
                 tab.title(),
                 dialog.known.as_ref().map_or(0, |k| k.files.len())
             ),
-            Tab::Decision if dialog.browse => "Target".to_owned(),
+            Tab::Decision if dialog.browse => format!("Target ({})", dialog.target_count()),
             Tab::Decision => tab.title().to_owned(),
         })
         .collect()
@@ -54,10 +54,11 @@ impl ExportBridge {
             return;
         };
         let c = &dialog.conflicts;
+        // Review 50 #7 (P9.3).
         let title = match (c.exists.is_some(), c.queued.is_empty()) {
-            (true, false) => "The file exists, and queued jobs write it too",
-            (true, true) => "The file exists already",
-            (false, false) => "Queued jobs write the same file",
+            (true, false) => "Target file already exists and is queued",
+            (true, true) => "Target file already exists",
+            (false, false) => "Target filename already used by the queue",
             (false, true) => "Files in the target folder",
         };
         e.set_dialog_known_mode(dialog.known.is_some());
@@ -119,9 +120,10 @@ impl ExportBridge {
                 key: i32::try_from(index).unwrap_or(i32::MAX),
                 title: o.title.as_str().into(),
                 file: o.file.as_str().into(),
+                detail_name: o.detail_name.as_str().into(),
                 detail: o.detail.as_str().into(),
                 enabled: o.enabled,
-                destructive: o.destructive,
+                recommended: false,
                 typed: o.choice == Choice::Rename,
             })
             .collect();

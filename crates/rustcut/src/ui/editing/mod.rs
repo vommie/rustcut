@@ -174,17 +174,10 @@ impl JobEditor {
 
     fn ask(&self, asking: Asking) {
         let Some(window) = self.window.upgrade() else { return };
-        let sections = self.editor.upgrade().map_or(0, |e| e.section_count());
         let j = window.global::<JobLoad<'_>>();
-        j.set_title(format!("Load job {} into the editor?", asking.id).into());
-        j.set_text(
-            match sections {
-                0 => "The editor has marks that are not saved in a job.".to_owned(),
-                1 => "The editor has a section that is not saved in a job.".to_owned(),
-                n => format!("The editor has {n} sections that are not saved in a job."),
-            }
-            .into(),
-        );
+        // The user's words (review 54, P9.3).
+        j.set_title(format!("Replace current session with Job {}?", asking.id).into());
+        j.set_text("The current session is not saved.".into());
         *self.asking.borrow_mut() = Some(asking);
         j.set_open(true);
     }

@@ -109,10 +109,8 @@ pub fn ask_text(status: &QueueStatus) -> String {
         1 => ", 1 more waits".to_owned(),
         n => format!(", {n} more wait"),
     };
-    format!(
-        "{rendering}{more}. No new job starts while this question is open. Quitting now stops the render; the job \
-         starts again at the next start."
-    )
+    // Review 55 (P9.3): what is going on and the question; "Force quit" explains itself.
+    format!("{rendering}{more}. What to do?")
 }
 
 /// The taskbar entry: the run's progress in whole percent and the open jobs, or nothing while the queue is idle.
@@ -174,7 +172,7 @@ mod tests {
             !ask_before_quit(&status(0, 2, None), true),
             "waiting jobs alone do not ask"
         );
-        assert!(ask_text(&busy).starts_with("A job is rendering, 2 more wait. No new job starts"));
+        assert_eq!(ask_text(&busy), "A job is rendering, 2 more wait. What to do?");
         assert_eq!(
             badge(&busy),
             Badge {

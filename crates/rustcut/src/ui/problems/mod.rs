@@ -438,7 +438,7 @@ impl ProblemsBridge {
                         c.title(),
                         &d.current().map(|f| c.detail(f)).unwrap_or_default(),
                         true,
-                        false,
+                        *c == NewerChoice::RECOMMENDED,
                     )
                 })
                 .collect();
@@ -461,7 +461,7 @@ impl ProblemsBridge {
             let options: Vec<ConflictOptionView> = DbChoice::ALL
                 .iter()
                 .enumerate()
-                .map(|(i, c)| option(i, c.title(), &d.detail(*c), d.enabled(*c), c.destructive()))
+                .map(|(i, c)| option(i, c.title(), &d.detail(*c), d.enabled(*c), *c == d.recommended()))
                 .collect();
             p.set_db_options(ModelRc::new(VecModel::from(options)));
             p.set_db_selected(
@@ -513,14 +513,15 @@ fn open_with(
     }
 }
 
-fn option(index: usize, title: &str, detail: &str, enabled: bool, destructive: bool) -> ConflictOptionView {
+fn option(index: usize, title: &str, detail: &str, enabled: bool, recommended: bool) -> ConflictOptionView {
     ConflictOptionView {
         key: i32::try_from(index).unwrap_or(0),
         title: title.into(),
         file: SharedString::new(),
+        detail_name: SharedString::new(),
         detail: detail.into(),
         enabled,
-        destructive,
+        recommended,
         typed: false,
     }
 }

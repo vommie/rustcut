@@ -1,8 +1,9 @@
 //! The question before a job without tags or rating is saved (`warnings.missing_metadata`, the Tag & Rate panel's
-//! "Warn" switch; user decisions Q-G1, Q-P8b): one modal dialog that names what is missing, offers the rating bar (a
-//! click saves with that rating), "Save without", "Back to tagging" and "Don't ask again" (switches "Warn" off). Asked
-//! only while the RustView link and the panel's "Active" switch are on; missing tags only when RustView has tags to
-//! choose from.
+//! "Warn" switch; user decisions Q-G1, Q-P8b, review 52): one compact modal dialog whose title names what is missing,
+//! with the rating bar (a click saves with that rating), "Save without" and "Back to editing". "Don't ask again" is no
+//! longer in the dialog (the user's review overrides Q-G1): the setting stays in Settings and on the panel. Asked only
+//! while the RustView link and the panel's "Active" switch are on; missing tags only when RustView has tags to choose
+//! from.
 
 use std::rc::Rc;
 
@@ -31,24 +32,6 @@ impl Missing {
             (true, true) => "The job has no tags and no rating",
             (true, false) => "The job has no tags",
             _ => "The job has no rating",
-        }
-    }
-
-    pub fn text(self) -> &'static str {
-        match (self.tags, self.rating) {
-            (true, true) => {
-                "RustView gets the clip without tags and unrated. Choose a rating to save with it, save without, or go \
-                 back to tagging."
-            }
-            (true, false) => "RustView gets the clip without tags. Save without them, or go back to tagging.",
-            _ => "RustView gets the clip unrated. Choose a rating to save with it, or save without one.",
-        }
-    }
-
-    /// "Don't ask again" switches the one warning off (the panel's "Warn" turns red).
-    pub fn silence(self, warnings: &mut WarningSettings) {
-        if self.any() {
-            warnings.missing_metadata = false;
         }
     }
 }
@@ -82,14 +65,13 @@ enum Answer {
     /// Save with this rating.
     Rated(u8),
     SaveWithout,
-    BackToTagging,
+    BackToEditing,
 }
 
 /// The open question with the job it is about.
 pub(super) struct MetaPending {
     draft: Draft,
     missing: Missing,
-    dont_ask: bool,
 }
 
 impl ExportBridge {
@@ -112,11 +94,7 @@ impl ExportBridge {
             rating = missing.rating,
             "[Export] The job lacks metadata; asking"
         );
-        *self.meta.borrow_mut() = Some(MetaPending {
-            draft,
-            missing,
-            dont_ask: false,
-        });
+        *self.meta.borrow_mut() = Some(MetaPending { draft, missing });
         self.publish_meta();
         self.publish();
         None
@@ -131,13 +109,11 @@ impl ExportBridge {
             return;
         };
         e.set_meta_title(pending.missing.title().into());
-        e.set_meta_text(pending.missing.text().into());
         e.set_meta_ask_rating(pending.missing.rating);
-        e.set_meta_dont_ask(pending.dont_ask);
         e.set_meta_open(true);
     }
 
-    /// Closes the question, and saves unless the answer goes back to tagging.
+    /// Closes the question, and saves unless the answer goes back to editing.
     fn answer_meta(self: &Rc<Self>, answer: Answer) {
         let Some(mut pending) = self.meta.borrow_mut().take() else {
             return;
@@ -146,7 +122,7 @@ impl ExportBridge {
         if let Some(window) = self.window.upgrade() {
             window.invoke_focus_keys();
         }
-        if answer == Answer::BackToTagging {
+        if answer == Answer::BackToEditing {
             Self::tell(
                 Notice::new(Kind::SaveCanceled, "Not saved").detail("Choose the tags and the rating, then save again."),
             );
@@ -156,27 +132,10 @@ impl ExportBridge {
             self.publish();
             return;
         }
-        if pending.dont_ask {
-            pending.missing.silence(&mut self.warnings.borrow_mut());
-            let warnings = self.warnings.borrow().clone();
-            if !self.writer.update(|s| s.warnings = warnings) {
-                Self::tell(
-                    Notice::new(Kind::SettingsReadOnly, "Not saved")
-                        .detail("config.toml is from a newer RustCut: the choice is kept for this run only."),
-                );
-            }
-        }
         if let Answer::Rated(rating) = answer {
             pending.draft.spec.metadata.rating = Some(rating);
         }
         self.check_target(pending.draft);
-    }
-
-    fn toggle_meta_dont_ask(&self) {
-        if let Some(pending) = self.meta.borrow_mut().as_mut() {
-            pending.dont_ask = !pending.dont_ask;
-        }
-        self.publish_meta();
     }
 }
 
@@ -197,13 +156,7 @@ pub(super) fn connect(bridge: &Rc<ExportBridge>, window: &MainWindow) {
     let weak = Rc::downgrade(bridge);
     e.on_meta_back(move || {
         if let Some(b) = weak.upgrade() {
-            b.answer_meta(Answer::BackToTagging);
-        }
-    });
-    let weak = Rc::downgrade(bridge);
-    e.on_meta_toggle_dont_ask(move || {
-        if let Some(b) = weak.upgrade() {
-            b.toggle_meta_dont_ask();
+            b.answer_meta(Answer::BackToEditing);
         }
     });
 }
@@ -261,13 +214,10 @@ mod tests {
             !missing(inactive, &on).any(),
             "nothing is asked while the panel's Active switch is off"
         );
-        let mut quiet = on;
-        Missing {
-            tags: true,
-            rating: false,
-        }
-        .silence(&mut quiet);
-        assert!(!quiet.missing_metadata && quiet.target_exists);
+        let quiet = WarningSettings {
+            missing_metadata: false,
+            ..on
+        };
         assert!(!missing(facts(false, false), &quiet).any(), "Warn off asks nothing");
     }
 
@@ -281,13 +231,13 @@ mod tests {
             .title()
             .contains("no tags and no rating")
         );
-        assert!(
+        assert_eq!(
             Missing {
                 tags: false,
                 rating: true
             }
-            .text()
-            .contains("unrated")
+            .title(),
+            "The job has no rating"
         );
     }
 }

@@ -158,11 +158,23 @@ impl SettingsBridge {
         };
         let weak = Weak::clone(&self.me);
         let key = key.to_owned();
-        color_picker::open(window, &request, move |color| {
-            if let Some(bridge) = weak.upgrade() {
-                let _ = bridge.edit(&key, Edit::Type(color_picker::hex_of(color)));
-            }
-        });
+        // The picker is modal for the Settings window (D-P9h, review 69): dimmed until it ends.
+        let dimmed = window.as_weak();
+        window.global::<SettingsUi<'_>>().set_picker_open(true);
+        color_picker::open(
+            window,
+            &request,
+            move |color| {
+                if let Some(bridge) = weak.upgrade() {
+                    let _ = bridge.edit(&key, Edit::Type(color_picker::hex_of(color)));
+                }
+            },
+            move || {
+                if let Some(window) = dimmed.upgrade() {
+                    window.global::<SettingsUi<'_>>().set_picker_open(false);
+                }
+            },
+        );
     }
 
     /// A button option.

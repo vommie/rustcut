@@ -92,11 +92,19 @@ fn an_existing_file_offers_a_number_and_overwrite_first_then_other_names() {
         d.options[0].file, "Clip - 03.mkv",
         "the series has 01, 02 and 07 (an MP4)"
     );
-    assert!(d.options[0].detail.contains("04"), "{}", d.options[0].detail);
+    assert_eq!(
+        d.options[0].detail, "Takes the next number not used in the target folder.",
+        "what the choice does, not the counter (review 50 #9)"
+    );
     assert_eq!(d.outcome().unwrap().counter, Some(3));
     assert_eq!(d.options[2].file, "Clip - 01 (1).mkv");
     assert_eq!(d.confirm_text(), "Save", "the chosen row shows the file name");
     assert!(!d.options[3].enabled, "the typed name starts as the taken one");
+    assert_eq!(
+        (d.options[3].detail_name.as_str(), d.options[3].detail.as_str()),
+        ("Clip - 01.mkv", "already exists."),
+        "the name in italics before the words (review 50 #1)"
+    );
     let decision: Vec<usize> = d.options_of(Tab::Decision).iter().map(|(i, _)| *i).collect();
     assert_eq!(
         decision,
@@ -105,7 +113,10 @@ fn an_existing_file_offers_a_number_and_overwrite_first_then_other_names() {
     );
     assert!(d.options_of(Tab::Similar).is_empty());
     d.type_name("Clip - 02");
-    assert!(d.options[3].detail.contains("taken"));
+    assert_eq!(
+        (d.options[3].detail_name.as_str(), d.options[3].detail.as_str()),
+        ("Clip - 02.mkv", "already exists.")
+    );
     d.type_name("Holiday");
     d.set_tab(Tab::Similar);
     d.select(3);
@@ -292,4 +303,18 @@ fn tabs_switch_and_wrap_and_a_tab_without_content_is_refused() {
     assert_eq!(d.tab, Tab::Decision);
     d.set_tab(Tab::Similar);
     assert_eq!(d.tab, Tab::Similar);
+}
+
+#[test]
+fn the_files_dialog_opens_on_the_similar_files_when_the_target_is_free() {
+    // Review 48 (P9.3): nothing has the name yet, so the dialog shows the similar files and "Target (0)".
+    let st = export(false);
+    let free = dialog(&st, Conflicts::default(), Vec::new()).browsing();
+    assert_eq!((free.tab, free.target_count()), (Tab::Similar, 0));
+    assert_eq!(
+        super::dialog_view::tab_titles(&free).first().map(String::as_str),
+        Some("Target (0)")
+    );
+    let taken = dialog(&st, exists(), Vec::new()).browsing();
+    assert_eq!((taken.tab, taken.target_count()), (Tab::Decision, 1));
 }

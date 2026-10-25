@@ -1,9 +1,9 @@
 // The question before a queued job replaces the open video with its sections (src/ui/editing/; setting
-// `editor.on_job_load = "ask"`, user decisions Q-Q3, Q-N10): replace it or cancel (Escape).
+// `editor.on_job_load = "ask"`, user decisions Q-Q3, Q-N10): replace it or cancel (Escape or ×).
 
-import { DialogFrame, DialogState } from "dialog_frame.slint";
+import { DialogFrame, DialogHeader, DialogState } from "dialog_frame.slint";
 import { Theme } from "styles.slint";
-import { AppIcon, IconId, IconSize } from "icons.slint";
+import { IconId } from "icons.slint";
 import { DialogButton } from "export_dialog.slint";
 import { JobLoad } from "job_types.slint";
 
@@ -45,34 +45,12 @@ export component JobLoadDialog inherits Rectangle {
                 padding: 16px;
                 spacing: 12px;
 
-                HorizontalLayout {
-                    spacing: 12px;
-
-                    AppIcon {
-                        icon: IconId.job-edit;
-                        size: IconSize.xl;
-                        color: Theme.accent;
-                    }
-
-                    VerticalLayout {
-                        horizontal-stretch: 1;
-                        spacing: 4px;
-
-                        Text {
-                            text: JobLoad.title;
-                            color: Theme.text;
-                            font-size: 15px;
-                            font-weight: 700;
-                            wrap: word-wrap;
-                        }
-
-                        Text {
-                            text: JobLoad.text;
-                            color: Theme.text-muted;
-                            font-size: 12px;
-                            wrap: word-wrap;
-                        }
-                    }
+                DialogHeader {
+                    icon: IconId.job-edit;
+                    title: JobLoad.title;
+                    text: JobLoad.text;
+                    closable: true;
+                    close => { JobLoad.cancel(); }
                 }
 
                 HorizontalLayout {

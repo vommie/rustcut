@@ -95,6 +95,8 @@ pub struct DialogOption {
     pub title: String,
     /// The file name the choice leads to ("" while a typed name is missing).
     pub file: String,
+    /// A file name the detail is about, shown in italics before it ("<name> already exists.", review 50 #1).
+    pub detail_name: String,
     pub detail: String,
     pub enabled: bool,
     /// Replaces or removes something (drawn as a warning).
@@ -196,7 +198,16 @@ impl ConflictDialog {
         self.browse = true;
         self.options.clear();
         self.selected = 0;
+        // Nothing has the name yet: the similar files are what there is to see (review 48, P9.3).
+        if self.target_count() == 0 && self.tabs().contains(&Tab::Similar) {
+            self.tab = Tab::Similar;
+        }
         self
+    }
+
+    /// What the Target tab of the files dialog shows: the existing file and the queued jobs that write it.
+    pub fn target_count(&self) -> usize {
+        usize::from(self.conflicts.exists.is_some()) + self.conflicts.queued.len()
     }
 
     /// The known-source dialog: the files made from the open video first, the similar names beside them.
@@ -230,12 +241,11 @@ impl ConflictDialog {
             let found = next_free_counter_except(start, self.container, &taken, used, |n| {
                 export.stem_with(facts, Some(n))
             });
-            let detail = match found {
-                Some((n, _)) if export.auto_increment => {
-                    format!("The counter continues at {:02} for the next job.", n.saturating_add(1))
-                }
-                Some((n, _)) => format!("The counter becomes {n:02}."),
-                None => "No free number was found.".to_owned(),
+            // What the choice does, not what the counter does next (review 50 #9, P9.3).
+            let detail = if found.is_some() {
+                "Takes the next number not used in the target folder.".to_owned()
+            } else {
+                "No free number was found.".to_owned()
             };
             DialogOption {
                 choice: Choice::NextNumber,
@@ -251,6 +261,7 @@ impl ConflictDialog {
                     .unwrap_or_default(),
                 detail,
                 enabled: found.is_some(),
+                detail_name: String::new(),
                 destructive: false,
                 outcome: found.map(|(n, stem)| Outcome {
                     stem,
@@ -270,6 +281,7 @@ impl ConflictDialog {
                 .unwrap_or_default(),
             detail: "Keeps the name and adds the next free number in brackets.".to_owned(),
             enabled: found.is_some(),
+            detail_name: String::new(),
             destructive: false,
             outcome: found.map(|stem| Outcome {
                 stem,
@@ -284,6 +296,7 @@ impl ConflictDialog {
             file: String::new(),
             detail: String::new(),
             enabled: false,
+            detail_name: String::new(),
             destructive: false,
             outcome: None,
         };
@@ -321,6 +334,7 @@ impl ConflictDialog {
                 file: self.file.clone(),
                 detail: format!("The existing file is replaced only after the new render is verified.{also}"),
                 enabled: true,
+                detail_name: String::new(),
                 destructive: true,
                 outcome: Some(same),
             }];
@@ -337,6 +351,7 @@ impl ConflictDialog {
                 file: self.file.clone(),
                 detail: "Renders after the queued jobs and replaces their file.".to_owned(),
                 enabled: true,
+                detail_name: String::new(),
                 destructive: false,
                 outcome: Some(same.clone()),
             },
@@ -353,6 +368,7 @@ impl ConflictDialog {
                     |r| format!("Job {} is rendering; cancel it in the queue first.", r.id),
                 ),
                 enabled: running.is_none(),
+                detail_name: String::new(),
                 destructive: true,
                 outcome: Some(Outcome {
                     remove: ids,
@@ -471,6 +487,7 @@ impl ConflictDialog {
         match result {
             Ok(stem) => {
                 option.file = file_name(&stem, container);
+                option.detail_name.clear();
                 "Free.".clone_into(&mut option.detail);
                 option.enabled = true;
                 option.outcome = Some(Outcome {
@@ -482,9 +499,9 @@ impl ConflictDialog {
             }
             Err(e) => {
                 option.file = String::new();
-                option.detail = match e {
-                    TypedNameError::Taken(file) => format!("{file} is taken too."),
-                    TypedNameError::Invalid(e) => format!("Not usable: {e}."),
+                (option.detail_name, option.detail) = match e {
+                    TypedNameError::Taken(file) => (file, "already exists.".to_owned()),
+                    TypedNameError::Invalid(e) => (String::new(), format!("Not usable: {e}.")),
                 };
                 option.enabled = false;
                 option.outcome = None;

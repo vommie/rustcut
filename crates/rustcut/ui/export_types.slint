@@ -3,15 +3,18 @@
 
 import { TipRow } from "tooltip.slint";
 
-// One way out of a target conflict. `file` is the name it leads to; `destructive` replaces or removes something.
+// One way out of a target conflict or a start problem. `file` is the name it leads to; `recommended` adds
+// "(Recommended)" after the title (the start dialogs, P9.3).
 export struct ConflictOptionView {
     // The index of the choice among all of the dialog's choices (key = index + 1); the tab shows only its own.
     key: int,
     title: string,
     file: string,
+    // A file name shown in italics before the detail ("<name> already exists.").
+    detail-name: string,
     detail: string,
     enabled: bool,
-    destructive: bool,
+    recommended: bool,
     // The choice whose file name is typed in the dialog.
     typed: bool,
 }
@@ -24,8 +27,6 @@ export struct PreviewView {
     group: int,
     index: int,
     name: string,
-    // The number in the series ("07"), empty for other names.
-    counter: string,
     // The target file itself.
     is-target: bool,
     state: int,
@@ -126,13 +127,10 @@ export global Export {
     // The question before a job without tags or rating is saved (modal; user decision Q-G1).
     in property <bool> meta-open;
     in property <string> meta-title;
-    in property <string> meta-text;
     in property <bool> meta-ask-rating;
-    in property <bool> meta-dont-ask;
     callback meta-rate(int);
     callback meta-save();
     callback meta-back();
-    callback meta-toggle-dont-ask();
 
     callback dialog-select(int);
     callback dialog-step(int);

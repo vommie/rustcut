@@ -1,11 +1,13 @@
-// The question before a job without tags or rating is saved (src/ui/export/metadata.rs; user decision Q-G1): what is
-// missing, the rating bar (a click saves the job with that rating), "Save without" (Enter), "Back to tagging" (Escape)
-// and "Don't ask again". Keys 0-5 pick a rating while it is asked for.
+// The question before a job without tags or rating is saved (src/ui/export/metadata.rs; user decisions Q-G1, D-P9g,
+// review 52): the title says what is missing; the rating bar (a click saves the job with that rating) while the rating
+// is missing, "Save without" and "Back to editing" (the primary button). Keys: the focus starts on "Back to editing"
+// (Enter goes back and saves nothing); Left and Right move a visible focus through the ratings and the buttons, Enter
+// acts on the focused one; 0-5 save with that rating; Escape and × go back. "Don't ask again" is the setting
+// `warnings.missing_metadata` (the panel's "Warn"), no longer a switch in the dialog.
 
-import { DialogFrame, DialogState } from "dialog_frame.slint";
+import { DialogFrame, DialogHeader, DialogState } from "dialog_frame.slint";
 import { Theme } from "styles.slint";
-import { AppIcon, IconId, IconSize } from "icons.slint";
-import { Switch } from "controls.slint";
+import { IconId } from "icons.slint";
 import { RatingBar } from "rating_bar.slint";
 import { DialogButton } from "export_dialog.slint";
 import { Export } from "export_types.slint";
@@ -13,6 +15,25 @@ import { Export } from "export_types.slint";
 export component MetadataDialog inherits Rectangle {
     // The scrim: the window behind waits.
     background: #000000a0;
+
+    // The focus: 0-5 a rating (only while the rating is missing), 6 "Save without", 7 "Back to editing".
+    property <int> focused: 7;
+    property <int> first: Export.meta-ask-rating ? 0 : 6;
+
+    function act() {
+        if root.focused == 7 {
+            Export.meta-back();
+        } else if root.focused == 6 {
+            Export.meta-save();
+        } else {
+            Export.meta-rate(root.focused);
+        }
+    }
+
+    // One step to the left (-1) or right (1), around at the ends.
+    function move(delta: int) {
+        root.focused = root.first + Math.mod(root.focused - root.first + delta + 8 - root.first, 8 - root.first);
+    }
 
     TouchArea { }
 
@@ -25,7 +46,15 @@ export component MetadataDialog inherits Rectangle {
                 return accept;
             }
             if event.text == Key.Return {
-                Export.meta-save();
+                root.act();
+                return accept;
+            }
+            if event.text == Key.LeftArrow {
+                root.move(-1);
+                return accept;
+            }
+            if event.text == Key.RightArrow {
+                root.move(1);
                 return accept;
             }
             if Export.meta-ask-rating && (event.text == "0" || event.text == "1" || event.text == "2"
@@ -40,9 +69,9 @@ export component MetadataDialog inherits Rectangle {
         card := DialogFrame {
             area-width: root.width;
             area-height: root.height;
-            default-width: 460px;
+            default-width: 420px;
             default-height: content.preferred-height;
-            least-width: 360px;
+            least-width: 340px;
             least-height: content.preferred-height;
             stored-width <=> DialogState.metadata-width;
             stored-height <=> DialogState.metadata-height;
@@ -53,82 +82,36 @@ export component MetadataDialog inherits Rectangle {
                 padding: 16px;
                 spacing: 12px;
 
-                HorizontalLayout {
-                    spacing: 12px;
-
-                    AppIcon {
-                        icon: IconId.panel-tag-rate;
-                        size: IconSize.xl;
-                        color: Theme.accent;
-                    }
-
-                    VerticalLayout {
-                        horizontal-stretch: 1;
-                        spacing: 4px;
-
-                        Text {
-                            text: Export.meta-title;
-                            color: Theme.text;
-                            font-size: 15px;
-                            font-weight: 700;
-                            wrap: word-wrap;
-                        }
-
-                        Text {
-                            text: Export.meta-text;
-                            color: Theme.text-muted;
-                            font-size: 12px;
-                            wrap: word-wrap;
-                        }
-                    }
+                DialogHeader {
+                    icon: IconId.panel-tag-rate;
+                    title: Export.meta-title;
+                    closable: true;
+                    close-tooltip: "Back to editing";
+                    close => { Export.meta-back(); }
                 }
 
-                if Export.meta-ask-rating: VerticalLayout {
-                    spacing: 4px;
-
-                    Text {
-                        text: "Save with the rating (keys 0-5)";
-                        color: Theme.text-muted;
-                        font-size: 11px;
-                        font-weight: 600;
-                    }
-
-                    RatingBar {
-                        selected-rating: -1;
-                        is-assign-mode: true;
-                        has-selection: true;
-                        rating-selected(r) => { Export.meta-rate(r); }
-                    }
+                if Export.meta-ask-rating: RatingBar {
+                    selected-rating: root.focused <= 5 ? root.focused : -1;
+                    is-assign-mode: true;
+                    has-selection: true;
+                    rating-selected(r) => { Export.meta-rate(r); }
                 }
 
                 HorizontalLayout {
                     spacing: 8px;
-
-                    Switch {
-                        y: (parent.height - self.height) / 2;
-                        checked: Export.meta-dont-ask;
-                        tooltip: "Can be switched on again in the settings (Warnings)";
-                        toggled => { Export.meta-toggle-dont-ask(); }
-                    }
-
-                    Text {
-                        horizontal-stretch: 1;
-                        text: "Don't ask again";
-                        color: Theme.text-muted;
-                        font-size: 11px;
-                        vertical-alignment: center;
-                        overflow: elide;
-                    }
-
-                    DialogButton {
-                        text: "Back to tagging";
-                        clicked => { Export.meta-back(); }
-                    }
+                    alignment: end;
 
                     DialogButton {
                         text: "Save without";
-                        primary: true;
+                        focused: root.focused == 6;
                         clicked => { Export.meta-save(); }
+                    }
+
+                    DialogButton {
+                        text: "Back to editing";
+                        primary: true;
+                        focused: root.focused == 7;
+                        clicked => { Export.meta-back(); }
                     }
                 }
             }
