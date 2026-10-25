@@ -7,7 +7,7 @@ import { Playback } from "player_types.slint";
 import { Jump, JumpFlash } from "jump.slint";
 import { BubbleLayer } from "bubble.slint";
 import { MediaInfoPanelView } from "media_info_panel.slint";
-import { SectionsCardBody } from "sections_card.slint";
+import { Sections, SectionsCardBody } from "sections_card.slint";
 import { FiltersCardBody } from "filters_card.slint";
 import { FinalizeCardBody } from "export_card.slint";
 import { QueuePanel } from "queue_panel.slint";
@@ -15,6 +15,14 @@ import { JobPanel } from "job_panel.slint";
 import { LogsPanel } from "logs_panel.slint";
 import { TagRatePanel } from "tag_rate_panel.slint";
 import { RenderAudioBody, RenderExpertBody, RenderProbeBody, RenderProfileBody, RenderVideoBody } from "render_cards.slint";
+
+/// A short summary at the right of a card's header ("2 • 10.500s"): the digits keep their width.
+component CardHeaderText inherits Text {
+    horizontal-stretch: 0;
+    color: Theme.text-muted;
+    font-size: 11px;
+    vertical-alignment: center;
+}
 
 /// A collapsible card inside a panel (its state is part of the dock layout).
 component DockCard inherits Rectangle {
@@ -57,6 +65,11 @@ component DockCard inherits Rectangle {
                     vertical-alignment: center;
                     horizontal-stretch: 1;
                     overflow: elide;
+                }
+
+                // The card's own text and buttons, right-aligned in its header (P9.1, the review's general note).
+                if root.card.id == "sections": CardHeaderText {
+                    text: Sections.summary;
                 }
             }
         }

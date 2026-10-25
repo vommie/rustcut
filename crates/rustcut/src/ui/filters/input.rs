@@ -17,8 +17,12 @@ const INTERPOLATIONS: [DeshakeInterpolation; 4] = [
     DeshakeInterpolation::Linear,
     DeshakeInterpolation::No,
 ];
-/// Pixels per wheel notch over a crop or resize field (even sizes stay even).
+/// Pixels per step of a crop field (even sizes stay even).
 const PIXEL_STEP: i32 = 2;
+/// Pixels per step of a resize field (a common multiple of the codecs' block sizes).
+const RESIZE_STEP: i32 = 16;
+/// One step of each deshake number (shakiness, accuracy, search step, smoothing, zoom), as in Settings > Filters.
+const DESHAKE_STEPS: [i64; 5] = [1, 1, 1, 5, 1];
 
 pub(super) fn interpolation_index(i: DeshakeInterpolation) -> i32 {
     INTERPOLATIONS
@@ -144,7 +148,7 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
             height.or(input.map(|i| i.height))
         };
         if let Some(current) = current {
-            let value = current.saturating_add_signed(steps.saturating_mul(PIXEL_STEP));
+            let value = current.saturating_add_signed(steps.saturating_mul(RESIZE_STEP));
             s.set_resize_side(u8::from(which != 0), Some(value));
         }
     });
@@ -168,7 +172,12 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
     });
     let step_deshake = change(&this, |s, (param, steps): (i32, i32)| {
         let current = deshake_value(s, param);
-        set_deshake_value(s, param, current.saturating_add(i64::from(steps)));
+        let step = usize::try_from(param)
+            .ok()
+            .and_then(|i| DESHAKE_STEPS.get(i))
+            .copied()
+            .unwrap_or(1);
+        set_deshake_value(s, param, current.saturating_add(i64::from(steps).saturating_mul(step)));
     });
     f.on_step_deshake(move |param, steps| step_deshake((param, steps)));
     let choice = change(&this, |s, (param, value): (i32, i32)| {

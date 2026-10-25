@@ -50,6 +50,7 @@ import { ToastLayer } from "notice_toasts.slint";
 import { BellPopup, NoticeBell } from "notice_bell.slint";
 import { BubbleButtonView, BubbleView, Bubbles } from "bubble.slint";
 import { NewerFileDialog, Problems, QueueDatabaseDialog } from "problem_dialogs.slint";
+import { TextLogic, TextSplit } from "controls_text.slint";
 
 export {
     Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
@@ -60,7 +61,8 @@ export {
     TagColumnView, TagHistoryItemModel, TagHistoryRowModel, Job, JobRowView, JobSectionView, Logs, LogLineView, JobLoad,
     ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderRowView,
     ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power, AppTray, Jump, Notices,
-    ToastView, BannerView, HistoryView, MessageKindView, Bubbles, BubbleView, BubbleButtonView, Problems, ColorCodec, ColorPickerWindow, TagFilterWindow, TagFilterRowView
+    ToastView, BannerView, HistoryView, MessageKindView, Bubbles, BubbleView, BubbleButtonView, Problems, ColorCodec, ColorPickerWindow, TagFilterWindow, TagFilterRowView,
+    TextLogic, TextSplit
 }
 
 export component MainWindow inherits Window {

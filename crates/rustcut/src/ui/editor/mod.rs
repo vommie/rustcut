@@ -557,11 +557,11 @@ impl Editor {
     }
 }
 
-/// "2 sections, 0:00:25.000 in total" (empty without sections).
+/// The count and the total length for the Sections card's header, "2 • 10.500s" (the compact form, P9.1; empty
+/// without sections).
 fn summary(sections: &SectionsState) -> String {
     match sections.list().len() {
         0 => String::new(),
-        1 => format!("1 section, {}", sections.list().total_duration()),
-        n => format!("{n} sections, {} in total", sections.list().total_duration()),
+        n => format!("{n} • {}", sections.list().total_duration().format_compact()),
     }
 }

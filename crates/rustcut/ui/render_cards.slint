@@ -291,26 +291,13 @@ export component RenderProbeBody inherits VerticalLayout {
         }
 
         NumberField {
-            width: 40px;
+            width: 56px;
             horizontal-stretch: 0;
             text: Probe.seconds;
+            unit: "s";
             tooltip: Probe.tip-seconds;
             committed(text) => { return Probe.seconds-typed(text); }
             stepped(steps) => { Probe.seconds-stepped(steps); }
-        }
-
-        TooltipArea {
-            text: Probe.tip-seconds;
-            width: 10px;
-
-            Text {
-                width: parent.width;
-                height: parent.height;
-                text: "s";
-                color: Theme.text-muted;
-                font-size: 11px;
-                vertical-alignment: center;
-            }
         }
     }
 

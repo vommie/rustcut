@@ -1,0 +1,9 @@
+// Measures shared by the controls (P9.1, review notes 08#1, 09#2, 71#1): every choice, number field and slider stretches
+// up to one common width, so the columns of a panel and of the Settings window line up.
+
+export global ControlMetrics {
+    // The widest a choice, a number field, a segmented choice or a slider grows.
+    out property <length> field-max-width: 200px;
+    // The spin arrows inside a number field.
+    out property <length> spin-width: 14px;
+}

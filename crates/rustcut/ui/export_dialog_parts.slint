@@ -5,7 +5,7 @@ import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Shortcuts } from "shortcuts.slint";
 import { TooltipArea } from "tooltip.slint";
-import { IconButton } from "controls.slint";
+import { IconButton, MiddleText } from "controls.slint";
 import { CollapsiblePanel } from "collapsible_panel.slint";
 import { ConflictOptionView, Export, PreviewView } from "export_types.slint";
 
@@ -131,13 +131,10 @@ export component OptionRow inherits Rectangle {
                     vertical-alignment: center;
                 }
 
-                if !root.option.typed: Text {
+                if !root.option.typed: MiddleText {
                     horizontal-stretch: 1;
                     text: root.option.file;
                     color: root.usable ? Theme.primary : Theme.status-deleted;
-                    font-size: 12px;
-                    vertical-alignment: center;
-                    overflow: elide;
                 }
 
                 if root.option.typed: Rectangle {
@@ -398,13 +395,12 @@ export component PreviewRow inherits Rectangle {
                     height: 16px;
                     horizontal-stretch: 1;
 
-                    Text {
+                    MiddleText {
                         width: parent.width;
+                        height: parent.height;
                         text: root.preview.name;
                         color: root.preview.is-target ? Theme.accent : Theme.text;
-                        font-size: 12px;
                         font-weight: 600;
-                        overflow: elide;
                     }
                 }
 
@@ -425,11 +421,21 @@ export component PreviewRow inherits Rectangle {
                 }
             }
 
-            if root.preview.folder != "": Text {
-                text: root.preview.missing ? root.preview.folder + " · file missing" : root.preview.folder;
-                color: root.preview.missing ? Theme.status-corrupt : Theme.text-muted;
-                font-size: 11px;
-                overflow: elide;
+            if root.preview.folder != "": HorizontalLayout {
+                spacing: 4px;
+
+                MiddleText {
+                    horizontal-stretch: 1;
+                    text: root.preview.folder;
+                    color: root.preview.missing ? Theme.status-corrupt : Theme.text-muted;
+                    font-size: 11px;
+                }
+
+                if root.preview.missing: Text {
+                    text: "· file missing";
+                    color: Theme.status-corrupt;
+                    font-size: 11px;
+                }
             }
 
             if !root.preview.missing: Text {

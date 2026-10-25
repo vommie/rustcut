@@ -15,8 +15,10 @@ export struct SettingRowView {
     index: int,
     text: string,
     placeholder: string,
-    // A number's unit, a button's text.
+    // A number's unit (shown inside its field), a button's text.
     suffix: string,
+    // A choice of at most three short entries, drawn side by side (`util::choice::segmented`).
+    segmented: bool,
     enabled: bool,
     indent: bool,
     // Why the last typed text was refused.

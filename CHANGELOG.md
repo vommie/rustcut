@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Choices with at most three short entries show them side by side, the chosen one pressed in (0.0.36): for example
+  the bit depth in the Codecs panel and "Automatic zoom" in Settings > Filters.
+- Up and down are one button wherever things move (0.0.36): its upper half moves up, its lower half down (the queue's
+  jobs, the sections, the target folders in Settings > Export & Naming).
+
 - "The file exists" and "Job #n writes this file too" under the name field offer a button that solves it (0.0.35): a
   name with a numbering scheme jumps to the next free number (the counter is switched on when it was off), any other
   name gets " (n)" with the first free number, like a file manager. The button's tooltip says what it does.
@@ -141,6 +146,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   sidecar" (`[hashing] write_sidecar`, on).
 
 ### Changed
+
+- Shared controls, your UI review round 1 (0.0.36): choices stretch up to one common width (the Quality slider too),
+  cut a long choice with "…" and open a list as wide as its longest entry. Number fields have small up and down arrows
+  (Shift: ten steps), show their unit inside the field ("px", "s", "frames", "kbit/s") and step with the mouse wheel
+  only after a click into the field, so scrolling a panel never changes a value; Up and Down step while you type.
+  Each field has its own step (Resize 16 px, Deshake smoothing 5 frames). The Settings window uses the same widths,
+  so its choices and numbers line up.
+- Names and paths are cut in the middle when they do not fit, so the end stays readable (0.0.36): "basic_h264… -
+  03.mkv" in the queue, the Job and Logs panels, the target folders in Settings and the dialogs about the target file.
+- The Sections card's header shows the number of sections and their total length on the right, "2 • 10.500s" (0.0.36).
+  These and the Job panel's sections use a compact time form that never changes its width: always three decimals,
+  minutes and seconds always two digits ("05.500s", "02:33.100", "3:02:33.000").
+- Buttons and links that lead somewhere in RustCut show the jump symbol (0.0.36): "Show the option", "Show the
+  sections" and "Show log" in messages, the links in bubbles, the settings button of the RustView card.
 
 - Loading a job into the editor always makes a copy (0.0.35, your decision): the edit button of the queue and of the
   Job panel loads waiting, held, finished, failed and canceled jobs alike, and Save makes a new job; the loaded job

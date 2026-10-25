@@ -8,7 +8,7 @@
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
-import { IconButton } from "controls.slint";
+import { IconButton, MiddleText } from "controls.slint";
 import { SmoothScrollArea } from "smooth_scroll_view.slint";
 import { GlobalTooltip, TooltipArea } from "tooltip.slint";
 import { Export } from "export_types.slint";
@@ -68,12 +68,10 @@ component QueuedJobs inherits FactBlock {
             font-size: 11px;
         }
 
-        Text {
+        MiddleText {
             horizontal-stretch: 1;
             text: job.name;
-            color: Theme.text;
             font-size: 11px;
-            overflow: elide;
         }
 
         Text {
@@ -110,13 +108,12 @@ component ExistingFile inherits Rectangle {
                 text: Export.dialog-existing.name;
                 height: 18px;
 
-                Text {
+                MiddleText {
                     width: parent.width;
+                    height: parent.height;
                     text: Export.dialog-existing.name;
-                    color: Theme.text;
                     font-size: 13px;
                     font-weight: 700;
-                    overflow: elide;
                 }
             }
 

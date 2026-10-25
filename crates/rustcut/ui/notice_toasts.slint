@@ -202,18 +202,21 @@ component ToastCard inherits Rectangle {
 
                         NoticeButton {
                             text: root.toast.action-1;
+                            jump: root.toast.jump-1;
                             accent: root.accent;
                             clicked => { Notices.toast-action(root.toast.id, 0); }
                         }
 
                         if root.toast.action-2 != "": NoticeButton {
                             text: root.toast.action-2;
+                            jump: root.toast.jump-2;
                             accent: root.accent;
                             clicked => { Notices.toast-action(root.toast.id, 1); }
                         }
 
                         if root.toast.action-3 != "": NoticeButton {
                             text: root.toast.action-3;
+                            jump: root.toast.jump-3;
                             accent: root.accent;
                             clicked => { Notices.toast-action(root.toast.id, 2); }
                         }

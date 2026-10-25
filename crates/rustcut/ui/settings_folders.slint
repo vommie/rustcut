@@ -3,7 +3,7 @@
 
 import { Theme } from "styles.slint";
 import { IconId } from "icons.slint";
-import { IconButton, NumberField } from "controls.slint";
+import { IconButton, MiddleText, NumberField, UpDownButton } from "controls.slint";
 import { SettingsCard } from "settings_card.slint";
 import { SettingsUi } from "settings_types.slint";
 
@@ -26,27 +26,27 @@ export component SettingsFolders inherits SettingsCard {
             committed(text) => { return SettingsUi.rename-folder(index, text); }
         }
 
-        Text {
+        MiddleText {
             horizontal-stretch: 1;
-            text: folder.missing ? folder.path + "  (missing)" : folder.path;
+            text: folder.path;
             color: folder.missing ? Theme.accent : Theme.text-muted;
             font-size: 11px;
+        }
+
+        if folder.missing: Text {
+            text: "(missing)";
+            color: Theme.accent;
+            font-size: 11px;
             vertical-alignment: center;
-            overflow: elide;
         }
 
-        IconButton {
-            icon: IconId.move-up;
-            tooltip: "Move up";
-            enabled: index > 0;
-            clicked => { SettingsUi.move-folder(index, -1); }
-        }
-
-        IconButton {
-            icon: IconId.move-down;
-            tooltip: "Move down";
-            enabled: index < SettingsUi.folders.length - 1;
-            clicked => { SettingsUi.move-folder(index, 1); }
+        UpDownButton {
+            up-tooltip: "Move up";
+            down-tooltip: "Move down";
+            up-enabled: index > 0;
+            down-enabled: index < SettingsUi.folders.length - 1;
+            up => { SettingsUi.move-folder(index, -1); }
+            down => { SettingsUi.move-folder(index, 1); }
         }
 
         IconButton {

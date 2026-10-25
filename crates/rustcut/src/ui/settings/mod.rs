@@ -308,6 +308,7 @@ impl SettingsBridge {
         ));
         Self::apply_look(&window, &self.writer.current());
         crate::ui::tooltip::install(&window);
+        crate::ui::controls::install(&window);
         crate::ui::color_picker::install(&window);
         notices::attach_settings(&window);
         Ok(window)
@@ -464,6 +465,7 @@ fn row_view(r: &view::RowView) -> SettingRowView {
         text: r.text.as_str().into(),
         placeholder: r.placeholder.into(),
         suffix: r.suffix.into(),
+        segmented: r.kind == view::RowKind::Choice && crate::util::choice::segmented(&r.items),
         enabled: r.enabled,
         indent: r.indent,
         error: r.error.as_str().into(),

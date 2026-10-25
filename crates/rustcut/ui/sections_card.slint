@@ -7,7 +7,7 @@
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Shortcuts } from "shortcuts.slint";
-import { IconButton } from "controls.slint";
+import { IconButton, UpDownButton } from "controls.slint";
 import { BubbleAnchor } from "bubble.slint";
 import { JumpFlash } from "jump.slint";
 
@@ -32,7 +32,7 @@ export global Sections {
     in property <bool> can-move-up;
     in property <bool> can-move-down;
     in property <bool> can-delete;
-    // "2 sections, 0:00:25.000 in total"; empty without sections.
+    // The count and the total length for the card's header ("2 • 10.500s", P9.1); empty without sections.
     in property <string> summary;
     // The keys of the actions, for the tooltips.
     in property <string> key-set-start;
@@ -375,18 +375,13 @@ export component SectionsCardBody inherits VerticalLayout {
     HorizontalLayout {
         spacing: 4px;
 
-        IconButton {
-            icon: IconId.section-up;
-            enabled: Sections.can-move-up;
-            tooltip: "Move the selected section up (the output keeps the list order)";
-            clicked => { Sections.move-up(); }
-        }
-
-        IconButton {
-            icon: IconId.section-down;
-            enabled: Sections.can-move-down;
-            tooltip: "Move the selected section down";
-            clicked => { Sections.move-down(); }
+        UpDownButton {
+            up-enabled: Sections.can-move-up;
+            down-enabled: Sections.can-move-down;
+            up-tooltip: "Move the selected section up (the output keeps the list order)";
+            down-tooltip: "Move the selected section down";
+            up => { Sections.move-up(); }
+            down => { Sections.move-down(); }
         }
 
         IconButton {
@@ -398,14 +393,8 @@ export component SectionsCardBody inherits VerticalLayout {
             clicked => { Sections.delete(); }
         }
 
-        Text {
-            text: Sections.summary;
+        Rectangle {
             horizontal-stretch: 1;
-            horizontal-alignment: right;
-            color: Theme.text-muted;
-            font-size: 11px;
-            vertical-alignment: center;
-            overflow: elide;
         }
     }
 }

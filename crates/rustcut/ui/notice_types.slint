@@ -22,10 +22,13 @@ export struct ToastView {
     running: bool,
     left-ms: int,
     timer: int,
-    // Up to three buttons ("" = none).
+    // Up to three buttons ("" = none); a button that jumps shows the jump symbol.
     action-1: string,
     action-2: string,
     action-3: string,
+    jump-1: bool,
+    jump-2: bool,
+    jump-3: bool,
     // A click on it leads to the cause.
     clickable: bool,
     // "Don't show again" is offered (hints and confirmations).
@@ -43,6 +46,9 @@ export struct BannerView {
     action-1: string,
     action-2: string,
     action-3: string,
+    jump-1: bool,
+    jump-2: bool,
+    jump-3: bool,
     clickable: bool,
     progress: float,
     // "since 15:40".

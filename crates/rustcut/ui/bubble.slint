@@ -32,6 +32,8 @@ export struct BubbleView {
     text: string,
     // What a click on it does ("Show the files"); empty = a click does nothing.
     link: string,
+    // The link leads somewhere: the jump symbol instead of "›" (P9.1).
+    link-jump: bool,
     // Icon buttons under its words.
     buttons: [BubbleButtonView],
     // Where its anchor is (window coordinates) and in which epoch the anchor reported it.
@@ -286,12 +288,25 @@ component BubbleCard inherits Rectangle {
                 wrap: word-wrap;
             }
 
-            if root.bubble.link != "": Text {
+            if root.bubble.link != "": HorizontalLayout {
                 width: root.text-w;
-                text: root.bubble.link + " ›";
-                font-size: TooltipSettings.small-font-size;
-                color: touch.has-hover ? TooltipSettings.text : NoticeLook.color(0);
-                wrap: word-wrap;
+                spacing: 4px;
+                alignment: start;
+
+                if root.bubble.link-jump: AppIcon {
+                    y: (parent.height - self.height) / 2;
+                    icon: IconId.jump-to;
+                    size: TooltipSettings.small-font-size + 2px;
+                    color: touch.has-hover ? TooltipSettings.text : NoticeLook.color(0);
+                }
+
+                Text {
+                    horizontal-stretch: 1;
+                    text: root.bubble.link-jump ? root.bubble.link : root.bubble.link + " ›";
+                    font-size: TooltipSettings.small-font-size;
+                    color: touch.has-hover ? TooltipSettings.text : NoticeLook.color(0);
+                    wrap: word-wrap;
+                }
             }
 
             if root.bubble.buttons.length > 0: HorizontalLayout {

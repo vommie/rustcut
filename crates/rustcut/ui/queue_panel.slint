@@ -6,7 +6,7 @@
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
-import { IconButton } from "controls.slint";
+import { IconButton, UpDownButton } from "controls.slint";
 import { TooltipHost } from "tooltip.slint";
 import { SearchField } from "search_field.slint";
 import { Export } from "export_types.slint";
@@ -295,20 +295,15 @@ export component QueuePanel inherits Rectangle {
         HorizontalLayout {
             spacing: 4px;
 
-            IconButton {
-                icon: IconId.move-up;
-                enabled: Queue.can-move-up;
-                tooltip: Queue.move-up-tooltip;
-                shortcut: Queue.key-move-up;
-                clicked => { Queue.move-up(); }
-            }
-
-            IconButton {
-                icon: IconId.move-down;
-                enabled: Queue.can-move-down;
-                tooltip: Queue.move-down-tooltip;
-                shortcut: Queue.key-move-down;
-                clicked => { Queue.move-down(); }
+            UpDownButton {
+                up-enabled: Queue.can-move-up;
+                down-enabled: Queue.can-move-down;
+                up-tooltip: Queue.move-up-tooltip;
+                down-tooltip: Queue.move-down-tooltip;
+                up-shortcut: Queue.key-move-up;
+                down-shortcut: Queue.key-move-down;
+                up => { Queue.move-up(); }
+                down => { Queue.move-down(); }
             }
 
             IconButton {

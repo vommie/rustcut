@@ -1,0 +1,56 @@
+// Texts cut in the middle (P9.1, review notes 15#9, 30#1, 50#8): a path or file name that does not fit loses a part of
+// its middle, never its end, so the file name, its counter and its extension always show ("basic_h264… - 03.mkv").
+// Rust decides where the text is split (`util::text::split_middle`, answered through `TextLogic` in every window that
+// installs it, `ui::controls::install`).
+
+import { Theme } from "styles.slint";
+
+export struct TextSplit {
+    // Cut at its end ("…") when the whole does not fit.
+    head: string,
+    // Always shown; empty = the text is not split.
+    tail: string,
+}
+
+export global TextLogic {
+    pure callback split-middle(/* text */ string) -> TextSplit;
+}
+
+/// A path or file name cut in the middle when it does not fit.
+export component MiddleText inherits HorizontalLayout {
+    in property <string> text;
+    in property <color> color: Theme.text;
+    in property <length> font-size: 12px;
+    in property <int> font-weight: 400;
+    in property <TextVerticalAlignment> vertical-alignment: center;
+
+    // A window that did not install the logic shows the whole text, cut at its end.
+    property <TextSplit> parts: TextLogic.split-middle(root.text);
+    property <bool> split: root.parts.tail != "";
+
+    alignment: start;
+
+    Text {
+        horizontal-stretch: 1;
+        max-width: self.preferred-width;
+        min-width: 12px;
+        text: root.split ? root.parts.head : root.text;
+        color: root.color;
+        font-size: root.font-size;
+        font-weight: root.font-weight;
+        vertical-alignment: root.vertical-alignment;
+        overflow: elide;
+    }
+
+    // The tail keeps its width (up to a limit, so a long file name cannot widen a panel); the head gives way.
+    if root.split: Text {
+        horizontal-stretch: 0;
+        min-width: Math.min(self.preferred-width, 140px);
+        text: root.parts.tail;
+        color: root.color;
+        font-size: root.font-size;
+        font-weight: root.font-weight;
+        vertical-alignment: root.vertical-alignment;
+        overflow: elide;
+    }
+}

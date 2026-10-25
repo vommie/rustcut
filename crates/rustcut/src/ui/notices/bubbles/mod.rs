@@ -286,6 +286,7 @@ impl BubbleCenter {
                 title: r.title.into(),
                 text: r.detail.into(),
                 link: r.link.into(),
+                link_jump: r.link_jump,
                 buttons: button_model(&mut models, r.id, &r.buttons),
                 anchor: TipRect {
                     x: r.place.x,
@@ -342,6 +343,7 @@ fn to_bubble(notice: &Notice) -> Option<NewBubble> {
             .find(|a| a.icon.is_none())
             .map(|a| a.label.clone())
             .unwrap_or_default(),
+        link_jump: notice.actions.iter().find(|a| a.icon.is_none()).is_some_and(|a| a.jump),
         buttons: notice
             .actions
             .iter()

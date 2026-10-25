@@ -63,8 +63,9 @@ component ConnectionCard inherits Rectangle {
             spacing: 6px;
 
             // The RustView settings, at the option behind the state when there is one (jump mark, Q-N6).
+            // It leads into the Settings window: the jump symbol (P9.1).
             IconButton {
-                icon: IconId.open-settings;
+                icon: IconId.jump-to;
                 tooltip: TagRate.connection-jump != "" ? TagRate.connection-jump : "Open the RustView settings";
                 clicked => {
                     if TagRate.connection-jump != "" {

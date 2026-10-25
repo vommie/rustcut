@@ -225,7 +225,7 @@ export component FinalizeCardBody inherits VerticalLayout {
         NumberField {
             text: Export.counter;
             enabled: Export.counter-enabled;
-            tooltip: "Counter of the next job (mouse wheel steps)";
+            tooltip: "Counter of the next job";
             committed(text) => { Export.counter-committed(text) }
             stepped(steps) => { Export.counter-stepped(steps); }
         }

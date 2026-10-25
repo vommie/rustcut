@@ -69,6 +69,6 @@ fn show(failed: &[(&'static str, String)]) {
                 reasons.join("; ")
             ))
             .jump(target)
-            .action("Show the option", move || crate::ui::jump::go(target)),
+            .jump_action("Show the option", target),
     );
 }

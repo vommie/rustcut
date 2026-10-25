@@ -5,7 +5,7 @@
 import { ListView } from "std-widgets.slint";
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
-import { IconButton } from "controls.slint";
+import { IconButton, MiddleText } from "controls.slint";
 import { TooltipHost } from "tooltip.slint";
 import { SearchField } from "search_field.slint";
 import { Logs, LogLineView } from "job_types.slint";
@@ -93,14 +93,11 @@ export component LogsPanel inherits Rectangle {
                 clicked => { Logs.select-source(3); }
             }
 
-            Text {
+            MiddleText {
                 horizontal-stretch: 1;
                 text: Logs.has-job ? Logs.title : "No job chosen";
                 color: Logs.has-job ? Theme.text : Theme.status-deleted;
-                font-size: 12px;
                 font-weight: 600;
-                vertical-alignment: center;
-                overflow: elide;
             }
 
             IconButton {

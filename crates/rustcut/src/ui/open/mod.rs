@@ -272,7 +272,7 @@ impl FileOpener {
             Notice::new(Kind::OpenFailed, title)
                 .detail(detail)
                 .level(level)
-                .action("Show log", notices::show_app_log),
+                .leading_action("Show log", notices::show_app_log),
         );
     }
 }
