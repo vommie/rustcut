@@ -4,6 +4,8 @@ use rustcut_core::settings::WhenDone;
 
 use super::super::queue::QueueStatus;
 use crate::desktop::taskbar::Badge;
+use crate::icons::Icon;
+use crate::ui::menu::MenuTint;
 
 /// The choices of the queue panel's "when done" button, in its order.
 pub const CHOICES: [WhenDone; 5] = [
@@ -14,13 +16,25 @@ pub const CHOICES: [WhenDone; 5] = [
     WhenDone::PowerOff,
 ];
 
+/// The entry of the "When the queue finishes…" menu (P9.6, the UI review's note 19).
 pub const fn label(choice: WhenDone) -> &'static str {
     match choice {
-        WhenDone::Nothing => "Then: nothing",
-        WhenDone::Notify => "Then: notify",
-        WhenDone::Quit => "Then: quit RustCut",
-        WhenDone::Suspend => "Then: suspend",
-        WhenDone::PowerOff => "Then: power off",
+        WhenDone::Nothing => "Do Nothing",
+        WhenDone::Notify => "Send Notification",
+        WhenDone::Quit => "Quit App",
+        WhenDone::Suspend => "Suspend Device",
+        WhenDone::PowerOff => "Power Off Device",
+    }
+}
+
+/// The entry's icon, colored by how far it goes (neutral, green, yellow, orange, red); the button's dot has the color.
+pub const fn look(choice: WhenDone) -> (Icon, MenuTint) {
+    match choice {
+        WhenDone::Nothing => (Icon::WhenDoneNothing, MenuTint::Plain),
+        WhenDone::Notify => (Icon::WhenDoneNotify, MenuTint::Green),
+        WhenDone::Quit => (Icon::WhenDoneQuit, MenuTint::Yellow),
+        WhenDone::Suspend => (Icon::WhenDoneSuspend, MenuTint::Orange),
+        WhenDone::PowerOff => (Icon::WhenDonePowerOff, MenuTint::Red),
     }
 }
 

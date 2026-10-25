@@ -8,7 +8,7 @@ import { TooltipHost } from "tooltip.slint";
 import { HoldConfirm, HoldLogic, HoldRing } from "hold.slint";
 
 export { NumberField } from "controls_number.slint";
-export { ChoiceButton, SegmentedChoice } from "controls_choice.slint";
+export { ChoiceButton, MultiChoiceButton, MultiChoiceItem, SegmentedChoice } from "controls_choice.slint";
 export { UpDownButton } from "controls_updown.slint";
 export { MiddleText, TextLogic, TextSplit } from "controls_text.slint";
 export { ControlMetrics } from "controls_base.slint";
@@ -28,6 +28,8 @@ export component IconButton inherits Rectangle {
     in property <bool> alert;
     in property <length> icon-size: IconSize.md;
     callback clicked();
+    // A right click (the queue's filter and "when done" buttons reset with it).
+    callback secondary-clicked();
 
     property <color> content-color: !root.enabled ? Theme.status-deleted
         : logic.progress > 0 ? HoldConfirm.color.mix(Theme.text, logic.progress)
@@ -74,7 +76,12 @@ export component IconButton inherits Rectangle {
     touch := TouchArea {
         mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
         pointer-event(event) => {
-            if event.kind == PointerEventKind.down {
+            if event.kind == PointerEventKind.down && event.button == PointerEventButton.right {
+                host.press();
+                if root.enabled {
+                    root.secondary-clicked();
+                }
+            } else if event.kind == PointerEventKind.down {
                 host.press();
                 logic.pressed-down();
             }

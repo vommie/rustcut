@@ -1,72 +1,18 @@
-// The queue panel (src/ui/queue/ fills `Queue`; HANDOFF 8.Q, M4.1): the processing switches with the queue's summary
-// and the overall progress of the current run, the search and the state chips, the list (compact two-line rows in a
-// narrow sidebar, a table with more columns as it gets wider), and the actions for the selected jobs. Several jobs can
-// be selected (Ctrl, Shift), dragged to another place, and reached through the context menu; removing and canceling
-// are held (hold.slint, user decision Q-Q4).
+// The queue panel (src/ui/queue/ fills `Queue`; HANDOFF 8.Q, M4.1, P9.6): the processing switches and the filter button
+// (its menu is `queue_filter.slint`) on top, the list (compact two-line rows in a narrow sidebar, a table with more
+// columns as it gets wider), the queue's summary with the overall progress of the current run under it, and the
+// actions for the selected jobs. Several jobs can be selected (Ctrl, Shift), dragged to another place, and reached
+// through the context menu (the empty space has its own); removing and canceling are held (hold.slint, Q-Q4).
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { IconButton, UpDownButton } from "controls.slint";
-import { TooltipHost } from "tooltip.slint";
-import { SearchField } from "search_field.slint";
 import { Export } from "export_types.slint";
-import { Queue, QueueChipView } from "queue_types.slint";
+import { Queue } from "queue_types.slint";
+import { MenuTints } from "context_menu.slint";
 import { QueueColors, QueueHeader, QueueRow } from "queue_row.slint";
 import { Jump } from "jump.slint";
 import { DragGhost, DragLogic, DropGap } from "drag.slint";
-
-component Chip inherits Rectangle {
-    in property <QueueChipView> chip;
-    in property <int> kind;
-
-    height: 20px;
-    width: row.preferred-width + 12px;
-    border-radius: 10px;
-    background: root.chip.on ? Theme.primary.with-alpha(0.22) : touch.has-hover ? Theme.surface-hover : Theme.surface;
-    border-width: 1px;
-    border-color: root.chip.on ? Theme.primary : Theme.border;
-
-    host := TooltipHost {
-        text: (root.chip.on ? "Showing " : "Show only ") + root.chip.title.to-lowercase() + " jobs (" + root.chip.count + ")";
-    }
-
-    row := HorizontalLayout {
-        x: 6px;
-        spacing: 4px;
-
-        Rectangle {
-            width: 7px;
-
-            Rectangle {
-                y: (parent.height - 7px) / 2;
-                height: 7px;
-                border-radius: 3.5px;
-                background: QueueColors.of(root.kind);
-            }
-        }
-
-        Text {
-            text: root.chip.count;
-            color: root.chip.count == 0 ? Theme.status-deleted : Theme.text;
-            font-size: 11px;
-            vertical-alignment: center;
-        }
-    }
-
-    touch := TouchArea {
-        clicked => {
-            host.press();
-            Queue.toggle-chip(root.chip.id);
-        }
-        changed has-hover => {
-            if self.has-hover {
-                host.enter();
-            } else {
-                host.leave();
-            }
-        }
-    }
-}
 
 export component QueuePanel inherits Rectangle {
     property <length> row-step: Queue.row-height + 2px;
@@ -121,7 +67,7 @@ export component QueuePanel inherits Rectangle {
             }
         }
 
-        // Processing, summary, overall progress.
+        // Processing and what happens when the queue finishes; the filter on the right.
         HorizontalLayout {
             spacing: 4px;
 
@@ -142,73 +88,64 @@ export component QueuePanel inherits Rectangle {
 
             when-done := IconButton {
                 icon: IconId.when-done;
-                checked: Queue.when-done != 0;
                 tooltip: Queue.when-done-tip;
                 clicked => {
-                    Queue.when-done-menu(when-done.absolute-position.x, when-done.absolute-position.y + when-done.height);
+                    Queue.when-done-menu(self.absolute-position.x, self.absolute-position.y, self.width, self.height);
+                }
+                secondary-clicked => { Queue.when-done-reset(); }
+
+                // A dot in the chosen entry's color while one is chosen (the bell's badge is the model).
+                if Queue.when-done != 0: Rectangle {
+                    x: parent.width - 9px;
+                    y: 2px;
+                    width: 7px;
+                    height: 7px;
+                    border-radius: 3.5px;
+                    background: MenuTints.of(Queue.when-done);
+                    border-width: 1px;
+                    border-color: Theme.surface;
                 }
             }
 
-            VerticalLayout {
+            Rectangle {
                 horizontal-stretch: 1;
-                alignment: center;
-                spacing: 2px;
+            }
 
-                Text {
-                    text: Queue.has-overall ? Queue.overall-text : Queue.summary;
-                    color: Theme.text-muted;
-                    font-size: 11px;
-                    overflow: elide;
+            filter-button := IconButton {
+                icon: IconId.queue-filter;
+                checked: Queue.filter-open || Queue.filtered;
+                tooltip: Queue.filter-count == 0 ? "Filter the jobs"
+                    : Queue.filter-note + " (a right click shows every job)";
+                clicked => {
+                    Queue.filter-anchor-x = self.absolute-position.x;
+                    Queue.filter-anchor-y = self.absolute-position.y;
+                    Queue.filter-anchor-width = self.width;
+                    Queue.filter-anchor-height = self.height;
+                    Queue.filter-open = !Queue.filter-open;
+                }
+                secondary-clicked => {
+                    Queue.filter-open = false;
+                    Queue.clear-filter();
                 }
 
-                if Queue.has-overall: Rectangle {
-                    height: 3px;
-                    border-radius: 1.5px;
-                    background: Theme.surface-selected;
+                // How many filters are set.
+                if Queue.filter-count > 0: Rectangle {
+                    x: parent.width - self.width + 4px;
+                    y: -4px;
+                    width: Math.max(14px, badge.preferred-width + 6px);
+                    height: 14px;
+                    border-radius: 7px;
+                    background: Theme.primary;
 
-                    Rectangle {
-                        x: 0;
-                        width: parent.width * Math.clamp(Queue.overall, 0, 1);
-                        border-radius: 1.5px;
-                        background: Queue.paused ? Theme.accent : Theme.primary;
+                    badge := Text {
+                        text: Queue.filter-count;
+                        color: Theme.background;
+                        font-size: 9px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
                     }
                 }
-            }
-        }
-
-        // Search and state chips.
-        HorizontalLayout {
-            spacing: 4px;
-
-            search := SearchField {
-                horizontal-stretch: 1;
-                // The field keeps this width: the row's width without the buttons beside it.
-                field-width: Math.max(60px, parent.width - 30px);
-                text: Queue.search;
-                placeholder-text: "Search jobs";
-                enable-regex-toggle: false;
-                show-search-icon: true;
-                clear-tooltip: "Clear the search (Esc)";
-                search-changed(text) => { Queue.search-edited(text); }
-                cleared => { Queue.search-edited(""); }
-            }
-
-            IconButton {
-                icon: IconId.filter-clear;
-                enabled: Queue.filtered;
-                tooltip: Queue.filtered ? Queue.filter-note + ": show every job" : "Every job is shown";
-                clicked => { Queue.clear-filter(); }
-            }
-        }
-
-        HorizontalLayout {
-            spacing: 4px;
-            alignment: start;
-
-            for chip[i] in Queue.chips: Chip {
-                chip: chip;
-                // waiting, running, held, finished, failed, canceled -> the colors of their states
-                kind: i == 0 ? 0 : i == 1 ? 2 : i == 2 ? 1 : i == 3 ? 4 : i == 4 ? 5 : 6;
             }
         }
 
@@ -301,7 +238,7 @@ export component QueuePanel inherits Rectangle {
                 wrap: word-wrap;
             }
 
-            // A right click below the rows: the menu for the selection.
+            // Below the rows: a click clears the selection, a right click opens the menu for every job.
             TouchArea {
                 y: list.preferred-height + flick.content-y;
                 height: Math.max(0px, parent.height - self.y);
@@ -310,6 +247,33 @@ export component QueuePanel inherits Rectangle {
                         Queue.context-menu(-1, self.absolute-position.x + self.mouse-x,
                             self.absolute-position.y + self.mouse-y);
                     }
+                }
+                clicked => { Queue.clear-selection(); }
+            }
+        }
+
+        // The queue's summary and the overall progress of the current run (P9.6: under the list).
+        VerticalLayout {
+            vertical-stretch: 0;
+            spacing: 2px;
+
+            Text {
+                text: Queue.has-overall ? Queue.overall-text : Queue.summary;
+                color: Theme.text-muted;
+                font-size: 11px;
+                overflow: elide;
+            }
+
+            if Queue.has-overall: Rectangle {
+                height: 3px;
+                border-radius: 1.5px;
+                background: Theme.surface-selected;
+
+                Rectangle {
+                    x: 0;
+                    width: parent.width * Math.clamp(Queue.overall, 0, 1);
+                    border-radius: 1.5px;
+                    background: Queue.paused ? Theme.accent : Theme.primary;
                 }
             }
         }

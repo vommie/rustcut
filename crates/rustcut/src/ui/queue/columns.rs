@@ -1,7 +1,8 @@
 //! The queue list's columns (HANDOFF 8.Q): which ones fit into the panel's width and where they sit. In a narrow
 //! sidebar the list shows compact two-line rows; as the panel gets wider (or its group is maximized) it becomes a
 //! table, and columns join in the order of their priority. The name stretches; the other columns keep the widths the
-//! user dragged them to (`UiState.queue.columns`). Slint draws exactly these numbers.
+//! user dragged them to (`UiState.queue.columns`), but for the held delete button at the right end, which has no
+//! caption and a fixed width (P9.6). Slint draws exactly these numbers.
 
 use std::collections::BTreeMap;
 
@@ -16,10 +17,12 @@ pub enum Column {
     Size,
     Profile,
     Folder,
+    /// The held delete button of the row.
+    Remove,
 }
 
 /// Left to right.
-pub const ORDER: [Column; 8] = [
+pub const ORDER: [Column; 9] = [
     Column::Id,
     Column::Name,
     Column::State,
@@ -28,6 +31,7 @@ pub const ORDER: [Column; 8] = [
     Column::Size,
     Column::Profile,
     Column::Folder,
+    Column::Remove,
 ];
 
 /// The optional columns, the first one left out first when the panel gets narrower. Without room for the ETA and
@@ -40,6 +44,8 @@ pub const NAME_MIN: u32 = 160;
 pub const WIDTH_RANGE: std::ops::RangeInclusive<u32> = 32..=600;
 /// Space between two columns.
 pub const GAP: u32 = 8;
+/// The delete button's column.
+const REMOVE_WIDTH: u32 = 26;
 
 impl Column {
     /// The id in `ui-state.toml` and in the Slint models.
@@ -53,6 +59,7 @@ impl Column {
             Self::Size => "size",
             Self::Profile => "profile",
             Self::Folder => "folder",
+            Self::Remove => "remove",
         }
     }
 
@@ -65,11 +72,12 @@ impl Column {
             Self::Id => "#",
             Self::Name => "Name",
             Self::State => "State",
-            Self::Eta => "ETA",
+            Self::Eta => "Time",
             Self::Length => "Length",
             Self::Size => "Size",
             Self::Profile => "Profile",
             Self::Folder => "Folder",
+            Self::Remove => "",
         }
     }
 
@@ -78,11 +86,12 @@ impl Column {
             Self::Id => "The job's number (never used twice)",
             Self::Name => "The file the job writes",
             Self::State => "Where the job stands, with the render's progress",
-            Self::Eta => "Time until the render is done",
+            Self::Eta => "While a job renders: the time left. Afterwards: how long its render took",
             Self::Length => "Length of the output (and the number of sections when there are several)",
             Self::Size => "Size of the output: estimated while rendering, measured when finished",
             Self::Profile => "The render profile the job was saved with",
             Self::Folder => "The target folder",
+            Self::Remove => "",
         }
     }
 
@@ -94,7 +103,13 @@ impl Column {
             Self::Eta | Self::Length => 64,
             Self::Size => 72,
             Self::Profile | Self::Folder => 120,
+            Self::Remove => REMOVE_WIDTH,
         }
+    }
+
+    /// Whether its right edge can be dragged (the name stretches, the delete button has its button's width).
+    pub fn resizable(self) -> bool {
+        !matches!(self, Self::Name | Self::Remove)
     }
 
     /// Numbers are aligned right.
@@ -121,6 +136,9 @@ pub struct Layout {
 
 /// The width of `column`: the dragged one, else its default.
 pub fn width_of(column: Column, widths: &BTreeMap<String, u32>) -> u32 {
+    if !column.resizable() {
+        return column.default_width();
+    }
     widths.get(column.id()).copied().map_or_else(
         || column.default_width(),
         |w| w.clamp(*WIDTH_RANGE.start(), *WIDTH_RANGE.end()),
@@ -184,13 +202,20 @@ mod tests {
     fn columns_join_as_the_panel_widens() {
         let widths = BTreeMap::new();
         assert!(layout(200, &widths).compact, "a narrow sidebar shows two-line rows");
-        assert!(layout(420, &widths).compact, "a table needs the ETA and the length");
-        let l = layout(440, &widths);
-        assert_eq!(ids(&l), ["name", "state", "eta", "length"]);
-        let l = layout(480, &widths);
-        assert_eq!(ids(&l), ["id", "name", "state", "eta", "length"]);
+        assert!(
+            layout(460, &widths).compact,
+            "a table needs the time, the length and the delete buttons"
+        );
+        let l = layout(470, &widths);
+        assert_eq!(ids(&l), ["name", "state", "eta", "length", "remove"]);
+        let l = layout(520, &widths);
+        assert_eq!(ids(&l), ["id", "name", "state", "eta", "length", "remove"]);
         let l = layout(2000, &widths);
-        assert_eq!(ids(&l).len(), 8);
+        assert_eq!(ids(&l).len(), 9);
+        assert_eq!(
+            l.slots.last().map(|s| (s.column, s.width)),
+            Some((Column::Remove, REMOVE_WIDTH))
+        );
         // Every slot follows the previous one, and the row is filled exactly.
         let last = l.slots.last().unwrap();
         assert_eq!(last.x + last.width, 2000);
@@ -205,10 +230,19 @@ mod tests {
         let mut widths = BTreeMap::new();
         widths.insert("eta".to_owned(), 200);
         widths.insert("state".to_owned(), 5);
+        widths.insert("remove".to_owned(), 300);
         assert_eq!(width_of(Column::State, &widths), *WIDTH_RANGE.start());
-        assert!(layout(400, &widths).compact, "a wide ETA leaves no room for a table");
+        assert_eq!(
+            width_of(Column::Remove, &widths),
+            REMOVE_WIDTH,
+            "the delete column keeps its width"
+        );
+        assert!(
+            layout(400, &widths).compact,
+            "a wide time column leaves no room for a table"
+        );
         let l = layout(520, &widths);
-        assert_eq!(ids(&l), ["name", "state", "eta", "length"]);
+        assert_eq!(ids(&l), ["name", "state", "eta", "length", "remove"]);
         assert_eq!(dragged(100, -500), 32);
         assert_eq!(dragged(100, 30), 130);
         assert_eq!(Column::from_id("folder"), Some(Column::Folder));

@@ -20,7 +20,6 @@ use self::state::{CHOICES, Countdown, Tick};
 use crate::desktop::logind::PowerAction;
 use crate::desktop::service::{DesktopCommand, DesktopHandle};
 use crate::desktop::taskbar::Badge;
-use crate::icons::Icon;
 use crate::ui::menu::{ContextMenuBridge, MenuAction, MenuItem};
 use crate::ui::notices::{self, Kind, Level, Notice};
 use crate::ui::queue::{QueueBridge, QueueStatus};
@@ -146,18 +145,23 @@ impl PowerBridge {
         self.publish();
     }
 
-    fn show_menu(&self, x: f32, y: f32) {
+    /// The "When the queue finishes…" menu, hanging from its button at `anchor` (window x, y, width, height).
+    fn show_menu(&self, anchor: [f32; 4]) {
         let Some(menu) = self.menu.upgrade() else { return };
         let current = self.when_done.get();
-        let items: Vec<MenuItem> = CHOICES
-            .iter()
-            .map(|choice| {
-                let icon = (*choice == current).then_some(Icon::Check);
-                MenuAction::new(state::index(*choice).to_string(), state::label(*choice), icon).into()
-            })
-            .collect();
+        let mut items: Vec<MenuItem> = vec![
+            MenuItem::Heading("When the queue finishes…".to_owned()),
+            MenuItem::Separator,
+        ];
+        items.extend(CHOICES.iter().map(|choice| {
+            let (icon, tint) = state::look(*choice);
+            MenuAction::new(state::index(*choice).to_string(), state::label(*choice), Some(icon))
+                .tint(tint)
+                .checked(*choice == current)
+                .into()
+        }));
         let weak = Weak::clone(&self.me);
-        menu.show(&items, x, y, move |id| {
+        menu.show_at(&items, anchor, move |id| {
             if let (Some(b), Some(choice)) = (weak.upgrade(), id.parse::<usize>().ok().and_then(|i| CHOICES.get(i))) {
                 b.set_when_done(*choice);
             }
@@ -317,10 +321,13 @@ impl PowerBridge {
         let choice = self.when_done.get();
         q.set_when_done(i32::try_from(state::index(choice)).unwrap_or(0));
         q.set_when_done_tip(
-            format!(
-                "When the queue is done: {}",
-                state::label(choice).trim_start_matches("Then: ")
-            )
+            match choice {
+                WhenDone::Nothing => "When the queue finishes: Do Nothing".to_owned(),
+                other => format!(
+                    "When the queue finishes: {} (a right click resets it to Do Nothing)",
+                    state::label(other)
+                ),
+            }
             .into(),
         );
     }
@@ -354,9 +361,19 @@ fn connect(bridge: &Rc<PowerBridge>, window: &MainWindow) {
         PowerBridge::tell(Notice::new(Kind::PowerChoice, "RustCut quits when the queue is done."));
     }));
     let weak = Rc::downgrade(bridge);
-    window.global::<Queue<'_>>().on_when_done_menu(move |x, y| {
-        if let Some(b) = weak.upgrade() {
-            b.show_menu(x, y);
+    window
+        .global::<Queue<'_>>()
+        .on_when_done_menu(move |x, y, width, height| {
+            if let Some(b) = weak.upgrade() {
+                b.show_menu([x, y, width, height]);
+            }
+        });
+    let weak = Rc::downgrade(bridge);
+    window.global::<Queue<'_>>().on_when_done_reset(move || {
+        if let Some(b) = weak.upgrade()
+            && b.when_done.get() != WhenDone::Nothing
+        {
+            b.set_when_done(WhenDone::Nothing);
         }
     });
 }

@@ -1,13 +1,15 @@
 // A row of the queue list and the table's column header (queue_panel.slint puts them together). A row is either the
-// compact two-line form (name and state; folder, profile and length, or ETA, size and speed while rendering, or the
-// failure) or a table line with one cell per column of `Queue.columns`; the state cell carries the render's progress.
+// compact two-line form (name and state; folder, profile and length, or ETA, size and speed while rendering with the
+// percentage on the right, or the failure) or a table line with one cell per column of `Queue.columns`; the state cell
+// carries the render's progress, the last column a held delete button (P9.6).
 // Click selects (Ctrl adds, Shift a range), a double click acts (play, log, details), a right click opens the context
 // menu, and a drag moves the selected jobs.
 
 import { Theme } from "styles.slint";
-import { AppIcon, IconId, IconSize } from "icons.slint";
+import { IconId, IconSize } from "icons.slint";
 import { TooltipHost } from "tooltip.slint";
 import { MiddleText } from "controls_text.slint";
+import { IconButton } from "controls.slint";
 import { Queue, QueueColumnView, QueueRowView } from "queue_types.slint";
 import { JumpFlash } from "jump.slint";
 import { DragMotion } from "drag.slint";
@@ -102,12 +104,6 @@ export component QueueRow inherits Rectangle {
             HorizontalLayout {
                 spacing: 6px;
 
-                if root.job.editing: AppIcon {
-                    icon: IconId.job-edit;
-                    size: IconSize.sm;
-                    color: Theme.accent;
-                }
-
                 MiddleText {
                     horizontal-stretch: 1;
                     text: root.job.name;
@@ -122,11 +118,26 @@ export component QueueRow inherits Rectangle {
                 }
             }
 
-            Text {
-                text: root.job.detail;
-                color: root.job.kind == 5 ? Theme.status-corrupt : Theme.text-muted;
-                font-size: 11px;
-                overflow: elide;
+            HorizontalLayout {
+                spacing: 6px;
+
+                Text {
+                    horizontal-stretch: 1;
+                    text: root.job.detail;
+                    color: root.job.kind == 5 ? Theme.status-corrupt : Theme.text-muted;
+                    font-size: 11px;
+                    overflow: elide;
+                }
+
+                // The render's percentage keeps its width and its place on the right (no jitter).
+                if root.job.percent != "": Text {
+                    width: 36px;
+                    text: root.job.percent;
+                    color: root.state-color;
+                    font-size: 11px;
+                    font-weight: 600;
+                    horizontal-alignment: right;
+                }
             }
 
             Progress {
@@ -154,25 +165,17 @@ export component QueueRow inherits Rectangle {
                     }
                 }
 
-                if column.id == "name" && root.job.editing: AppIcon {
-                    x: 0;
-                    y: (parent.height - self.height) / 2;
-                    icon: IconId.job-edit;
-                    size: IconSize.sm;
-                    color: Theme.accent;
-                }
-
                 // Names and folders are cut in the middle (P9.1).
                 if column.id == "name" || column.id == "folder": MiddleText {
-                    x: column.id == "name" && root.job.editing ? 18px : 0px;
-                    width: parent.width - self.x;
+                    x: 0px;
+                    width: parent.width;
                     height: parent.height;
                     text: root.job.cells[i];
                     color: column.id == "name" ? Theme.text : Theme.text-muted;
                     font-weight: column.id == "name" ? 600 : 400;
                 }
 
-                if column.id != "name" && column.id != "folder": Text {
+                if column.id != "name" && column.id != "folder" && column.id != "remove": Text {
                     width: parent.width;
                     text: root.job.cells[i];
                     color: column.id == "state" ? root.state-color
@@ -245,6 +248,33 @@ export component QueueRow inherits Rectangle {
                 host.enter();
             } else {
                 host.leave();
+            }
+        }
+    }
+
+    // The table's held delete buttons, over the row's pointer area (they move with the row while jobs are dragged).
+    if !Queue.compact: Rectangle {
+        x: 8px;
+        y: root.drag-shift;
+        animate y { duration: Queue.drag-instant ? 0ms : DragMotion.shift; easing: ease-out; }
+        width: parent.width - 16px;
+        height: parent.height;
+        opacity: root.lifted ? 0 : 1;
+
+        for column in Queue.columns: Rectangle {
+            x: column.x;
+            width: column.width;
+
+            if column.id == "remove": IconButton {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                icon: IconId.job-remove;
+                icon-size: IconSize.sm;
+                hold: true;
+                enabled: root.job.removable;
+                tooltip: root.job.removable ? "Remove the job from the queue (its files stay)"
+                    : "Remove the job (cancel it first: it renders)";
+                clicked => { Queue.remove-row(root.job.id); }
             }
         }
     }

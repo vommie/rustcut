@@ -586,6 +586,9 @@ fn queue_keys(settings: &Settings) -> (MenuKeys, String) {
             move_down: keymap.tooltip_keys(Action::QueueMoveDown),
             move_top: keymap.first_label(Action::QueueMoveTop),
             move_bottom: keymap.first_label(Action::QueueMoveBottom),
+            menu_up: keymap.first_label(Action::QueueMoveUp),
+            menu_down: keymap.first_label(Action::QueueMoveDown),
+            select_all: keymap.first_label(Action::QueueSelectAll),
         },
         keymap.first_label(Action::Save),
     )

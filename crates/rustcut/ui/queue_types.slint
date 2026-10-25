@@ -1,6 +1,8 @@
 // The data of the queue panel (src/ui/queue/ fills `Queue` and handles its callbacks): the rows in their compact or
-// table form, the columns that fit, the state chips and the search, the overall progress, and what the toolbar can do
-// with the selection.
+// table form, the columns that fit, the filter menu (search, rule, states, folders, profiles; P9.6), the overall
+// progress, and what the toolbar can do with the selection.
+
+import { MultiChoiceItem } from "controls_choice.slint";
 
 // One row of the queue list.
 export struct QueueRowView {
@@ -11,6 +13,10 @@ export struct QueueRowView {
     kind: int,
     // 0 to 1 while rendering or when finished, negative otherwise.
     progress: float,
+    // "45 %" while rendering: the compact form's second row, on the right.
+    percent: string,
+    // Not rendering: the table's held delete button can remove it.
+    removable: bool,
     // The compact form's second line.
     detail: string,
     tooltip: string,
@@ -35,25 +41,31 @@ export struct QueueColumnView {
     resizable: bool,
 }
 
-// A state filter chip.
-export struct QueueChipView {
-    id: string,
-    title: string,
-    count: int,
-    on: bool,
-}
-
 export global Queue {
     in property <[QueueRowView]> rows;
     // Two-line rows without a header (a narrow sidebar).
     in property <bool> compact: true;
     in property <[QueueColumnView]> columns;
     in property <length> row-height: 44px;
-    in property <[QueueChipView]> chips;
     in property <string> search;
     in property <bool> filtered;
     // "4 of 12 jobs shown" while a filter is on.
     in property <string> filter-note;
+    // The filter menu (P9.6): a flyout from the filter button (window coordinates of the button), its choices with what
+    // they show, the rule (ANY instead of ALL) and the number of filters that are set (the button's badge).
+    in-out property <bool> filter-open;
+    in-out property <length> filter-anchor-x;
+    in-out property <length> filter-anchor-y;
+    in-out property <length> filter-anchor-width;
+    in-out property <length> filter-anchor-height;
+    in property <[MultiChoiceItem]> filter-states;
+    in property <[MultiChoiceItem]> filter-folders;
+    in property <[MultiChoiceItem]> filter-profiles;
+    in property <string> filter-states-text: "Any state";
+    in property <string> filter-folders-text: "Any target folder";
+    in property <string> filter-profiles-text: "Any profile";
+    in property <bool> filter-any;
+    in property <int> filter-count;
     in property <string> summary;
     in property <string> empty-text;
     // The overall progress of the current run.
@@ -111,13 +123,21 @@ export global Queue {
     callback drag-end();
     callback column-resize-started(/* column id */ string);
     callback column-resized(/* column id */ string, /* delta */ length);
-    callback toggle-chip(/* chip id */ string);
+    // An entry of a filter choice (0 states, 1 folders, 2 profiles; entry -1 = any) with Ctrl or without.
+    callback filter-pick(/* kind */ int, /* entry */ int, /* control */ bool);
+    callback toggle-filter-any();
     callback search-edited(string);
     callback clear-filter();
+    // A left click on the list's empty space.
+    callback clear-selection();
+    // The table's held delete button of a job.
+    callback remove-row(/* job id */ int);
     callback toggle-paused();
     callback toggle-pause-after();
-    // The "when done" menu below the button (window coordinates).
-    callback when-done-menu(length, length);
+    // The "When the queue finishes…" menu hanging from its button (window x, y, width, height); a right click on the
+    // button resets it to "Do Nothing".
+    callback when-done-menu(length, length, length, length);
+    callback when-done-reset();
     // The queue lives only in memory (its database cannot be used, M6.5d): the red line at the top; a click opens the
     // database dialog again.
     in property <string> temporary-line;

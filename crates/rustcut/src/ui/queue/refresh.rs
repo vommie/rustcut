@@ -1,0 +1,215 @@
+//! The queue panel's refresh (UI thread): the shown rows (the filter's result), the table's columns, the filter menu's
+//! choices and badge, the totals line, the toolbar, and the hooks of the other panels that follow the queue.
+
+use std::fmt::Write as _;
+
+use az::CheckedAs as _;
+use rustcut_core::job::{JobId, JobStateKind};
+use rustcut_core::queue::JobSummary;
+use slint::{ComponentHandle as _, ModelRc, VecModel};
+
+use super::{
+    COMPACT_ROW, Column, Filter, FilterChoice, FilterKind, Overall, QueueAction, QueueBridge, ROW_PADDING, RowText,
+    TABLE_ROW, actions, layout, pause, row_text, short_clock, status_of,
+};
+use crate::util::model::sync;
+use crate::{MultiChoiceItem, Queue, QueueColumnView, QueueRowView};
+
+impl QueueBridge {
+    /// The filter menu: its three choices with their texts, the rule and the badge's number.
+    fn publish_filter(&self, q: &Queue<'_>, filter: &Filter, choices: &[(FilterKind, Vec<FilterChoice>); 3]) {
+        *self.filter_values.borrow_mut() = choices
+            .each_ref()
+            .map(|(_, entries)| entries.iter().map(|c| c.value.clone()).collect());
+        for ((kind, entries), model) in choices.iter().zip(&self.filter_models) {
+            let text = Filter::summary(entries, *kind);
+            sync(
+                model,
+                entries
+                    .iter()
+                    .map(|c| MultiChoiceItem {
+                        label: c.label.as_str().into(),
+                        detail: c.count.to_string().into(),
+                        on: c.on,
+                    })
+                    .collect(),
+            );
+            match kind {
+                FilterKind::State => q.set_filter_states_text(text.into()),
+                FilterKind::Folder => q.set_filter_folders_text(text.into()),
+                FilterKind::Profile => q.set_filter_profiles_text(text.into()),
+            }
+        }
+        q.set_filter_any(filter.any);
+        q.set_filter_count(i32::try_from(filter.active_count()).unwrap_or(i32::MAX));
+    }
+
+    /// Shows the current view (UI thread).
+    pub(super) fn refresh(&self) {
+        let Some(window) = self.window.upgrade() else { return };
+        let mut ui = self.ui.borrow_mut();
+        let layout = layout(
+            (ui.width - ROW_PADDING)
+                .max(0.0)
+                .round()
+                .checked_as::<u32>()
+                .unwrap_or_default(),
+            &ui.widths,
+        );
+        let shown: Vec<Column> = layout.slots.iter().map(|s| s.column).collect();
+        let (texts, visible, total, choices, summary, overall, paused, pause_after, finished, selected, ended, start) = {
+            let mut shared = self.shared.lock();
+            let ended = std::mem::take(&mut shared.ended);
+            let view = &shared.view;
+            let rows: Vec<&JobSummary> = view.rows.iter().filter(|r| ui.filter.matches(r)).collect();
+            let visible: Vec<JobId> = rows.iter().map(|r| r.id).collect();
+            ui.selection
+                .retain(|id| visible.contains(&id), |id| view.row(id).is_some());
+            let texts: Vec<(RowText, bool)> = rows
+                .iter()
+                .map(|r| {
+                    let text = row_text(r, view.progress.get(&r.id), view.size(r.id), &shown);
+                    (text, QueueAction::Remove.applies_to(&r.state))
+                })
+                .collect();
+            let selected: Vec<JobSummary> = ui
+                .selection
+                .in_order(&visible)
+                .iter()
+                .filter_map(|id| view.row(*id).cloned())
+                .collect();
+            (
+                texts,
+                visible,
+                view.rows.len(),
+                FilterKind::ALL.map(|kind| (kind, ui.filter.choices(kind, &view.rows))),
+                view.summary(),
+                view.overall(),
+                view.paused(),
+                view.pause_after_current(),
+                view.rows
+                    .iter()
+                    .filter(|r| r.state.kind() == JobStateKind::Finished)
+                    .count(),
+                selected,
+                ended,
+                (view.processing.as_ref().map(|p| p.paused), pause::waiting(&view.rows)),
+            )
+        };
+        ui.visible.clone_from(&visible);
+        let current = ui.selection.current();
+        let editing = self.editing.get();
+        let rows: Vec<QueueRowView> = texts
+            .into_iter()
+            .map(|(t, removable)| QueueRowView {
+                id: i32::try_from(t.id.0).unwrap_or(i32::MAX),
+                removable,
+                percent: t.percent.into(),
+                selected: ui.selection.contains(t.id),
+                current: current == Some(t.id),
+                editing: editing == Some(t.id),
+                name: t.name.into(),
+                state: t.state.into(),
+                kind: t.kind,
+                progress: t.progress,
+                detail: t.detail.into(),
+                tooltip: t.tooltip.into(),
+                cells: ModelRc::new(VecModel::from(
+                    t.cells
+                        .into_iter()
+                        .map(Into::into)
+                        .collect::<Vec<slint::SharedString>>(),
+                )),
+            })
+            .collect();
+        let row_count = rows.len();
+        sync(&self.rows, rows);
+        self.drag_rows_changed(&visible);
+        let column_views = layout
+            .slots
+            .iter()
+            .map(|s| QueueColumnView {
+                id: s.column.id().into(),
+                title: s.column.title().into(),
+                tooltip: s.column.tooltip().into(),
+                x: az::Az::az::<f32>(s.x),
+                width: az::Az::az::<f32>(s.width),
+                right: s.column.right_aligned(),
+                resizable: s.column.resizable(),
+            })
+            .collect();
+        sync(&self.columns, column_views);
+        let q = window.global::<Queue<'_>>();
+        self.publish_filter(&q, &ui.filter, &choices);
+        q.set_compact(layout.compact);
+        q.set_row_height(if layout.compact { COMPACT_ROW } else { TABLE_ROW });
+        q.set_filtered(ui.filter.is_active());
+        q.set_filter_note(format!("{row_count} of {total} jobs shown").into());
+        q.set_empty_text(
+            if total > 0 && ui.filter.is_active() {
+                "No job matches the filter."
+            } else {
+                self.empty_text.as_str()
+            }
+            .into(),
+        );
+        q.set_summary(summary.as_str().into());
+        q.set_has_overall(overall.is_some());
+        if let Some(o) = overall {
+            q.set_overall(az::Az::az::<f32>(o.fraction));
+            q.set_overall_text(overall_text(&summary, &o, paused).into());
+        }
+        q.set_paused(paused);
+        q.set_pause_after(pause_after);
+        drop(ui);
+        actions::publish_toolbar(&q, &selected, &visible, finished);
+        self.pause_seen(start.0, start.1);
+        if ended && let Some(hook) = self.hooks.borrow().job_ended.as_ref() {
+            hook();
+        }
+        if let Some(hook) = self.hooks.borrow().refreshed.as_ref() {
+            hook();
+        }
+        let (done, status, ended_jobs) = {
+            let mut shared = self.shared.lock();
+            (
+                shared.done.take(),
+                status_of(&shared.view),
+                std::mem::take(&mut shared.ended_jobs),
+            )
+        };
+        if let Some(hook) = self.hooks.borrow().job_done.as_ref() {
+            for row in &ended_jobs {
+                hook(row);
+            }
+        }
+        for hook in &self.hooks.borrow().status {
+            hook(status);
+        }
+        if let Some((finished, failed)) = done
+            && let Some(hook) = self.hooks.borrow().done.as_ref()
+        {
+            hook(finished, failed);
+        }
+    }
+}
+
+/// "1 running · 2 waiting — 2 of 5 done · about 0:12:30 left".
+fn overall_text(summary: &str, o: &Overall, paused: bool) -> String {
+    let mut text = format!("{summary} — {} of {} done", o.done, o.total);
+    match (o.eta_secs, paused) {
+        (_, true) if o.done < o.total => text.push_str(" · paused"),
+        (Some(eta), _) => {
+            let eta = short_clock(rustcut_core::time::Timestamp::from_secs(
+                i64::try_from(eta).unwrap_or(i64::MAX),
+            ));
+            let _ = if o.partial {
+                write!(text, " · at least {eta} left")
+            } else {
+                write!(text, " · about {eta} left")
+            };
+        }
+        _ => {}
+    }
+    text
+}

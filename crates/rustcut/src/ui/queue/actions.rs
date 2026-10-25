@@ -13,7 +13,8 @@ use slint::ComponentHandle as _;
 
 use super::QueueBridge;
 use super::columns::{self, Column};
-use super::menu::{QueueAction, queue_menu, targets};
+use super::filter::FilterKind;
+use super::menu::{ListFacts, QueueAction, list_menu, queue_menu, targets};
 use crate::ui::dock::PanelId;
 use crate::{MainWindow, Queue};
 
@@ -50,11 +51,20 @@ pub(super) fn connect(bridge: &Rc<QueueBridge>, window: &MainWindow) {
     let weak = Rc::downgrade(bridge);
     q.on_context_menu(move |id, x, y| {
         if let Some(b) = weak.upgrade() {
-            if id < 0 {
-                b.ui.borrow_mut().selection.clear();
-                b.refresh();
-            }
-            b.open_menu(x, y);
+            b.open_menu(id >= 0, x, y);
+        }
+    });
+    let weak = Rc::downgrade(bridge);
+    q.on_clear_selection(move || {
+        if let Some(b) = weak.upgrade() {
+            b.ui.borrow_mut().selection.clear();
+            b.refresh();
+        }
+    });
+    let weak = Rc::downgrade(bridge);
+    q.on_remove_row(move |id| {
+        if let Some(b) = weak.upgrade() {
+            b.run_on(&QueueAction::Remove, JobId(i64::from(id)));
         }
     });
     let weak = Rc::downgrade(bridge);
@@ -81,9 +91,33 @@ pub(super) fn connect(bridge: &Rc<QueueBridge>, window: &MainWindow) {
         b.refresh();
     });
     let weak = Rc::downgrade(bridge);
-    q.on_toggle_chip(move |id| {
+    q.on_filter_pick(move |kind, index, control| {
+        let Some(b) = weak.upgrade() else { return };
+        let Some((k, kind)) = usize::try_from(kind)
+            .ok()
+            .and_then(|k| FilterKind::ALL.get(k).map(|kind| (k, *kind)))
+        else {
+            return;
+        };
+        let value = usize::try_from(index)
+            .ok()
+            .and_then(|i| b.filter_values.borrow().get(k).and_then(|v| v.get(i).cloned()));
+        if index >= 0 && value.is_none() {
+            return;
+        }
+        tracing::debug!(?kind, ?value, control, "[Queue] Filter picked");
+        b.ui.borrow_mut().filter.pick(kind, value.as_deref(), control);
+        b.refresh();
+    });
+    let weak = Rc::downgrade(bridge);
+    q.on_toggle_filter_any(move || {
         if let Some(b) = weak.upgrade() {
-            b.ui.borrow_mut().filter.toggle(&id);
+            let any = {
+                let mut ui = b.ui.borrow_mut();
+                ui.filter.any = !ui.filter.any;
+                ui.filter.any
+            };
+            tracing::info!(any, "[Queue] Filter rule switched");
             b.refresh();
         }
     });
@@ -97,11 +131,7 @@ pub(super) fn connect(bridge: &Rc<QueueBridge>, window: &MainWindow) {
     let weak = Rc::downgrade(bridge);
     q.on_clear_filter(move || {
         if let Some(b) = weak.upgrade() {
-            b.ui.borrow_mut().filter.clear();
-            if let Some(window) = b.window.upgrade() {
-                window.global::<Queue<'_>>().set_search("".into());
-            }
-            b.refresh();
+            b.clear_filter();
         }
     });
     let weak = Rc::downgrade(bridge);
@@ -215,13 +245,18 @@ pub(super) fn publish_toolbar(q: &Queue<'_>, selected: &[JobSummary], visible: &
     let all_held = release == n && n > 0;
     q.set_can_hold(hold > 0 || release > 0);
     q.set_held(all_held);
+    // The hand holds the selected jobs (the queue-wide pause is the pause button; D-P9f).
+    let counted = |verb: &str, k: usize| match k {
+        1 => format!("{verb} job"),
+        k => format!("{verb} {k} jobs"),
+    };
     q.set_hold_tooltip(
         if all_held {
-            format!("Held: release {}", jobs(release))
+            counted("Release", release)
         } else if hold > 0 {
-            format!("Hold {} (waits until released)", jobs(hold))
+            counted("Hold", hold)
         } else {
-            "Hold waiting jobs (they wait until released)".to_owned()
+            "Hold job (a waiting one)".to_owned()
         }
         .into(),
     );
@@ -260,6 +295,33 @@ impl QueueBridge {
                 (false, false) => ui.selection.click(id),
             }
         }
+        self.refresh();
+    }
+
+    /// Whether the selected jobs (in queue order) can move one place up and down among the shown ones.
+    pub(super) fn can_move(&self, selected: &[JobSummary]) -> (bool, bool) {
+        let ui = self.ui.borrow();
+        let first = ui
+            .visible
+            .iter()
+            .position(|id| selected.first().is_some_and(|r| r.id == *id));
+        let last = ui
+            .visible
+            .iter()
+            .position(|id| selected.last().is_some_and(|r| r.id == *id));
+        (
+            first.is_some_and(|p| p > 0),
+            last.is_some_and(|p| p + 1 < ui.visible.len()),
+        )
+    }
+
+    /// Every filter and the search off (a right click on the filter button, the empty space's menu).
+    pub(super) fn clear_filter(&self) {
+        self.ui.borrow_mut().filter.clear();
+        if let Some(window) = self.window.upgrade() {
+            window.global::<Queue<'_>>().set_search("".into());
+        }
+        tracing::info!("[Queue] Filters cleared");
         self.refresh();
     }
 
@@ -340,7 +402,8 @@ impl QueueBridge {
         }
     }
 
-    fn open_menu(self: &Rc<Self>, x: f32, y: f32) {
+    /// The menu of the selected jobs (`on_row`) or of the list's empty space.
+    fn open_menu(self: &Rc<Self>, on_row: bool, x: f32, y: f32) {
         let Some(menu) = self.menu.upgrade() else { return };
         let selected = self.selected_rows();
         let rows: Vec<&JobSummary> = selected.iter().collect();
@@ -353,8 +416,24 @@ impl QueueBridge {
                 .filter(|r| r.state.kind() == JobStateKind::Finished)
                 .count()
         };
-        let profiles = self.hooks.borrow().profiles.as_ref().map(|p| p()).unwrap_or_default();
-        let items = queue_menu(&rows, finished, &profiles, &self.keys);
+        let (shown, filtered) = {
+            let ui = self.ui.borrow();
+            (ui.visible.len(), ui.filter.is_active())
+        };
+        let (can_up, can_down) = self.can_move(&selected);
+        let facts = ListFacts {
+            finished,
+            shown,
+            filtered,
+            can_up,
+            can_down,
+        };
+        let items = if on_row {
+            let profiles = self.hooks.borrow().profiles.as_ref().map(|p| p()).unwrap_or_default();
+            queue_menu(&rows, facts, &profiles, &self.keys)
+        } else {
+            list_menu(facts, &self.keys)
+        };
         let weak = Rc::downgrade(self);
         menu.show(&items, x, y, move |id| {
             if let (Some(b), Some(action)) = (weak.upgrade(), QueueAction::from_id(id)) {
@@ -415,6 +494,18 @@ impl QueueBridge {
             QueueAction::Hold if !ids.is_empty() => self.send(QueueCommand::Hold { ids }),
             QueueAction::Release if !ids.is_empty() => self.send(QueueCommand::Release { ids }),
             QueueAction::Retry if !ids.is_empty() => self.send(QueueCommand::Restart { ids, profile: None }),
+            QueueAction::RetryHeld if !ids.is_empty() => {
+                tracing::info!(jobs = ids.len(), "[Queue] Jobs requeued held");
+                self.send(QueueCommand::RestartHeld { ids, profile: None });
+            }
+            QueueAction::MoveUp => self.move_selected(MoveTarget::Up),
+            QueueAction::MoveDown => self.move_selected(MoveTarget::Down),
+            QueueAction::SelectAll => self.select_all(),
+            QueueAction::ClearSelection => {
+                self.ui.borrow_mut().selection.clear();
+                self.refresh();
+            }
+            QueueAction::ClearFilter => self.clear_filter(),
             QueueAction::RetryWith(id) if !ids.is_empty() => {
                 let profile = self.hooks.borrow().profile.as_ref().and_then(|p| p(id));
                 if let Some(profile) = profile {

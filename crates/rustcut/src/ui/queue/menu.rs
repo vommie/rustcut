@@ -1,6 +1,7 @@
 //! What the queue can do with the selected jobs: the context menu's entries (with the number of jobs each one reaches
 //! when several are selected; PyCutRv bug 17: actions always use the selection, never just the row under the pointer)
-//! and the jobs an action applies to. The panel's buttons use the same rules.
+//! and the jobs an action applies to, and the menu of the list's empty space (P9.6). The panel's buttons use the same
+//! rules.
 
 use rustcut_core::job::{JobId, JobState, JobStateKind};
 use rustcut_core::queue::JobSummary;
@@ -20,13 +21,21 @@ pub enum QueueAction {
     Hold,
     Release,
     Retry,
+    /// Render again, held right away (it waits until released; P9.6).
+    RetryHeld,
     /// Render again with the profile of this id (`""` = the Codecs panel's current settings).
     RetryWith(String),
     MoveTop,
+    MoveUp,
+    MoveDown,
     MoveBottom,
     Cancel,
     Remove,
     RemoveFinished,
+    SelectAll,
+    ClearSelection,
+    /// Every filter and the search off (the empty space's menu while a filter hides jobs).
+    ClearFilter,
 }
 
 /// The id of "the Codecs panel's current settings" in the "Render Again With" submenu.
@@ -44,12 +53,18 @@ impl QueueAction {
             Self::Hold => "hold".into(),
             Self::Release => "release".into(),
             Self::Retry => "retry".into(),
+            Self::RetryHeld => "retry_held".into(),
             Self::RetryWith(profile) => format!("retry_with:{profile}"),
             Self::MoveTop => "top".into(),
+            Self::MoveUp => "up".into(),
+            Self::MoveDown => "down".into(),
             Self::MoveBottom => "bottom".into(),
             Self::Cancel => "cancel".into(),
             Self::Remove => "remove".into(),
             Self::RemoveFinished => "remove_finished".into(),
+            Self::SelectAll => "select_all".into(),
+            Self::ClearSelection => "clear_selection".into(),
+            Self::ClearFilter => "clear_filter".into(),
         }
     }
 
@@ -67,11 +82,17 @@ impl QueueAction {
             "hold" => Self::Hold,
             "release" => Self::Release,
             "retry" => Self::Retry,
+            "retry_held" => Self::RetryHeld,
             "top" => Self::MoveTop,
+            "up" => Self::MoveUp,
+            "down" => Self::MoveDown,
             "bottom" => Self::MoveBottom,
             "cancel" => Self::Cancel,
             "remove" => Self::Remove,
             "remove_finished" => Self::RemoveFinished,
+            "select_all" => Self::SelectAll,
+            "clear_selection" => Self::ClearSelection,
+            "clear_filter" => Self::ClearFilter,
             _ => return None,
         })
     }
@@ -80,13 +101,23 @@ impl QueueAction {
     pub fn applies_to(&self, state: &JobState) -> bool {
         let kind = state.kind();
         match self {
-            Self::Retry | Self::RetryWith(_) | Self::ShowLog => kind.is_done(),
+            Self::Retry | Self::RetryHeld | Self::RetryWith(_) | Self::ShowLog => kind.is_done(),
             Self::Play | Self::RemoveFinished => kind == JobStateKind::Finished,
             Self::Hold => kind == JobStateKind::Waiting,
             Self::Release => kind == JobStateKind::Held,
             Self::Cancel => !kind.is_done(),
             Self::Remove => !kind.is_active(),
-            Self::Edit | Self::Details | Self::EditTags | Self::Reveal | Self::MoveTop | Self::MoveBottom => true,
+            Self::Edit
+            | Self::Details
+            | Self::EditTags
+            | Self::Reveal
+            | Self::MoveTop
+            | Self::MoveUp
+            | Self::MoveDown
+            | Self::MoveBottom
+            | Self::SelectAll
+            | Self::ClearSelection
+            | Self::ClearFilter => true,
         }
     }
 
@@ -120,21 +151,36 @@ pub fn counted(title: &str, count: usize, selected: usize) -> String {
     }
 }
 
-/// The key labels of the queue: the menu shows the first key next to its entries (`move_top`, `move_bottom`), the
-/// tooltips of the move buttons every key (`move_up`, `move_down`).
+/// The key labels of the queue: the menu shows the first key next to its entries (`move_top`, `menu_up`,
+/// `menu_down`, `move_bottom`, `select_all`), the tooltips of the move buttons every key (`move_up`, `move_down`).
 #[derive(Debug, Clone, Default)]
 pub struct MenuKeys {
     pub move_up: String,
     pub move_down: String,
     pub move_top: String,
     pub move_bottom: String,
+    pub menu_up: String,
+    pub menu_down: String,
+    pub select_all: String,
 }
 
-/// The context menu for `selected`; `finished` is the number of finished jobs in the whole queue, `profiles` the
-/// render profiles (id, name) for "Render Again With".
+/// What the menus need to know about the whole list.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ListFacts {
+    /// Finished jobs in the whole queue.
+    pub finished: usize,
+    /// Jobs shown, and whether a filter hides some.
+    pub shown: usize,
+    pub filtered: bool,
+    /// The selection can move one place up, down.
+    pub can_up: bool,
+    pub can_down: bool,
+}
+
+/// The context menu for `selected`; `profiles` are the render profiles (id, name) for "Render Again With".
 pub fn queue_menu(
     selected: &[&JobSummary],
-    finished: usize,
+    facts: ListFacts,
     profiles: &[(String, String)],
     keys: &MenuKeys,
 ) -> Vec<MenuItem> {
@@ -180,6 +226,9 @@ pub fn queue_menu(
     );
     items.extend([
         entry(QueueAction::Retry, "Render Again", Icon::JobRetry).into(),
+        entry(QueueAction::RetryHeld, "Render Again (Hold)", Icon::JobHold)
+            .tooltip("Renders it again, held first: it waits until you release it")
+            .into(),
         MenuItem::Submenu {
             title: counted("Render Again With", again, n),
             icon: Icon::JobRetryWith,
@@ -189,6 +238,14 @@ pub fn queue_menu(
         MenuItem::Separator,
         entry(QueueAction::MoveTop, "Move to Top", Icon::MoveTop)
             .shortcut(keys.move_top.as_str())
+            .into(),
+        MenuAction::new(QueueAction::MoveUp.id(), "Move Up", Some(Icon::MoveUp))
+            .enabled(facts.can_up)
+            .shortcut(keys.menu_up.as_str())
+            .into(),
+        MenuAction::new(QueueAction::MoveDown.id(), "Move Down", Some(Icon::MoveDown))
+            .enabled(facts.can_down)
+            .shortcut(keys.menu_down.as_str())
             .into(),
         entry(QueueAction::MoveBottom, "Move to Bottom", Icon::MoveBottom)
             .shortcut(keys.move_bottom.as_str())
@@ -202,20 +259,55 @@ pub fn queue_menu(
             .hold()
             .tooltip("Remove from the queue (output and source files stay)")
             .into(),
+        remove_finished(facts.finished),
+        MenuItem::Separator,
+        MenuAction::new(QueueAction::SelectAll.id(), "Select All", Some(Icon::SelectAll))
+            .enabled(n < facts.shown)
+            .shortcut(keys.select_all.as_str())
+            .into(),
         MenuAction::new(
-            QueueAction::RemoveFinished.id(),
-            match finished {
-                0 => "Remove Finished Jobs".to_owned(),
-                n => format!("Remove Finished Jobs ({n})"),
-            },
-            Some(Icon::RemoveFinished),
+            QueueAction::ClearSelection.id(),
+            "Clear Selection",
+            Some(Icon::SelectionClear),
         )
-        .enabled(finished > 0)
-        .hold()
-        .tooltip("Remove every finished job from the queue (their files stay)")
+        .enabled(n > 0)
         .into(),
     ]);
     items
+}
+
+/// The menu of the list's empty space: what applies to every job.
+pub fn list_menu(facts: ListFacts, keys: &MenuKeys) -> Vec<MenuItem> {
+    let mut items: Vec<MenuItem> = vec![
+        MenuAction::new(QueueAction::SelectAll.id(), "Select All", Some(Icon::SelectAll))
+            .enabled(facts.shown > 0)
+            .shortcut(keys.select_all.as_str())
+            .into(),
+    ];
+    if facts.filtered {
+        items.push(
+            MenuAction::new(QueueAction::ClearFilter.id(), "Show Every Job", Some(Icon::FilterClear))
+                .tooltip("Clears the filters and the search")
+                .into(),
+        );
+    }
+    items.extend([MenuItem::Separator, remove_finished(facts.finished)]);
+    items
+}
+
+fn remove_finished(finished: usize) -> MenuItem {
+    MenuAction::new(
+        QueueAction::RemoveFinished.id(),
+        match finished {
+            0 => "Remove Finished Jobs".to_owned(),
+            n => format!("Remove Finished Jobs ({n})"),
+        },
+        Some(Icon::RemoveFinished),
+    )
+    .enabled(finished > 0)
+    .hold()
+    .tooltip("Remove every finished job from the queue (their files stay)")
+    .into()
 }
 
 #[cfg(test)]
@@ -229,7 +321,7 @@ mod tests {
             .filter_map(|i| match i {
                 MenuItem::Action(a) => Some((a.title.clone(), a.enabled)),
                 MenuItem::Submenu { title, enabled, .. } => Some((title.clone(), *enabled)),
-                MenuItem::Separator => None,
+                MenuItem::Separator | MenuItem::Heading(_) => None,
             })
             .collect()
     }
@@ -244,7 +336,14 @@ mod tests {
         ];
         let all: Vec<&JobSummary> = jobs.iter().collect();
         let profiles = vec![("x265".to_owned(), "x265 quality".to_owned())];
-        let menu = queue_menu(&all, 5, &profiles, &MenuKeys::default());
+        let facts = ListFacts {
+            finished: 5,
+            shown: 4,
+            filtered: false,
+            can_up: false,
+            can_down: false,
+        };
+        let menu = queue_menu(&all, facts, &profiles, &MenuKeys::default());
         let t = titles(&menu);
         let get = |name: &str| {
             t.iter()
@@ -263,10 +362,24 @@ mod tests {
         assert_eq!(get("Cancel"), ("Cancel (3 jobs)".into(), true));
         assert_eq!(get("Remove ("), ("Remove (3 jobs)".into(), true), "not the running one");
         assert_eq!(get("Remove Finished"), ("Remove Finished Jobs (5)".into(), true));
+        assert_eq!(get("Render Again (Hold)"), ("Render Again (Hold) (1 job)".into(), true));
+        assert_eq!(get("Move Up"), ("Move Up".into(), false));
+        assert_eq!(
+            get("Select All"),
+            ("Select All".into(), false),
+            "every shown job is selected"
+        );
+        assert_eq!(get("Clear Selection"), ("Clear Selection".into(), true));
         assert_eq!(targets(&QueueAction::Remove, &all), vec![JobId(1), JobId(2), JobId(3)]);
 
         let one = [&jobs[2]];
-        let t = titles(&queue_menu(&one, 1, &profiles, &MenuKeys::default()));
+        let facts = ListFacts {
+            finished: 1,
+            can_up: true,
+            ..facts
+        };
+        let t = titles(&queue_menu(&one, facts, &profiles, &MenuKeys::default()));
+        assert!(t.contains(&("Move Up".into(), true)) && t.contains(&("Select All".into(), true)));
         assert!(
             t.contains(&("Load into the Editor".into(), true)),
             "a finished job too (Q-P8b)"
@@ -277,9 +390,32 @@ mod tests {
     }
 
     #[test]
+    fn the_empty_space_menu() {
+        let facts = ListFacts {
+            finished: 0,
+            shown: 3,
+            filtered: true,
+            ..ListFacts::default()
+        };
+        assert_eq!(
+            titles(&list_menu(facts, &MenuKeys::default())),
+            [
+                ("Select All".into(), true),
+                ("Show Every Job".into(), true),
+                ("Remove Finished Jobs".into(), false),
+            ]
+        );
+        let plain = titles(&list_menu(ListFacts::default(), &MenuKeys::default()));
+        assert_eq!(plain.len(), 2, "no filter, nothing to show again");
+    }
+
+    #[test]
     fn ids_round_trip() {
         for action in [
             QueueAction::Edit,
+            QueueAction::RetryHeld,
+            QueueAction::MoveUp,
+            QueueAction::ClearSelection,
             QueueAction::RetryWith("my-hevc".into()),
             QueueAction::RetryWith(CURRENT_SETTINGS.into()),
             QueueAction::RemoveFinished,
