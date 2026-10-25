@@ -15,6 +15,12 @@ export global DragLogic {
 export global DragState {
     // A drag runs somewhere in this window: Escape cancels it.
     in property <bool> active;
+    // The card stack the dragged list is in (its panel key; "" = a list that scrolls itself): the stack scrolls near
+    // its edges and counts every scroll in `scrolls`, so the list measures the pointer again.
+    in property <string> area;
+    // The pointer's window y while a list in a card stack is dragged (the list sets it).
+    in-out property <length> pointer-y;
+    in-out property <int> scrolls;
     callback cancel();
 }
 
@@ -136,6 +142,77 @@ export component DragGhost inherits Rectangle {
                     }
                 }
             }
+        }
+    }
+}
+
+/// The pointer area of a list row that can be dragged (P9.4, P9.5): a left press that moves more than a few pixels
+/// up or down starts a drag (reported in window coordinates), a press that does not is a tap with the keys held at the
+/// press; a right press asks for the context menu. A row can embed several (its free space and its fields).
+export component DragArea inherits Rectangle {
+    in property <bool> enabled: true;
+    in property <bool> draggable: true;
+    in property <MouseCursor> mouse-cursor: MouseCursor.default;
+    out property <bool> has-hover: touch.has-hover;
+    out property <bool> pressed: touch.pressed;
+    callback tapped(/* control */ bool, /* shift */ bool);
+    callback double-tapped();
+    callback menu(/* window x */ length, /* window y */ length);
+    callback pressed-down();
+    callback drag-started(/* window y of the press */ length);
+    callback drag-moved(/* window y */ length);
+    callback drag-ended();
+
+    property <bool> control;
+    property <bool> shift;
+    property <bool> dragging;
+    // This press became a drag: its release is no tap.
+    property <bool> dragged;
+    property <length> press-y;
+    property <length> press-window-y;
+
+    width: 100%;
+    height: 100%;
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.mouse-cursor;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                root.pressed-down();
+                if event.button == PointerEventButton.right {
+                    root.menu(self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y);
+                } else if event.button == PointerEventButton.left {
+                    root.control = event.modifiers.control;
+                    root.shift = event.modifiers.shift;
+                    root.press-y = self.mouse-y;
+                    root.press-window-y = self.absolute-position.y + self.mouse-y;
+                    root.dragging = false;
+                    root.dragged = false;
+                }
+            }
+            if event.kind == PointerEventKind.up && event.button == PointerEventButton.left && root.dragging {
+                root.dragging = false;
+                root.drag-ended();
+            }
+        }
+        moved => {
+            if root.draggable && self.pressed && (root.dragging || Math.abs(self.mouse-y - root.press-y) > 6px) {
+                if !root.dragging {
+                    root.dragging = true;
+                    root.dragged = true;
+                    root.drag-started(root.press-window-y);
+                }
+                root.drag-moved(self.absolute-position.y + self.mouse-y);
+            }
+        }
+        clicked => {
+            if !root.dragged {
+                root.tapped(root.control, root.shift);
+            }
+        }
+        double-clicked => {
+            root.double-tapped();
         }
     }
 }

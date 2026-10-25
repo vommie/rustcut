@@ -1,6 +1,9 @@
-//! What the timeline draws, in track pixels: ruler ticks, section blocks, the current section's marks and range, the
-//! overview window. Built from the [`Viewport`] and the [`SectionsState`]; Slint places exactly these numbers.
+//! What the timeline draws, in track pixels: ruler ticks, section blocks (selected ones outlined, the hovered one
+//! brighter), the current section's marks and range, the overview window, and while something is dragged a readout of
+//! its start, end and length (P9.5, D-P9b). Built from the [`Viewport`] and the [`SectionsState`]; Slint places
+//! exactly these numbers.
 
+use rustcut_core::edit::SectionId;
 use rustcut_core::time::Timestamp;
 
 use super::ticks::{Tick, ticks};
@@ -20,6 +23,8 @@ pub struct BlockView {
     pub label: String,
     pub selected: bool,
     pub overlapping: bool,
+    /// The pointer is over it.
+    pub hovered: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -38,8 +43,9 @@ pub struct TimelineView {
     pub window: (f32, f32),
 }
 
-/// The view of the whole timeline except the playhead and the hover marker (they change more often).
-pub fn build(vp: &Viewport, sections: &SectionsState) -> TimelineView {
+/// The view of the whole timeline except the playhead and the hover marker (they change more often); `hovered` is the
+/// section under the pointer.
+pub fn build(vp: &Viewport, sections: &SectionsState, hovered: Option<SectionId>) -> TimelineView {
     if vp.is_empty() {
         return TimelineView::default();
     }
@@ -58,6 +64,7 @@ pub fn build(vp: &Viewport, sections: &SectionsState) -> TimelineView {
                 },
                 selected: row.selected,
                 overlapping: row.overlapping,
+                hovered: hovered == Some(row.id),
             })
         })
         .collect();
@@ -92,6 +99,24 @@ pub fn hover(vp: &Viewport, x: f32) -> Option<(f32, String)> {
     let x = x.clamp(0.0, vp.width());
     let t = vp.time_at(x);
     Some((vp.x_of(t), t.to_string()))
+}
+
+/// The readout over a dragged range `[a, b)` (`b` = `None`: one mark alone): where its box is centered and
+/// "0:00:10.000 – 0:00:20.500 • 10.500s" (or the mark's time).
+pub fn readout(vp: &Viewport, a: Timestamp, b: Option<Timestamp>) -> Option<(f32, String)> {
+    if vp.is_empty() {
+        return None;
+    }
+    let Some(b) = b.filter(|b| *b > a) else {
+        return Some((vp.x_of(a).clamp(0.0, vp.width()), a.to_string()));
+    };
+    let (x0, x1) = (vp.x_of(a).max(0.0), vp.x_of(b).min(vp.width()));
+    let center = if x1 >= x0 {
+        f32::midpoint(x0, x1)
+    } else {
+        vp.x_of(a).clamp(0.0, vp.width())
+    };
+    Some((center, format!("{a} – {b} • {}", (b - a).format_compact())))
 }
 
 /// `[a, b)` as a clipped (x, width) on the track; `None` when it is not visible.
@@ -129,8 +154,10 @@ mod tests {
     #[test]
     fn blocks_marks_and_range_on_the_whole_video() {
         let vp = Viewport::new(secs(100), 1000.0, 1.0);
-        let view = build(&vp, &sections());
+        let s = sections();
+        let view = build(&vp, &s, s.id_at(0));
         assert!(view.active && !view.zoomed);
+        assert!(view.blocks[0].hovered && !view.blocks[1].hovered);
         assert_eq!(view.blocks.len(), 3);
         assert_eq!((view.blocks[0].x, view.blocks[0].width), (100.0, 100.0));
         assert_eq!(view.blocks[0].label, "1");
@@ -147,7 +174,7 @@ mod tests {
         let mut vp = Viewport::new(secs(100), 1000.0, 10.0);
         vp.zoom_to(10.0, 0.0);
         vp.scroll_by(1500.0); // 100 px per second: 15 s .. 25 s
-        let view = build(&vp, &sections());
+        let view = build(&vp, &sections(), None);
         assert!(view.zoomed);
         assert_eq!(view.blocks.len(), 1);
         assert_eq!((view.blocks[0].x, view.blocks[0].width), (-CLIP, 500.0 + CLIP));
@@ -161,8 +188,24 @@ mod tests {
         assert_eq!(hover(&vp, 123.4), Some((123.4, "0:00:12.340".to_owned())));
         assert_eq!(hover(&vp, -50.0), Some((0.0, "0:00:00.000".to_owned())));
         let empty = Viewport::new(Timestamp::ZERO, 1000.0, 1.0);
-        assert_eq!(build(&empty, &sections()), TimelineView::default());
+        assert_eq!(build(&empty, &sections(), None), TimelineView::default());
         assert_eq!(hover(&empty, 10.0), None);
         assert_eq!(visible_x(&vp, secs(150)), None);
+    }
+
+    #[test]
+    fn readouts_of_dragged_ranges() {
+        let vp = Viewport::new(secs(100), 1000.0, 1.0);
+        assert_eq!(
+            readout(&vp, secs(10), Some(Timestamp::from_millis(20_500))),
+            Some((152.5, "0:00:10.000 – 0:00:20.500 • 10.500s".to_owned()))
+        );
+        assert_eq!(readout(&vp, secs(30), None), Some((300.0, "0:00:30.000".to_owned())));
+        // A range that is partly off the track is centered on its visible part.
+        assert_eq!(readout(&vp, secs(90), Some(secs(150))).map(|r| r.0), Some(950.0));
+        assert_eq!(
+            readout(&Viewport::new(Timestamp::ZERO, 1000.0, 1.0), secs(1), None),
+            None
+        );
     }
 }

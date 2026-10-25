@@ -1,6 +1,6 @@
 // The Job Finalization card of the Export panel (src/ui/export/ fills `Export`): the target folder (the source's folder
-// or a named one, added and removed here), the name, the counter with auto-increment, clearing the sections after a
-// save, the file name the job will write with the live conflict check, and Save. Buttons are icons with tooltips (user
+// or a named one, added and removed here), the name, the counter with auto-increment, the file name the job will write
+// with the live conflict check, and Save (clearing the sections after a save is in the Sections card's header, P9.5). Buttons are icons with tooltips (user
 // rule 2026-10-23).
 
 import { Theme } from "styles.slint";
@@ -179,13 +179,6 @@ export component FinalizeCardBody inherits VerticalLayout {
             checked: Export.auto-increment;
             tooltip: Export.auto-increment ? "The counter goes up after each save" : "The counter stays after a save";
             clicked => { Export.toggle-auto-increment(); }
-        }
-
-        IconButton {
-            icon: IconId.clear-sections;
-            checked: Export.clear-sections;
-            tooltip: Export.clear-sections ? "The section list is cleared after each save" : "The sections stay after a save";
-            clicked => { Export.toggle-clear-sections(); }
         }
     }
 

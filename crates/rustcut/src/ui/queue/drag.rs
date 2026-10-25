@@ -58,7 +58,7 @@ impl QueueBridge {
             settling: false,
         });
         let weak = Rc::downgrade(self);
-        drag::begin(&window, move || {
+        drag::begin(&window, "", move || {
             if let Some(bridge) = weak.upgrade() {
                 bridge.drag_finish(false);
             }

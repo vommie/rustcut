@@ -147,6 +147,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The Sections card and the timeline, your UI review round 1 (0.0.40): the current section is one row (set the start
+  to the playhead, its start, its end, set the end, add it; both times share the width equally, the length is in
+  their tooltips and in the Add button's). Sections are selected like jobs in the queue (Ctrl adds or removes one,
+  Shift a range) and have a context menu: Duplicate (the copies go after the last selected section and flash),
+  Move Up, Move Down, Delete (held), Select All and Clear Selection; a right click below the rows offers Select All
+  and Clear All Sections (held), a click there clears the selection. Every row has its own delete button (held), the
+  durations use the compact form ("14.840s"), and the rows are dragged to another place like the queue's jobs (the
+  Export panel scrolls along near its edges; Escape cancels). The buttons under the list are gone (the menu, the
+  keys and the drag do it), and "Clear the sections after each save" moved from Job Finalization into the Sections
+  header. On the timeline the start and end marks are flags, a selected section is outlined, the section under the
+  pointer is brighter, and a section's body can be dragged to move it whole (its start or end snaps like an edge; a
+  click on it still selects it and seeks there). While an edge or a section is dragged, its start, end and length
+  stand over it on the ruler, and Ctrl moves a tenth as far for fine work (Shift still snaps to frames only). Edges
+  and sections snap to where the playhead was when the drag started.
 - Dragging jobs in the queue is a real drag (0.0.39, your UI review): the selected jobs lift off as one
   semi-transparent ghost with a dashed outline that follows the pointer ("2 jobs" and a "+1" badge when several move),
   the other jobs slide aside to open a gap where they will land, and near the top or bottom edge the list scrolls

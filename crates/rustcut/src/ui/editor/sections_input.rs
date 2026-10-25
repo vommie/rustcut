@@ -1,5 +1,6 @@
-//! The Sections card's callbacks: marks from the playhead or typed, seeking to a time, adding, selecting, editing, moving
-//! and deleting sections. A refused typed time says why in a bubble at its field (`section_bubbles.rs`).
+//! The Sections card's callbacks: marks from the playhead or typed, seeking to a time, adding, selecting (Ctrl, Shift),
+//! editing and deleting sections, and the context menus (P9.5) whose entries act on the selection. A refused typed time
+//! says why in a bubble at its field (`section_bubbles.rs`); the rows' drag & drop is `sections_drag.rs`.
 
 use std::rc::Rc;
 
@@ -7,8 +8,9 @@ use slint::ComponentHandle as _;
 
 use super::Editor;
 use super::section_bubbles::{mark_anchor, row_anchor};
-use crate::ui::sections::{Bound, EditError, SectionsState};
-use crate::{MainWindow, Sections};
+use crate::ui::jump;
+use crate::ui::sections::{Bound, EditError, SectionAction, SectionsState, list_menu, selection_menu};
+use crate::{Jump, MainWindow, Sections};
 
 pub(super) fn connect(editor: &Rc<Editor>, window: &MainWindow) {
     let sections = window.global::<Sections<'_>>();
@@ -57,14 +59,29 @@ pub(super) fn connect(editor: &Rc<Editor>, window: &MainWindow) {
         }
     });
     let this = Rc::downgrade(editor);
-    sections.on_select(move |row| {
-        if let Some(editor) = this.upgrade() {
-            {
-                let mut st = editor.state.borrow_mut();
-                let id = usize::try_from(row).ok().and_then(|i| st.sections.id_at(i));
-                st.sections.select(id);
-            }
+    sections.on_pick(move |row, control, shift| {
+        if let (Some(editor), Ok(row)) = (this.upgrade(), usize::try_from(row)) {
+            editor.state.borrow_mut().sections.pick(row, control, shift);
             editor.publish();
+        }
+    });
+    let this = Rc::downgrade(editor);
+    sections.on_clear_selection(move || {
+        if let Some(editor) = this.upgrade() {
+            editor.state.borrow_mut().sections.clear_selection();
+            editor.publish();
+        }
+    });
+    let this = Rc::downgrade(editor);
+    sections.on_delete_row(move |row| {
+        if let Some(editor) = this.upgrade() {
+            editor.delete_row(row);
+        }
+    });
+    let this = Rc::downgrade(editor);
+    sections.on_context_menu(move |row, x, y| {
+        if let Some(editor) = this.upgrade() {
+            editor.open_menu(row, x, y);
         }
     });
     let this = Rc::downgrade(editor);
@@ -117,24 +134,6 @@ pub(super) fn connect(editor: &Rc<Editor>, window: &MainWindow) {
             editor.time_done(&row_anchor(row, which));
         }
     });
-    let this = Rc::downgrade(editor);
-    sections.on_move_up(move || {
-        if let Some(editor) = this.upgrade() {
-            editor.move_selected(true);
-        }
-    });
-    let this = Rc::downgrade(editor);
-    sections.on_move_down(move || {
-        if let Some(editor) = this.upgrade() {
-            editor.move_selected(false);
-        }
-    });
-    let this = Rc::downgrade(editor);
-    sections.on_delete(move || {
-        if let Some(editor) = this.upgrade() {
-            editor.delete_section();
-        }
-    });
 }
 
 fn bound(which: i32) -> Bound {
@@ -159,9 +158,83 @@ impl Editor {
         }
     }
 
-    fn move_selected(&self, up: bool) {
-        if self.state.borrow_mut().sections.move_selected(up) {
+    /// The row's own delete button (held).
+    fn delete_row(&self, row: i32) {
+        if self.probe_blocks() {
+            return;
+        }
+        let deleted = {
+            let mut st = self.state.borrow_mut();
+            let id = usize::try_from(row).ok().and_then(|i| st.sections.id_at(i));
+            id.is_some_and(|id| st.sections.delete(id))
+        };
+        if deleted {
+            tracing::info!(row, "[Editor] Section deleted by its button");
             self.publish();
+        }
+    }
+
+    /// The context menu of the row `row` (it is selected first unless it is; the entries act on the selection) or,
+    /// with `row` < 0, of the empty space.
+    fn open_menu(self: &Rc<Self>, row: i32, x: f32, y: f32) {
+        let Some(menu) = self.menu.borrow().upgrade() else {
+            return;
+        };
+        let items = {
+            let mut st = self.state.borrow_mut();
+            match usize::try_from(row).ok() {
+                Some(index) => {
+                    if st.sections.id_at(index).is_some_and(|id| !st.sections.is_selected(id)) {
+                        st.sections.pick(index, false, false);
+                    }
+                    selection_menu(&st.sections, &self.key_label(crate::ui::keymap::Action::DeleteSection))
+                }
+                None => list_menu(&st.sections),
+            }
+        };
+        self.publish();
+        let this = Rc::downgrade(self);
+        menu.show(&items, x, y, move |id| {
+            if let (Some(editor), Some(action)) = (this.upgrade(), SectionAction::from_id(id)) {
+                editor.run_section_action(action);
+            }
+        });
+    }
+
+    /// An entry of the context menus.
+    fn run_section_action(&self, action: SectionAction) {
+        tracing::info!(action = action.id(), "[Editor] Sections menu");
+        let edits = !matches!(action, SectionAction::SelectAll | SectionAction::ClearSelection);
+        if edits && self.probe_blocks() {
+            return;
+        }
+        let mut flash = None;
+        {
+            let mut st = self.state.borrow_mut();
+            let s = &mut st.sections;
+            match action {
+                SectionAction::Duplicate => flash = s.duplicate_selected().first().copied(),
+                SectionAction::MoveUp => {
+                    s.move_selected(true);
+                }
+                SectionAction::MoveDown => {
+                    s.move_selected(false);
+                }
+                SectionAction::Delete => {
+                    s.delete_selected();
+                }
+                SectionAction::SelectAll => s.select_all(),
+                SectionAction::ClearSelection => s.clear_selection(),
+                SectionAction::ClearAll => s.clear_list(),
+            }
+        }
+        if edits {
+            self.edit_accepted();
+        }
+        self.publish();
+        // The copy flashes once it is laid out (and scrolls into view).
+        if let (Some(row), Some(window)) = (flash, self.window.upgrade()) {
+            jump::flash(&window.global::<Jump<'_>>(), &format!("sections:{row}"));
         }
     }
 }
