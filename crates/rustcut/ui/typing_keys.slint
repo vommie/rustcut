@@ -1,0 +1,10 @@
+// Copied from RustView (crates/rustview/ui/typing_keys.slint, 0.4.11) with search_field.slint, which asks it. RustCut leaves
+// `key` unset in every window (it answers false, the field keeps the key): the menu bar already takes the keys with
+// Ctrl, Alt or Meta while a field has the cursor (`Shortcuts.editing-changed`).
+
+/// The keys a text field does not use itself go to the window's keymap first, so the actions marked "works while typing"
+/// (Ctrl+W, Ctrl+Tab, Alt+1, Ctrl+Comma, F1, Ctrl+F, ...) act while a field has the cursor (`docs/hotkeys.md`, "Text fields").
+/// Slint globals are per window: a window without a keymap leaves `key` unset, which answers false (the field keeps the key).
+export global TypingKeys {
+    callback key(string /* text */, bool /* control */, bool /* alt */, bool /* shift */, bool /* meta */, bool /* repeat */) -> bool;
+}
