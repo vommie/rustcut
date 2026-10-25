@@ -58,12 +58,6 @@ pub(super) fn connect(bridge: &Rc<QueueBridge>, window: &MainWindow) {
         }
     });
     let weak = Rc::downgrade(bridge);
-    q.on_drop_rows(move |index| {
-        if let Some(b) = weak.upgrade() {
-            b.drop_rows(usize::try_from(index).unwrap_or_default());
-        }
-    });
-    let weak = Rc::downgrade(bridge);
     q.on_column_resize_started(move |id| {
         if let Some(b) = weak.upgrade()
             && let Some(column) = Column::from_id(&id)
@@ -297,7 +291,7 @@ impl QueueBridge {
 
     /// The selected jobs were dropped in front of shown row `index`: they go before the first row from there on that
     /// is not one of them (else to the end).
-    fn drop_rows(&self, index: usize) {
+    pub(super) fn drop_rows(&self, index: usize) {
         let (ids, before) = {
             let ui = self.ui.borrow();
             let ids = ui.selection.in_order(&ui.visible);

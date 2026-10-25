@@ -7,6 +7,7 @@
 
 import { AppIcon, IconId } from "icons.slint";
 import { HoldConfirm } from "hold.slint";
+import { DragState } from "drag.slint";
 import { GlobalTooltip, TipKeys, TipPlacement, TipRect, TipSide, TooltipLogic, TooltipSettings } from "tooltip.slint";
 
 /// One key cap.
@@ -123,7 +124,9 @@ export component TipArrow inherits Rectangle {
 }
 
 export component TooltipLayer inherits Rectangle {
-    property <bool> active: GlobalTooltip.is-visible && (TooltipSettings.enabled || GlobalTooltip.tip.forced);
+    // No tooltip while rows are dragged (the user's wish with P9.4).
+    property <bool> active: GlobalTooltip.is-visible && !DragState.active
+        && (TooltipSettings.enabled || GlobalTooltip.tip.forced);
     property <TipKeys> keys: TooltipLogic.key-caps(GlobalTooltip.tip.shortcut);
     property <bool> show-hold: GlobalTooltip.tip.hold && HoldConfirm.duration > 0ms;
     property <bool> has-footer: root.show-hold || root.keys.caps.length > 0;
