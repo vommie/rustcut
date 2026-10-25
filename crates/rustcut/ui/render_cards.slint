@@ -126,20 +126,18 @@ export component RenderProfileBody inherits VerticalLayout {
     HorizontalLayout {
         spacing: 4px;
 
+        // The profile takes the row's whole width up to its buttons (P9.10, review note 08#2).
         ChoiceButton {
             items: RenderSettings.profiles;
             current: RenderSettings.profile-index;
             tooltip: RenderSettings.profile-tooltip;
+            stretch-fully: true;
             // The issues of options whose card is folded (M6.5c).
             bubble: "codecs:profile";
             selected(index) => {
                 root.naming = 0;
                 RenderSettings.select-profile(index);
             }
-        }
-
-        Rectangle {
-            horizontal-stretch: 1;
         }
 
         IconButton {

@@ -171,11 +171,15 @@ impl PanelState {
         self.selection.working != before
     }
 
-    /// The quality slider moved to `position`.
-    pub fn slide(&mut self, position: u16) -> bool {
-        let before = self.selection.working.video.rate_control;
-        self.selection.working.set_quality_position(position);
-        self.selection.working.video.rate_control != before
+    /// The slider of `row` (quality, audio bit rate) moved to `position`. `true` when the working copy changed.
+    pub fn slide(&mut self, row: Row, position: u16) -> bool {
+        let before = self.selection.working.clone();
+        match row {
+            Row::Quality => self.selection.working.set_quality_position(position),
+            Row::AudioBitrate => self.selection.working.set_audio_bitrate_position(position),
+            _ => return false,
+        }
+        self.selection.working != before
     }
 
     /// The switch of a row was flipped.

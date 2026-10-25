@@ -314,8 +314,9 @@ impl SettingsBridge {
         self.profile_edited(changed);
     }
 
-    pub(super) fn profile_slide(&self, _key: &str, position: i32) {
-        let changed = u16::try_from(position).is_ok_and(|p| self.profiles.borrow_mut().state.slide(p));
+    pub(super) fn profile_slide(&self, key: &str, position: i32) {
+        let Some(row) = Row::from_key(key) else { return };
+        let changed = u16::try_from(position).is_ok_and(|p| self.profiles.borrow_mut().state.slide(row, p));
         self.profile_edited(changed);
     }
 

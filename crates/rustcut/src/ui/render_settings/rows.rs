@@ -157,7 +157,6 @@ pub enum Pick {
     Speed(Speed),
     Container(Container),
     AudioCodec(AudioCodec),
-    AudioBitrate(Option<u32>),
     AudioChannels(Option<u8>),
     AudioSampleRate(Option<u32>),
     RateMode(RateMode),

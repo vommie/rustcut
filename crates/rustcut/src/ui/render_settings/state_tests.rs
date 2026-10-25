@@ -123,7 +123,7 @@ fn rate_modes_values_and_steps() {
     );
     assert_eq!(st.type_text(Row::RateValue, "abc"), Err(NotAValue));
 
-    assert!(st.slide(3));
+    assert!(st.slide(Row::Quality, 3));
     assert_eq!(st.profile().video.rate_control, RateControl::Quality { value: 29 });
 }
 
@@ -181,7 +181,7 @@ fn bit_depth_and_codec_profile_follow_each_other() {
 fn audio_codec_drops_what_it_does_not_take() {
     let mut st = state();
     st.choose(Row::AudioCodec, pick(&st, Row::AudioCodec, "AAC"));
-    st.choose(Row::AudioBitrate, pick(&st, Row::AudioBitrate, "320 kbit/s"));
+    assert!(st.slide(Row::AudioBitrate, 6), "AAC's last step: 320 kbit/s");
     st.choose(Row::AudioSampleRate, pick(&st, Row::AudioSampleRate, "44.1 kHz"));
     st.choose(Row::AudioChannels, pick(&st, Row::AudioChannels, "Stereo"));
     st.choose(Row::AudioCodec, pick(&st, Row::AudioCodec, "Opus"));

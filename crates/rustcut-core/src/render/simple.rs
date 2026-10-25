@@ -158,6 +158,11 @@ impl RenderProfile {
         self.video.rate_control = RateControl::Quality { value };
     }
 
+    /// Moves the audio bit rate slider (P9.10): the offered bit rate at `position`.
+    pub fn set_audio_bitrate_position(&mut self, position: u16) {
+        self.audio.bitrate_kbps = self.audio.codec.spec().bitrate_at(position);
+    }
+
     /// Picks one of the five speeds (a no-op for encoders without presets).
     pub fn set_speed(&mut self, speed: Speed) {
         if let Some(preset) = self.video.encoder.spec().speed_preset(speed) {

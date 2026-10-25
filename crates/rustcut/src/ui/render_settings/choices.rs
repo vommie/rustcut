@@ -53,17 +53,6 @@ impl PanelState {
                 .into_iter()
                 .map(|c| (c.spec().display_name.to_owned(), Pick::AudioCodec(c)))
                 .collect(),
-            Row::AudioBitrate => {
-                let a = p.audio.codec.spec();
-                let default = a.default_bitrate.map_or_else(String::new, |k| format!(" ({k} kbit/s)"));
-                std::iter::once((format!("Default{default}"), Pick::AudioBitrate(None)))
-                    .chain(
-                        a.bitrates
-                            .iter()
-                            .map(|k| (format!("{k} kbit/s"), Pick::AudioBitrate(Some(*k)))),
-                    )
-                    .collect()
-            }
             Row::AudioChannels => [
                 ("As the source", None),
                 ("Mono", Some(1)),
@@ -148,7 +137,9 @@ impl PanelState {
                 .into_iter()
                 .map(|r| (r.label().to_owned(), Pick::ColorRange(r)))
                 .collect(),
+            // Sliders and fields (the audio bit rate is a slider since P9.10, D-P9i).
             Row::Quality
+            | Row::AudioBitrate
             | Row::RateValue
             | Row::Level
             | Row::Keyint
@@ -168,7 +159,6 @@ impl PanelState {
             Row::Speed => v.speed().map_or(Pick::Keep, Pick::Speed),
             Row::Container => Pick::Container(p.container),
             Row::AudioCodec => Pick::AudioCodec(p.audio.codec),
-            Row::AudioBitrate => Pick::AudioBitrate(p.audio.bitrate_kbps),
             Row::AudioChannels => Pick::AudioChannels(p.audio.channels),
             Row::AudioSampleRate => Pick::AudioSampleRate(p.audio.sample_rate),
             Row::RateMode => Pick::RateMode(RateMode::of(v.rate_control)),
@@ -181,6 +171,7 @@ impl PanelState {
             Row::ColorTags => Pick::ColorTags(v.color.tags),
             Row::ColorRange => Pick::ColorRange(v.color.range),
             Row::Quality
+            | Row::AudioBitrate
             | Row::RateValue
             | Row::Level
             | Row::Keyint
@@ -213,7 +204,6 @@ pub(super) fn apply(p: &mut RenderProfile, pick: Pick) {
                 p.audio.sample_rate = None;
             }
         }
-        Pick::AudioBitrate(b) => p.audio.bitrate_kbps = b,
         Pick::AudioChannels(c) => p.audio.channels = c,
         Pick::AudioSampleRate(r) => p.audio.sample_rate = r,
         Pick::RateMode(mode) => {
