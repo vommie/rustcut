@@ -9,13 +9,16 @@ use super::bubbles::Area;
 use super::kind::{Kind, Level};
 use crate::ui::jump::JumpTarget;
 
-/// A button of a toast or banner (UI thread).
+/// A button of a toast, banner or bubble (UI thread).
 #[derive(Clone)]
 pub struct Action {
+    /// Its words; the tooltip of an icon button.
     pub label: String,
     pub run: Rc<dyn Fn()>,
     /// The message goes away after the button ran.
     pub closes: bool,
+    /// A bubble shows it as an icon button (P8b); toasts and banners show the words.
+    pub icon: Option<crate::icons::Icon>,
 }
 
 impl fmt::Debug for Action {
@@ -23,6 +26,7 @@ impl fmt::Debug for Action {
         f.debug_struct("Action")
             .field("label", &self.label)
             .field("closes", &self.closes)
+            .field("icon", &self.icon)
             .finish_non_exhaustive()
     }
 }
@@ -131,6 +135,24 @@ impl Notice {
             label: label.into(),
             run: Rc::new(run),
             closes: true,
+            icon: None,
+        });
+        self
+    }
+
+    /// An icon button of a bubble, explained by `tooltip` (a bubble's link stays its first action without an icon).
+    #[must_use]
+    pub fn icon_action(
+        mut self,
+        icon: crate::icons::Icon,
+        tooltip: impl Into<String>,
+        run: impl Fn() + 'static,
+    ) -> Self {
+        self.actions.push(Action {
+            label: tooltip.into(),
+            run: Rc::new(run),
+            closes: true,
+            icon: Some(icon),
         });
         self
     }
@@ -142,6 +164,7 @@ impl Notice {
             label: label.into(),
             run: Rc::new(run),
             closes: false,
+            icon: None,
         });
         self
     }

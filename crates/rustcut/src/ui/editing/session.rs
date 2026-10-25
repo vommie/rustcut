@@ -1,11 +1,10 @@
-//! A queued job loaded into the editor, without Slint (user decisions Q-Q2, Q-Q3, Q-N10): which job it is, what its
-//! target was, whether saving can update it (a waiting or held job whose target file stays the same) or makes a new
-//! job, and whether RustCut held it for the editing.
+//! A job loaded into the editor, without Slint (user decisions Q-Q3, Q-N10, Q-P8b): which job it is and what its target
+//! was. Loading always makes a copy (Q-P8b): saving makes a new job, the loaded job stays as it is (it is neither held
+//! nor updated), whatever its state.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use rustcut_core::job::{JobId, JobSpec, JobStateKind};
-use rustcut_core::naming::same_path;
+use rustcut_core::job::{JobId, JobSpec};
 
 #[derive(Debug, Clone)]
 pub struct JobEdit {
@@ -13,25 +12,12 @@ pub struct JobEdit {
     /// The target's file name (the card's banner).
     pub label: String,
     pub target: PathBuf,
-    pub overwrite: bool,
     /// What the job was when it was loaded, for what a save keeps when the panels do not know it (yet).
     pub spec: Box<JobSpec>,
-    /// It was waiting or held: saving with the same target updates it.
-    pub updatable: bool,
-    /// RustCut held it for the editing (it was waiting): it waits again when the editing ends.
-    pub release: bool,
-}
-
-/// What a save while a job is edited does.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SaveAs {
-    Update(JobId),
-    New,
 }
 
 impl JobEdit {
-    /// Starts the editing of job `id` that is in `state`.
-    pub fn new(id: JobId, state: JobStateKind, spec: Box<JobSpec>) -> Self {
+    pub fn new(id: JobId, spec: Box<JobSpec>) -> Self {
         let target = spec.target_path();
         Self {
             id,
@@ -39,31 +25,14 @@ impl JobEdit {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default(),
-            overwrite: spec.target.overwrite,
             target,
             spec,
-            updatable: matches!(state, JobStateKind::Waiting | JobStateKind::Held),
-            release: state == JobStateKind::Waiting,
-        }
-    }
-
-    /// A save that writes `target`: the job is updated only while it writes the same file (Q-Q2: another name, counter,
-    /// folder or container makes a new job).
-    pub fn save_as(&self, target: &Path, force_new: bool) -> SaveAs {
-        if self.updatable && !force_new && same_path(target, &self.target) {
-            SaveAs::Update(self.id)
-        } else {
-            SaveAs::New
         }
     }
 
     /// The card's banner.
     pub fn banner(&self) -> String {
-        if self.updatable {
-            format!("Editing job {}: {}", self.id, self.label)
-        } else {
-            format!("Job {} loaded as a new job: {}", self.id, self.label)
-        }
+        format!("Job {} loaded: {}", self.id, self.label)
     }
 }
 
@@ -119,8 +88,8 @@ mod tests {
         }
     }
 
-    /// The editor round trip of a waiting job: its spec loaded into the panels' states and saved again (as the export
-    /// builds a job from them) is the same spec, so "Update job" without a change changes nothing.
+    /// The editor round trip of a job: its spec loaded into the panels' states and saved again (as the export builds a
+    /// job from them) is the same spec, so a copy saved without a change is the same job.
     #[test]
     fn a_waiting_job_survives_the_editor_unchanged() {
         let job = waiting_job();
@@ -185,35 +154,8 @@ mod tests {
         };
         assert_eq!(saved, job);
 
-        let edit = JobEdit::new(JobId(4), JobStateKind::Waiting, Box::new(job.clone()));
-        assert_eq!(edit.save_as(&saved.target_path(), false), SaveAs::Update(JobId(4)));
-        assert!(edit.release);
-        assert_eq!(edit.banner(), "Editing job #4: Beach - 04.mkv");
-
-        // Another counter number is another file: a new job (Q-Q2), as is "Save as new".
-        export.set_counter(5);
-        let (stem, file) = export.file(&facts).unwrap();
-        assert_eq!(stem, "Beach - 05");
-        assert_eq!(
-            edit.save_as(&PathBuf::from("/out/clips").join(file), false),
-            SaveAs::New
-        );
-        assert_eq!(edit.save_as(&saved.target_path(), true), SaveAs::New);
-    }
-
-    #[test]
-    fn done_and_held_jobs() {
-        let job = Box::new(waiting_job());
-        let done = JobEdit::new(JobId(1), JobStateKind::Finished, job.clone());
-        assert_eq!(
-            done.save_as(&job.target_path(), false),
-            SaveAs::New,
-            "a done job is only a template"
-        );
-        assert!(!done.release);
-        assert!(done.banner().starts_with("Job #1 loaded as a new job"));
-        let held = JobEdit::new(JobId(2), JobStateKind::Held, job.clone());
-        assert_eq!(held.save_as(&job.target_path(), false), SaveAs::Update(JobId(2)));
-        assert!(!held.release, "it was held by the user: it stays held");
+        let edit = JobEdit::new(JobId(4), Box::new(job.clone()));
+        assert_eq!(edit.banner(), "Job #4 loaded: Beach - 04.mkv");
+        assert_eq!(edit.target, saved.target_path());
     }
 }

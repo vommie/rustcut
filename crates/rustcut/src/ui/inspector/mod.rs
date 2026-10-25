@@ -125,8 +125,8 @@ impl InspectorBridge {
             .into(),
         );
         j.set_editing(self.editing.get() == Some(row.id));
-        j.set_can_edit(matches!(kind, JobStateKind::Waiting | JobStateKind::Held));
-        j.set_can_load(kind.is_done());
+        // Loading is a copy (user decision Q-P8b): any job can be loaded.
+        j.set_can_edit(true);
         j.set_can_play(kind == JobStateKind::Finished);
         j.set_can_retry(kind.is_done());
         j.set_can_log(kind.is_done() || row.started_at.is_some());
@@ -257,7 +257,6 @@ fn connect(bridge: &Rc<InspectorBridge>, window: &MainWindow) {
         }
     };
     j.on_edit(bind(QueueAction::Edit));
-    j.on_load_new(bind(QueueAction::LoadAsNew));
     j.on_play(bind(QueueAction::Play));
     j.on_reveal(bind(QueueAction::Reveal));
     j.on_retry(bind(QueueAction::Retry));

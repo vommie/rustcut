@@ -106,6 +106,8 @@ folder_remove = { tabler = "folder-minus", doc = "Remove the target folder from 
 target_name = { tabler = "file-pencil", doc = "File name of the job" }
 counter = { tabler = "hash", doc = "Counter in the file name" }
 auto_increment = { tabler = "sort-ascending-numbers", doc = "Raise the counter after each save" }
+counter_next_free = { tabler = "list-numbers", doc = "The name check's way out: the next free number of the series" }
+name_variant = { tabler = "parentheses", doc = "The name check's way out: a free number in brackets" }
 clear_sections = { tabler = "eraser", doc = "Clear the section list after each save" }
 existing_file = { tabler = "file", doc = "The target file exists" }
 reveal_file = { tabler = "folder-search", doc = "Show the file in the file manager" }
@@ -153,7 +155,6 @@ warn_off = { tabler = "alert-triangle-off", doc = "No warning about missing tags
 # Queue panel, Job panel, Logs panel (M4.1)
 panel_job = { tabler = "file-info", doc = "Job panel (the inspector of the queue's current job)" }
 job_edit = { tabler = "edit", doc = "Edit the job in the editor" }
-job_load_new = { tabler = "file-import", doc = "Load the job into the editor as a new job" }
 job_duplicate = { tabler = "copy", doc = "Duplicate (a render profile in the Settings window)" }
 job_retry_with = { tabler = "repeat", doc = "Render the job again with another profile" }
 move_top = { tabler = "arrow-bar-to-up", doc = "Move to the top" }

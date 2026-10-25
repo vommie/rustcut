@@ -177,6 +177,81 @@ impl SettingsWriter {
     }
 }
 
+/// Writes `ui-state.toml` while RustCut runs, for the few states that must survive a crash (the queue's pause, user
+/// decision Q-P8b): the state as it was read at the start with the changes patched in, saved on the runtime (the newest
+/// change wins). At quit [`Self::close`] stops it before the full state is saved, so a late write never replaces that.
+pub struct UiStateWriter {
+    sender: tokio::sync::watch::Sender<Option<UiState>>,
+    state: std::cell::RefCell<UiState>,
+    /// `ui-state.toml` is from a newer version: nothing is written.
+    read_only: Rc<Cell<bool>>,
+    /// Held while a write runs; `true` once RustCut quits.
+    closed: std::sync::Arc<parking_lot::Mutex<bool>>,
+}
+
+impl std::fmt::Debug for UiStateWriter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UiStateWriter")
+            .field("read_only", &self.read_only.get())
+            .finish_non_exhaustive()
+    }
+}
+
+impl UiStateWriter {
+    pub fn start(runtime: &tokio::runtime::Handle, loaded: &Loaded) -> Self {
+        let (sender, mut receiver) = tokio::sync::watch::channel(None::<UiState>);
+        let closed = std::sync::Arc::new(parking_lot::Mutex::new(false));
+        let gate = std::sync::Arc::clone(&closed);
+        let dir = loaded.paths.config_dir.clone();
+        runtime.spawn(async move {
+            while receiver.changed().await.is_ok() {
+                let Some(state) = receiver.borrow_and_update().clone() else {
+                    continue;
+                };
+                let (dir, gate) = (dir.clone(), std::sync::Arc::clone(&gate));
+                let written = tokio::task::spawn_blocking(move || {
+                    let closed = gate.lock();
+                    if *closed {
+                        return Ok(false);
+                    }
+                    save(&dir, &state).map(|()| true)
+                })
+                .await;
+                match written {
+                    Ok(Ok(true)) => tracing::debug!("[Settings] ui-state.toml saved while running"),
+                    Ok(Ok(false)) => {}
+                    Ok(Err(e)) => tracing::warn!(error = %e, "[Settings] ui-state.toml could not be saved"),
+                    Err(e) => tracing::warn!(error = %e, "[Settings] Saving ui-state.toml did not finish"),
+                }
+            }
+        });
+        Self {
+            sender,
+            state: std::cell::RefCell::new(loaded.ui_state.clone()),
+            read_only: Rc::clone(&loaded.ui_read_only),
+            closed,
+        }
+    }
+
+    /// Changes the stored state with `change` and saves it soon (UI thread).
+    pub fn update(&self, change: impl FnOnce(&mut UiState)) {
+        if self.read_only.get() {
+            return;
+        }
+        let state = {
+            let mut state = self.state.borrow_mut();
+            change(&mut state);
+            state.clone()
+        };
+        self.sender.send_replace(Some(state));
+    }
+
+    /// RustCut quits: a write that runs ends first, none follows (the full state is saved next).
+    pub fn close(&self) {
+        *self.closed.lock() = true;
+    }
+}
+
 fn load_file<T: VersionedFile>(paths: &AppPaths) -> Option<LoadOutcome<T>> {
     match load::<T>(&paths.config_dir, &paths.config_backups()) {
         Ok(outcome) => {
@@ -224,6 +299,44 @@ mod tests {
         let again = load_all(AppPaths::below(dir.path()));
         assert_eq!(again.ui_state.window.width, 1000);
         assert!(dir.path().join("data").is_dir() && dir.path().join("state").is_dir());
+    }
+
+    #[test]
+    fn the_pause_is_saved_at_once_and_nothing_after_the_close() {
+        // User decision Q-P8b: a paused queue stays paused after a crash.
+        let dir = tempfile::tempdir().unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let loaded = load_all(AppPaths::below(dir.path()));
+        let writer = UiStateWriter::start(runtime.handle(), &loaded);
+        writer.update(|s| s.queue.paused = true);
+        let read = |dir: &std::path::Path| load_all(AppPaths::below(dir)).ui_state.queue.paused;
+        runtime.block_on(async {
+            for _ in 0..200 {
+                if read(dir.path()) {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        });
+        assert!(read(dir.path()), "written while RustCut runs");
+        writer.close();
+        writer.update(|s| s.queue.paused = false);
+        runtime.block_on(async { tokio::time::sleep(std::time::Duration::from_millis(100)).await });
+        assert!(
+            read(dir.path()),
+            "nothing is written after the close (the full state follows)"
+        );
+        // A newer ui-state.toml is never written.
+        let newer = tempfile::tempdir().unwrap();
+        let loaded = load_all(AppPaths::below(newer.path()));
+        loaded.ui_read_only.set(true);
+        let writer = UiStateWriter::start(runtime.handle(), &loaded);
+        writer.update(|s| s.queue.paused = true);
+        runtime.block_on(async { tokio::time::sleep(std::time::Duration::from_millis(100)).await });
+        assert!(!read(newer.path()), "a read-only ui-state.toml stays as it is");
     }
 
     #[test]

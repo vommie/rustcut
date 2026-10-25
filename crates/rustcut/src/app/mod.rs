@@ -182,6 +182,12 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         keys,
         &save_key,
     );
+    // The queue's pause is saved at once, so a crash keeps it (user decision Q-P8b).
+    let ui_writer = Rc::new(persistence::UiStateWriter::start(runtime.handle(), &loaded));
+    {
+        let writer = Rc::clone(&ui_writer);
+        queue.hooks().paused_changed = Some(Box::new(move |paused| writer.update(|s| s.queue.paused = paused)));
+    }
     let tags = TagsBridge::install(
         &main,
         (&ui, runtime.handle().clone(), &sync, queue_service.handle.clone()),
@@ -535,6 +541,8 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     dialogs::capture(&main, &mut ui_state.dialogs);
     logs.save_into(&mut ui_state.logs);
     settings_window.save_into(&mut ui_state.settings);
+    // A write of the pause that still runs ends first, and none follows the full state.
+    ui_writer.close();
     persistence::save_ui_state(&loaded, &ui_state);
     settings_window.shut_down();
     // Stop listening now (the settings' listener holds the holder until the end of `run`).

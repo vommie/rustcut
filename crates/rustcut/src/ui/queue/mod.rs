@@ -8,6 +8,7 @@ mod actions;
 mod columns;
 mod filter;
 mod menu;
+mod pause;
 mod selection;
 mod text;
 mod totals;
@@ -124,6 +125,8 @@ pub struct QueueHooks {
     pub job_done: Option<JobDoneHook>,
     pub profiles: Option<ProfilesHook>,
     pub profile: Option<ProfileHook>,
+    /// The pause changed (not at the start): the app saves it at once (user decision Q-P8b).
+    pub paused_changed: Option<Box<dyn Fn(bool)>>,
 }
 
 pub struct QueueBridge {
@@ -141,6 +144,9 @@ pub struct QueueBridge {
     editing: Cell<Option<JobId>>,
     keys: MenuKeys,
     empty_text: String,
+    /// The pause as the panel last saw it (`None` before the first snapshot) and as `ui-state.toml` had it at the start.
+    last_paused: Cell<Option<bool>>,
+    paused_before: bool,
 }
 
 impl QueueBridge {
@@ -182,6 +188,8 @@ impl QueueBridge {
             } else {
                 format!("Saved jobs appear here ({save_key}).")
             },
+            last_paused: Cell::new(None),
+            paused_before: saved.paused,
         });
         BRIDGE.with(|b| *b.borrow_mut() = Rc::downgrade(&bridge));
         let q = window.global::<Queue<'_>>();
@@ -293,7 +301,7 @@ impl QueueBridge {
             &ui.widths,
         );
         let shown: Vec<Column> = layout.slots.iter().map(|s| s.column).collect();
-        let (texts, visible, counts, summary, overall, paused, pause_after, finished, selected, ended) = {
+        let (texts, visible, counts, summary, overall, paused, pause_after, finished, selected, ended, start) = {
             let mut shared = self.shared.lock();
             let ended = std::mem::take(&mut shared.ended);
             let view = &shared.view;
@@ -325,6 +333,7 @@ impl QueueBridge {
                     .count(),
                 selected,
                 ended,
+                (view.processing.as_ref().map(|p| p.paused), pause::waiting(&view.rows)),
             )
         };
         ui.visible.clone_from(&visible);
@@ -402,6 +411,7 @@ impl QueueBridge {
         q.set_pause_after(pause_after);
         drop(ui);
         actions::publish_toolbar(&q, &selected, &visible, finished);
+        self.pause_seen(start.0, start.1);
         if ended && let Some(hook) = self.hooks.borrow().job_ended.as_ref() {
             hook();
         }

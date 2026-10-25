@@ -55,13 +55,7 @@ impl ExportBridge {
             return;
         }
         let target = folder.join(rustcut_core::naming::file_name(stem, facts.container));
-        let mut queue = self.queue.upgrade().map(|q| q.targets()).unwrap_or_default();
-        let edited = self.editing.borrow().upgrade().and_then(|e| e.info()).map(|e| e.id);
-        if let Some(id) = edited
-            && self.updates(&target, false)
-        {
-            queue.retain(|q| q.id != id);
-        }
+        let queue = self.queue.upgrade().map(|q| q.targets()).unwrap_or_default();
         let (base, source) = {
             let st = self.state.borrow();
             (st.name.clone(), st.source.clone())
