@@ -3,11 +3,13 @@
 //! belongs to the window it was opened from (X11: `WM_TRANSIENT_FOR`, so it stays above that window; centered on it).
 //!
 //! Call [`install`] once for every window that contains a `ColorPicker` or a `ColorSwatchButton`; [`open`] shows the
-//! picker. UI thread only.
+//! picker. It is modal for its parent (D-P9h, review 69): the caller dims the parent until the picker reports its end,
+//! and a click on the dimmed parent calls [`raise`]. UI thread only.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use slint::winit_030::WinitWindowAccessor as _;
 use slint::{Color, ComponentHandle, Global, SharedString};
 
 use crate::desktop::x11_dialog;
@@ -53,6 +55,29 @@ thread_local! {
     static WINDOW: RefCell<Option<ColorPickerWindow>> = const { RefCell::new(None) };
     /// The parent the window manager is told about when the picker's window is set up the first time.
     static PENDING_PARENT: Cell<Option<u32>> = const { Cell::new(None) };
+    /// What the opener does when the picker ends (its parent stops being dimmed).
+    static ON_END: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
+}
+
+/// The picker ended (OK, Cancel, closed, replaced): tells the opener once.
+fn ended() {
+    let on_end = ON_END.with(|slot| slot.try_borrow_mut().ok().and_then(|mut slot| slot.take()));
+    if let Some(on_end) = on_end {
+        on_end();
+    }
+}
+
+/// Brings the open picker to the front and gives it the keyboard (a click on its dimmed parent).
+pub fn raise() {
+    WINDOW.with(|slot| {
+        if let Some(window) = slot.borrow().as_ref()
+            && window.window().is_visible()
+        {
+            window
+                .window()
+                .with_winit_window(slint::winit_030::winit::window::Window::focus_window);
+        }
+    });
 }
 
 /// What the picker window starts with.
@@ -67,9 +92,15 @@ pub struct PickerRequest {
 }
 
 /// Opens the color picker in a window of its own over `parent`. Every change the user makes goes to `on_change` at
-/// once; Cancel, Escape or closing the window reports the initial color again, OK keeps the last one. A picker that is
-/// already open is replaced.
-pub fn open<P: ComponentHandle>(parent: &P, request: &PickerRequest, on_change: impl Fn(Color) + 'static) {
+/// once; Cancel, Escape or closing the window reports the initial color again, OK keeps the last one. `on_end` runs
+/// once when the picker ends in any way. A picker that is already open is replaced (its `on_end` runs first).
+pub fn open<P: ComponentHandle>(
+    parent: &P,
+    request: &PickerRequest,
+    on_change: impl Fn(Color) + 'static,
+    on_end: impl Fn() + 'static,
+) {
+    ended();
     let created = WINDOW.with(|slot| {
         let mut slot = slot.borrow_mut();
         if slot.is_none() {
@@ -108,12 +139,14 @@ pub fn open<P: ComponentHandle>(parent: &P, request: &PickerRequest, on_change: 
         if let Some(window) = weak.upgrade() {
             let _ = window.hide();
         }
+        ended();
     });
     let weak = window.as_weak();
     window.on_accepted(move || {
         if let Some(window) = weak.upgrade() {
             let _ = window.hide();
         }
+        ended();
     });
     let weak = window.as_weak();
     window.window().on_close_requested(move || {
@@ -136,6 +169,7 @@ pub fn open<P: ComponentHandle>(parent: &P, request: &PickerRequest, on_change: 
         tracing::error!(error = %e, "[ColorPicker] The picker window could not be shown");
         return;
     }
+    ON_END.with(|slot| *slot.borrow_mut() = Some(Box::new(on_end)));
     x11_dialog::center_over(window.window(), parent.window());
     tracing::info!(title = %request.title, "[ColorPicker] Picker opened");
 }
@@ -163,6 +197,7 @@ pub fn close() {
             let _ = window.hide();
         }
     });
+    ended();
 }
 
 /// RustCut quits: the picker window is hidden and dropped.
@@ -172,6 +207,7 @@ pub fn shutdown() {
         let _ = window.hide();
         tracing::debug!("[ColorPicker] Picker window dropped");
     }
+    ended();
 }
 
 #[cfg(test)]

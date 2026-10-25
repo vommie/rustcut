@@ -147,6 +147,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Dialogs, your UI review round 1 (0.0.38): every dialog's symbol sits vertically centered beside its title, and
+  every dialog you can cancel has an × in the top right corner (Escape does the same; the start dialogs keep none).
+  Radio marks and key numbers of the choices are centered on their rows, and the start dialogs mark the recommended
+  choice with "(Recommended)" (no yellow choices any more). The file lists of the dialogs have subtle lines between
+  the files, no number badges on the pictures, and the pictures and buttons are centered on their rows; the existing
+  file's play and folder buttons sit on the right of its tile.
+- The save dialog about the target says "Target file already exists"; "Next free number" says it takes the next
+  number not used in the target folder; "Overwrite" is no longer highlighted; a typed name that is taken says
+  "*name* already exists." (0.0.38). The files dialog of the name check opens on "Similar files" when nothing has the
+  name yet and shows "Target (0)".
+- The question about a job without tags or rating is compact (0.0.38): the title, the rating bar, "Save without" and
+  "Back to editing", which is the main button and has the keyboard: Enter goes back without saving, Left and Right
+  move a visible focus through the ratings and the buttons, 0-5 still save with that rating, Escape and × go back.
+  "Don't ask again" is gone from the dialog; the setting stays in Settings > Warnings & Confirmations and as "Warn" on
+  the Tag & Rate panel.
+- Other dialog words (0.0.38): loading a job asks "Replace current session with Job #3?" ("The current session is
+  not saved."); quitting while rendering says "A job is rendering. What to do?" with "Force quit" (held), "Quit when
+  done" and "Cancel"; a settings file from a newer RustCut is a "Version conflict detected" that asks you to decide,
+  says "There is 1 setting" or "There are 2 settings this version does not know" and lists them one per line.
+- The color picker of the Settings window belongs to it (0.0.38): while the picker is open, the Settings window is
+  dimmed and takes no input (a click brings the picker forward); changes still show at once.
 - Messages, your UI review round 1 (0.0.37): toasts show their time as hh:mm:ss in the title row, left of ×. Banners
   show their symbol larger and centered, and the time their state began (hh:mm:ss, no "since") left of ×; their
   buttons and the pager ("‹ 1 / 2 ›") stand left of the time, everything centered in height. The bell keeps its

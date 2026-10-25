@@ -38,11 +38,6 @@ impl Choice {
             Self::Quit => "Quit",
         }
     }
-
-    /// Replaces or drops something (drawn as a warning).
-    pub const fn destructive(self) -> bool {
-        matches!(self, Self::StartEmpty | Self::Temporary)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,18 +53,26 @@ pub struct DatabaseDialog {
     pub failed: String,
 }
 
+/// The way that fits the problem: preselected and marked "(Recommended)" (review 59, P9.3).
+const fn recommended(problem: &Problem) -> Choice {
+    match problem {
+        Problem::Newer { .. } => Choice::Temporary,
+        Problem::Damaged => Choice::Rescue,
+        Problem::NoAccess => Choice::Retry,
+    }
+}
+
 impl DatabaseDialog {
+    pub const fn recommended(&self) -> Choice {
+        recommended(&self.problem)
+    }
+
     pub fn new(problem: Problem, error: String, path: PathBuf) -> Self {
-        let selected = match problem {
-            Problem::Newer { .. } => Choice::Temporary,
-            Problem::Damaged => Choice::Rescue,
-            Problem::NoAccess => Choice::Retry,
-        };
         Self {
+            selected: recommended(&problem),
             problem,
             error,
             path,
-            selected,
             busy: false,
             failed: String::new(),
         }

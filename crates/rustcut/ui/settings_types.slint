@@ -116,6 +116,9 @@ export global SettingsUi {
     callback pick(/* key */ string);
     // A color option: open the color picker for it.
     callback pick-color(/* key */ string);
+    // The color picker is open: the window is dimmed and takes no input (D-P9h); a click brings the picker forward.
+    in property <bool> picker-open;
+    callback raise-picker();
     // A button row.
     callback action(/* key */ string);
     callback close();

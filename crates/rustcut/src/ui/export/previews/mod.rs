@@ -32,8 +32,6 @@ pub(super) enum Place {
 /// One listed file.
 pub(super) struct Listed {
     pub name: String,
-    /// The number in the series ("" for the other names).
-    pub counter: String,
     /// The target file itself (its preview is the existing file's).
     pub target: bool,
     pub slot: Slot,
@@ -93,7 +91,7 @@ impl DialogPreviews {
             tags: file.tags.as_str().into(),
             missing: file.missing,
             job: file.job.as_str().into(),
-            ..view(&name, "", false, slot, None, self.pictures != PictureScope::Off)
+            ..view(&name, false, slot, None, self.pictures != PictureScope::Off)
         })
     }
 
@@ -107,7 +105,7 @@ impl DialogPreviews {
         PreviewView {
             group,
             index: i32::try_from(index).unwrap_or(i32::MAX),
-            ..view(&listed.name, &listed.counter, listed.target, slot, None, pictures)
+            ..view(&listed.name, listed.target, slot, None, pictures)
         }
     }
 
@@ -125,7 +123,7 @@ impl DialogPreviews {
         self.existing
             .as_ref()
             .map_or_else(PreviewView::default, |(name, known, slot)| {
-                view(name, "", true, slot, *known, self.pictures != PictureScope::Off)
+                view(name, true, slot, *known, self.pictures != PictureScope::Off)
             })
     }
 
@@ -138,14 +136,7 @@ impl DialogPreviews {
     }
 }
 
-fn view(
-    name: &str,
-    counter: &str,
-    target: bool,
-    slot: &Slot,
-    known: Option<ExistingFile>,
-    pictures: bool,
-) -> PreviewView {
+fn view(name: &str, target: bool, slot: &Slot, known: Option<ExistingFile>, pictures: bool) -> PreviewView {
     let text = tile_text(slot, known, pictures);
     let picture = match slot {
         Slot::Ready(_, Some(image)) => image.clone(),
@@ -164,7 +155,6 @@ fn view(
         group: 0,
         index: 0,
         name: name.into(),
-        counter: counter.into(),
         is_target: target,
         state: text.state as i32,
         picture,
@@ -205,16 +195,8 @@ impl ExportBridge {
                 dialog.folder.clone(),
                 dialog.file.clone(),
                 dialog.conflicts.exists,
-                dialog
-                    .series
-                    .iter()
-                    .map(|f| (f.name.clone(), format!("{:02}", f.counter)))
-                    .collect::<Vec<_>>(),
-                dialog
-                    .others
-                    .iter()
-                    .map(|n| (n.clone(), String::new()))
-                    .collect::<Vec<_>>(),
+                dialog.series.iter().map(|f| f.name.clone()).collect::<Vec<_>>(),
+                dialog.others.clone(),
                 dialog.known.as_ref().map(|k| k.files.clone()).unwrap_or_default(),
             )
         };
@@ -226,11 +208,11 @@ impl ExportBridge {
         let mut rest_places = Vec::new();
         let mut rest = Vec::new();
         // The target's tile shows the existing file's preview; every other file is read once.
-        let listed = |names: Vec<(String, String)>, series: bool, rest_places: &mut Vec<Place>, rest: &mut Vec<_>| {
+        let listed = |names: Vec<String>, series: bool, rest_places: &mut Vec<Place>, rest: &mut Vec<_>| {
             names
                 .into_iter()
                 .enumerate()
-                .map(|(i, (name, counter))| {
+                .map(|(i, name)| {
                     let target = name == file && exists.is_some();
                     if !target {
                         rest_places.push(if series { Place::Series(i) } else { Place::Other(i) });
@@ -240,7 +222,6 @@ impl ExportBridge {
                         });
                     }
                     Listed {
-                        counter,
                         target,
                         slot: Slot::Waiting,
                         name,
@@ -551,7 +532,6 @@ mod tests {
     fn rows_know_their_group_and_index() {
         let listed = |name: &str| Listed {
             name: name.to_owned(),
-            counter: String::new(),
             target: false,
             slot: Slot::Waiting,
         };

@@ -201,6 +201,28 @@ export component SettingsWindow inherits Window {
         }
     }
 
+    // The color picker is open (D-P9h, review 69): the window is dimmed and takes no input; a click or a key brings
+    // the picker forward.
+    if SettingsUi.picker-open: Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        background: #000000a0;
+
+        TouchArea {
+            clicked => { SettingsUi.raise-picker(); }
+        }
+
+        FocusScope {
+            init => { self.focus(); }
+            key-pressed(event) => {
+                SettingsUi.raise-picker();
+                accept
+            }
+        }
+    }
+
     TooltipLayer {
         x: 0;
         y: 0;

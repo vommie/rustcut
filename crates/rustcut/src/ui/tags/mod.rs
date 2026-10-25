@@ -208,7 +208,7 @@ impl TagsBridge {
         self.publish();
     }
 
-    /// Shows the panel (the save dialog's "Back to tagging").
+    /// Shows the panel (the save dialog's "Back to editing").
     pub fn reveal(&self) {
         if let Some(hook) = self.on_reveal.borrow().as_ref() {
             hook();

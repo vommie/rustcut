@@ -11,7 +11,7 @@ import { SmoothScrollArea } from "smooth_scroll_view.slint";
 import { GlobalTooltip } from "tooltip.slint";
 import { ConflictOptionView } from "export_types.slint";
 import { DialogButton, DialogTabs, OptionRow } from "export_dialog_parts.slint";
-import { DialogFrame, DialogState } from "dialog_frame.slint";
+import { DialogFrame, DialogHeader, DialogState } from "dialog_frame.slint";
 
 export global Problems {
     // ---- A file from a newer RustCut.
@@ -97,42 +97,6 @@ component DialogKeys inherits FocusScope {
     }
 }
 
-/// The icon, title and text at the top of a dialog.
-component Header inherits HorizontalLayout {
-    in property <IconId> icon;
-    in property <color> tint;
-    in property <string> title;
-    in property <string> text;
-
-    spacing: 12px;
-
-    AppIcon {
-        icon: root.icon;
-        size: IconSize.xl;
-        color: root.tint;
-    }
-
-    VerticalLayout {
-        horizontal-stretch: 1;
-        spacing: 4px;
-
-        Text {
-            text: root.title;
-            color: Theme.text;
-            font-size: 15px;
-            font-weight: 700;
-            wrap: word-wrap;
-        }
-
-        Text {
-            text: root.text;
-            color: Theme.text-muted;
-            font-size: 12px;
-            wrap: word-wrap;
-        }
-    }
-}
-
 export component NewerFileDialog inherits Rectangle {
     background: #000000a0;
 
@@ -164,10 +128,9 @@ export component NewerFileDialog inherits Rectangle {
                 padding: 14px;
                 spacing: 10px;
 
-                Header {
+                DialogHeader {
                     icon: IconId.status-warning;
-                    tint: Theme.accent;
-                    title: "Settings from a newer RustCut";
+                    title: "Version conflict detected";
                     text: Problems.newer-text;
                 }
 
@@ -224,16 +187,38 @@ export component NewerFileDialog inherits Rectangle {
                             }
                         }
 
-                        if Problems.newer-unknown-open: VerticalLayout {
-                            padding-left: 28px;
-                            padding-bottom: 4px;
-                            spacing: 1px;
+                        // The unknown settings as a list (review 57, P9.3): one key per row with a bullet.
+                        if Problems.newer-unknown-open: Rectangle {
+                            border-radius: 4px;
+                            background: Theme.background;
+                            border-width: 1px;
+                            border-color: Theme.border;
 
-                            for key in Problems.newer-unknown: Text {
-                                text: key;
-                                color: Theme.text-muted;
-                                font-family: "monospace";
-                                font-size: 11px;
+                            VerticalLayout {
+                                padding: 6px;
+                                padding-left: 10px;
+                                spacing: 2px;
+
+                                for key in Problems.newer-unknown: HorizontalLayout {
+                                    spacing: 8px;
+
+                                    Text {
+                                        text: "•";
+                                        color: Theme.text-muted;
+                                        font-size: 11px;
+                                        vertical-alignment: center;
+                                    }
+
+                                    Text {
+                                        horizontal-stretch: 1;
+                                        text: key;
+                                        color: Theme.text;
+                                        font-family: "monospace";
+                                        font-size: 11px;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                }
                             }
                         }
 
@@ -306,7 +291,7 @@ export component QueueDatabaseDialog inherits Rectangle {
                 padding: 14px;
                 spacing: 10px;
 
-                Header {
+                DialogHeader {
                     icon: IconId.status-error;
                     tint: Theme.status-corrupt;
                     title: Problems.db-title;

@@ -1,9 +1,11 @@
-// The frame of RustCut's modal dialogs (user request with M5.4): a centered card the user resizes at its edges and
-// corners; its size stays the same whatever the dialog shows (tabs never change it) and is kept per dialog in
+// The frame of RustCut's modal dialogs (user request with M5.4) and their head (P9.3): a centered card the user resizes
+// at its edges and corners; its size stays the same whatever the dialog shows (tabs never change it) and is kept per dialog in
 // ui-state.toml (`DialogState`, src/app/dialogs.rs). The dialog lays its content out from the top; height it does not
 // need stays free at the bottom of its content area.
 
 import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { IconButton } from "controls.slint";
 
 /// What the user changed in the dialogs (0 = the dialog's default size); the app restores it at start and saves it at
 /// quit.
@@ -187,5 +189,69 @@ export component DialogFrame inherits Rectangle {
         sy: 1;
         pressed-at => { root.start(); }
         dragged(dx, dy) => { root.resize(1, 1, dx, dy); }
+    }
+}
+
+/// The head of every dialog (review round 1, P9.3): the symbol vertically centered with the title, the text under the
+/// title, and × when the dialog can be canceled (Escape does the same; the start dialogs have none, review 56 #4).
+/// Lines under the text (the conflict dialog's path) are its children.
+export component DialogHeader inherits VerticalLayout {
+    in property <IconId> icon;
+    in property <color> tint: Theme.accent;
+    in property <string> title;
+    in property <string> text;
+    in property <bool> closable;
+    in property <string> close-tooltip: "Cancel";
+    callback close();
+
+    spacing: 3px;
+
+    HorizontalLayout {
+        spacing: 12px;
+
+        VerticalLayout {
+            alignment: center;
+
+            AppIcon {
+                icon: root.icon;
+                size: IconSize.xl;
+                color: root.tint;
+            }
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: root.title;
+            color: Theme.text;
+            font-size: 15px;
+            font-weight: 700;
+            wrap: word-wrap;
+            vertical-alignment: center;
+        }
+
+        if root.closable: VerticalLayout {
+            alignment: center;
+
+            IconButton {
+                icon: IconId.close;
+                tooltip: root.close-tooltip;
+                shortcut: "Esc";
+                clicked => { root.close(); }
+            }
+        }
+    }
+
+    VerticalLayout {
+        padding-left: IconSize.xl + 12px;
+        spacing: 3px;
+
+        if root.text != "": Text {
+            text: root.text;
+            color: Theme.text-muted;
+            font-size: 12px;
+            wrap: word-wrap;
+        }
+
+        @children
     }
 }
