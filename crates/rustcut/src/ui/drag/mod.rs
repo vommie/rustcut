@@ -23,9 +23,7 @@ where
     for<'a> DragLogic<'a>: Global<'a, C>,
     for<'a> DragState<'a>: Global<'a, C>,
 {
-    component
-        .global::<DragLogic<'_>>()
-        .on_scroll_step(|pointer, view| auto_scroll(pointer, view));
+    component.global::<DragLogic<'_>>().on_scroll_step(auto_scroll);
     component.global::<DragState<'_>>().on_cancel(|| {
         let cancel = CANCEL.with(|slot| slot.try_borrow_mut().ok().and_then(|mut slot| slot.take()));
         if let Some(cancel) = cancel {
