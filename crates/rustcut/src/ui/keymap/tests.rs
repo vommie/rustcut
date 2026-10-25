@@ -183,17 +183,12 @@ fn the_table_round_trips() {
 }
 
 #[test]
-fn menus_lose_plain_keys_while_a_field_is_edited() {
+fn menu_entries_show_the_first_key() {
     let keymap = Keymap::default();
-    assert_eq!(
-        keymap.menu_keys(Action::TogglePause, false),
-        chord("Space").keys().clone()
-    );
-    assert_eq!(keymap.menu_keys(Action::TogglePause, true), Keys::default());
-    assert_eq!(keymap.menu_keys(Action::Open, true), chord("Control+O").keys().clone());
+    assert_eq!(keymap.first_label(Action::Open), "Ctrl+O");
     let mut unbound = keymap;
     unbound.unbind(Action::Open, "Control+O");
-    assert_eq!(unbound.menu_keys(Action::Open, false), Keys::default());
+    assert_eq!(unbound.first_label(Action::Open), "", "an unbound action shows no key");
 }
 
 fn texts(keymap: &Keymap, action: Action) -> Vec<String> {

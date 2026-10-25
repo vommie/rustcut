@@ -3,7 +3,6 @@
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
-import { Shortcuts } from "shortcuts.slint";
 import { TooltipArea } from "tooltip.slint";
 import { IconButton, MiddleText } from "controls.slint";
 import { CollapsiblePanel } from "collapsible_panel.slint";
@@ -186,7 +185,6 @@ export component OptionRow inherits Rectangle {
                             reject
                         }
                         changed has-focus => {
-                            Shortcuts.editing-changed(self.has-focus);
                             if self.has-focus {
                                 root.picked();
                             }

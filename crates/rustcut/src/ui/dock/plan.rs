@@ -11,6 +11,9 @@ use super::model::{DockLayout, DropTarget, GroupRef, PanelId, Side, Sidebar};
 /// Sizes shared with the Slint side (set into the `DockMetrics` global at startup), in logical pixels.
 pub mod metrics {
     pub const SIDEBAR_PADDING: f32 = 6.0;
+    /// Above the first group: none, so the sidebars start on the line of the video's top edge (P9.12, the user's wish
+    /// with the new menu bar).
+    pub const SIDEBAR_TOP_PADDING: f32 = 0.0;
     pub const TAB_BAR_HEIGHT: f32 = 30.0;
     pub const TAB_HEIGHT: f32 = 26.0;
     pub const TAB_SPACING: f32 = 4.0;
@@ -33,8 +36,8 @@ pub mod metrics {
 }
 
 use metrics::{
-    BAR_BUTTON, BAR_BUTTON_SPACING, EDGE_STRIP, MIN_BODY, RESIZER, SIDEBAR_PADDING, SPLIT_BAND, TAB_BAR_HEIGHT,
-    TAB_BAR_INSET, TAB_MAX_WIDTH, TAB_MIN_WIDTH, TAB_SPACING,
+    BAR_BUTTON, BAR_BUTTON_SPACING, EDGE_STRIP, MIN_BODY, RESIZER, SIDEBAR_PADDING, SIDEBAR_TOP_PADDING, SPLIT_BAND,
+    TAB_BAR_HEIGHT, TAB_BAR_INSET, TAB_MAX_WIDTH, TAB_MIN_WIDTH, TAB_SPACING,
 };
 
 /// Vertical placement of one group inside its sidebar (see the module docs).
@@ -93,7 +96,7 @@ pub fn plan_sidebar(sidebar: &Sidebar) -> SidebarPlan {
     let expanded = shows_body.iter().filter(|s| **s).count();
 
     let mut groups = Vec::with_capacity(sidebar.groups.len());
-    let mut fixed_before = SIDEBAR_PADDING;
+    let mut fixed_before = SIDEBAR_TOP_PADDING;
     let mut frac_before = 0.0;
     for (shows, weight) in shows_body.iter().zip(&weights) {
         let fixed = if *shows {
@@ -117,7 +120,7 @@ pub fn plan_sidebar(sidebar: &Sidebar) -> SidebarPlan {
         frac_before += frac;
     }
     let total_fixed = if groups.is_empty() {
-        2.0 * SIDEBAR_PADDING
+        SIDEBAR_TOP_PADDING + SIDEBAR_PADDING
     } else {
         fixed_before - RESIZER + SIDEBAR_PADDING
     };
@@ -358,7 +361,7 @@ fn hit_sidebar(layout: &DockLayout, frame: &DockFrame, side: Side, x: f32, y: f3
     let last_bottom = plan
         .groups
         .last()
-        .map_or(rect.y + SIDEBAR_PADDING, |p| rect.y + p.y(extra) + p.height(extra));
+        .map_or(rect.y + SIDEBAR_TOP_PADDING, |p| rect.y + p.y(extra) + p.height(extra));
     let free = Rect {
         x: rect.x + SIDEBAR_PADDING,
         y: last_bottom + RESIZER,

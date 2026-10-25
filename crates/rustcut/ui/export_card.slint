@@ -106,7 +106,6 @@ component NameField inherits Rectangle {
             reject
         }
         changed has-focus => {
-            Shortcuts.editing-changed(self.has-focus);
             if !self.has-focus {
                 root.editing = false;
             }

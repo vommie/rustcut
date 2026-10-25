@@ -281,9 +281,6 @@ export component TooltipLayer inherits Rectangle {
         border-radius: 6px;
         border-width: 1px;
         border-color: TooltipSettings.border;
-        drop-shadow-blur: 10px;
-        drop-shadow-color: #00000099;
-        drop-shadow-offset-y: 2px;
 
         animate opacity { duration: root.active ? 110ms : 80ms; easing: ease-out; }
         animate x, y { duration: GlobalTooltip.glide ? 90ms : 0ms; easing: ease-out; }

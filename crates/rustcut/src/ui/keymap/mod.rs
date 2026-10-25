@@ -2,9 +2,9 @@
 //! stores it as plain strings; this module validates and sanitizes it), with conflict detection. The editing UI is part
 //! of the Settings window (M4.2).
 //!
-//! Key presses reach the keymap in two ways: menu items carry the first key of their action as their shortcut (Slint's
-//! menu bar handles those before any element, which is why plain keys are taken off the menus while a text field has the
-//! keyboard), and every other press that no focused element took arrives through the main window's key scope.
+//! Key presses reach the keymap through the main window's key scope: every press that no focused element took (a text
+//! field keeps its plain keys). The menu bar's entries only show the first key of their action (P9.12: RustCut's own
+//! menu bar; Slint's took its shortcuts before any element).
 
 mod action;
 mod chord;
@@ -12,8 +12,6 @@ mod chord;
 mod tests;
 
 use std::collections::BTreeMap;
-
-use slint::Keys;
 
 pub use action::Action;
 pub use chord::{Chord, ChordError, KeyPress};
@@ -177,15 +175,5 @@ impl Keymap {
     /// The first key of `action` as a menu row or a hint text shows it ("" when unbound).
     pub fn first_label(&self, action: Action) -> String {
         self.chords(action).first().map(Chord::label).unwrap_or_default()
-    }
-
-    /// The shortcut of `action`'s menu item: its first chord. While a text field has the keyboard (`editing`), chords
-    /// without Control, Alt or Meta are left off, so typing `.` or Space reaches the field instead of the menu.
-    pub fn menu_keys(&self, action: Action, editing: bool) -> Keys {
-        self.chords(action)
-            .first()
-            .filter(|c| !editing || c.has_command_modifier())
-            .map(|c| c.keys().clone())
-            .unwrap_or_default()
     }
 }

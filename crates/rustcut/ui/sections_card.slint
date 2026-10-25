@@ -76,6 +76,8 @@ export global Sections {
     callback context-menu(/* row */ int, /* x */ length, /* y */ length);
     // A left click on the empty space.
     callback clear-selection();
+    // The menu bar's Sections > Clear All Sections (held, P9.12).
+    callback clear-all();
     // Drag & drop: the pointer in the list's coordinates (0 = the top of the first row).
     callback drag-start(/* row */ int, /* pointer */ length, /* pitch */ length, /* height */ length);
     callback drag-move(/* pointer */ length);
@@ -202,7 +204,6 @@ export component TimeField inherits Rectangle {
         }
 
         changed has-focus => {
-            Shortcuts.editing-changed(self.has-focus);
             // Leaving the field keeps a valid time and drops an invalid one.
             if !self.has-focus && root.editing {
                 if !root.committed(self.text) {

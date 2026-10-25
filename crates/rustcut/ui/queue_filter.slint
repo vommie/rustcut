@@ -126,7 +126,6 @@ export component QueueFilterFlyout inherits Rectangle {
                     clear-tooltip: "Clear the search";
                     search-changed(text) => { Queue.search-edited(text); }
                     cleared => { Queue.search-edited(""); }
-                    changed has-focus => { Shortcuts.editing-changed(self.has-focus); }
                 }
 
                 HorizontalLayout {

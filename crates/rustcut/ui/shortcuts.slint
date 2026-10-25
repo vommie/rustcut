@@ -1,46 +1,44 @@
-// The keymap's side in Slint (src/ui/keymap/, src/ui/editor/): the shortcuts of the menu items (set from the keymap; plain
-// keys are left off while a text field has the keyboard, because the menu bar sees keys before any element), and the entry
-// for every key press no focused element took.
+// The keymap's side in Slint (src/ui/keymap/, src/ui/editor/): the key labels of the menu bar's entries (set from the
+// keymap; since P9.12's own menu bar they are only labels: every key reaches the keymap through the main window's key
+// scope), and the entry for every key press no focused element took.
 
 export global Shortcuts {
-    in property <keys> open;
-    in property <keys> save;
-    in property <keys> quit;
-    in property <keys> settings;
-    in property <keys> toggle-pause;
-    in property <keys> frame-back;
-    in property <keys> frame-forward;
-    in property <keys> toggle-mute;
-    in property <keys> reload;
-    in property <keys> set-start;
-    in property <keys> set-end;
-    in property <keys> go-to-start;
-    in property <keys> go-to-end;
-    in property <keys> add-section;
-    in property <keys> previous-cut;
-    in property <keys> next-cut;
-    in property <keys> zoom-in;
-    in property <keys> zoom-out;
-    in property <keys> zoom-fit;
-    in property <keys> filter-preview;
-    in property <keys> filter-keep;
-    in property <keys> filter-reset;
-    in property <keys> probe-render;
-    in property <keys> crop-edit;
-    in property <keys> auto-crop;
-    in property <keys> rotate-left;
-    in property <keys> rotate-right;
-    in property <keys> mirror-horizontal;
-    in property <keys> mirror-vertical;
+    in property <string> open;
+    in property <string> save;
+    in property <string> quit;
+    in property <string> settings;
+    in property <string> toggle-pause;
+    in property <string> frame-back;
+    in property <string> frame-forward;
+    in property <string> toggle-mute;
+    in property <string> reload;
+    in property <string> set-start;
+    in property <string> set-end;
+    in property <string> go-to-start;
+    in property <string> go-to-end;
+    in property <string> add-section;
+    in property <string> previous-cut;
+    in property <string> next-cut;
+    in property <string> zoom-in;
+    in property <string> zoom-out;
+    in property <string> zoom-fit;
+    in property <string> filter-preview;
+    in property <string> filter-keep;
+    in property <string> filter-reset;
+    in property <string> probe-render;
+    in property <string> crop-edit;
+    in property <string> auto-crop;
+    in property <string> rotate-left;
+    in property <string> rotate-right;
+    in property <string> mirror-horizontal;
+    in property <string> mirror-vertical;
 
     // A key press that no focused element took; true when it ran (or deliberately ignored) a keymap action.
     callback key-pressed(/* text */ string, /* control */ bool, /* alt */ bool, /* shift */ bool, /* meta */ bool,
         /* repeat */ bool) -> bool;
     // A key was released (only Ctrl matters: holding it over the video edits the crop).
     callback key-released(/* text */ string);
-    // A text field got or lost the keyboard.
-    callback editing-changed(bool);
-    // A modal dialog opened or closed: the menu bar's keys must not act behind it (P8).
+    // A modal dialog opened or closed: the keymap's keys must not act behind it (P8).
     callback modal-changed(bool);
     // Gives the keyboard back to the shortcuts (Enter or Escape in a field, a click on the video or the timeline).
     callback release-focus();

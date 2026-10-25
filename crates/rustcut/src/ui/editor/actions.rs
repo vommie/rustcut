@@ -57,12 +57,6 @@ pub(super) fn connect(editor: &Rc<Editor>, window: &MainWindow) {
         }
     });
     let this = Rc::downgrade(editor);
-    sc.on_editing_changed(move |editing| {
-        if let Some(editor) = this.upgrade() {
-            editor.set_menu_editing(editing);
-        }
-    });
-    let this = Rc::downgrade(editor);
     sc.on_modal_changed(move |modal| {
         if let Some(editor) = this.upgrade() {
             editor.set_menu_modal(modal);
@@ -113,6 +107,11 @@ impl Editor {
         let Some(action) = found else {
             return false;
         };
+        // Behind a modal dialog only Quit acts (a key the dialog did not take must not reach the editor, P8).
+        if self.menu_modal.get() && action != Action::Quit {
+            tracing::debug!(action = action.id(), "[Keymap] Key ignored behind a modal dialog");
+            return true;
+        }
         if press.repeat && !action.repeats() {
             return true;
         }

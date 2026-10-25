@@ -66,6 +66,12 @@ pub(super) fn connect(editor: &Rc<Editor>, window: &MainWindow) {
         }
     });
     let this = Rc::downgrade(editor);
+    sections.on_clear_all(move || {
+        if let Some(editor) = this.upgrade() {
+            editor.run_section_action(SectionAction::ClearAll);
+        }
+    });
+    let this = Rc::downgrade(editor);
     sections.on_clear_selection(move || {
         if let Some(editor) = this.upgrade() {
             editor.state.borrow_mut().sections.clear_selection();
