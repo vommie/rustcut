@@ -8,7 +8,6 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use az::SaturatingAs as _;
 use slint::{Color, ComponentHandle, Global, SharedString};
 
 use crate::desktop::x11_dialog;
@@ -137,7 +136,7 @@ pub fn open<P: ComponentHandle>(parent: &P, request: &PickerRequest, on_change: 
         tracing::error!(error = %e, "[ColorPicker] The picker window could not be shown");
         return;
     }
-    center_over(&window, parent);
+    x11_dialog::center_over(window.window(), parent.window());
     tracing::info!(title = %request.title, "[ColorPicker] Picker opened");
 }
 
@@ -173,16 +172,6 @@ pub fn shutdown() {
         let _ = window.hide();
         tracing::debug!("[ColorPicker] Picker window dropped");
     }
-}
-
-/// Puts `window` in the middle of `parent` (physical pixels, as both report them; Wayland compositors place it
-/// themselves).
-fn center_over<P: ComponentHandle>(window: &ColorPickerWindow, parent: &P) {
-    let (parent_pos, parent_size) = (parent.window().position(), parent.window().size());
-    let size = window.window().size();
-    let x = parent_pos.x + (parent_size.width.saturating_as::<i32>() - size.width.saturating_as::<i32>()) / 2;
-    let y = parent_pos.y + (parent_size.height.saturating_as::<i32>() - size.height.saturating_as::<i32>()) / 2;
-    window.window().set_position(slint::PhysicalPosition::new(x, y));
 }
 
 #[cfg(test)]

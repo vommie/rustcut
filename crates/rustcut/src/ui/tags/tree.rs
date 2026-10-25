@@ -2,7 +2,8 @@
 //! build_branch, flatten, chunk_into_columns}`; the constants come from `crates/rustview/src/ui/tags/mod.rs`, ADR-10).
 //! What differs: the tags are the API's `TagItem`s; RustView's selection statistics over several files become the one
 //! job's assigned tags (RustCut's panel is always in assign mode, so nothing is "selected" or "partial"); RustCut adds
-//! locked tags and hidden branches. `tests/rustview_parity.rs` pins RustView's functions, so a change there is noticed.
+//! locked tags and hidden branches (a tag shown again inside a hidden branch keeps the way to it in the tree, dimmed).
+//! `tests/rustview_parity.rs` pins RustView's functions, so a change there is noticed.
 
 use std::collections::{HashMap, HashSet};
 
@@ -38,7 +39,30 @@ pub struct TagFlattenContext<'a> {
     pub locked: &'a HashSet<u32>,
     /// Branches the user hid: left out, or shown dimmed while they are being chosen (`show_hidden`).
     pub hidden: &'a HashSet<u32>,
+    /// Tags shown again inside a hidden branch (with their branch); the hidden tags above them stay as the way there.
+    pub shown: &'a HashSet<u32>,
     pub show_hidden: bool,
+}
+
+impl TagFlattenContext<'_> {
+    /// Whether a tag shows itself: its own mark, else its parent's state.
+    fn visible(&self, id: u32, parent_visible: bool) -> bool {
+        if self.hidden.contains(&id) {
+            false
+        } else if self.shown.contains(&id) {
+            true
+        } else {
+            parent_visible
+        }
+    }
+
+    /// Whether a tag of `nodes` (or below them) shows itself.
+    fn shows_below(&self, nodes: &[TagTreeNode], parent_visible: bool) -> bool {
+        nodes.iter().any(|n| {
+            let visible = self.visible(n.record.id, parent_visible);
+            visible || (!self.shown.is_empty() && self.shows_below(&n.children, visible))
+        })
+    }
 }
 
 pub struct TagTreeBuilder;
@@ -90,13 +114,13 @@ impl TagTreeBuilder {
         ctx: &TagFlattenContext<'_>,
         output: &mut Vec<TagNodeView>,
     ) -> bool {
-        Self::flatten_inner(nodes, depth, false, ctx, output)
+        Self::flatten_inner(nodes, depth, true, ctx, output)
     }
 
     fn flatten_inner(
         nodes: &[TagTreeNode],
         depth: i32,
-        in_hidden: bool,
+        parent_visible: bool,
         ctx: &TagFlattenContext<'_>,
         output: &mut Vec<TagNodeView>,
     ) -> bool {
@@ -104,14 +128,17 @@ impl TagTreeBuilder {
         let is_filtering = !ctx.filter_text.is_empty();
 
         for node in nodes {
-            let hidden = in_hidden || ctx.hidden.contains(&node.record.id);
-            if hidden && !ctx.show_hidden {
+            let visible = ctx.visible(node.record.id, parent_visible);
+            let hidden = !visible;
+            // A hidden tag stays as the way to a tag shown again below it.
+            let way_there = hidden && !ctx.shown.is_empty() && ctx.shows_below(&node.children, visible);
+            if hidden && !way_there && !ctx.show_hidden {
                 continue;
             }
             let has_children = !node.children.is_empty();
             let is_expanded = ctx.expanded_set.contains(&node.record.id);
 
-            let name_match = if !is_filtering {
+            let name_match = if !is_filtering || (hidden && !ctx.show_hidden) {
                 false
             } else if let Some(re) = ctx.filter_regex {
                 re.is_match(&node.record.name)
@@ -136,7 +163,7 @@ impl TagTreeBuilder {
 
             let mut child_matches = false;
             if has_children && (is_expanded || is_filtering) {
-                child_matches = Self::flatten_inner(&node.children, depth + 1, hidden, ctx, output);
+                child_matches = Self::flatten_inner(&node.children, depth + 1, visible, ctx, output);
             }
 
             if is_filtering && !name_match && !child_matches {
@@ -228,6 +255,7 @@ mod tests {
         assigned: HashSet<u32>,
         locked: HashSet<u32>,
         hidden: HashSet<u32>,
+        shown: HashSet<u32>,
     }
 
     fn sets(expanded: &[u32], hidden: &[u32]) -> Sets {
@@ -236,6 +264,7 @@ mod tests {
             assigned: [2, 5].into_iter().collect(),
             locked: [5].into_iter().collect(),
             hidden: hidden.iter().copied().collect(),
+            shown: HashSet::new(),
         }
     }
 
@@ -248,6 +277,7 @@ mod tests {
             assigned: &sets.assigned,
             locked: &sets.locked,
             hidden: &sets.hidden,
+            shown: &sets.shown,
             show_hidden,
         };
         let mut out = Vec::new();
@@ -281,6 +311,7 @@ mod tests {
             assigned: &s.assigned,
             locked: &s.locked,
             hidden: &s.hidden,
+            shown: &s.shown,
             show_hidden: false,
         };
         let mut out = Vec::new();
@@ -326,6 +357,34 @@ mod tests {
     }
 
     #[test]
+    fn a_tag_shown_again_keeps_the_way_to_it() {
+        // Places (1) is hidden, Alps (3) below it is shown again: Places stays dimmed as the way to Alps and Glacier,
+        // beach (2) is left out (user decision Q-P8b).
+        let mut s = sets(&[1, 3], &[1]);
+        s.shown.insert(3);
+        let rows = rows(&s, "", None, false);
+        assert_eq!(
+            rows,
+            [
+                ("people".to_owned(), 0, false),
+                ("Places".to_owned(), 0, true),
+                ("Alps".to_owned(), 1, false),
+                ("Glacier".to_owned(), 2, false)
+            ]
+        );
+        assert_eq!(
+            names(&rows_of(&s, "glac")),
+            ["Places", "Alps", "Glacier"],
+            "the filter finds the shown tag"
+        );
+        assert!(rows_of(&s, "beach").is_empty(), "a hidden tag is not found");
+    }
+
+    fn rows_of(s: &Sets, filter: &str) -> Vec<(String, i32, bool)> {
+        rows(s, filter, None, false)
+    }
+
+    #[test]
     fn columns_fit_the_height() {
         // RustView: 4 px padding at the top and bottom, rows of 22 px with 2 px between them.
         assert_eq!(TagTreeBuilder::rows_per_column(0.0), 1);
@@ -340,6 +399,7 @@ mod tests {
             assigned: &s.assigned,
             locked: &s.locked,
             hidden: &s.hidden,
+            shown: &s.shown,
             show_hidden: false,
         };
         let mut out = Vec::new();

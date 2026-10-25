@@ -64,3 +64,36 @@ pub fn set_parent(dialog: u32, parent: u32) -> bool {
     );
     written && synced
 }
+
+/// Makes `dialog` a dialog of `parent` as soon as Slint has made its window, before it is mapped the first time (a
+/// rendering notifier; later showings find the properties in place). For a dialog whose parent never changes (the tag
+/// filter window); the color picker, opened from several windows, writes its parent per opening.
+pub fn parent_when_set_up<D, P>(dialog: &D, parent: &P)
+where
+    D: slint::ComponentHandle + 'static,
+    P: slint::ComponentHandle + 'static,
+{
+    let (dialog_weak, parent_weak) = (dialog.as_weak(), parent.as_weak());
+    let installed = dialog.window().set_rendering_notifier(move |state, _| {
+        if matches!(state, slint::RenderingState::RenderingSetup)
+            && let (Some(dialog), Some(parent)) = (dialog_weak.upgrade(), parent_weak.upgrade())
+            && let (Some(dialog), Some(parent)) = (xid(dialog.window()), xid(parent.window()))
+        {
+            set_parent(dialog, parent);
+        }
+    });
+    if let Err(e) = installed {
+        tracing::warn!(error = ?e, "[Desktop] No rendering notifier: the dialog has no parent window");
+    }
+}
+
+/// Puts `window` in the middle of `parent` (physical pixels, as both report them; Wayland compositors place windows
+/// themselves).
+pub fn center_over(window: &slint::Window, parent: &slint::Window) {
+    use az::SaturatingAs as _;
+    let (parent_pos, parent_size) = (parent.position(), parent.size());
+    let size = window.size();
+    let x = parent_pos.x + (parent_size.width.saturating_as::<i32>() - size.width.saturating_as::<i32>()) / 2;
+    let y = parent_pos.y + (parent_size.height.saturating_as::<i32>() - size.height.saturating_as::<i32>()) / 2;
+    window.set_position(slint::PhysicalPosition::new(x, y));
+}

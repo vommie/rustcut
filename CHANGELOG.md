@@ -9,6 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- A tag filter window (0.0.34): the filter button under the tag history opens RustView's whole tag tree with a check
+  box per tag. Unchecked tags are hidden in the Tag & Rate panel with everything below them, also tags RustView adds
+  there later; a tag below a hidden one can be checked again on its own (the hidden tags above it stay in the tree,
+  dimmed, as the way to it). A search shows the matching tags with the way to them, branches fold, the number on the
+  filter button says how many tags are hidden, and "Show all" (held) shows every tag again. Every change shows in the
+  panel at once; the window remembers its size and folded branches. The eye button still hides and shows branches
+  right in the tree, now with the same rules.
+
 - The Tag & Rate panel has PyCutRv's switches in a row under the tag history (0.0.33): **Active** (the tag symbol)
   and **Warn** (the warning triangle). Switched off, Active saves the next jobs without RustView: RustView gets no
   entry, no tags, no rating and not the video's MD5, also when the job finishes; the panel is dimmed meanwhile and the

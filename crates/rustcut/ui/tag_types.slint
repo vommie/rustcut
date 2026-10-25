@@ -71,6 +71,7 @@ export global TagRate {
     in property <string> empty-text;
     /// Choosing the branches to hide: a click hides or shows a branch.
     in property <bool> hide-mode;
+    /// How many tags the tree does not show (the filter button's number).
     in property <int> hidden-count;
 
     in-out property <string> filter-text;
@@ -109,4 +110,6 @@ export global TagRate {
     callback toggle-hide-mode();
     callback toggle-active();
     callback toggle-warn();
+    // The tag filter window (P8b).
+    callback open-filter();
 }
