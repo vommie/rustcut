@@ -59,8 +59,19 @@ pub struct Placement {
 }
 
 /// The place of a `width` x `height` bubble for `anchor` in an `area_width` x `area_height` window; `beside` tries the
-/// right and the left side before below and above.
+/// right and the left side before below and above. On whole pixels, so the arrow's edges meet the border line exactly
+/// (review 15 #10, P9.2).
 pub fn place(anchor: Rect, width: f32, height: f32, area_width: f32, area_height: f32, beside: bool) -> Placement {
+    let p = place_exact(anchor, width, height, area_width, area_height, beside);
+    Placement {
+        x: p.x.round(),
+        y: p.y.round(),
+        arrow: p.arrow.round(),
+        ..p
+    }
+}
+
+fn place_exact(anchor: Rect, width: f32, height: f32, area_width: f32, area_height: f32, beside: bool) -> Placement {
     let width = finite(width).max(0.0);
     let height = finite(height).max(0.0);
     let area_width = finite(area_width).max(0.0);

@@ -100,66 +100,10 @@ component NameField inherits Rectangle {
     }
 }
 
-/// A job loaded into the editor (user decisions Q-Q3, Q-P8b): which job the copy came from, and "Stop" to forget it
-/// (the editor keeps what it has; saving always makes a new job).
-component EditingBanner inherits Rectangle {
-    height: 30px;
-    border-radius: 4px;
-    background: Theme.accent.with-alpha(0.12);
-    border-width: 1px;
-    border-color: Theme.accent.with-alpha(0.6);
-
-    host := TooltipHost {
-        text: Export.editing-tooltip;
-    }
-
-    HorizontalLayout {
-        padding-left: 6px;
-        padding-right: 3px;
-        spacing: 4px;
-
-        AppIcon {
-            y: (parent.height - self.height) / 2;
-            icon: IconId.job-edit;
-            size: IconSize.sm;
-            color: Theme.accent;
-        }
-
-        Text {
-            horizontal-stretch: 1;
-            text: Export.editing-text;
-            color: Theme.text;
-            font-size: 11px;
-            font-weight: 600;
-            vertical-alignment: center;
-            overflow: elide;
-
-            TouchArea {
-                changed has-hover => {
-                    if self.has-hover {
-                        host.enter();
-                    } else {
-                        host.leave();
-                    }
-                }
-            }
-        }
-
-        IconButton {
-            y: (parent.height - self.height) / 2;
-            icon: IconId.close;
-            tooltip: "Forget the loaded job (the editor keeps what it has)";
-            clicked => { Export.stop-editing(); }
-        }
-    }
-}
-
 export component FinalizeCardBody inherits VerticalLayout {
     padding: 8px;
     padding-top: 2px;
     spacing: 6px;
-
-    if Export.editing: EditingBanner { }
 
     HorizontalLayout {
         spacing: 4px;

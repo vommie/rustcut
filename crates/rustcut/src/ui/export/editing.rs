@@ -1,5 +1,6 @@
-//! The export while a job is loaded into the editor (M4.1, user decisions Q-Q3, Q-P8b): the card's banner and the
-//! job's target in the card. Loading is always a copy: Save makes a new job, the loaded one stays as it is.
+//! The export while a job is loaded into the editor (M4.1, user decisions Q-Q3, Q-P8b): the job's target in the card.
+//! Loading is always a copy: Save makes a new job, the loaded one stays as it is. The loaded job is told by the message
+//! kind `job_loaded` (D-P9m), no longer by a strip in the card.
 
 use std::rc::Rc;
 
@@ -47,25 +48,5 @@ impl ExportBridge {
     /// A job was loaded or the link to it ended.
     pub fn editing_changed(&self) {
         self.publish();
-    }
-
-    /// The banner's state (from `publish`).
-    pub(super) fn publish_editing(&self, e: &Export<'_>) {
-        let editing = self.editing.borrow().upgrade();
-        let Some(info) = editing.as_ref().and_then(|ed| ed.info()) else {
-            e.set_editing(false);
-            return;
-        };
-        let banner = editing.and_then(|ed| ed.banner()).unwrap_or_default();
-        e.set_editing(true);
-        e.set_editing_tooltip(
-            format!(
-                "{banner}\nSaving makes a new job; job {} stays as it is. If the new job replaces it, remove or hold \
-                 job {} in the queue yourself.",
-                info.id, info.id
-            )
-            .into(),
-        );
-        e.set_editing_text(banner.into());
     }
 }

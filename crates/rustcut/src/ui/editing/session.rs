@@ -9,7 +9,7 @@ use rustcut_core::job::{JobId, JobSpec};
 #[derive(Debug, Clone)]
 pub struct JobEdit {
     pub id: JobId,
-    /// The target's file name (the card's banner).
+    /// The target's file name (the `job_loaded` message).
     pub label: String,
     pub target: PathBuf,
     /// What the job was when it was loaded, for what a save keeps when the panels do not know it (yet).
@@ -30,8 +30,8 @@ impl JobEdit {
         }
     }
 
-    /// The card's banner.
-    pub fn banner(&self) -> String {
+    /// The title of the `job_loaded` message.
+    pub fn title(&self) -> String {
         format!("Job {} loaded: {}", self.id, self.label)
     }
 }
@@ -155,7 +155,7 @@ mod tests {
         assert_eq!(saved, job);
 
         let edit = JobEdit::new(JobId(4), Box::new(job.clone()));
-        assert_eq!(edit.banner(), "Job #4 loaded: Beach - 04.mkv");
+        assert_eq!(edit.title(), "Job #4 loaded: Beach - 04.mkv");
         assert_eq!(edit.target, saved.target_path());
     }
 }

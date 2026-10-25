@@ -10,7 +10,7 @@ export struct ToastView {
     level: int,
     title: string,
     detail: string,
-    // "15:42".
+    // "15:42:07" (review 34, P9.2).
     time: string,
     // How often it came ("×3" from 2 on).
     count: int,
@@ -51,8 +51,8 @@ export struct BannerView {
     jump-3: bool,
     clickable: bool,
     progress: float,
-    // "since 15:40".
-    since: string,
+    // When its state began, "15:40:12" (review 35, P9.2: no "since").
+    time: string,
 }
 
 export struct HistoryView {

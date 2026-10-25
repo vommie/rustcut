@@ -1,7 +1,7 @@
 // The banner over the top of the video (M6.5, user decisions Q-N8): a state that holds (the probe plays, the job cannot
 // be saved, the file does not play). Full width of the video, lying on it, tinted in its level's color, with the
-// symbol, the title, the detail over several lines, its buttons, "‹ 1 / 3 ›" when several hold, and × (hidden until
-// the state changes). It slides down like a curtain (or fades, or simply shows) and a new error lights up once.
+// symbol, the title, the detail over several lines, its buttons, "‹ 1 / 3 ›" when several hold, the time it began
+// (hh:mm:ss) and × (hidden until the state changes). It slides down like a curtain (or fades, or simply shows) and a new error lights up once.
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
@@ -63,6 +63,8 @@ export component NoticeBanner inherits Rectangle {
             }
         }
 
+        // Review 35/41 (P9.2): the symbol 8 px larger, everything at the right vertically centered: the buttons, the
+        // pager, the time (hh:mm:ss, like the toasts) and ×.
         HorizontalLayout {
             padding-left: 12px;
             padding-right: 8px;
@@ -71,12 +73,11 @@ export component NoticeBanner inherits Rectangle {
             spacing: 10px;
 
             VerticalLayout {
-                alignment: start;
-                padding-top: 1px;
+                alignment: center;
 
                 AppIcon {
                     icon: NoticeLook.icon(Notices.banner.level);
-                    size: IconSize.md;
+                    size: IconSize.md + 8px;
                     color: root.accent;
                 }
             }
@@ -86,24 +87,12 @@ export component NoticeBanner inherits Rectangle {
                 spacing: 3px;
                 alignment: center;
 
-                HorizontalLayout {
-                    spacing: 8px;
-
-                    Text {
-                        text: Notices.banner.title;
-                        color: Theme.text;
-                        font-weight: 700;
-                        overflow: elide;
-                        min-width: 0px;
-                        horizontal-stretch: 1;
-                    }
-
-                    if Notices.banner.since != "": Text {
-                        text: Notices.banner.since;
-                        color: Theme.text-muted;
-                        font-size: 11px;
-                        vertical-alignment: center;
-                    }
+                Text {
+                    text: Notices.banner.title;
+                    color: Theme.text;
+                    font-weight: 700;
+                    overflow: elide;
+                    min-width: 0px;
                 }
 
                 if Notices.banner.detail != "": Text {
@@ -157,28 +146,38 @@ export component NoticeBanner inherits Rectangle {
                     }
                 }
 
-                if Notices.banner-count > 1: HorizontalLayout {
-                    spacing: 2px;
+                if Notices.banner-count > 1: VerticalLayout {
                     alignment: center;
 
-                    NoticeIcon {
-                        icon: IconId.chevron-left;
-                        tooltip: "Previous message";
-                        clicked => { Notices.page-banners(-1); }
-                    }
+                    HorizontalLayout {
+                        spacing: 2px;
 
-                    Text {
-                        text: (Notices.banner-index + 1) + " / " + Notices.banner-count;
-                        color: Theme.text-muted;
-                        font-size: 12px;
-                        vertical-alignment: center;
-                    }
+                        NoticeIcon {
+                            icon: IconId.chevron-left;
+                            tooltip: "Previous message";
+                            clicked => { Notices.page-banners(-1); }
+                        }
 
-                    NoticeIcon {
-                        icon: IconId.chevron-right;
-                        tooltip: "Next message";
-                        clicked => { Notices.page-banners(1); }
+                        Text {
+                            text: (Notices.banner-index + 1) + " / " + Notices.banner-count;
+                            color: Theme.text-muted;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                        }
+
+                        NoticeIcon {
+                            icon: IconId.chevron-right;
+                            tooltip: "Next message";
+                            clicked => { Notices.page-banners(1); }
+                        }
                     }
+                }
+
+                if Notices.banner.time != "": Text {
+                    text: Notices.banner.time;
+                    color: Theme.text-muted;
+                    font-size: 11px;
+                    vertical-alignment: center;
                 }
 
                 VerticalLayout {

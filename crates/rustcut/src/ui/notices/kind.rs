@@ -94,6 +94,7 @@ const BUBBLE: &[NoticePlace] = &[Bubble];
 /// A dialog that needs an answer (M6.5d): its place never changes.
 const FIXED_DIALOG: &[NoticePlace] = &[Dialog];
 const BUBBLE_OR_NOT: &[NoticePlace] = &[Bubble, Nothing];
+const TOAST_OR_NOT: &[NoticePlace] = &[Toast, Nothing];
 
 macro_rules! kinds {
     ($( $(#[$doc:meta])* $variant:ident = $id:literal, $title:literal, $group:ident, $level:ident, $place:ident,
@@ -141,10 +142,11 @@ kinds! {
     /// The export card's name check (M6.5c): files in the folder with similar names.
     TargetSimilar = "target_similar", "Similar names in the target folder", Saving, Info, Bubble, BUBBLE_OR_NOT,
         desktop false, critical false,
-        ("2 files in the folder have similar names", "basic_h264_720p - 01.mkv, basic_h264_720p - 02.mp4");
+        ("2 similar filenames in target folder", "");
     /// The target file exists or a queued job writes it: Save asks what to do.
     TargetConflict = "target_conflict", "Target file exists or is queued", Saving, Warning, Bubble, BUBBLE_OR_NOT,
-        desktop false, critical false, ("The file exists", "Save asks what to do.");
+        desktop false, critical false, ("Target filename already exists",
+        "If you do not fix it here, Save opens a dialog that helps you resolve it.");
     /// The name or the folder cannot be used: the job cannot be saved like this.
     TargetProblem = "target_problem", "Target cannot be used", Saving, Error, Bubble, BUBBLE, desktop false,
         critical false, ("The folder does not exist or cannot be read", "/videos/out");
@@ -225,9 +227,14 @@ kinds! {
         ("RustCut quits when the queue is done", "");
     JobLoadFailed = "job_load_failed", "Job cannot be loaded", Editing, Error, Toast, EVENT, desktop true,
         critical false, ("The job cannot be loaded into the editor", "Its spec is unreadable.");
-    /// Loading a job (a copy, Q-P8b) and ending the link (Q-N8: no message by default).
-    Editing = "editing", "Job loaded into the editor", Editing, Info, Nothing, QUIET, desktop false, critical false,
-        ("Job 3 is in the editor", "Saving makes a new job; job 3 stays as it is.");
+    /// A job was loaded into the editor (a copy, Q-P8b; D-P9m: replaces the strip in the Job Finalization card, no
+    /// message by default: the job is highlighted in the queue).
+    JobLoaded = "job_loaded", "Job loaded into the editor", Editing, Info, Nothing, TOAST_OR_NOT, desktop false,
+        critical false, ("Job #3 loaded: Beach - 03.mkv", "Saving makes a new job; job #3 stays as it is.");
+    /// The other notes about loading jobs: not loaded, the link ended, tags left as they were (Q-N8: no message by
+    /// default).
+    Editing = "editing", "Other notes about loaded jobs", Editing, Info, Nothing, QUIET, desktop false,
+        critical false, ("Job #3 is no longer linked to the editor", "");
     TagsUpdated = "tags_updated", "Tags and rating changed", Tags, Success, Toast, EVENT, desktop false,
         critical false, ("Tags and rating of \"Clip\" updated", "");
     TagsFailed = "tags_failed", "Tags not changed", Tags, Error, Toast, EVENT, desktop true, critical false,

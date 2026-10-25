@@ -16,8 +16,8 @@ pub struct Banner {
     pub actions: Vec<Label>,
     pub clickable: bool,
     pub progress: Option<f32>,
-    /// "since 15:40".
-    pub since: String,
+    /// When its state began, "15:40:12".
+    pub time: String,
     seq: u64,
     revision: u64,
 }
@@ -33,7 +33,7 @@ pub struct NewBanner {
     pub actions: Vec<Label>,
     pub clickable: bool,
     pub progress: Option<f32>,
-    pub since: String,
+    pub time: String,
 }
 
 /// What [`BannerBoard::set`] did.
@@ -72,7 +72,7 @@ impl BannerBoard {
             banner.title = new.title;
             banner.detail = new.detail;
             banner.level = new.level;
-            banner.since = new.since;
+            banner.time = new.time;
             banner.seq = seq;
             banner.revision += 1;
             let (key, level) = (banner.key.clone(), banner.level);
@@ -89,7 +89,7 @@ impl BannerBoard {
             actions: new.actions,
             clickable: new.clickable,
             progress: new.progress,
-            since: new.since,
+            time: new.time,
             seq,
             revision: 0,
         });
@@ -179,7 +179,7 @@ mod tests {
             actions: Vec::new(),
             clickable: false,
             progress: None,
-            since: "12:00".into(),
+            time: "12:00:00".into(),
         }
     }
 

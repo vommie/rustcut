@@ -178,10 +178,11 @@ impl NoticeCenter {
             // A bubble's kind the user moved elsewhere: no bubble stays behind.
             self.bubbles.set(&bubble_key(), None, Duration::ZERO);
         }
-        let clock = chrono::Local::now();
+        // hh:mm:ss everywhere (review 34/35, P9.2).
+        let clock = chrono::Local::now().format("%H:%M:%S").to_string();
         let fresh = match route.place {
-            NoticePlace::Toast => self.toast(&notice, clock.format("%H:%M").to_string()),
-            NoticePlace::Banner => self.banner(&notice, clock.format("%H:%M").to_string()),
+            NoticePlace::Toast => self.toast(&notice, clock.clone()),
+            NoticePlace::Banner => self.banner(&notice, clock.clone()),
             NoticePlace::Status => {
                 if let Some(window) = self.window.upgrade() {
                     status::show(&window, notice.level, &notice.text());
@@ -195,7 +196,7 @@ impl NoticeCenter {
             return;
         }
         self.history.borrow_mut().push(
-            clock.format("%H:%M:%S").to_string(),
+            clock,
             notice.kind,
             notice.level,
             notice.title.clone(),
@@ -321,7 +322,7 @@ impl NoticeCenter {
         (secs > 0).then(|| Duration::from_secs(u64::from(secs)))
     }
 
-    fn banner(&self, notice: &Notice, since: String) -> bool {
+    fn banner(&self, notice: &Notice, time: String) -> bool {
         let key = notice.key.clone().unwrap_or_else(|| notice.kind.id().to_owned());
         let set = self.banners.borrow_mut().set(NewBanner {
             key: key.clone(),
@@ -332,7 +333,7 @@ impl NoticeCenter {
             actions: notice.actions.iter().map(Action::shown).collect(),
             clickable: notice.click.is_some(),
             progress: notice.progress,
-            since,
+            time,
         });
         self.banner_runs.borrow_mut().insert(key, Runs::of(notice));
         if set != Set::Same
