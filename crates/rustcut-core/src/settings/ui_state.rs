@@ -349,6 +349,9 @@ pub struct TagPanelState {
     /// The tag filter window's size in logical pixels.
     pub filter_width: u32,
     pub filter_height: u32,
+    /// The eye under the tag history (P9.8): the tree shows the hidden tags too, dimmed (they are chosen in the tag
+    /// filter window only).
+    pub show_hidden: bool,
 }
 
 impl TagPanelState {
@@ -419,6 +422,7 @@ impl Default for TagPanelState {
             filter_collapsed: Vec::new(),
             filter_width: 380,
             filter_height: 560,
+            show_hidden: false,
         }
     }
 }

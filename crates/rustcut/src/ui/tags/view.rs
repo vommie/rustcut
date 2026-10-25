@@ -1,7 +1,5 @@
-//! The panel's texts: RustView's connection state in the tree's place (the one place it is shown, ADR-6), the line that
-//! sums up the job's tags and rating, and what the tree area says while it has no rows.
-
-use std::fmt::Write as _;
+//! The panel's texts: RustView's connection state in the tree's place (the one place it is shown, ADR-6), the eye's
+//! tooltip and what the tree area says while it has no rows.
 
 use rustcut_core::rustview::ConnectionState;
 
@@ -9,12 +7,13 @@ use super::state::TagPanel;
 use crate::ui::jump::JumpTarget;
 use crate::ui::settings::page::Page;
 
-/// The card in the tree's place while RustView is unavailable or switched off (connecting and connected show none).
+/// The card in the tree's place while RustView is unavailable or switched off (connecting and connected show none): one
+/// short line (P9.8, review note 28#1); the error is the tooltip of the button that leads to the setting behind it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConnectionView {
     pub text: String,
-    /// What the state means (the reason once, then what RustCut does about it).
-    pub detail: String,
+    /// The current error in short: the jump button's tooltip.
+    pub error: String,
     /// 0 = unknown, 1 = connected, 2 = unavailable, 3 = switched off (`TagRate.connection-kind`).
     pub kind: i32,
     pub can_retry: bool,
@@ -32,38 +31,31 @@ const fn rustview_option(key: &'static str) -> JumpTarget {
 }
 
 pub fn connection(state: &ConnectionState) -> ConnectionView {
-    const WRITES: &str = "Jobs keep their tags and rating and are written into RustView's library once it answers.";
     match state {
         ConnectionState::Unknown => ConnectionView {
             text: "Connecting to RustView...".into(),
-            detail: String::new(),
+            error: String::new(),
             kind: 0,
             can_retry: false,
             jump: None,
         },
         ConnectionState::Connected => ConnectionView {
             text: "RustView connected".into(),
-            detail: String::new(),
+            error: String::new(),
             kind: 1,
             can_retry: false,
             jump: None,
         },
-        ConnectionState::Unavailable { reason, retry_in_secs } => ConnectionView {
+        ConnectionState::Unavailable { reason, .. } => ConnectionView {
             text: "RustView unavailable".into(),
-            detail: format!(
-                "{reason}\nRustCut tries again by itself (the next try was {retry_in_secs} s after this failure, the pause \
-                 doubles up to 2 minutes); Retry tries now.\n{WRITES}"
-            ),
+            error: reason.clone(),
             kind: 2,
             can_retry: true,
             jump: Some(rustview_option("rustview.binary")),
         },
         ConnectionState::Disabled => ConnectionView {
             text: "RustView is switched off".into(),
-            detail:
-                "The RustView link is switched off in the settings (`[rustview] enabled`): jobs are not written into \
-                      RustView's library."
-                    .into(),
+            error: "The RustView link is switched off in the settings.".into(),
             kind: 3,
             can_retry: false,
             jump: Some(rustview_option("rustview.enabled")),
@@ -71,31 +63,20 @@ pub fn connection(state: &ConnectionState) -> ConnectionView {
     }
 }
 
-/// "2 tags, rating 4" (with the locked and hidden ones named when there are any); "Saved without RustView" while the
-/// "Active" switch is off.
-pub fn summary(panel: &TagPanel) -> String {
-    if !panel.active && panel.editing.is_none() {
-        return "Saved without RustView".to_owned();
+/// The eye's tooltip (P9.8: it only shows or hides the hidden tags; they are chosen in the tag filter window).
+pub fn eye_tooltip(panel: &TagPanel) -> String {
+    if panel.show_hidden {
+        return "Hide the hidden tags again".to_owned();
     }
-    let choice = panel.choice();
-    let tags = match choice.tags.len() {
-        0 => "No tags".to_owned(),
-        1 => "1 tag".to_owned(),
-        n => format!("{n} tags"),
-    };
-    let rating = choice
-        .rating
-        .map_or_else(|| "no rating".to_owned(), |r| format!("rating {r}"));
-    let mut text = format!("{tags}, {rating}");
-    let locked = if panel.editing.is_some() { 0 } else { panel.locked.len() };
-    if locked > 0 {
-        let _ = write!(text, " ({locked} locked)");
+    let hidden = panel.hidden_count();
+    if hidden == 0 {
+        return "No tag is hidden (the tag filter hides tags)".to_owned();
     }
-    let hidden = panel.assigned_in_hidden();
-    if hidden > 0 {
-        let _ = write!(text, ", {hidden} in hidden branches");
+    let tags = if hidden == 1 { "tag" } else { "tags" };
+    match panel.assigned_in_hidden() {
+        0 => format!("Show the {hidden} hidden {tags}"),
+        assigned => format!("Show the {hidden} hidden {tags} ({assigned} of them assigned)"),
     }
-    text
 }
 
 /// The last saved job's tags by name ("Beach, Anna").
@@ -123,12 +104,13 @@ pub fn empty_text(panel: &TagPanel, state: &ConnectionState) -> String {
     if !panel.filter.trim().is_empty() {
         return "No tag matches the filter.".to_owned();
     }
-    "Every branch is hidden: the hide button shows them again.".to_owned()
+    "Every tag is hidden: the eye button shows them.".to_owned()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rustcut_core::rustview::{TagItem, TagTree};
     use rustcut_core::settings::TagPanelState;
 
     #[test]
@@ -138,28 +120,49 @@ mod tests {
             reason: "RustView cannot be started: not installed".into(),
             retry_in_secs: 4,
         });
-        assert!(down.can_retry && down.text == "RustView unavailable" && down.detail.contains("4 s"));
+        assert!(down.can_retry && down.text == "RustView unavailable");
         assert_eq!(
-            down.detail.matches("not installed").count(),
-            1,
-            "the reason is said once (P8b audit)"
+            down.error, "RustView cannot be started: not installed",
+            "the error is the button's tooltip"
         );
         assert!(!connection(&ConnectionState::Disabled).can_retry);
     }
 
     #[test]
-    fn summary_and_empty_texts() {
+    fn eye_and_empty_texts() {
         let mut panel = TagPanel::new(&TagPanelState::default());
-        assert_eq!(summary(&panel), "No tags, no rating");
         assert_eq!(
             empty_text(&panel, &ConnectionState::Unknown),
             "Loading RustView's tags..."
         );
-        panel.set_tree(std::sync::Arc::new(rustcut_core::rustview::TagTree::default()));
+        panel.set_tree(std::sync::Arc::new(TagTree::default()));
         assert!(empty_text(&panel, &ConnectionState::Connected).contains("no tags yet"));
-        panel.click_rating(4);
-        assert_eq!(summary(&panel), "No tags, rating 4");
-        panel.active = false;
-        assert_eq!(summary(&panel), "Saved without RustView");
+
+        let tags = [(1, None, "People"), (2, Some(1), "Anna"), (3, None, "Travel")]
+            .into_iter()
+            .map(|(id, parent_id, name)| TagItem {
+                id,
+                parent_id,
+                name: name.into(),
+            })
+            .collect();
+        panel.set_tree(std::sync::Arc::new(TagTree {
+            success: true,
+            total_tags: 3,
+            tags,
+        }));
+        assert_eq!(eye_tooltip(&panel), "No tag is hidden (the tag filter hides tags)");
+        panel.toggle_branch(1);
+        assert_eq!(eye_tooltip(&panel), "Show the 2 hidden tags");
+        panel.click_tag(2);
+        assert_eq!(eye_tooltip(&panel), "Show the 2 hidden tags (1 of them assigned)");
+        panel.toggle_show_hidden();
+        assert_eq!(eye_tooltip(&panel), "Hide the hidden tags again");
+        panel.toggle_branch(3);
+        panel.toggle_show_hidden();
+        assert_eq!(
+            empty_text(&panel, &ConnectionState::Connected),
+            "Every tag is hidden: the eye button shows them."
+        );
     }
 }

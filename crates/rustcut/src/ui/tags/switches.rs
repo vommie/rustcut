@@ -27,9 +27,6 @@ impl TagsBridge {
         let on = {
             let mut state = self.state.borrow_mut();
             state.active = !state.active;
-            if !state.active {
-                state.hide_mode = false;
-            }
             state.active
         };
         tracing::info!(active = on, "[Tags] Active switched");

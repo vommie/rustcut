@@ -38,14 +38,13 @@ export struct TagHistoryRowModel {
 
 export global TagRate {
     // RustView's connection state (the one place it is shown, ADR-6): while RustView is unavailable or switched off a
-    // card takes the tree's place (user request Q-P8b); connecting and connected need no words.
+    // card takes the tree's place (user request Q-P8b) with one short line (P9.8); connecting and connected need no words.
     in property <string> connection-text;
-    in property <string> connection-detail;
     /// 0 = unknown/checking, 1 = connected, 2 = unavailable, 3 = switched off.
     in property <int> connection-kind;
     in property <bool> can-retry;
-    // The tooltip of the button that leads to the RustView setting behind the state (empty = none, Q-N6).
-    in property <string> connection-jump;
+    // The current error in short: the tooltip of the button that leads to the RustView setting behind it (Q-N6).
+    in property <string> connection-error;
 
     // What the panel edits: the next job (the draft) or a queued job (user decision Q-G3).
     in property <bool> editing-job;
@@ -55,7 +54,6 @@ export global TagRate {
 
     // The rating bar: -1 = no rating chosen (the bar sets it on a click; Rust sets what the job holds right after).
     in-out property <int> rating: -1;
-    in property <string> summary;
     in property <bool> has-last-tags;
     in property <string> last-tags-tooltip;
     /// -1 = no job was saved with a rating yet.
@@ -63,14 +61,16 @@ export global TagRate {
     in property <bool> can-clear;
     /// The "Active" switch (user decision Q-P8b): off = jobs are saved without RustView; red while off, held to switch
     /// off. The tree, the rating and the history are dimmed while it is off (unless a queued job's entry is edited).
+    /// Without a video (and no queued job edited) the parts that tag are locked (D-P9e, `TagRatePanel.has-job`).
     in property <bool> active: true;
     /// The "Warn" switch = `warnings.missing_metadata`: red while off, held to switch off.
     in property <bool> warn: true;
     /// The tree was loaded at least once (tags can be chosen).
     in property <bool> has-tree;
     in property <string> empty-text;
-    /// Choosing the branches to hide: a click hides or shows a branch.
-    in property <bool> hide-mode;
+    /// The eye (P9.8): the tree shows the hidden tags too, dimmed.
+    in property <bool> show-hidden;
+    in property <string> eye-tooltip;
     /// How many tags the tree does not show (the filter button's number).
     in property <int> hidden-count;
 
@@ -85,9 +85,8 @@ export global TagRate {
     in-out property <length> history-height: 96px;
 
     callback retry();
+    // The setting behind the state, else the RustView page of the Settings window.
     callback connection-jump-clicked();
-    // The RustView page of the Settings window (the card while RustView is not connected, M6.5e).
-    callback open-settings();
     callback apply-edit();
     callback cancel-edit();
     callback rating-clicked(int);
@@ -105,9 +104,7 @@ export global TagRate {
     callback apply-last-tags();
     callback apply-last-rating();
     callback clear();
-    callback expand-all();
-    callback collapse-all();
-    callback toggle-hide-mode();
+    callback toggle-show-hidden();
     callback toggle-active();
     callback toggle-warn();
     // The tag filter window (P8b).

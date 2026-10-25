@@ -1,7 +1,8 @@
 //! The Tag & Rate panel's state, without Slint: the tag tree as RustView last sent it, the tags and rating chosen for the
 //! next job (the draft) or for a queued job being edited (user decision Q-G3), locked tags that stay for the next jobs
-//! (Q-G2), hidden branches, the filter, the expanded branches and the tag history. Every operation is a method; the
-//! bridge only shows what [`TagPanel::rows`] and the other views say.
+//! (Q-G2), hidden branches (chosen in the tag filter window, which edits a copy until Apply), the filter, the expanded
+//! branches and the tag history. Every operation is a method; the bridge only shows what [`TagPanel::rows`] and the
+//! other views say.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -11,6 +12,7 @@ use rustcut_core::job::{JobId, JobMetadata};
 use rustcut_core::rustview::{TagItem, TagTree};
 use rustcut_core::settings::TagPanelState;
 
+use super::hidden::Marks;
 use super::history::{TagHistoryItem, TagHistoryManager};
 use super::tree::{TagFlattenContext, TagTreeBuilder, TagTreeNode, descendants};
 use crate::TagNodeView;
@@ -74,17 +76,18 @@ pub struct TagPanel {
     pub history: Vec<u32>,
     pub history_collapsed: bool,
     pub history_height: u32,
-    pub hidden: HashSet<u32>,
-    /// Tags shown again inside a hidden branch (with everything below them).
-    pub shown: HashSet<u32>,
+    /// The hidden branches the tree leaves out.
+    pub marks: Marks,
+    /// The tag filter window's copy of the marks while it is open (Apply makes it `marks`, D-P9n).
+    pub filter_draft: Option<Marks>,
     pub locked: Vec<u32>,
     pub last_tags: Vec<u32>,
     pub last_rating: Option<u8>,
     /// The next job's tags and rating.
     pub draft: Choice,
     pub editing: Option<Editing>,
-    /// Choosing the branches to hide (a click hides or shows one).
-    pub hide_mode: bool,
+    /// The eye (P9.8): the tree shows the hidden tags too, dimmed.
+    pub show_hidden: bool,
     /// The "Active" switch (user decision Q-P8b): off = the next jobs are saved without RustView.
     pub active: bool,
     /// The tag filter window: its folded branches and its size.
@@ -103,8 +106,10 @@ impl TagPanel {
             history: saved.history.clone(),
             history_collapsed: saved.history_collapsed,
             history_height: saved.history_height,
-            hidden: saved.hidden.iter().copied().collect(),
-            shown: saved.shown.iter().copied().collect(),
+            marks: Marks {
+                hidden: saved.hidden.iter().copied().collect(),
+                shown: saved.shown.iter().copied().collect(),
+            },
             locked: saved.locked.clone(),
             last_tags: saved.last_tags.clone(),
             last_rating: saved.last_rating,
@@ -113,6 +118,7 @@ impl TagPanel {
                 rating: None,
             },
             active: saved.active,
+            show_hidden: saved.show_hidden,
             filter_collapsed: saved.filter_collapsed.iter().copied().collect(),
             filter_size: (saved.filter_width, saved.filter_height),
             history_size: TagPanelState::HISTORY_DEFAULT,
@@ -140,8 +146,8 @@ impl TagPanel {
             history: self.history.clone(),
             history_collapsed: self.history_collapsed,
             history_height: self.history_height,
-            hidden: sorted(&self.hidden),
-            shown: sorted(&self.shown),
+            hidden: sorted(&self.marks.hidden),
+            shown: sorted(&self.marks.shown),
             locked: self.locked.clone(),
             last_tags: self.last_tags.clone(),
             last_rating: self.last_rating,
@@ -149,6 +155,7 @@ impl TagPanel {
             filter_collapsed: sorted(&self.filter_collapsed),
             filter_width: self.filter_size.0,
             filter_height: self.filter_size.1,
+            show_hidden: self.show_hidden,
         };
     }
 
@@ -158,13 +165,12 @@ impl TagPanel {
         self.forest = TagTreeBuilder::build_hierarchy(&tree.tags);
         self.by_id = tree.tags.iter().map(|t| (t.id, t.clone())).collect();
         let valid: HashSet<u32> = self.by_id.keys().copied().collect();
-        for set in [
-            &mut self.expanded,
-            &mut self.hidden,
-            &mut self.shown,
-            &mut self.filter_collapsed,
-        ] {
+        for set in [&mut self.expanded, &mut self.filter_collapsed] {
             set.retain(|id| valid.contains(id));
+        }
+        self.marks.retain(&valid);
+        if let Some(draft) = &mut self.filter_draft {
+            draft.retain(&valid);
         }
         TagHistoryManager::prune_invalid(&mut self.history, &valid);
         for list in [&mut self.locked, &mut self.last_tags, &mut self.draft.tags] {
@@ -214,14 +220,10 @@ impl TagPanel {
         }
     }
 
-    /// A click on a tag in the tree: assigns or unassigns it, or hides/shows its branch while branches are chosen.
-    /// Unassigning a locked tag unlocks it.
+    /// A click on a tag in the tree or a pill of the tag history: assigns or unassigns it. Unassigning a locked tag
+    /// unlocks it.
     pub fn click_tag(&mut self, id: u32) {
         if !self.by_id.contains_key(&id) {
-            return;
-        }
-        if self.hide_mode {
-            self.toggle_branch(id);
             return;
         }
         let assigned = self.choice_mut().toggle(id);
@@ -232,17 +234,10 @@ impl TagPanel {
         }
     }
 
-    /// A click on a pill of the tag history (never hides a branch).
-    pub fn click_history(&mut self, id: u32) {
-        let hide_mode = std::mem::replace(&mut self.hide_mode, false);
-        self.click_tag(id);
-        self.hide_mode = hide_mode;
-    }
-
     /// A right click locks the tag (and assigns it) or unlocks it (it stays assigned for this job). Only for the draft:
     /// a lock is about the next jobs.
     pub fn toggle_lock(&mut self, id: u32) -> bool {
-        if self.editing.is_some() || self.hide_mode || !self.by_id.contains_key(&id) {
+        if self.editing.is_some() || !self.by_id.contains_key(&id) {
             return false;
         }
         if let Some(at) = self.locked.iter().position(|t| *t == id) {
@@ -300,16 +295,9 @@ impl TagPanel {
         }
     }
 
-    pub fn expand_all(&mut self) {
-        self.expanded = self.by_id.keys().copied().collect();
-    }
-
-    pub fn collapse_all(&mut self) {
-        self.expanded.clear();
-    }
-
-    pub fn toggle_hide_mode(&mut self) {
-        self.hide_mode = !self.hide_mode;
+    /// The eye: the hidden tags show in the tree (dimmed) or not.
+    pub fn toggle_show_hidden(&mut self) {
+        self.show_hidden = !self.show_hidden;
     }
 
     /// The filter as a regular expression (case-insensitive) when the regex switch is on; `Err` = it does not compile
@@ -345,9 +333,9 @@ impl TagPanel {
             filter_regex: regex.as_ref(),
             assigned: &assigned,
             locked: &locked,
-            hidden: &self.hidden,
-            shown: &self.shown,
-            show_hidden: self.hide_mode,
+            hidden: &self.marks.hidden,
+            shown: &self.marks.shown,
+            show_hidden: self.show_hidden,
         };
         let mut rows = Vec::new();
         TagTreeBuilder::flatten(&self.forest, 0, &ctx, &mut rows);
@@ -361,7 +349,7 @@ impl TagPanel {
 
     /// Tags of the choice that a hidden branch keeps out of the tree (they are still assigned).
     pub fn assigned_in_hidden(&self) -> usize {
-        if self.hidden.is_empty() {
+        if self.marks.hidden.is_empty() {
             return 0;
         }
         self.choice().tags.iter().filter(|t| !self.visible(**t)).count()
@@ -401,7 +389,6 @@ impl TagPanel {
             tags: metadata.tags.clone(),
             rating: metadata.rating,
         };
-        self.hide_mode = false;
         self.editing = Some(Editing {
             id,
             name,
@@ -482,7 +469,7 @@ mod tests {
         assert_eq!(p.draft.rating, None, "the chosen rating again clears it");
         p.click_rating(7);
         assert_eq!(p.draft.rating, None);
-        p.click_history(2);
+        p.click_tag(2);
         assert_eq!(p.draft.tags, [4, 2]);
     }
 
@@ -554,32 +541,37 @@ mod tests {
     }
 
     #[test]
-    fn hiding_branches_and_a_new_tree_prune_unknown_ids() {
+    fn hidden_branches_the_eye_and_a_new_tree_prune_unknown_ids() {
         let mut p = panel();
         p.click_tag(2);
-        p.toggle_hide_mode();
-        p.click_tag(1);
-        p.toggle_hide_mode();
-        assert!(p.hidden.contains(&1));
-        assert_eq!(p.draft.tags, [2], "hide mode does not assign");
+        p.toggle_branch(1);
+        assert!(p.marks.hidden.contains(&1));
+        assert_eq!(p.draft.tags, [2], "hiding does not assign");
         assert_eq!(p.assigned_in_hidden(), 1);
         assert_eq!(p.rows().iter().map(|r| r.id).collect::<Vec<_>>(), [4]);
-        p.expand_all();
-        p.toggle_hide_mode();
-        assert_eq!(p.rows().len(), 4, "every tag shows while branches are chosen");
-        p.toggle_hide_mode();
+        p.expanded = [1, 2, 3, 4].into_iter().collect();
+        p.toggle_show_hidden();
+        let rows: Vec<(i32, bool)> = p.rows().iter().map(|r| (r.id, r.is_dimmed)).collect();
+        assert_eq!(
+            rows,
+            [(4, false), (1, true), (3, true), (2, true)],
+            "the eye shows them dimmed"
+        );
+        p.click_tag(3);
+        assert_eq!(p.draft.tags, [2, 3], "a click on a shown hidden tag assigns it");
+        p.toggle_show_hidden();
 
         let mut smaller = (*tree()).clone();
         smaller.tags.retain(|t| t.id == 4);
         p.set_tree(Arc::new(smaller));
-        assert!(p.hidden.is_empty() && p.draft.tags.is_empty() && p.history.is_empty());
+        assert!(p.marks.hidden.is_empty() && p.draft.tags.is_empty() && p.history.is_empty());
         assert_eq!(p.expanded, [4].into_iter().collect());
     }
 
     #[test]
     fn regex_filter_falls_back_and_state_round_trips() {
         let mut p = panel();
-        p.expand_all();
+        p.expanded = [1, 2, 3, 4].into_iter().collect();
         p.filter = "be".into();
         assert_eq!(p.rows().iter().map(|r| r.id).collect::<Vec<_>>(), [1, 2]);
         p.regex = true;
@@ -591,6 +583,7 @@ mod tests {
 
         p.toggle_lock(2);
         p.history_height = 120;
+        p.toggle_show_hidden();
         let mut saved = TagPanelState::default();
         p.save_into(&mut saved);
         let restored = TagPanel::new(&saved);

@@ -147,6 +147,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The Tag & Rate panel, your UI review round 1 (0.0.43): without an open video (and while no queued job's tags are
+  edited) the rating, tagging in the tree, the history's tags and the last rating and tags are dimmed and locked;
+  filtering, opening and folding branches, folding the history, clearing, the switches, the eye and the tag filter
+  still work. A locked tag (right click) is red instead of green, without the lock symbol that pushed its name aside.
+  The row under the history has no text between its buttons any more. The eye only shows or hides the hidden tags
+  (dimmed in the tree, and a click assigns them as usual); which tags are hidden is chosen in the tag filter only, so
+  the eye's own mode with its hint is gone. Active's tooltip says "When the job is saved, its tags and rating are
+  written into RustView for the target file." The tag filter window is called "Tags Filter", says "Select the tags to
+  hide", and a check now means hidden; its changes wait for "Apply" (it replaces "Done"), while Escape or the window's
+  × close it without changing anything. While RustView is unavailable or switched off, its card says so in one short
+  line under a larger symbol; the button to the RustView settings names the error in its tooltip. The tag filter field
+  is off while there are no tags to filter. The buttons that expanded and collapsed every branch are gone.
+  `ui-state.toml` keeps whether the eye shows the hidden tags (a new field; older files load unchanged).
 - Job Finalization, your UI review round 1 (0.0.42): two rows whose three columns line up: the name (the chosen
   container's extension stands dim inside it, ".mkv"), the counter and the auto-increment toggle; the target folder,
   a button to the folder list in Settings > Export & Naming (it replaces adding and removing folders on the card) and

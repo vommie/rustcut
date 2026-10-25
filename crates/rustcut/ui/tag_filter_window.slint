@@ -1,8 +1,9 @@
-// The tag filter (P8b, user decision Q-P8b): RustView's whole tag tree with a check box per tag, in a window of its own
-// that belongs to the main window (X11: a dialog of it, src/ui/tags/filter_window.rs). Unchecked = hidden in the Tag &
-// Rate panel; a check box acts on its whole branch (tags RustView adds there later follow), a tag below can be checked
-// again on its own. A search shows the tags whose names contain the text with the way to them. Every change shows in
-// the panel at once; "Show all" (held) clears the filter, Done or Escape closes the window. Rust fills everything.
+// The tag filter (P8b, user decision Q-P8b; P9.8): RustView's whole tag tree with a check box per tag, in a window of
+// its own that belongs to the main window (X11: a dialog of it, src/ui/tags/filter_window.rs). Checked = hidden in the
+// Tag & Rate panel (Q-P9); a check box acts on its whole branch (tags RustView adds there later follow), a tag below
+// can be unchecked again on its own. A search shows the tags whose names contain the text with the way to them. The
+// window edits a draft (D-P9n): Apply hides the checked tags and closes, Escape and × drop the changes; "Show all"
+// (held) clears every check. Rust fills everything.
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
@@ -19,7 +20,7 @@ export struct TagFilterRowView {
     depth: int,
     has-children: bool,
     expanded: bool,
-    /// 0 = hidden, 1 = shown, 2 = mixed (the branch below differs).
+    /// 0 = shown (no check), 1 = hidden (checked), 2 = mixed (the branch below differs).
     check: int,
     /// Only on the way to a tag the search found.
     dimmed: bool,
@@ -54,9 +55,9 @@ component FilterRow inherits Rectangle {
     border-radius: 3px;
 
     host := TooltipHost {
-        text: root.item.check == 0 ? "Hidden in the Tag & Rate panel with everything below it: a click shows the branch"
+        text: root.item.check == 1 ? "Hidden with everything below it: a click shows it again"
             : root.item.check == 2 ? "Some tags below differ: a click makes the whole branch follow this tag"
-            : "Shown in the Tag & Rate panel: a click hides it with everything below it";
+            : "Shown: a click hides it with everything below it";
     }
 
     touch := TouchArea {
@@ -105,7 +106,7 @@ component FilterRow inherits Rectangle {
             text: root.item.name;
             font-size: 12px;
             font-weight: root.item.has-children ? 600 : 400;
-            color: root.item.dimmed ? Theme.text-muted.with-alpha(0.6) : root.item.check == 0 ? Theme.text-muted : Theme.text;
+            color: root.item.dimmed ? Theme.text-muted.with-alpha(0.6) : root.item.check == 1 ? Theme.text-muted : Theme.text;
             vertical-alignment: center;
             horizontal-stretch: 1;
             overflow: elide;
@@ -191,10 +192,13 @@ export component TagFilterWindow inherits Window {
     callback expand(int);
     callback search-changed(string);
     callback show-all();
-    callback done();
+    /// Apply: the checked tags are hidden, the window closes.
+    callback apply();
+    /// Escape (and the window's ×): the changes are dropped, the window closes.
+    callback discard();
     callback resized(length, length);
 
-    title: "Tag filter - RustCut";
+    title: "Tags Filter - RustCut";
     background: Theme.background;
     min-width: 260px;
     min-height: 240px;
@@ -208,7 +212,7 @@ export component TagFilterWindow inherits Window {
     keys := FocusScope {
         key-pressed(event) => {
             if event.text == Key.Escape {
-                root.done();
+                root.discard();
                 return accept;
             }
             return reject;
@@ -219,14 +223,14 @@ export component TagFilterWindow inherits Window {
             spacing: 8px;
 
             Text {
-                text: "Tags in the Tag & Rate panel";
+                text: "Tags Filter";
                 font-size: 13px;
                 font-weight: 700;
                 color: Theme.text;
             }
 
             Text {
-                text: "Unchecked tags are hidden there, with everything below them (also tags added later). A tag below a hidden one can be checked on its own.";
+                text: "Select the tags to hide";
                 font-size: 11px;
                 color: Theme.text-muted;
                 wrap: word-wrap;
@@ -294,15 +298,15 @@ export component TagFilterWindow inherits Window {
                     text: "Show all";
                     hold: true;
                     enabled: root.hidden-count > 0;
-                    tooltip: "Show every tag in the panel again";
+                    tooltip: "Clear every check";
                     clicked => { root.show-all(); }
                 }
 
                 TextButton {
-                    text: "Done";
+                    text: "Apply";
                     primary: true;
-                    tooltip: "Close the filter (Esc); every change is in the panel already";
-                    clicked => { root.done(); }
+                    tooltip: "Hide the checked tags and close (Esc drops the changes)";
+                    clicked => { root.apply(); }
                 }
             }
         }
