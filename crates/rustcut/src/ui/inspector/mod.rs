@@ -1,6 +1,7 @@
 //! The Job panel's bridge (M4.1, user decision Q-Q1): it follows the queue's current job (after every refresh of the
 //! queue panel), reads the job's spec on the runtime (`QueueCommand::Spec`) when the job or its row changed, and shows
-//! the details (`details.rs`) with RustView's tag names from the Tag & Rate panel. Its buttons act on that job.
+//! the details (`details.rs`) with RustView's tag names from the Tag & Rate panel. Its buttons act on that job; the
+//! rows' own buttons (P9.11) play or show the files, open the folders and lead to the job's profile in Settings.
 
 mod details;
 
@@ -10,15 +11,23 @@ use std::rc::{Rc, Weak};
 
 use rustcut_core::job::{JobId, JobSpec, JobStateKind};
 use rustcut_core::queue::{JobSummary, QueueCommand, QueueError};
+use rustcut_core::render::RenderProfile;
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 
-pub use details::{DetailRow, DetailSection, Extras, SECTION_IDS, Tone, details, filter_text};
+pub use details::{DetailRow, DetailSection, Extras, RowAction, RowIcon, SECTION_IDS, Tone, details, filter_text};
 
 use crate::ui::dispatcher::UiDispatcher;
-use crate::ui::queue::{QueueAction, QueueBridge, file_label, kind_number, title};
+use crate::ui::queue::{QueueAction, QueueBridge, file_label, kind_number, open_file, title};
 use crate::ui::tags::TagsBridge;
 use crate::util::model::sync;
-use crate::{Job, JobRowView, JobSectionView, MainWindow};
+use crate::{Job, JobRowButton, JobRowView, JobSectionView, MainWindow};
+
+/// The buttons of the shown rows: per section id, per row.
+type ShownActions = Vec<(&'static str, Vec<Vec<RowAction>>)>;
+/// Whether the profile library holds a profile unchanged.
+type ProfileKnown = Box<dyn Fn(&RenderProfile) -> bool>;
+/// Shows a profile in Settings.
+type ShowProfile = Box<dyn Fn(&str)>;
 
 thread_local! {
     static BRIDGE: RefCell<Weak<InspectorBridge>> = const { RefCell::new(Weak::new()) };
@@ -46,6 +55,11 @@ pub struct InspectorBridge {
     /// The job loaded into the editor.
     editing: Cell<Option<JobId>>,
     sections: Rc<VecModel<JobSectionView>>,
+    /// The rows' buttons as shown: per section id, per row.
+    actions: RefCell<ShownActions>,
+    /// Whether the profile library holds a profile unchanged, and the way to show one (Settings, P9.11).
+    profile_known: RefCell<Option<ProfileKnown>>,
+    show_profile: RefCell<Option<ShowProfile>>,
 }
 
 impl InspectorBridge {
@@ -75,6 +89,9 @@ impl InspectorBridge {
             reads: Cell::new(0),
             editing: Cell::new(None),
             sections: Rc::new(VecModel::default()),
+            actions: RefCell::new(Vec::new()),
+            profile_known: RefCell::new(None),
+            show_profile: RefCell::new(None),
         });
         BRIDGE.with(|b| *b.borrow_mut() = Rc::downgrade(&bridge));
         let j = window.global::<Job<'_>>();
@@ -82,6 +99,13 @@ impl InspectorBridge {
         j.set_empty_text("Click a job in the queue to see it here.".into());
         connect(&bridge, window);
         bridge
+    }
+
+    /// The profile row's jump (P9.11): `known` says whether a job's profile still exists unchanged, `show` shows one.
+    pub fn set_profile_hooks(&self, known: impl Fn(&RenderProfile) -> bool + 'static, show: impl Fn(&str) + 'static) {
+        *self.profile_known.borrow_mut() = Some(Box::new(known));
+        *self.show_profile.borrow_mut() = Some(Box::new(show));
+        self.publish_sections();
     }
 
     /// The folded sections for `ui-state.toml`.
@@ -188,14 +212,21 @@ impl InspectorBridge {
         let Some(shown) = shown.as_ref() else { return };
         let tags = self.tags.upgrade();
         let name = |id: u32| tags.as_ref().and_then(|t| t.tag_name(id));
+        let known = self.profile_known.borrow();
         let all = details(
             &shown.row,
             shown.spec.as_deref(),
             &Extras {
                 size: shown.size,
                 tag_name: Some(&name),
+                profile_known: known.as_deref(),
             },
         );
+        drop(known);
+        *self.actions.borrow_mut() = all
+            .iter()
+            .map(|s| (s.id, s.rows.iter().map(|r| r.actions.clone()).collect()))
+            .collect();
         let collapsed = self.collapsed.borrow();
         let views = all
             .into_iter()
@@ -203,25 +234,32 @@ impl InspectorBridge {
                 id: s.id.into(),
                 title: s.title.into(),
                 collapsed: collapsed.contains(s.id),
-                rows: ModelRc::new(VecModel::from(
-                    s.rows
-                        .into_iter()
-                        .map(|r| JobRowView {
-                            label: r.label.into(),
-                            value: r.value.into(),
-                            tooltip: r.tooltip.into(),
-                            tone: match r.tone {
-                                Tone::Normal => 0,
-                                Tone::Muted => 1,
-                                Tone::Error => 2,
-                            },
-                            path: r.path,
-                        })
-                        .collect::<Vec<_>>(),
-                )),
+                rows: ModelRc::new(VecModel::from(s.rows.into_iter().map(row_view).collect::<Vec<_>>())),
             })
             .collect();
         sync(&self.sections, views);
+    }
+
+    /// Button `button` of row `row` in section `section` was clicked.
+    fn row_button(&self, section: &str, row: usize, button: usize) {
+        let action = self
+            .actions
+            .borrow()
+            .iter()
+            .find(|(id, _)| *id == section)
+            .and_then(|(_, rows)| rows.get(row))
+            .and_then(|buttons| buttons.get(button))
+            .cloned();
+        match action {
+            Some(RowAction::Play(path) | RowAction::OpenFolder(path)) => open_file(&self.runtime, path, false),
+            Some(RowAction::Reveal(path)) => open_file(&self.runtime, path, true),
+            Some(RowAction::Profile(id)) => {
+                if let Some(show) = self.show_profile.borrow().as_ref() {
+                    show(&id);
+                }
+            }
+            None => {}
+        }
     }
 
     fn current(&self) -> Option<JobId> {
@@ -235,8 +273,52 @@ impl InspectorBridge {
     }
 }
 
+fn row_view(r: DetailRow) -> JobRowView {
+    JobRowView {
+        label: r.label.into(),
+        value: r.value.into(),
+        tooltip: r.tooltip.into(),
+        tone: match r.tone {
+            Tone::Normal => 0,
+            Tone::Muted => 1,
+            Tone::Error => 2,
+        },
+        path: r.path,
+        badge: r.badge,
+        icon: match r.icon {
+            RowIcon::None => 0,
+            RowIcon::Done => 1,
+            RowIcon::Failed => 2,
+            RowIcon::Waiting => 3,
+            RowIcon::Off => 4,
+            RowIcon::Removed => 5,
+        },
+        indent: r.indent,
+        buttons: ModelRc::new(VecModel::from(
+            r.actions
+                .iter()
+                .map(|a| JobRowButton {
+                    kind: match a {
+                        RowAction::Play(_) => 0,
+                        RowAction::Reveal(_) => 1,
+                        RowAction::OpenFolder(_) => 2,
+                        RowAction::Profile(_) => 3,
+                    },
+                    tooltip: a.tooltip().into(),
+                })
+                .collect::<Vec<_>>(),
+        )),
+    }
+}
+
 fn connect(bridge: &Rc<InspectorBridge>, window: &MainWindow) {
     let j = window.global::<Job<'_>>();
+    let weak = Rc::downgrade(bridge);
+    j.on_row_button(move |section, row, button| {
+        if let (Some(b), Ok(row), Ok(button)) = (weak.upgrade(), usize::try_from(row), usize::try_from(button)) {
+            b.row_button(&section, row, button);
+        }
+    });
     let weak = Rc::downgrade(bridge);
     j.on_toggle_section(move |id| {
         if let Some(b) = weak.upgrade() {

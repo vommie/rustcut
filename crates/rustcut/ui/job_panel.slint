@@ -1,6 +1,7 @@
 // The Job panel (src/ui/inspector/ fills `Job`; user decision Q-Q1): the queue's current job with its state and what
 // can be done with it, and its details in foldable sections (job, source, output, sections, filters, codecs, tags and
-// rating). Long values are elided; their tooltip has the whole text.
+// rating). Long values are elided; their tooltip has the whole text. Rows can carry a badge (the state), a status
+// symbol (RustView) and buttons on their right (P9.11).
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
@@ -9,49 +10,122 @@ import { TooltipHost } from "tooltip.slint";
 import { Job, JobRowView, JobSectionView } from "job_types.slint";
 import { QueueColors } from "queue_row.slint";
 
+/// The symbol of a row's status (`JobRowView.icon`).
+global RowIcons {
+    pure public function icon(kind: int) -> IconId {
+        return kind == 1 ? IconId.sync-done : kind == 2 ? IconId.sync-failed : kind == 3 ? IconId.sync-waiting
+            : kind == 4 ? IconId.sync-off : IconId.sync-removed;
+    }
+    pure public function color(kind: int) -> color {
+        return kind == 1 ? Theme.status-ok : kind == 2 ? Theme.status-corrupt : Theme.text-muted;
+    }
+    pure public function button(kind: int) -> IconId {
+        return kind == 0 ? IconId.play-file : kind == 1 ? IconId.reveal-file : kind == 2 ? IconId.open-folder
+            : IconId.jump-to;
+    }
+}
+
 component DetailRow inherits Rectangle {
     in property <JobRowView> item;
+    in property <string> section;
+    in property <int> index;
+    property <color> value-color: root.item.tone == 2 ? Theme.status-corrupt
+        : root.item.tone == 1 ? Theme.text-muted : Theme.text;
 
-    height: 20px;
+    height: root.item.buttons.length > 0 ? 24px : 20px;
 
     host := TooltipHost {
         text: root.item.tooltip;
     }
 
-    HorizontalLayout {
-        spacing: 8px;
-
-        Text {
-            width: 76px;
-            text: root.item.label;
-            color: Theme.text-muted;
-            font-size: 11px;
-            vertical-alignment: center;
-            overflow: elide;
-        }
-
-        if !root.item.path: Text {
-            horizontal-stretch: 1;
-            text: root.item.value;
-            color: root.item.tone == 2 ? Theme.status-corrupt : root.item.tone == 1 ? Theme.text-muted : Theme.text;
-            font-size: 12px;
-            vertical-alignment: center;
-            overflow: elide;
-        }
-
-        if root.item.path: MiddleText {
-            horizontal-stretch: 1;
-            text: root.item.value;
-            color: root.item.tone == 2 ? Theme.status-corrupt : root.item.tone == 1 ? Theme.text-muted : Theme.text;
-        }
-    }
-
+    // Under the buttons: the row's tooltip on hover.
     TouchArea {
         changed has-hover => {
             if self.has-hover {
                 host.enter();
             } else {
                 host.leave();
+            }
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 8px;
+
+        Rectangle {
+            width: 76px;
+
+            Text {
+                x: root.item.indent ? 10px : 0px;
+                width: parent.width - self.x;
+                height: parent.height;
+                text: root.item.label;
+                color: Theme.text-muted;
+                font-size: 11px;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+
+        HorizontalLayout {
+            horizontal-stretch: 1;
+            spacing: 4px;
+
+            if root.item.icon != 0: AppIcon {
+                y: (parent.height - self.height) / 2;
+                icon: RowIcons.icon(root.item.icon);
+                size: IconSize.sm;
+                color: RowIcons.color(root.item.icon);
+            }
+
+            // The state as a badge in its color (P9.11, review note 11#1).
+            if root.item.badge: Rectangle {
+                horizontal-stretch: 1;
+
+                Rectangle {
+                    x: 0;
+                    y: (parent.height - self.height) / 2;
+                    width: Math.min(parent.width, badge-text.preferred-width + 12px);
+                    height: 16px;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: QueueColors.of(Job.kind);
+                    background: QueueColors.of(Job.kind).with-alpha(0.18);
+
+                    badge-text := Text {
+                        x: 6px;
+                        width: parent.width - 12px;
+                        text: root.item.value;
+                        color: QueueColors.of(Job.kind);
+                        font-size: 11px;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                }
+            }
+
+            if !root.item.badge && !root.item.path: Text {
+                horizontal-stretch: 1;
+                text: root.item.value;
+                color: root.value-color;
+                font-size: 12px;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+
+            if !root.item.badge && root.item.path: MiddleText {
+                horizontal-stretch: 1;
+                text: root.item.value;
+                color: root.value-color;
+            }
+
+            // Play, show in the file manager, open the folder, the profile (P9.11), on the row's right.
+            for button[b] in root.item.buttons: IconButton {
+                y: 0;
+                icon: RowIcons.button(button.kind);
+                tooltip: button.tooltip;
+                clicked => { Job.row-button(root.section, root.index, b); }
             }
         }
     }
@@ -101,8 +175,10 @@ component DetailSection inherits Rectangle {
         }
 
         if !root.section.collapsed: VerticalLayout {
-            for item in root.section.rows: DetailRow {
+            for item[index] in root.section.rows: DetailRow {
                 item: item;
+                section: root.section.id;
+                index: index;
             }
         }
     }

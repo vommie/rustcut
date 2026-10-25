@@ -20,7 +20,7 @@ pub enum LineLevel {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShownLine {
-    /// Position in the whole log (1-based), shown as the line number.
+    /// Position in the whole log (1-based; the panel shows no line numbers since P9.11).
     pub number: usize,
     pub text: String,
     pub level: LineLevel,

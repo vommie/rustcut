@@ -11,6 +11,7 @@ pub mod known_source;
 mod state;
 
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -21,13 +22,18 @@ use rustcut_core::hashing::{HashCommand, HashEvent, HashService};
 use rustcut_core::media::{InfoSection, MediaInfo, ProbeOptions, probe, probe_frame_timing};
 use rustcut_core::rustview::{SyncCommand, SyncHandle, trusted_hash};
 use rustcut_core::settings::Settings;
-use slint::{ComponentHandle as _, ModelRc, VecModel};
+use slint::{ComponentHandle as _, Model as _, ModelRc, VecModel};
 use tokio::sync::broadcast::error::RecvError;
 
 pub use state::{HashOrigin, HashStatus, HashView, MediaPanelState, PanelState, ProbeStatus, SectionsView};
 
 use crate::ui::dispatcher::{CoalesceKey, UiDispatcher, rate};
 use crate::{MainWindow, MediaInfoPanel, MediaInfoRow, MediaInfoSection};
+
+thread_local! {
+    /// The folded cards by title (P9.11: every card folds; kept for this run only, not in `ui-state.toml`). UI thread.
+    static COLLAPSED: RefCell<BTreeSet<String>> = const { RefCell::new(BTreeSet::new()) };
+}
 
 /// The function that sees the probe result of the open file.
 type ProbeHook = Box<dyn Fn(Option<&Arc<MediaInfo>>)>;
@@ -139,6 +145,26 @@ impl MediaInfoBridge {
         panel.on_cancel_hash(move || {
             if let Some(bridge) = this.upgrade() {
                 bridge.cancel_hash();
+            }
+        });
+        let weak = window.as_weak();
+        panel.on_toggle_section(move |title| {
+            let collapsed = COLLAPSED.with(|c| {
+                let mut c = c.borrow_mut();
+                let fold = !c.remove(title.as_str());
+                if fold {
+                    c.insert(title.to_string());
+                }
+                fold
+            });
+            if let Some(window) = weak.upgrade() {
+                let sections = window.global::<MediaInfoPanel<'_>>().get_sections();
+                for row in 0..sections.row_count() {
+                    if let Some(mut section) = sections.row_data(row).filter(|s| s.title == title) {
+                        section.collapsed = collapsed;
+                        sections.set_row_data(row, section);
+                    }
+                }
             }
         });
         bridge.refresh();
@@ -481,6 +507,7 @@ fn to_slint(section: &InfoSection) -> MediaInfoSection {
         .collect();
     MediaInfoSection {
         title: section.title.as_str().into(),
+        collapsed: COLLAPSED.with(|c| c.borrow().contains(section.title.as_str())),
         rows: ModelRc::new(VecModel::from(rows)),
     }
 }

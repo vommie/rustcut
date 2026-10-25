@@ -122,6 +122,11 @@ impl ProfilesPage {
             .collect()
     }
 
+    /// The list position of profile `id`.
+    pub fn index_of(&self, id: &str) -> Option<usize> {
+        self.state.library.all().position(|p| p.id == id)
+    }
+
     pub fn index(&self) -> usize {
         self.state
             .library

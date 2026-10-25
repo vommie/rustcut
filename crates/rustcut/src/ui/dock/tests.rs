@@ -288,10 +288,10 @@ fn tabs_shrink_to_fit_their_bar() {
     assert!(end(&wide) > 300.0);
     assert!(end(&narrow) <= 200.0 + 1e-3);
     // The short tab keeps its width; the long ones are cut to a common width.
-    let short = plan::tab_slots(&[PanelId::TagRate, PanelId::MediaInfo, PanelId::Logs], 230.0);
-    assert_eq!(short[2].width, plan::preferred_tab_width("Logs"));
+    let short = plan::tab_slots(&[PanelId::TagRate, PanelId::Export, PanelId::MediaInfo], 222.0);
+    assert_eq!(short[2].width, plan::preferred_tab_width("Info"));
     assert!((short[0].width - short[1].width).abs() < 1e-3);
-    assert!(end(&short) <= 230.0 + 1e-3);
+    assert!(end(&short) <= 222.0 + 1e-3);
     assert_eq!(plan::insertion_index(&wide, 0.0), 0);
     assert_eq!(plan::insertion_index(&wide, 5000.0), 4);
 }

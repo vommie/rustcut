@@ -117,6 +117,12 @@ name_variant = { tabler = "parentheses", doc = "The name check's way out: a free
 clear_sections = { tabler = "eraser", doc = "Clear the section list after each save" }
 existing_file = { tabler = "file", doc = "The target file exists" }
 reveal_file = { tabler = "folder-search", doc = "Show the file in the file manager" }
+open_folder = { tabler = "folder-open", doc = "Open the folder in the file manager (Job panel rows)" }
+sync_done = { tabler = "circle-check", doc = "The job is written into RustView (Job panel)" }
+sync_failed = { tabler = "circle-x", doc = "Writing the job into RustView failed (Job panel)" }
+sync_waiting = { tabler = "clock", doc = "The job waits to be written into RustView (Job panel)" }
+sync_off = { tabler = "circle-dashed", doc = "The job is not written into RustView (Job panel)" }
+sync_removed = { tabler = "trash-x", doc = "The job's RustView entry was removed again (Job panel)" }
 play_file = { tabler = "player-play", doc = "Play the file in the default player" }
 details = { tabler = "info-circle", doc = "Details of a file (hover shows them)" }
 preview_loading = { tabler = "movie", doc = "A picture of a video is being made" }

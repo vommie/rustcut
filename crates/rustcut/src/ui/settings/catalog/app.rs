@@ -216,7 +216,7 @@ pub static ADVANCED: &[Card] = &[
             path_field!(
                 "advanced.ffprobe",
                 "ffprobe",
-                "Reads the streams of a video (Media Info) and checks every finished render.",
+                "Reads the streams of a video (the Info panel) and checks every finished render.",
                 advanced.ffprobe,
                 "ffprobe (from PATH)",
                 folder: false

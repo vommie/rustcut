@@ -1,8 +1,10 @@
-// The Media Info panel (dock panel `media-info`): what ffprobe says about the open file, one card per section (container,
-// each stream), and the source's MD5 in the container card with its progress while it is computed. Filled from
+// The Info panel (dock panel `media-info`): what ffprobe says about the open file, one card per section (container,
+// each stream; each folds with a click on its title, P9.11), and the source's MD5 in the container card with its progress
+// while it is computed. Filled from
 // src/ui/media_info/ through the `MediaInfoPanel` global. The decoder in use is not repeated here: the status line shows it.
 
 import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
 
 export struct MediaInfoRow {
     label: string,
@@ -11,6 +13,8 @@ export struct MediaInfoRow {
 
 export struct MediaInfoSection {
     title: string,
+    // Folded (kept for this run only).
+    collapsed: bool,
     rows: [MediaInfoRow],
 }
 
@@ -30,6 +34,7 @@ export global MediaInfoPanel {
 
     callback compute-hash();
     callback cancel-hash();
+    callback toggle-section(/* title */ string);
 }
 
 /// Width of the label column.
@@ -157,20 +162,47 @@ component SectionCard inherits Rectangle {
         padding-top: 6px;
         spacing: 4px;
 
-        Text {
-            text: root.section.title;
-            color: Theme.text;
-            font-size: MediaInfoMetrics.font-size;
-            font-weight: 600;
-            overflow: elide;
+        // The title folds the card (like the Job panel's sections).
+        Rectangle {
+            height: 18px;
+
+            HorizontalLayout {
+                spacing: 4px;
+
+                AppIcon {
+                    y: (parent.height - self.height) / 2;
+                    icon: root.section.collapsed ? IconId.chevron-right : IconId.chevron-down;
+                    size: IconSize.sm;
+                    color: Theme.text-muted;
+                }
+
+                Text {
+                    horizontal-stretch: 1;
+                    text: root.section.title;
+                    color: Theme.text;
+                    font-size: MediaInfoMetrics.font-size;
+                    font-weight: 600;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+
+            TouchArea {
+                mouse-cursor: MouseCursor.pointer;
+                clicked => { MediaInfoPanel.toggle-section(root.section.title); }
+            }
         }
 
-        for row in root.section.rows: InfoRowView {
-            label: row.label;
-            value: row.value;
-        }
+        if !root.section.collapsed: VerticalLayout {
+            spacing: 4px;
 
-        if root.with-hash: HashRowView { }
+            for row in root.section.rows: InfoRowView {
+                label: row.label;
+                value: row.value;
+            }
+
+            if root.with-hash: HashRowView { }
+        }
     }
 }
 
