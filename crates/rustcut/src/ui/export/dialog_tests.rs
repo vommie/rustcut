@@ -52,6 +52,7 @@ fn dialog_with(
         conflicts,
         scan: FolderScan {
             readable: true,
+            missing: false,
             names: FOLDER.into_iter().map(str::to_owned).collect(),
         },
         queue,

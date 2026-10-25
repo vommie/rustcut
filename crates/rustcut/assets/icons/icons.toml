@@ -58,6 +58,7 @@ section_delete = { tabler = "trash", doc = "Delete the selected section" }
 section_up = { tabler = "arrow-up", doc = "Move the selected section up" }
 section_down = { tabler = "arrow-down", doc = "Move the selected section down" }
 section_duplicate = { tabler = "copy", doc = "Duplicate the selected sections" }
+drag_grip = { tabler = "grip-vertical", doc = "A row's handle for drag & drop" }
 sections_clear_all = { tabler = "trash-x", doc = "Delete every section" }
 select_all = { tabler = "select-all", doc = "Select every row of a list" }
 selection_clear = { tabler = "deselect", doc = "Select no row" }

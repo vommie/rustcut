@@ -46,13 +46,18 @@ use crate::app::SettingsWriter;
 use crate::ui::editing::JobEditor;
 use crate::ui::editor::Editor;
 use crate::ui::filters::FiltersBridge;
+use crate::ui::jump::JumpTarget;
 use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::notices::{self, Kind, Level, Notice};
 use crate::ui::player::PlayerBridge;
 use crate::ui::queue::QueueBridge;
 use crate::ui::render_settings::RenderSettingsBridge;
+use crate::ui::settings::page::Page;
 use crate::ui::tags::TagsBridge;
 use crate::{Export, MainWindow};
+
+/// The folder list of Settings > Export & Naming (its jump mark, `settings_folders.slint`).
+pub const FOLDERS_KEY: &str = "export.folders";
 
 /// The parts the export flow reads the job from.
 pub struct ExportParts<'a> {
@@ -322,23 +327,20 @@ impl ExportBridge {
                 )
                 .into(),
         );
-        e.set_can_remove_folder(st.folder.is_some());
         e.set_name(st.name.as_str().into());
         e.set_counter_enabled(st.counter_enabled);
         e.set_counter(format!("{:02}", st.counter).into());
         e.set_auto_increment(st.auto_increment);
         e.set_clear_sections(st.clear_sections);
-        e.set_file_tooltip(
-            folder
-                .as_deref()
-                .zip(file.as_ref().and_then(|f| f.as_ref().ok()))
-                .map(|(f, (_, name))| f.join(name).display().to_string())
-                .unwrap_or_default()
-                .into(),
-        );
-        e.set_file_name(
-            file.and_then(Result::ok)
-                .map(|(_, name)| name)
+        let file_name = file
+            .as_ref()
+            .and_then(|f| f.as_ref().ok())
+            .map(|(_, name)| name.clone())
+            .unwrap_or_default();
+        e.set_extension(
+            Path::new(&file_name)
+                .extension()
+                .map(|x| format!(".{}", x.to_string_lossy()))
                 .unwrap_or_default()
                 .into(),
         );
@@ -361,9 +363,9 @@ impl ExportBridge {
             } else if !line.can_save() {
                 format!("Cannot save: {}", line.text)
             } else if self.editing.borrow().upgrade().is_some_and(|ed| ed.info().is_some()) {
-                "Save as a new job (the loaded job stays as it is)".to_owned()
+                format!("Save as a new job: {file_name} (the loaded job stays as it is)")
             } else {
-                "Save the job into the queue".to_owned()
+                format!("Save the job into the queue: {file_name}")
             }
             .into(),
         );
@@ -419,33 +421,6 @@ impl ExportBridge {
             );
         }
     }
-
-    /// File > Add folder: the portal's folder dialog runs on its own thread; the UI thread only awaits the answer.
-    fn add_folder(self: &Rc<Self>) {
-        let start = self.state.borrow().target_folder();
-        let mut dialog = rfd::AsyncFileDialog::new().set_title("Add a Target Folder");
-        if let Some(start) = start {
-            dialog = dialog.set_directory(start);
-        }
-        if let Some(window) = self.window.upgrade() {
-            dialog = dialog.set_parent(&window.window().window_handle());
-        }
-        let picked = dialog.pick_folder();
-        let weak = Rc::downgrade(self);
-        let spawned = slint::spawn_local(async move {
-            let Some(folder) = picked.await else { return };
-            let Some(bridge) = weak.upgrade() else { return };
-            let path = folder.path().to_path_buf();
-            if bridge.state.borrow_mut().add_folder(&path) {
-                tracing::info!(folder = %path.display(), "[Export] Target folder added");
-                bridge.store_folders();
-            }
-            bridge.rescan();
-        });
-        if let Err(e) = spawned {
-            tracing::error!(error = %e, "[Export] The event loop is gone; no folder dialog");
-        }
-    }
 }
 
 thread_local! {
@@ -475,13 +450,12 @@ fn connect(bridge: &Rc<ExportBridge>, window: &MainWindow) {
             }
         }
     });
-    e.on_add_folder(on(ExportBridge::add_folder));
-    e.on_remove_folder(on(|b| {
-        if b.state.borrow_mut().remove_folder() {
-            b.store_folders();
-        }
-        b.rescan();
-    }));
+    e.on_edit_folders(|| {
+        crate::ui::jump::go(JumpTarget::Settings {
+            page: Page::Export,
+            key: FOLDERS_KEY,
+        });
+    });
     e.on_name_edited({
         let weak = Rc::downgrade(bridge);
         move |text| {
@@ -491,20 +465,14 @@ fn connect(bridge: &Rc<ExportBridge>, window: &MainWindow) {
             }
         }
     });
-    e.on_toggle_counter(on(|b| {
-        let mut st = b.state.borrow_mut();
-        st.counter_enabled = !st.counter_enabled;
-        drop(st);
-        b.publish();
-    }));
+    // An empty counter field means no counter (P9.7, Q-P9): the counter's own switch is gone.
     e.on_counter_committed({
         let weak = Rc::downgrade(bridge);
         move |text| {
             let Some(b) = weak.upgrade() else { return false };
-            let Ok(value) = text.trim().parse::<u32>() else {
+            if !b.state.borrow_mut().type_counter(&text) {
                 return false;
-            };
-            b.state.borrow_mut().set_counter(value);
+            }
             b.publish();
             true
         }
@@ -513,7 +481,13 @@ fn connect(bridge: &Rc<ExportBridge>, window: &MainWindow) {
         let weak = Rc::downgrade(bridge);
         move |steps| {
             if let Some(b) = weak.upgrade() {
-                b.state.borrow_mut().step_counter(steps);
+                let mut st = b.state.borrow_mut();
+                if st.counter_enabled {
+                    st.step_counter(steps);
+                } else {
+                    st.counter_enabled = true;
+                }
+                drop(st);
                 b.publish();
             }
         }

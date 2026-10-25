@@ -510,11 +510,11 @@ fn pick_path(
 }
 
 /// The bubble of a refused text of the option `key` (at its field, `settings_row.slint`).
-fn bubble_key(key: &str) -> String {
+pub(super) fn bubble_key(key: &str) -> String {
     format!("settings-value:{key}")
 }
 
-fn post_refused(key: &str, reason: &str, grace: std::time::Duration) {
+pub(super) fn post_refused(key: &str, reason: &str, grace: std::time::Duration) {
     notices::post(
         Notice::new(notices::Kind::ValueInvalid, reason)
             .key(bubble_key(key))

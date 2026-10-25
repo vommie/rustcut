@@ -147,6 +147,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Job Finalization, your UI review round 1 (0.0.42): two rows whose three columns line up: the name (the chosen
+  container's extension stands dim inside it, ".mkv"), the counter and the auto-increment toggle; the target folder,
+  a button to the folder list in Settings > Export & Naming (it replaces adding and removing folders on the card) and
+  Save. The field icons, the file-name line and the counter's own switch are gone: an empty counter field means no
+  counter (with auto-increment it stays empty), a number switches it on; Save's tooltip names the file.
+- Settings > Export & Naming > Target folders (your wishes with the review): each folder's path is a field you can
+  type into. The path is checked against what Linux allows (it starts at /, ~ stands for your home folder, a folder
+  name has at most 255 bytes, the path at most 4096); a refused path keeps the field open with a bubble that says
+  why; a path that is a file is refused the same way and the old path stays. A label that was the old folder's name
+  follows the new one. A folder that does not exist yet is fine: a sign inside its path field says so, and it is made
+  on the fly when a job writes into it (any job, also one saved before the folder went missing; the export card no
+  longer refuses a missing folder). Each row has a button that picks the folder with the file dialog and a handle to
+  drag the row to another place (the page scrolls along at its edges; Escape cancels).
 - The queue panel, your UI review round 1 (0.0.41): the search and the state chips moved into a filter menu that
   hangs from the filter button at the right of the top bar: the search on top, a switch for how the filters combine
   (ALL: a job matches every filter that is set, the default; ANY: one is enough), and one choice each for the states,

@@ -243,6 +243,21 @@ impl ExportState {
         self.counter = value.clamp(1, MAX_COUNTER);
     }
 
+    /// A typed counter (P9.7): empty means no counter, a number is the counter; `false` = not a number.
+    pub fn type_counter(&mut self, text: &str) -> bool {
+        let text = text.trim();
+        if text.is_empty() {
+            self.counter_enabled = false;
+            return true;
+        }
+        let Ok(value) = text.parse::<u32>() else {
+            return false;
+        };
+        self.set_counter(value);
+        self.counter_enabled = true;
+        true
+    }
+
     pub fn step_counter(&mut self, steps: i32) {
         let value = i64::from(self.counter).saturating_add(i64::from(steps));
         self.set_counter(u32::try_from(value.max(1)).unwrap_or(MAX_COUNTER));
@@ -333,6 +348,22 @@ mod tests {
 
     fn facts() -> JobFacts {
         JobFacts::new(&builtin_profiles().remove(0), 2, Timestamp::from_secs(3_725))
+    }
+
+    #[test]
+    fn an_empty_counter_field_means_no_counter() {
+        let mut st = state();
+        st.file_opened(Path::new("/videos/Holiday.mp4"));
+        assert!(st.type_counter(" "));
+        assert_eq!(st.file(&facts()).unwrap().1, "Holiday.mkv", "no counter in the name");
+        st.saved(None);
+        assert!(!st.counter_enabled, "auto-increment keeps an empty field empty");
+        assert!(!st.type_counter("x7"), "not a number");
+        assert!(st.type_counter("07"));
+        assert_eq!((st.counter_enabled, st.counter), (true, 7));
+        assert_eq!(st.file(&facts()).unwrap().1, "Holiday - 07.mkv");
+        st.saved(Some(7));
+        assert_eq!(st.counter, 8, "auto-increment after a save");
     }
 
     #[test]

@@ -55,6 +55,7 @@ rfd.workspace = true
 interprocess.workspace = true
 fnv.workspace = true
 directories.workspace = true
+path-clean.workspace = true
 regex.workspace = true
 x11rb.workspace = true
 raw-window-handle.workspace = true

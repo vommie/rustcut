@@ -193,6 +193,7 @@ mod tests {
     fn scan(names: &[&str]) -> FolderScan {
         FolderScan {
             readable: true,
+            missing: false,
             names: names.iter().map(|n| (*n).to_owned()).collect(),
         }
     }

@@ -21,13 +21,15 @@ export component ChoiceButton inherits Rectangle {
     in property <IconId> icon: IconId.none;
     // The key of the bubble about this choice (`bubble.slint`; empty = none).
     in property <string> bubble;
+    // Stretches over all the room it gets (the target folder, P9.7).
+    in property <bool> stretch-fully;
     callback selected(int);
 
     height: 24px;
     // Stretches up to the common width; a narrow sidebar cuts the chosen text.
     min-width: 48px;
     preferred-width: ControlMetrics.field-max-width;
-    max-width: ControlMetrics.field-max-width;
+    max-width: root.stretch-fully ? 100000px : ControlMetrics.field-max-width;
     horizontal-stretch: 1;
     border-radius: 4px;
     background: !root.enabled ? transparent : touch.pressed ? Theme.surface-selected
