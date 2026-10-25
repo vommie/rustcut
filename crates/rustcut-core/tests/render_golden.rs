@@ -414,12 +414,19 @@ async fn a_variable_frame_rate_keeps_its_frames_in_mp4() {
 async fn unusable_sources_and_folders_fail_early() {
     let fx = Fixture::new();
     let spec = fx.spec("multi_audio_2tracks.mkv", &[(0, 1_000)], "x");
-    let mut missing = spec.clone();
-    missing.target.folder = fx.dir.path().join("unplugged drive");
-    assert_eq!(
-        render_simply(&fx, &missing).await.0.unwrap_err(),
-        RenderError::TargetFolder(missing.target.folder.clone())
-    );
+    // A target folder's path taken by a file fails early; a missing folder is made on the fly (P9.7).
+    let mut taken = spec.clone();
+    taken.target.folder = fx.dir.path().join("a file, not a folder");
+    std::fs::write(&taken.target.folder, b"x").unwrap();
+    assert!(matches!(
+        render_simply(&fx, &taken).await.0,
+        Err(RenderError::TargetFolder(folder, _)) if folder == taken.target.folder
+    ));
+    let mut fresh = spec.clone();
+    fresh.target.folder = fx.dir.path().join("new").join("deep folder");
+    let (made, log) = render_simply(&fx, &fresh).await;
+    made.unwrap_or_else(|e| panic!("{e}\n{}", log.to_text()));
+    assert!(fresh.target.folder.is_dir(), "the folder was made");
     let mut broken = spec.clone();
     broken.source = fx.dir.path().join("does not exist.mp4");
     assert!(matches!(

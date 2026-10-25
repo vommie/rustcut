@@ -23,8 +23,10 @@ const MAX_COUNTER_TRIES: u32 = 10_000;
 /// What a target folder holds.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FolderScan {
-    /// The folder exists and could be read.
+    /// The folder could be read (a folder that does not exist yet reads as empty: it is made when a job writes into it).
     pub readable: bool,
+    /// The folder does not exist yet.
+    pub missing: bool,
     /// File names in the folder (not sorted; at most [`MAX_SCANNED`]).
     pub names: HashSet<String>,
 }
@@ -48,8 +50,16 @@ pub async fn scan_folder(folder: &Path) -> FolderScan {
 
 /// [`scan_folder`] on the calling thread.
 pub fn scan_folder_now(folder: &Path) -> FolderScan {
-    let Ok(entries) = std::fs::read_dir(folder) else {
-        return FolderScan::default();
+    let entries = match std::fs::read_dir(folder) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return FolderScan {
+                readable: true,
+                missing: true,
+                names: HashSet::new(),
+            };
+        }
+        Err(_) => return FolderScan::default(),
     };
     let mut names = HashSet::new();
     for entry in entries {
@@ -68,7 +78,11 @@ pub fn scan_folder_now(folder: &Path) -> FolderScan {
             }
         }
     }
-    FolderScan { readable: true, names }
+    FolderScan {
+        readable: true,
+        missing: false,
+        names,
+    }
 }
 
 /// Size and time of an existing file (`None` when there is none).
@@ -263,6 +277,7 @@ mod tests {
     fn scan(names: &[&str]) -> FolderScan {
         FolderScan {
             readable: true,
+            missing: false,
             names: names.iter().map(|n| (*n).to_owned()).collect(),
         }
     }
@@ -384,6 +399,15 @@ mod tests {
         assert!(found.readable && found.names.contains("a.mkv"));
         assert_eq!(existing_file(&dir.path().join("a.mkv")).await.map(|f| f.bytes), Some(5));
         assert_eq!(existing_file(&dir.path().join("b.mkv")).await, None);
-        assert!(!scan_folder(&dir.path().join("missing")).await.readable);
+        let missing = scan_folder(&dir.path().join("missing")).await;
+        assert!(
+            missing.readable && missing.missing && missing.names.is_empty(),
+            "a folder that does not exist yet reads as empty (it is made on the fly)"
+        );
+        std::fs::write(dir.path().join("a file"), b"x").unwrap();
+        assert!(
+            !scan_folder(&dir.path().join("a file")).await.readable,
+            "a file is no folder"
+        );
     }
 }

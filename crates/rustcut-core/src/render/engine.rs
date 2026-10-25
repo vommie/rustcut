@@ -86,8 +86,10 @@ pub enum RenderError {
     Source(ProbeError),
     #[error(transparent)]
     Plan(#[from] PlanError),
-    #[error("the target folder {0} does not exist")]
-    TargetFolder(PathBuf),
+    /// The target folder's path is taken by a file, or the folder could not be made (P9.7: a missing target folder is
+    /// made on the fly).
+    #[error("the target folder {0} cannot be used: {1}")]
+    TargetFolder(PathBuf, String),
     #[error("{0} exists already and overwriting was not chosen")]
     TargetExists(PathBuf),
     #[error("a work folder could not be created: {0}")]
@@ -187,9 +189,7 @@ async fn run_plan(
     log: &mut JobLog,
     updates: &mut (impl FnMut(RenderUpdate) + Send),
 ) -> Result<RenderedFile, RenderError> {
-    if !is_folder(&spec.target.folder).await {
-        return Err(RenderError::TargetFolder(spec.target.folder.clone()));
-    }
+    ensure_folder(&spec.target.folder).await?;
     if !spec.target.overwrite && tokio::fs::try_exists(&plan.target).await.unwrap_or(true) {
         return Err(RenderError::TargetExists(plan.target.clone()));
     }
@@ -248,8 +248,20 @@ async fn run_plan(
     })
 }
 
-async fn is_folder(path: &Path) -> bool {
-    tokio::fs::metadata(path).await.is_ok_and(|m| m.is_dir())
+/// The target folder exists or is made now (the user's wish with P9.7: folders are made on the fly when a job writes
+/// into them); a file of that name or a folder that cannot be made is an error.
+async fn ensure_folder(path: &Path) -> Result<(), RenderError> {
+    match tokio::fs::metadata(path).await {
+        Ok(meta) if meta.is_dir() => Ok(()),
+        Ok(_) => Err(RenderError::TargetFolder(path.to_path_buf(), "it is a file".to_owned())),
+        Err(_) => {
+            tokio::fs::create_dir_all(path)
+                .await
+                .map_err(|e| RenderError::TargetFolder(path.to_path_buf(), e.to_string()))?;
+            tracing::info!(folder = %path.display(), "[Render] Target folder made");
+            Ok(())
+        }
+    }
 }
 
 /// Seconds left for the whole job: the rest of this pass and the passes after it, at the current speed (ffmpeg's

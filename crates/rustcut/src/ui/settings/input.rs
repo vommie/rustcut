@@ -61,6 +61,32 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     let t = this.clone();
     ui.on_move_folder(move |i, by| with(&t, |b| index(i).map(|i| b.move_folder(i, by)).unwrap_or_default()));
     let t = this.clone();
+    ui.on_set_folder_path(move |i, text| with(&t, |b| index(i).is_some_and(|i| b.set_folder_path(i, &text))));
+    let t = this.clone();
+    ui.on_folder_path_typed(move |i, text| {
+        with(&t, |b| {
+            if let Some(i) = index(i) {
+                b.folder_path_typed(i, &text);
+            }
+        });
+    });
+    let t = this.clone();
+    ui.on_folder_path_canceled(move |i| with(&t, |b| index(i).map(|i| b.folder_path_canceled(i)).unwrap_or_default()));
+    let t = this.clone();
+    ui.on_pick_folder_path(move |i| with(&t, |b| index(i).map(|i| b.pick_folder_path(i)).unwrap_or_default()));
+    let t = this.clone();
+    ui.on_folder_drag_start(move |i, pointer, pitch, height| {
+        with(&t, |b| {
+            if let Some(i) = index(i) {
+                b.folder_drag_start(i, pointer, pitch, height);
+            }
+        });
+    });
+    let t = this.clone();
+    ui.on_folder_drag_move(move |pointer| with(&t, |b| b.folder_drag_move(pointer)));
+    let t = this.clone();
+    ui.on_folder_drag_end(move || with(&t, |b| b.folder_drag_finish(true)));
+    let t = this.clone();
     ui.on_rename_folder(move |i, label| with(&t, |b| index(i).is_some_and(|i| b.rename_folder(i, &label))));
 
     let t = this.clone();

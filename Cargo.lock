@@ -5046,7 +5046,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut"
-version = "0.0.41"
+version = "0.0.42"
 dependencies = [
  "arboard",
  "az",
@@ -5060,6 +5060,7 @@ dependencies = [
  "notify-rust",
  "opener",
  "parking_lot",
+ "path-clean",
  "proptest",
  "raw-window-handle",
  "regex",
@@ -5084,7 +5085,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-core"
-version = "0.0.41"
+version = "0.0.42"
 dependencies = [
  "atomic-write-file",
  "az",
@@ -5120,7 +5121,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-player"
-version = "0.0.41"
+version = "0.0.42"
 dependencies = [
  "glow",
  "hdrhistogram",

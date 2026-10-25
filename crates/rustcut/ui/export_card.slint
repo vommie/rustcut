@@ -1,13 +1,15 @@
-// The Job Finalization card of the Export panel (src/ui/export/ fills `Export`): the target folder (the source's folder
-// or a named one, added and removed here), the name, the counter with auto-increment, the file name the job will write
-// with the live conflict check, and Save (clearing the sections after a save is in the Sections card's header, P9.5). Buttons are icons with tooltips (user
-// rule 2026-10-23).
+// The Job Finalization card of the Export panel (src/ui/export/ fills `Export`; P9.7, the UI review's notes 03): two rows
+// in three columns that line up: the name (the chosen container's extension dim inside it), the counter (empty = no
+// counter) and the auto-increment toggle; the target folder (the source's folder or a named one), the jump to the
+// folder list in Settings > Export & Naming, and Save. The live conflict check shows as bubbles at the name and the
+// folder; clearing the sections after a save is in the Sections card's header (P9.5). Buttons are icons with tooltips
+// (user rule 2026-10-23).
 
 import { Theme } from "styles.slint";
-import { AppIcon, IconId, IconSize } from "icons.slint";
+import { IconId } from "icons.slint";
 import { Shortcuts } from "shortcuts.slint";
-import { ChoiceButton, FieldIcon, IconButton, NumberField, Switch } from "controls.slint";
-import { TooltipArea, TooltipHost } from "tooltip.slint";
+import { ChoiceButton, IconButton, NumberField } from "controls.slint";
+import { TooltipHost } from "tooltip.slint";
 import { Export } from "export_types.slint";
 import { BubbleAnchor } from "bubble.slint";
 import { Playback } from "player_types.slint";
@@ -15,10 +17,13 @@ import { Playback } from "player_types.slint";
 /// The name: shows the text, a click turns it into a field whose every edit updates the file name at once.
 component NameField inherits Rectangle {
     in property <string> text;
+    // The file's extension, dim at the right inside the field (".mkv").
+    in property <string> suffix;
     in property <bool> enabled: true;
     callback edited(string);
 
     property <bool> editing;
+    property <length> suffix-width: root.suffix == "" ? 0px : suffix-label.preferred-width + 6px;
 
     min-width: 40px;
     height: 22px;
@@ -37,9 +42,18 @@ component NameField inherits Rectangle {
         key: Playback.has-video ? "export.name" : "";
     }
 
+    suffix-label := Text {
+        x: parent.width - self.width - 5px;
+        height: parent.height;
+        text: root.suffix;
+        color: Theme.status-deleted;
+        font-size: 12px;
+        vertical-alignment: center;
+    }
+
     if !root.editing: Text {
         x: 5px;
-        width: parent.width - 10px;
+        width: parent.width - 10px - root.suffix-width;
         text: root.text == "" ? "Name" : root.text;
         color: !root.enabled || root.text == "" ? Theme.status-deleted : Theme.text;
         font-size: 12px;
@@ -68,7 +82,7 @@ component NameField inherits Rectangle {
 
     input := TextInput {
         x: 5px;
-        width: parent.width - 10px;
+        width: parent.width - 10px - root.suffix-width;
         height: parent.height;
         visible: root.editing;
         enabled: root.editing;
@@ -100,6 +114,12 @@ component NameField inherits Rectangle {
     }
 }
 
+/// The card's columns: the counter's width (the jump below it takes it too) and the toggle's (Save below it).
+global FinalizeMetrics {
+    out property <length> counter-width: 54px;
+    out property <length> button-width: 26px;
+}
+
 export component FinalizeCardBody inherits VerticalLayout {
     padding: 8px;
     padding-top: 2px;
@@ -108,73 +128,24 @@ export component FinalizeCardBody inherits VerticalLayout {
     HorizontalLayout {
         spacing: 4px;
 
-        FieldIcon {
-            icon: IconId.target-folder;
-            tooltip: "Target folder";
-        }
-
-        ChoiceButton {
-            items: Export.folders;
-            current: Export.folder-index;
-            tooltip: Export.folder-path;
-            bubble: Playback.has-video ? "export.folder" : "";
-            selected(index) => { Export.select-folder(index); }
-        }
-
-        IconButton {
-            icon: IconId.folder-add;
-            tooltip: "Add a target folder";
-            clicked => { Export.add-folder(); }
-        }
-
-        IconButton {
-            hold: true;
-            icon: IconId.folder-remove;
-            tooltip: "Remove this folder from the list (the folder itself stays)";
-            enabled: Export.can-remove-folder;
-            clicked => { Export.remove-folder(); }
-        }
-    }
-
-    HorizontalLayout {
-        spacing: 4px;
-
-        FieldIcon {
-            icon: IconId.target-name;
-            tooltip: "Name";
-        }
-
-        name-field := NameField {
+        NameField {
             text: Export.name;
+            suffix: Export.extension;
             enabled: Export.has-source;
             edited(text) => { Export.name-edited(text); }
         }
-    }
-
-    HorizontalLayout {
-        spacing: 4px;
-
-        FieldIcon {
-            icon: IconId.counter;
-            tooltip: "Counter in the file name";
-        }
-
-        Switch {
-            y: (parent.height - self.height) / 2;
-            checked: Export.counter-enabled;
-            tooltip: Export.counter-enabled ? "The file name ends with the counter" : "No counter in the file name";
-            toggled => { Export.toggle-counter(); }
-        }
 
         NumberField {
-            text: Export.counter;
-            enabled: Export.counter-enabled;
-            tooltip: "Counter of the next job";
-            committed(text) => { Export.counter-committed(text) }
+            width: FinalizeMetrics.counter-width;
+            text: Export.counter-enabled ? Export.counter : "";
+            placeholder: "None";
+            tooltip: "The counter of the next job (empty: no counter in the file name)";
+            committed(text) => { return Export.counter-committed(text); }
             stepped(steps) => { Export.counter-stepped(steps); }
         }
 
         IconButton {
+            width: FinalizeMetrics.button-width;
             icon: IconId.auto-increment;
             checked: Export.auto-increment;
             tooltip: Export.auto-increment ? "The counter goes up after each save" : "The counter stays after a save";
@@ -183,31 +154,27 @@ export component FinalizeCardBody inherits VerticalLayout {
     }
 
     HorizontalLayout {
-        spacing: 6px;
+        spacing: 4px;
 
-        TooltipArea {
-            horizontal-stretch: 1;
-            min-height: 30px;
-            text: Export.file-tooltip;
-
-            Text {
-                width: parent.width;
-                height: parent.height;
-                text: Export.file-name == "" ? "No file name yet" : Export.file-name;
-                color: Export.file-name == "" ? Theme.status-deleted : Theme.text;
-                font-size: 12px;
-                font-weight: 600;
-                vertical-alignment: center;
-                overflow: elide;
-            }
+        ChoiceButton {
+            stretch-fully: true;
+            items: Export.folders;
+            current: Export.folder-index;
+            tooltip: Export.folder-path;
+            bubble: Playback.has-video ? "export.folder" : "";
+            selected(index) => { Export.select-folder(index); }
         }
 
-        save-button := IconButton {
-            y: (parent.height - self.height) / 2;
+        IconButton {
+            width: FinalizeMetrics.counter-width;
+            icon: IconId.jump-to;
+            tooltip: "Edit the target folders (Settings > Export & Naming)";
+            clicked => { Export.edit-folders(); }
+        }
+
+        IconButton {
+            width: FinalizeMetrics.button-width;
             icon: IconId.job-save;
-            icon-size: IconSize.lg;
-            height: 30px;
-            width: 34px;
             enabled: Export.can-save;
             tooltip: Export.save-tooltip;
             shortcut: Export.key-save;

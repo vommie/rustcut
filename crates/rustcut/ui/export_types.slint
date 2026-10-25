@@ -60,24 +60,25 @@ export global Export {
     in property <[string]> folders;
     in property <int> folder-index;
     in property <string> folder-path;
-    in property <bool> can-remove-folder;
     in property <string> name;
+    // The chosen container's extension (".mkv"), dim inside the name field (P9.7).
+    in property <string> extension;
+    // The counter is in the file name: the field shows it, an empty field means none (P9.7).
     in property <bool> counter-enabled;
     in property <string> counter;
     in property <bool> auto-increment;
     in property <bool> clear-sections;
-    // The file the job writes and its whole path (the live check shows as a bubble at the name or the folder, M6.5c).
-    in property <string> file-name;
-    in property <string> file-tooltip;
+    // The live check of the file the job writes shows as a bubble at the name or the folder (M6.5c); Save's tooltip
+    // names the file.
     in property <bool> can-save;
     in property <string> save-tooltip;
     in property <string> key-save;
 
     callback select-folder(int);
-    callback add-folder();
-    callback remove-folder();
+    // The jump to the folder list in Settings > Export & Naming.
+    callback edit-folders();
     callback name-edited(string);
-    callback toggle-counter();
+    // A typed counter ("" = no counter); false = not accepted.
     callback counter-committed(string) -> bool;
     callback counter-stepped(int);
     callback toggle-auto-increment();

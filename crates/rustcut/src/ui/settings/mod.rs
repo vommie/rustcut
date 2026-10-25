@@ -8,6 +8,8 @@
 
 mod catalog;
 mod field;
+mod folder_drag;
+mod folder_path;
 pub mod folders;
 mod handlers;
 mod hotkeys;
@@ -91,6 +93,9 @@ pub struct SettingsBridge {
     tested: RefCell<Option<(Kind, String)>>,
     tested_timer: slint::Timer,
     messages_shown: RefCell<messages::Shown>,
+    /// A target folder that is dragged (P9.7) and how far each row moves aside meanwhile.
+    folder_drag: RefCell<Option<folder_drag::FolderDrag>>,
+    folder_shifts: Rc<VecModel<f32>>,
 }
 
 impl SettingsBridge {
@@ -145,6 +150,8 @@ impl SettingsBridge {
             tested: RefCell::new(None),
             tested_timer: slint::Timer::default(),
             messages_shown: RefCell::default(),
+            folder_drag: RefCell::new(None),
+            folder_shifts: Rc::new(VecModel::default()),
         });
         let this = Rc::downgrade(&bridge);
         main.on_open_settings(move || {
@@ -273,6 +280,7 @@ impl SettingsBridge {
         ui.set_pages(ModelRc::from(Rc::clone(&m.pages)));
         ui.set_cards(ModelRc::from(Rc::clone(&m.cards)));
         ui.set_folders(ModelRc::from(Rc::clone(&m.folders)));
+        ui.set_folder_drag_shifts(ModelRc::from(Rc::clone(&self.folder_shifts)));
         ui.set_profiles(ModelRc::from(Rc::clone(&m.profiles)));
         ui.set_profile_issues(ModelRc::from(Rc::clone(&m.issues)));
         ui.set_profile_video(ModelRc::from(Rc::clone(&m.video)));
@@ -309,6 +317,7 @@ impl SettingsBridge {
         Self::apply_look(&window, &self.writer.current());
         crate::ui::tooltip::install(&window);
         crate::ui::controls::install(&window);
+        crate::ui::drag::install(&window);
         crate::ui::color_picker::install(&window);
         notices::attach_settings(&window);
         Ok(window)

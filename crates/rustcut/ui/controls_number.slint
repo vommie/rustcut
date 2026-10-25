@@ -4,6 +4,7 @@
 // owner decides how far one step goes (each field has its own step).
 
 import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Shortcuts } from "shortcuts.slint";
 import { TooltipHost } from "tooltip.slint";
 import { BubbleAnchor } from "bubble.slint";
@@ -26,6 +27,9 @@ export component NumberField inherits Rectangle {
     in property <bool> spin: root.alignment == TextHorizontalAlignment.right;
     // The key of the bubble that explains a refused text (`bubble.slint`; empty = none).
     in property <string> bubble;
+    // A sign at the right inside the field (a target folder that does not exist yet, P9.7); its color.
+    in property <IconId> mark: IconId.none;
+    in property <color> mark-color: Theme.accent;
     callback committed(string) -> bool;
     callback stepped(/* steps */ int);
     // The text changed while the field is open (the owner checks it again after a refusal).
@@ -41,7 +45,8 @@ export component NumberField inherits Rectangle {
     // The unit belongs to a value: a placeholder ("auto", "off") stands alone.
     property <bool> unit-shown: root.unit != "" && (root.text != "" || root.editing);
     property <length> unit-width: root.unit-shown ? unit-label.preferred-width + 3px : 0px;
-    property <length> text-right: root.width - root.arrows-width - root.unit-width - 5px;
+    property <length> mark-width: root.mark != IconId.none ? IconSize.sm + 4px : 0px;
+    property <length> text-right: root.width - root.arrows-width - root.unit-width - root.mark-width - 5px;
 
     min-width: 34px + root.arrows-width;
     max-width: root.spin ? ControlMetrics.field-max-width : 100000px;
@@ -111,6 +116,14 @@ export component NumberField inherits Rectangle {
         horizontal-alignment: root.alignment;
         vertical-alignment: center;
         overflow: elide;
+    }
+
+    if root.mark != IconId.none: AppIcon {
+        x: root.width - root.arrows-width - root.unit-width - self.width - 5px;
+        y: (parent.height - self.height) / 2;
+        icon: root.mark;
+        size: IconSize.sm;
+        color: root.mark-color;
     }
 
     unit-label := Text {

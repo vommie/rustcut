@@ -12,6 +12,7 @@ import { SettingsCard } from "settings_card.slint";
 import { SettingsRow } from "settings_row.slint";
 import { SettingsUi } from "settings_types.slint";
 import { Jump } from "jump.slint";
+import { DragLogic, DragState } from "drag.slint";
 import { BubbleLayer } from "bubble.slint";
 import { SettingsFolders } from "settings_folders.slint";
 import { SettingsProfiles } from "settings_profiles.slint";
@@ -33,6 +34,11 @@ export component SettingsWindow inherits Window {
 
     dialog-focus := FocusScope {
         key-pressed(event) => {
+            // A drag of list rows runs: Escape cancels it (P9.4).
+            if event.text == Key.Escape && DragState.active {
+                DragState.cancel();
+                return accept;
+            }
             if event.text == Key.Escape && SettingsUi.recording == "" {
                 SettingsUi.close();
                 return accept;
@@ -109,6 +115,22 @@ export component SettingsWindow inherits Window {
                 // The page, with the bubbles of its fields over it (M6.5c; not scrolled with it).
                 Rectangle {
                     vertical-stretch: 1;
+
+                    // A list of the page is dragged (the target folders, P9.7): near the top and bottom edge the page
+                    // scrolls along, faster toward the edge, and counts the scroll so the list measures again.
+                    Timer {
+                        interval: 16ms;
+                        running: DragState.active && DragState.area == "settings";
+                        triggered => {
+                            let step = DragLogic.scroll-step(DragState.pointer-y - scroll.absolute-position.y, scroll.visible-height);
+                            let to = Math.max(Math.min(0px, scroll.visible-height - scroll.content-height),
+                                Math.min(0px, scroll.content-y - step));
+                            if to != scroll.content-y {
+                                scroll.content-y = to;
+                                DragState.scrolls += 1;
+                            }
+                        }
+                    }
 
                     scroll := ScrollView {
                         width: parent.width;

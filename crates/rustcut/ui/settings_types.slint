@@ -129,6 +129,26 @@ export global SettingsUi {
     callback remove-folder(int);
     callback move-folder(/* index */ int, /* by */ int);
     callback rename-folder(/* index */ int, /* label */ string) -> bool;
+    // A typed path (checked, the folder made when missing; false = refused, P9.7), its typing and closing, the folder
+    // dialog of a row.
+    callback set-folder-path(/* index */ int, /* path */ string) -> bool;
+    callback folder-path-typed(/* index */ int, string);
+    callback folder-path-canceled(/* index */ int);
+    callback pick-folder-path(/* index */ int);
+    // Dragging a folder row to another place (P9.7 with the module of P9.4): the rows' shifts, the gap, the ghost.
+    in property <bool> folder-dragging;
+    in property <[length]> folder-drag-shifts;
+    in property <bool> folder-drag-instant;
+    in property <length> folder-drag-gap-y;
+    in property <length> folder-drag-gap-height;
+    in property <length> folder-drag-ghost-y;
+    in property <string> folder-drag-title;
+    // The dragged row.
+    in property <int> folder-drag-row: -1;
+    out property <length> folder-row-height: 24px;
+    callback folder-drag-start(/* row */ int, /* pointer */ length, /* pitch */ length, /* height */ length);
+    callback folder-drag-move(/* pointer */ length);
+    callback folder-drag-end();
 
     // Render Profiles.
     in property <[ProfileItemView]> profiles;
