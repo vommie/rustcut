@@ -1,4 +1,5 @@
-//! What the pointer is over on the track, and where a dragged edge snaps to. Uses the same [`Viewport`] as the drawing.
+//! What the pointer is over on the track, and where a dragged edge or a section moved whole (P9.5) snaps to. Uses the
+//! same [`Viewport`] as the drawing.
 
 use rustcut_core::edit::SectionId;
 use rustcut_core::time::{FrameRate, Timestamp};
@@ -108,34 +109,88 @@ pub fn snap(
     snap_to_edges: bool,
 ) -> Timestamp {
     if snap_to_edges {
-        let x = vp.x_of(t);
-        let mut targets: Vec<Timestamp> = playhead.into_iter().collect();
-        let (start, end) = sections.marks();
-        for (mark, bound) in [(start, Bound::Start), (end, Bound::End)] {
-            if dragged
-                != (Edge {
-                    owner: EdgeOwner::Marks,
-                    bound,
-                })
-            {
-                targets.extend(mark);
-            }
-        }
-        for row in sections.rows() {
-            if dragged.owner != EdgeOwner::Section(row.id) {
-                targets.extend([row.start, row.end]);
-            }
-        }
-        let nearest = targets
-            .into_iter()
-            .map(|target| ((vp.x_of(target) - x).abs(), target))
-            .filter(|(d, _)| *d <= SNAP)
-            .min_by(|a, b| a.0.total_cmp(&b.0));
-        if let Some((_, target)) = nearest {
+        let mark = |bound| (dragged.owner == EdgeOwner::Marks && dragged.bound == bound).then_some(bound);
+        let skip_mark = mark(Bound::Start).or_else(|| mark(Bound::End));
+        let skip_section = match dragged.owner {
+            EdgeOwner::Section(id) => Some(id),
+            EdgeOwner::Marks => None,
+        };
+        let found = nearest(vp, &targets(sections, playhead, skip_mark, skip_section), [t]);
+        if let Some((target, _)) = found {
             return target;
         }
     }
     nearest_frame(t, rate)
+}
+
+/// Where the section `id` moved whole to start at `start` lands (its length stays `length`): its start or its end onto
+/// the playhead, a mark or another section's edge within [`SNAP`] pixels (`snap` off: Shift held), else its start onto
+/// the nearest frame.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the same inputs as `snap` plus the moved section"
+)]
+pub fn snap_body(
+    vp: &Viewport,
+    sections: &SectionsState,
+    id: SectionId,
+    start: Timestamp,
+    length: Timestamp,
+    playhead: Option<Timestamp>,
+    rate: Option<FrameRate>,
+    snap_to_edges: bool,
+) -> Timestamp {
+    if snap_to_edges {
+        let found = nearest(
+            vp,
+            &targets(sections, playhead, None, Some(id)),
+            [start, start + length],
+        );
+        match found {
+            Some((target, 0)) => return target,
+            Some((target, _)) => return target - length,
+            None => {}
+        }
+    }
+    nearest_frame(start, rate)
+}
+
+/// Every time a dragged thing can snap onto: the playhead, the marks (but `skip_mark`) and the bounds of every section
+/// (but `skip_section`).
+fn targets(
+    sections: &SectionsState,
+    playhead: Option<Timestamp>,
+    skip_mark: Option<Bound>,
+    skip_section: Option<SectionId>,
+) -> Vec<Timestamp> {
+    let mut targets: Vec<Timestamp> = playhead.into_iter().collect();
+    let (start, end) = sections.marks();
+    for (mark, bound) in [(start, Bound::Start), (end, Bound::End)] {
+        if skip_mark != Some(bound) {
+            targets.extend(mark);
+        }
+    }
+    for row in sections.rows() {
+        if skip_section != Some(row.id) {
+            targets.extend([row.start, row.end]);
+        }
+    }
+    targets
+}
+
+/// The target nearest to one of `points` within [`SNAP`] pixels, and which point it is nearest to.
+fn nearest<const N: usize>(vp: &Viewport, targets: &[Timestamp], points: [Timestamp; N]) -> Option<(Timestamp, usize)> {
+    targets
+        .iter()
+        .flat_map(|target| {
+            points
+                .iter()
+                .enumerate()
+                .map(move |(i, p)| ((vp.x_of(*target) - vp.x_of(*p)).abs(), *target, i))
+        })
+        .filter(|(d, _, _)| *d <= SNAP)
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, target, i)| (target, i))
 }
 
 /// The start of the frame nearest to `t`, or the nearest millisecond without a frame rate.
@@ -263,6 +318,48 @@ mod tests {
         assert_eq!(
             snap(&vp, &s, dragged, Timestamp::from_millis(30_400), None, rate, true),
             Timestamp::from_millis(30_400)
+        );
+    }
+
+    #[test]
+    fn moved_sections_snap_with_either_end() {
+        let (vp, s) = setup();
+        let first = s.id_at(0).unwrap();
+        let rate = FrameRate::new(25, 1);
+        let ten = secs(10);
+        // Its end (34.6) is 4 px from the other section's start (35): the end snaps onto it.
+        assert_eq!(
+            snap_body(&vp, &s, first, Timestamp::from_millis(24_600), ten, None, rate, true),
+            secs(25)
+        );
+        // The start 19.5 is 5 px from the end mark at 20.
+        assert_eq!(
+            snap_body(&vp, &s, first, Timestamp::from_millis(19_500), ten, None, rate, true),
+            secs(20)
+        );
+        // Onto the playhead with its start.
+        assert_eq!(
+            snap_body(
+                &vp,
+                &s,
+                first,
+                Timestamp::from_millis(70_300),
+                ten,
+                Some(secs(70)),
+                rate,
+                true
+            ),
+            secs(70)
+        );
+        // Shift: only the frame grid; its own edges never attract it.
+        assert_eq!(
+            snap_body(&vp, &s, first, Timestamp::from_millis(19_515), ten, None, rate, false),
+            Timestamp::from_millis(19_520)
+        );
+        assert_eq!(
+            snap_body(&vp, &s, first, Timestamp::from_millis(30_300), ten, None, rate, true),
+            Timestamp::from_millis(30_280),
+            "its old place is no target"
         );
     }
 

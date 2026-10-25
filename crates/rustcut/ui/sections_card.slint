@@ -1,15 +1,19 @@
 // The Sections card of the Export panel (src/ui/editor/ fills the `Sections` global and handles its callbacks): the current
-// section's start and end (from the playhead with the set buttons or the keys, or typed), adding the section, the list of
-// added sections with editable times, durations and the total, and the buttons that move and delete the selected section.
+// section in one row (set the start to the playhead, its start, its end, set the end, add it; the length in the tooltips),
+// and the list of added sections with editable times, durations and a held delete button per row (P9.5). Rows are
+// selected like the queue's (Ctrl one more, Shift a range), reached through the context menu (Duplicate, Move Up/Down,
+// Delete, Select All), dragged to another place (P9.4), and the empty space has a menu for the whole list.
 // Buttons are icons with tooltips (user rule 2026-10-23).
 // Times: a click seeks there, a double click edits (Enter keeps, Escape cancels; user decision 2026-10-23).
 
 import { Theme } from "styles.slint";
-import { AppIcon, IconId, IconSize } from "icons.slint";
+import { IconId, IconSize } from "icons.slint";
 import { Shortcuts } from "shortcuts.slint";
-import { IconButton, UpDownButton } from "controls.slint";
+import { IconButton } from "controls.slint";
+import { TooltipHost } from "tooltip.slint";
 import { BubbleAnchor } from "bubble.slint";
 import { JumpFlash } from "jump.slint";
+import { DragArea, DragGhost, DragMotion, DragState, DropGap } from "drag.slint";
 
 export struct SectionRowView {
     number: int,
@@ -23,15 +27,12 @@ export struct SectionRowView {
 export global Sections {
     // A video is loaded: marks can be set.
     in property <bool> has-media;
-    // The current section's marks ("" = not set) and its length ("" without a range).
+    // The current section's marks ("" = not set) and its length for the tooltips ("" without a range).
     in property <string> mark-start;
     in property <string> mark-end;
     in property <string> current-length;
     in property <bool> can-add;
     in property <[SectionRowView]> rows;
-    in property <bool> can-move-up;
-    in property <bool> can-move-down;
-    in property <bool> can-delete;
     // The count and the total length for the card's header ("2 • 10.500s", P9.1); empty without sections.
     in property <string> summary;
     // The keys of the actions, for the tooltips.
@@ -39,6 +40,20 @@ export global Sections {
     in property <string> key-set-end;
     in property <string> key-add;
     in property <string> key-delete;
+    // Drag & drop of the rows (P9.4): the rows' shifts, the gap where they land, the ghost under the pointer. A
+    // dropped drag snaps the rows into the new order without animation (`drag-instant`).
+    in property <bool> dragging;
+    in property <[length]> drag-shifts;
+    in property <bool> drag-instant;
+    in property <length> drag-gap-y;
+    in property <length> drag-gap-height;
+    in property <length> drag-ghost-y;
+    in property <string> drag-title;
+    in property <string> drag-detail;
+    in property <int> drag-count: 1;
+    out property <length> row-height: 26px;
+    // The time columns of the list (the header's titles stand over the times).
+    out property <length> time-width: 80px;
 
     // 0 = start, 1 = end.
     callback set-mark(int);
@@ -46,7 +61,8 @@ export global Sections {
     // A typed time; false = not accepted (the field stays open and turns red).
     callback edit-mark(int, string) -> bool;
     callback add();
-    callback select(/* row */ int);
+    // A click on a row: Ctrl one more or less, Shift a range (as in the queue).
+    callback pick(/* row */ int, /* control */ bool, /* shift */ bool);
     callback seek-row(/* row */ int, /* 0 = start, 1 = end */ int);
     callback edit-row(/* row */ int, /* 0 = start, 1 = end */ int, string) -> bool;
     // A field with a refused time is typed in again, or closed without keeping it (its bubble, M6.5c).
@@ -54,27 +70,42 @@ export global Sections {
     callback mark-canceled(int);
     callback row-typed(/* row */ int, /* 0 = start, 1 = end */ int, string);
     callback row-canceled(/* row */ int, /* 0 = start, 1 = end */ int);
-    callback move-up();
-    callback move-down();
-    callback delete();
+    // The row's own held delete button.
+    callback delete-row(/* row */ int);
+    // A right click on a row (-1 = the empty space) at a window position.
+    callback context-menu(/* row */ int, /* x */ length, /* y */ length);
+    // A left click on the empty space.
+    callback clear-selection();
+    // Drag & drop: the pointer in the list's coordinates (0 = the top of the first row).
+    callback drag-start(/* row */ int, /* pointer */ length, /* pitch */ length, /* height */ length);
+    callback drag-move(/* pointer */ length);
+    callback drag-end();
 }
 
-/// A time that seeks on click and turns into a text field on double click.
+/// A time that seeks on click and turns into a text field on double click. In a list row it can start the row's drag.
 export component TimeField inherits Rectangle {
     in property <string> text;
     in property <string> placeholder: "Not set";
     in property <bool> enabled: true;
+    in property <string> tooltip;
+    in property <string> note;
+    // The press may drag the row it is in.
+    in property <bool> draggable;
     // The key of the bubble that explains a refused time (`bubble.slint`).
     in property <string> bubble;
-    callback clicked();
+    callback clicked(/* control */ bool, /* shift */ bool);
     callback committed(string) -> bool;
     callback typed(string);
     callback canceled();
+    callback menu(/* window x */ length, /* window y */ length);
+    callback drag-started(/* window y of the press */ length);
+    callback drag-moved(/* window y */ length);
+    callback drag-ended();
 
     property <bool> editing;
     property <bool> invalid;
 
-    min-width: 84px;
+    min-width: 64px;
     height: 22px;
     border-radius: 3px;
     background: root.editing ? Theme.background
@@ -107,6 +138,11 @@ export component TimeField inherits Rectangle {
         key: root.bubble;
     }
 
+    host := TooltipHost {
+        text: root.tooltip;
+        note: root.note;
+    }
+
     if !root.editing: Text {
         x: 5px;
         width: parent.width - 10px;
@@ -118,11 +154,24 @@ export component TimeField inherits Rectangle {
         overflow: elide;
     }
 
-    touch := TouchArea {
+    touch := DragArea {
         enabled: root.enabled && !root.editing;
+        draggable: root.draggable;
         mouse-cursor: MouseCursor.pointer;
-        clicked => { root.clicked(); }
-        double-clicked => { root.start-edit(); }
+        pressed-down => { host.press(); }
+        tapped(control, shift) => { root.clicked(control, shift); }
+        double-tapped => { root.start-edit(); }
+        menu(x, y) => { root.menu(x, y); }
+        drag-started(y) => { root.drag-started(y); }
+        drag-moved(y) => { root.drag-moved(y); }
+        drag-ended => { root.drag-ended(); }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
     }
 
     input := TextInput {
@@ -166,115 +215,151 @@ export component TimeField inherits Rectangle {
     }
 }
 
-component MarkRow inherits HorizontalLayout {
-    in property <string> label;
-    in property <string> time;
-    in property <int> which;
+/// The current section in one row: set the start, the start, the end, set the end, add (P9.5). Both times stretch
+/// and stay equally wide; the length is in their tooltips and in the Add button's.
+component CurrentSection inherits HorizontalLayout {
+    spacing: 4px;
 
-    spacing: 6px;
-
-    Text {
-        text: root.label;
-        width: 34px;
-        color: Theme.text-muted;
-        font-size: 12px;
-        vertical-alignment: center;
+    IconButton {
+        icon: IconId.mark-set;
+        enabled: Sections.has-media;
+        tooltip: "Set the start to the playhead";
+        shortcut: Sections.key-set-start;
+        clicked => { Sections.set-mark(0); }
     }
 
-    field := TimeField {
+    for which in 2: TimeField {
         horizontal-stretch: 1;
-        text: root.time;
+        text: which == 0 ? Sections.mark-start : Sections.mark-end;
         enabled: Sections.has-media;
-        bubble: root.which == 0 ? "sections.mark.start" : "sections.mark.end";
-        clicked => { Sections.seek-mark(root.which); }
-        committed(text) => { return Sections.edit-mark(root.which, text); }
-        typed(text) => { Sections.mark-typed(root.which, text); }
-        canceled => { Sections.mark-canceled(root.which); }
+        tooltip: which == 0 ? "Start of the current section" : "End of the current section";
+        note: Sections.current-length;
+        bubble: which == 0 ? "sections.mark.start" : "sections.mark.end";
+        clicked => { Sections.seek-mark(which); }
+        committed(text) => { return Sections.edit-mark(which, text); }
+        typed(text) => { Sections.mark-typed(which, text); }
+        canceled => { Sections.mark-canceled(which); }
     }
 
     IconButton {
         icon: IconId.mark-set;
         enabled: Sections.has-media;
-        tooltip: root.which == 0 ? "Set the start to the playhead" : "Set the end to the playhead";
-        shortcut: root.which == 0 ? Sections.key-set-start : Sections.key-set-end;
-        clicked => { Sections.set-mark(root.which); }
+        tooltip: "Set the end to the playhead";
+        shortcut: Sections.key-set-end;
+        clicked => { Sections.set-mark(1); }
+    }
+
+    IconButton {
+        icon: IconId.section-add;
+        enabled: Sections.can-add;
+        tooltip: Sections.current-length == "" ? "Add the current section to the list"
+            : "Add the current section to the list (" + Sections.current-length + ")";
+        shortcut: Sections.key-add;
+        clicked => { Sections.add(); }
     }
 }
 
 component SectionRowItem inherits Rectangle {
     in property <SectionRowView> item;
     in property <int> index;
+    // Drag & drop (P9.4): how far the row moves aside while sections are dragged, and whether it is one of them (the
+    // ghost shows it under the pointer, so it is hidden here and keeps its place: its fields hold the pointer).
+    in property <length> drag-shift;
+    in property <bool> lifted;
+    callback drag-started(/* window y of the press */ length);
+    callback drag-moved(/* window y */ length);
+    callback drag-ended();
 
-    height: 24px;
-    border-radius: 3px;
-    background: root.item.selected ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : transparent;
+    height: Sections.row-height;
 
-    touch := TouchArea {
-        clicked => { Sections.select(root.index); }
-    }
+    body := Rectangle {
+        y: root.lifted ? 0px : root.drag-shift;
+        animate y { duration: Sections.drag-instant ? 0ms : DragMotion.shift; easing: ease-out; }
+        width: parent.width;
+        height: parent.height;
+        opacity: root.lifted ? 0 : 1;
+        border-radius: 3px;
+        background: root.item.selected ? Theme.surface-selected
+            : area.has-hover && !Sections.dragging ? Theme.surface-hover : transparent;
 
-    // The overlap of this section with an earlier one (M6.5c).
-    BubbleAnchor {
-        key: "sections.row." + root.index;
-    }
-
-    // A refused save leads to this section (M6.5e).
-    JumpFlash {
-        key: "sections:" + root.index;
-    }
-
-    HorizontalLayout {
-        padding-left: 4px;
-        padding-right: 4px;
-        spacing: 2px;
-
-        Text {
-            text: root.item.number;
-            width: 18px;
-            color: root.item.overlapping ? Theme.status-corrupt : Theme.text-muted;
-            font-size: 11px;
-            vertical-alignment: center;
+        // The free space of the row: select, menu, drag.
+        area := DragArea {
+            tapped(control, shift) => { Sections.pick(root.index, control, shift); }
+            menu(x, y) => { Sections.context-menu(root.index, x, y); }
+            drag-started(y) => { root.drag-started(y); }
+            drag-moved(y) => { root.drag-moved(y); }
+            drag-ended => { root.drag-ended(); }
         }
 
-        VerticalLayout {
-            alignment: center;
-            TimeField {
-                text: root.item.start;
-                bubble: "sections.row." + root.index + ".start";
-                clicked => {
-                    Sections.select(root.index);
-                    Sections.seek-row(root.index, 0);
+        // The overlap of this section with an earlier one (M6.5c).
+        BubbleAnchor {
+            key: "sections.row." + root.index;
+        }
+
+        HorizontalLayout {
+            padding-left: 4px;
+            padding-right: 0px;
+            spacing: 2px;
+
+            Text {
+                text: root.item.number;
+                width: 18px;
+                color: root.item.overlapping ? Theme.status-corrupt : Theme.text-muted;
+                font-size: 11px;
+                vertical-alignment: center;
+            }
+
+            for which in 2: VerticalLayout {
+                alignment: center;
+
+                TimeField {
+                    width: Sections.time-width;
+                    text: which == 0 ? root.item.start : root.item.end;
+                    draggable: true;
+                    bubble: "sections.row." + root.index + (which == 0 ? ".start" : ".end");
+                    clicked(control, shift) => {
+                        Sections.pick(root.index, control, shift);
+                        if !control && !shift {
+                            Sections.seek-row(root.index, which);
+                        }
+                    }
+                    committed(text) => { return Sections.edit-row(root.index, which, text); }
+                    typed(text) => { Sections.row-typed(root.index, which, text); }
+                    canceled => { Sections.row-canceled(root.index, which); }
+                    menu(x, y) => { Sections.context-menu(root.index, x, y); }
+                    drag-started(y) => { root.drag-started(y); }
+                    drag-moved(y) => { root.drag-moved(y); }
+                    drag-ended => { root.drag-ended(); }
                 }
-                committed(text) => { return Sections.edit-row(root.index, 0, text); }
-                typed(text) => { Sections.row-typed(root.index, 0, text); }
-                canceled => { Sections.row-canceled(root.index, 0); }
+            }
+
+            Text {
+                text: root.item.duration;
+                horizontal-stretch: 1;
+                horizontal-alignment: right;
+                color: Theme.text-muted;
+                font-family: "monospace";
+                font-size: 11px;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+
+            VerticalLayout {
+                alignment: center;
+
+                IconButton {
+                    icon: IconId.section-delete;
+                    icon-size: IconSize.sm;
+                    hold: true;
+                    tooltip: "Delete this section";
+                    clicked => { Sections.delete-row(root.index); }
+                }
             }
         }
 
-        VerticalLayout {
-            alignment: center;
-            TimeField {
-                text: root.item.end;
-                bubble: "sections.row." + root.index + ".end";
-                clicked => {
-                    Sections.select(root.index);
-                    Sections.seek-row(root.index, 1);
-                }
-                committed(text) => { return Sections.edit-row(root.index, 1, text); }
-                typed(text) => { Sections.row-typed(root.index, 1, text); }
-                canceled => { Sections.row-canceled(root.index, 1); }
-            }
-        }
-
-        Text {
-            text: root.item.duration;
-            horizontal-stretch: 1;
-            horizontal-alignment: right;
-            color: Theme.text-muted;
-            font-family: "monospace";
-            font-size: 11px;
-            vertical-alignment: center;
-            overflow: elide;
+        // A refused save leads to this section (M6.5e), a duplicate flashes (P9.5).
+        JumpFlash {
+            key: "sections:" + root.index;
         }
     }
 }
@@ -286,115 +371,124 @@ component ColumnTitle inherits Text {
 }
 
 /// The body of the Sections card.
-export component SectionsCardBody inherits VerticalLayout {
-    padding: 8px;
-    padding-top: 0px;
-    spacing: 6px;
+export component SectionsCardBody inherits Rectangle {
+    property <length> row-step: Sections.row-height + 2px;
 
-    MarkRow {
-        label: "Start";
-        time: Sections.mark-start;
-        which: 0;
+    // The empty space of the card: a click clears the selection, a right click opens the list's menu.
+    TouchArea {
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down && event.button == PointerEventButton.right {
+                Sections.context-menu(-1, self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y);
+            }
+        }
+        clicked => { Sections.clear-selection(); }
     }
 
-    MarkRow {
-        label: "End";
-        time: Sections.mark-end;
-        which: 1;
-    }
-
-    HorizontalLayout {
+    VerticalLayout {
+        padding: 8px;
+        padding-top: 0px;
         spacing: 6px;
 
-        IconButton {
-            icon: IconId.section-add;
-            enabled: Sections.can-add;
-            tooltip: "Add the current section (start to end) to the list";
-            shortcut: Sections.key-add;
-            clicked => { Sections.add(); }
-        }
-
-        Text {
-            text: Sections.current-length;
-            horizontal-stretch: 1;
-            horizontal-alignment: right;
-            color: Theme.text-muted;
-            font-family: "monospace";
-            font-size: 11px;
-            vertical-alignment: center;
-        }
-    }
-
-    Rectangle {
-        height: 1px;
-        background: Theme.border;
-    }
-
-    if Sections.rows.length == 0: Text {
-        text: "No sections yet: set a start and an end, then add the section.";
-        color: Theme.text-muted;
-        font-size: 11px;
-        wrap: word-wrap;
-    }
-
-    if Sections.rows.length > 0: HorizontalLayout {
-        padding-left: 4px;
-        padding-right: 4px;
-        spacing: 2px;
-        height: 14px;
-
-        ColumnTitle {
-            text: "#";
-            width: 18px;
-        }
-
-        ColumnTitle {
-            text: "Start";
-            min-width: 84px;
-            horizontal-stretch: 0;
-        }
-
-        ColumnTitle {
-            text: "End";
-            min-width: 84px;
-            horizontal-stretch: 0;
-        }
-
-        ColumnTitle {
-            text: "Duration";
-            horizontal-stretch: 1;
-            horizontal-alignment: right;
-        }
-    }
-
-    for row[index] in Sections.rows: SectionRowItem {
-        item: row;
-        index: index;
-    }
-
-    HorizontalLayout {
-        spacing: 4px;
-
-        UpDownButton {
-            up-enabled: Sections.can-move-up;
-            down-enabled: Sections.can-move-down;
-            up-tooltip: "Move the selected section up (the output keeps the list order)";
-            down-tooltip: "Move the selected section down";
-            up => { Sections.move-up(); }
-            down => { Sections.move-down(); }
-        }
-
-        IconButton {
-            icon: IconId.section-delete;
-            hold: true;
-            enabled: Sections.can-delete;
-            tooltip: "Delete the selected section (the key deletes it at once)";
-            shortcut: Sections.key-delete;
-            clicked => { Sections.delete(); }
-        }
+        CurrentSection { }
 
         Rectangle {
-            horizontal-stretch: 1;
+            height: 1px;
+            background: Theme.border;
+        }
+
+        if Sections.rows.length == 0: Text {
+            text: "No sections yet: set a start and an end, then add the section.";
+            color: Theme.text-muted;
+            font-size: 11px;
+            wrap: word-wrap;
+        }
+
+        if Sections.rows.length > 0: HorizontalLayout {
+            padding-left: 4px;
+            spacing: 2px;
+            height: 14px;
+
+            ColumnTitle {
+                text: "#";
+                width: 18px;
+            }
+
+            for title in ["Start", "End"]: Rectangle {
+                width: Sections.time-width;
+
+                // Over the times, after the field's inner padding.
+                ColumnTitle {
+                    x: 5px;
+                    height: parent.height;
+                    text: title;
+                }
+            }
+
+            ColumnTitle {
+                text: "Duration";
+                horizontal-stretch: 1;
+                horizontal-alignment: right;
+            }
+
+            // The delete buttons' column has no caption.
+            Rectangle {
+                width: 26px;
+            }
+        }
+
+        if Sections.rows.length > 0: list-area := Rectangle {
+            height: list.preferred-height;
+
+            // The card stack scrolled under the pointer: the pointer is measured again (`DragState.scrolls`).
+            property <int> scrolls: DragState.scrolls;
+            changed scrolls => {
+                if Sections.dragging {
+                    Sections.drag-move(DragState.pointer-y - list.absolute-position.y);
+                }
+            }
+
+            list := VerticalLayout {
+                width: parent.width;
+                height: parent.height;
+                alignment: start;
+                spacing: 2px;
+
+                for row[index] in Sections.rows: SectionRowItem {
+                    item: row;
+                    index: index;
+                    drag-shift: index < Sections.drag-shifts.length ? Sections.drag-shifts[index] : 0px;
+                    lifted: Sections.dragging && row.selected;
+                    // Drag & drop (P9.4): window coordinates turn into the list's coordinates.
+                    drag-started(y) => {
+                        DragState.pointer-y = y;
+                        Sections.drag-start(index, y - list.absolute-position.y, root.row-step, Sections.row-height);
+                    }
+                    drag-moved(y) => {
+                        DragState.pointer-y = y;
+                        Sections.drag-move(y - list.absolute-position.y);
+                    }
+                    drag-ended => { Sections.drag-end(); }
+                }
+            }
+
+            // Where the dragged sections would land (the other rows moved aside).
+            if Sections.dragging: DropGap {
+                x: 0px;
+                y: Sections.drag-gap-y;
+                width: parent.width;
+                height: Math.max(0px, Sections.drag-gap-height - 2px);
+            }
+
+            // The dragged sections under the pointer.
+            if Sections.dragging: DragGhost {
+                x: 0px;
+                y: Sections.drag-ghost-y;
+                width: parent.width;
+                height: Sections.row-height;
+                title: Sections.drag-title;
+                detail: Sections.drag-detail;
+                count: Sections.drag-count;
+            }
         }
     }
 }

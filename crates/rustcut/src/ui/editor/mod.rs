@@ -9,6 +9,7 @@
 
 mod actions;
 mod section_bubbles;
+mod sections_drag;
 mod sections_input;
 mod timeline_input;
 
@@ -16,20 +17,22 @@ use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
 use az::CheckedAs as _;
-use rustcut_core::edit::SectionList;
+use rustcut_core::edit::{SectionId, SectionList};
 use rustcut_core::settings::{AutoSection, EditorSettings, Settings, TimelineState};
 use rustcut_core::time::{FrameRate, Timestamp};
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 
+use self::timeline_input::{Cursor, Drag};
 use crate::ui::export::ExportBridge;
 use crate::ui::filters::{FilterKeys, FiltersBridge};
 use crate::ui::keymap::{Action, Keymap};
 use crate::ui::media_info::MediaInfoBridge;
+use crate::ui::menu::ContextMenuBridge;
 use crate::ui::notices::{self, Kind, Notice};
 use crate::ui::player::{self, PlaybackView, PlayerBridge};
 use crate::ui::probe::ProbeBridge;
 use crate::ui::queue::QueueBridge;
-use crate::ui::sections::{Bound, Edge, SectionsState};
+use crate::ui::sections::{Bound, SectionsState};
 use crate::ui::tags::TagsBridge;
 use crate::ui::timeline::{Viewport, view};
 use crate::util::model::sync;
@@ -37,15 +40,6 @@ use crate::{Export, MainWindow, Playback, SectionRowView, Sections, Shortcuts, T
 
 /// Frame rates outside this range are not a frame grid (Matroska's 1000/1 time base, broken headers).
 const PLAUSIBLE_FPS: std::ops::RangeInclusive<f64> = 1.0..=300.0;
-
-/// A press on the timeline that is still held.
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum Drag {
-    /// Scrubbing: the playhead follows the pointer.
-    Scrub,
-    /// Moving an edge; `offset` is where the pointer grabbed it, relative to the edge.
-    Edge { edge: Edge, offset: f32 },
-}
 
 #[derive(Debug)]
 struct State {
@@ -56,8 +50,10 @@ struct State {
     drag: Option<Drag>,
     /// Where the pointer hovers over the timeline.
     hover: Option<f32>,
-    /// The pointer is on a draggable edge (resize cursor).
-    edge_hovered: bool,
+    /// The section under the pointer (drawn brighter, P9.5).
+    hovered: Option<SectionId>,
+    /// The pointer's shape over the timeline.
+    cursor: Cursor,
 }
 
 pub struct Editor {
@@ -85,6 +81,11 @@ pub struct Editor {
     export: RefCell<Weak<ExportBridge>>,
     /// The queue panel (the queue keys move its selected jobs).
     queue: RefCell<Weak<QueueBridge>>,
+    /// The context menu of the Sections card.
+    menu: RefCell<Weak<ContextMenuBridge>>,
+    /// A drag of section rows that runs (P9.5).
+    sections_drag: RefCell<Option<sections_drag::SectionsDrag>>,
+    drag_shifts: Rc<VecModel<f32>>,
     /// The status line shows a refused edit: the next accepted one replaces it.
     warned: Cell<bool>,
     /// Time fields whose refused text has a bubble (their anchors, M6.5c).
@@ -130,7 +131,8 @@ impl Editor {
                 has_video: false,
                 drag: None,
                 hover: None,
-                edge_hovered: false,
+                hovered: None,
+                cursor: Cursor::Default,
             }),
             probe: RefCell::new(Weak::new()),
             tags: RefCell::new(Weak::new()),
@@ -140,6 +142,9 @@ impl Editor {
             menu_modal: Cell::new(false),
             export: RefCell::new(Weak::new()),
             queue: RefCell::new(Weak::new()),
+            menu: RefCell::new(Weak::new()),
+            sections_drag: RefCell::new(None),
+            drag_shifts: Rc::new(VecModel::default()),
             warned: Cell::new(false),
             time_bubbles: RefCell::default(),
             overlap_bubbles: RefCell::default(),
@@ -156,6 +161,7 @@ impl Editor {
         actions::connect(&editor, window);
         timeline_input::connect(&editor, window);
         sections_input::connect(&editor, window);
+        sections_drag::connect(&editor, window);
         let this = Rc::downgrade(&editor);
         player::set_view_hook(move |view| {
             if let Some(editor) = this.upgrade() {
@@ -174,6 +180,7 @@ impl Editor {
             st.sections.clear();
             st.viewport.set_duration(Timestamp::ZERO);
             st.drag = None;
+            st.hovered = None;
         }
         self.publish();
     }
@@ -201,6 +208,11 @@ impl Editor {
     /// Connects the queue panel (the queue keys).
     pub fn set_queue(&self, queue: &Rc<QueueBridge>) {
         *self.queue.borrow_mut() = Rc::downgrade(queue);
+    }
+
+    /// Connects the context menu (the Sections card's menus).
+    pub fn set_menu(&self, menu: &Rc<ContextMenuBridge>) {
+        *self.menu.borrow_mut() = Rc::downgrade(menu);
     }
 
     /// The sections a saved job gets: the list, or with an empty list the automatic section of `auto` (PyCutRv's
@@ -439,7 +451,7 @@ impl Editor {
         let Some(window) = self.window.upgrade() else { return };
         let st = self.state.borrow();
         let tv = if st.has_video {
-            view::build(&st.viewport, &st.sections)
+            view::build(&st.viewport, &st.sections, st.hovered)
         } else {
             view::TimelineView::default()
         };
@@ -465,6 +477,7 @@ impl Editor {
                     label: b.label.as_str().into(),
                     selected: b.selected,
                     overlapping: b.overlapping,
+                    hovered: b.hovered,
                 })
                 .collect(),
         );
@@ -499,22 +512,6 @@ impl Editor {
         tl.set_overview_playhead(st.viewport.fraction_of(st.playhead));
     }
 
-    fn publish_hover(&self) {
-        let Some(window) = self.window.upgrade() else { return };
-        let st = self.state.borrow();
-        let tl = window.global::<Timeline<'_>>();
-        let hover = st
-            .hover
-            .filter(|_| st.has_video)
-            .and_then(|x| view::hover(&st.viewport, x));
-        tl.set_hover_shown(hover.is_some());
-        if let Some((x, text)) = hover {
-            tl.set_hover_x(x);
-            tl.set_hover_text(text.into());
-        }
-        tl.set_edge_hovered(st.edge_hovered);
-    }
-
     fn publish_sections(&self, window: &MainWindow, st: &State) {
         // The export card checks the job again (copied audio needs one section, Q-N6).
         if let Some(export) = self.export.borrow().upgrade() {
@@ -529,16 +526,13 @@ impl Editor {
         let current = s.current().ok();
         sections.set_current_length(
             current
-                .map(|c| format!("Length {}", c.duration()))
+                .map(|c| format!("Length {}", c.duration().format_compact()))
                 .unwrap_or_default()
                 .into(),
         );
         sections.set_can_add(st.has_video && current.is_some());
         let rows = s.rows();
-        let selected = rows.iter().position(|r| r.selected);
-        sections.set_can_move_up(selected.is_some_and(|i| i > 0));
-        sections.set_can_move_down(selected.is_some_and(|i| i + 1 < rows.len()));
-        sections.set_can_delete(selected.is_some());
+        self.sections_drag_rows_changed(&rows.iter().map(|r| r.id).collect::<Vec<_>>());
         sections.set_summary(summary(s).into());
         self.publish_overlaps(&s.overlaps());
         sync(
@@ -548,7 +542,7 @@ impl Editor {
                     number: r.number.checked_as::<i32>().unwrap_or(i32::MAX),
                     start: r.start.to_string().into(),
                     end: r.end.to_string().into(),
-                    duration: (r.end - r.start).to_string().into(),
+                    duration: (r.end - r.start).format_compact().into(),
                     selected: r.selected,
                     overlapping: r.overlapping,
                 })

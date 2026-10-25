@@ -1,6 +1,7 @@
 //! Drag & drop of list rows (P9.4): the pure model (`model.rs`) and the window glue of `ui/drag.slint`: the edge
 //! scrolling's step as a pure Slint callback, and Escape, which cancels the drag that runs (`DragState`; main.slint
-//! asks it before the keymap). A list starts a drag with [`begin`] (its cancel), and ends it with [`end`].
+//! asks it before the keymap). A list starts a drag with [`begin`] (its cancel and, for a list inside a card stack,
+//! the stack's area: the stack scrolls along near its edges), and ends it with [`end`].
 
 mod model;
 
@@ -33,13 +34,16 @@ where
     });
 }
 
-/// A drag started in `component`; Escape runs `cancel`.
-pub fn begin<C: ComponentHandle>(component: &C, cancel: impl Fn() + 'static)
+/// A drag started in `component`; Escape runs `cancel`. `area` names the card stack that scrolls for it (its panel
+/// key, `dock_panels.slint`), "" for a list that scrolls itself.
+pub fn begin<C: ComponentHandle>(component: &C, area: &str, cancel: impl Fn() + 'static)
 where
     for<'a> DragState<'a>: Global<'a, C>,
 {
     CANCEL.with(|slot| *slot.borrow_mut() = Some(Box::new(cancel)));
-    component.global::<DragState<'_>>().set_active(true);
+    let state = component.global::<DragState<'_>>();
+    state.set_area(area.into());
+    state.set_active(true);
 }
 
 /// The drag ended (dropped or canceled).
@@ -52,5 +56,7 @@ where
             slot.take();
         }
     });
-    component.global::<DragState<'_>>().set_active(false);
+    let state = component.global::<DragState<'_>>();
+    state.set_active(false);
+    state.set_area("".into());
 }

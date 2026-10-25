@@ -1,22 +1,31 @@
-//! The queue panel's selection: several jobs (click, Ctrl+click, Shift+click, select all), the anchor of a Shift range
-//! and the current job that the Job and Logs panels show (the last one clicked). Only visible rows can be selected;
-//! a filter that hides a selected job drops it from the selection (an action never reaches a job the user cannot see).
+//! A list's selection of several rows (click, Ctrl+click, Shift+click, select all), the anchor of a Shift range and
+//! the current row (the last one clicked). The queue panel selects jobs with it (the current job is the one the Job
+//! and Logs panels show), the Sections card selects sections (P9.5). Only visible rows can be selected; a filter that
+//! hides a selected row drops it from the selection (an action never reaches a row the user cannot see).
 
-use rustcut_core::job::JobId;
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Selection {
-    /// In the order the jobs were selected.
-    ids: Vec<JobId>,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Selection<T> {
+    /// In the order the rows were selected.
+    ids: Vec<T>,
     /// Where a Shift+click range starts.
-    anchor: Option<JobId>,
-    /// The job the Job and Logs panels show; stays when the selection is cleared.
-    current: Option<JobId>,
+    anchor: Option<T>,
+    /// The row the panels show; stays when the selection is cleared.
+    current: Option<T>,
 }
 
-impl Selection {
+impl<T> Default for Selection<T> {
+    fn default() -> Self {
+        Self {
+            ids: Vec::new(),
+            anchor: None,
+            current: None,
+        }
+    }
+}
+
+impl<T: Copy + PartialEq> Selection<T> {
     /// The selection saved in `ui-state.toml` (ids that are gone are dropped by [`Selection::retain`]).
-    pub fn restore(ids: &[JobId], current: Option<JobId>) -> Self {
+    pub fn restore(ids: &[T], current: Option<T>) -> Self {
         let mut selection = Self::default();
         for &id in ids {
             if !selection.ids.contains(&id) {
@@ -28,15 +37,15 @@ impl Selection {
         selection
     }
 
-    pub fn ids(&self) -> &[JobId] {
+    pub fn ids(&self) -> &[T] {
         &self.ids
     }
 
-    pub fn current(&self) -> Option<JobId> {
+    pub fn current(&self) -> Option<T> {
         self.current
     }
 
-    pub fn contains(&self, id: JobId) -> bool {
+    pub fn contains(&self, id: T) -> bool {
         self.ids.contains(&id)
     }
 
@@ -48,20 +57,20 @@ impl Selection {
         self.ids.len()
     }
 
-    /// The selected jobs in the order of `order` (the queue's order).
-    pub fn in_order(&self, order: &[JobId]) -> Vec<JobId> {
+    /// The selected rows in the order of `order` (the list's order).
+    pub fn in_order(&self, order: &[T]) -> Vec<T> {
         order.iter().copied().filter(|id| self.ids.contains(id)).collect()
     }
 
-    /// A plain click: only this job. A click on the only selected job keeps it (no toggling by accident).
-    pub fn click(&mut self, id: JobId) {
+    /// A plain click: only this row. A click on the only selected row keeps it (no toggling by accident).
+    pub fn click(&mut self, id: T) {
         self.ids = vec![id];
         self.anchor = Some(id);
         self.current = Some(id);
     }
 
-    /// Ctrl+click: this job in or out; the anchor moves to it.
-    pub fn toggle(&mut self, id: JobId) {
+    /// Ctrl+click: this row in or out; the anchor moves to it.
+    pub fn toggle(&mut self, id: T) {
         if let Some(at) = self.ids.iter().position(|i| *i == id) {
             self.ids.remove(at);
         } else {
@@ -71,9 +80,9 @@ impl Selection {
         self.current = Some(id);
     }
 
-    /// Shift+click: everything between the anchor and this job in `visible` (the rows as shown); with Ctrl the range
+    /// Shift+click: everything between the anchor and this row in `visible` (the rows as shown); with Ctrl the range
     /// is added to the selection. Without an anchor it is a plain click.
-    pub fn extend(&mut self, id: JobId, visible: &[JobId], add: bool) {
+    pub fn extend(&mut self, id: T, visible: &[T], add: bool) {
         let from = self.anchor.and_then(|a| visible.iter().position(|v| *v == a));
         let to = visible.iter().position(|v| *v == id);
         let (Some(from), Some(to)) = (from, to) else {
@@ -85,21 +94,38 @@ impl Selection {
         if !add {
             self.ids.clear();
         }
-        for &job in range {
-            if !self.ids.contains(&job) {
-                self.ids.push(job);
+        for &row in range {
+            if !self.ids.contains(&row) {
+                self.ids.push(row);
             }
         }
         self.current = Some(id);
     }
 
-    /// Ctrl+A: every visible job.
-    pub fn select_all(&mut self, visible: &[JobId]) {
+    /// A click with the keys held: Shift a range (with Ctrl added to the selection), Ctrl one row in or out, else
+    /// only this row.
+    pub fn pick(&mut self, id: T, visible: &[T], control: bool, shift: bool) {
+        match (control, shift) {
+            (_, true) => self.extend(id, visible, control),
+            (true, false) => self.toggle(id),
+            (false, false) => self.click(id),
+        }
+    }
+
+    /// Ctrl+A: every visible row.
+    pub fn select_all(&mut self, visible: &[T]) {
         self.ids = visible.to_vec();
         if self.current.is_none_or(|c| !visible.contains(&c)) {
             self.current = visible.first().copied();
         }
         self.anchor = self.current;
+    }
+
+    /// Exactly these rows; `current` becomes the current one (the anchor of the next Shift range).
+    pub fn set(&mut self, ids: Vec<T>, current: Option<T>) {
+        self.ids = ids;
+        self.current = current;
+        self.anchor = current;
     }
 
     /// Nothing selected; the Job panel keeps its job.
@@ -108,9 +134,9 @@ impl Selection {
         self.anchor = None;
     }
 
-    /// Keeps only jobs that `keep` accepts (jobs that are gone or hidden by a filter). The current job stays while it
+    /// Keeps only rows that `keep` accepts (rows that are gone or hidden by a filter). The current row stays while it
     /// exists (`exists`), so the Job panel does not go blank when a filter hides it.
-    pub fn retain(&mut self, keep: impl Fn(JobId) -> bool, exists: impl Fn(JobId) -> bool) {
+    pub fn retain(&mut self, keep: impl Fn(T) -> bool, exists: impl Fn(T) -> bool) {
         self.ids.retain(|id| keep(*id));
         if self.anchor.is_some_and(|a| !keep(a)) {
             self.anchor = None;
@@ -120,14 +146,16 @@ impl Selection {
         }
     }
 
-    /// The job the panels show changes without touching the selection (a job loaded into the editor).
-    pub fn set_current(&mut self, id: Option<JobId>) {
+    /// The row the panels show changes without touching the selection (a job loaded into the editor).
+    pub fn set_current(&mut self, id: Option<T>) {
         self.current = id;
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use rustcut_core::job::JobId;
+
     use super::*;
 
     fn ids(v: &[i64]) -> Vec<JobId> {
@@ -179,5 +207,26 @@ mod tests {
         let s = Selection::restore(&[], Some(JobId(2)));
         assert!(s.is_empty());
         assert_eq!(s.current(), Some(JobId(2)));
+    }
+
+    #[test]
+    fn picks_follow_the_keys() {
+        let visible = [1, 2, 3, 4];
+        let mut s = Selection::default();
+        s.pick(2, &visible, false, false);
+        s.pick(4, &visible, false, true);
+        assert_eq!(s.ids(), [2, 3, 4]);
+        s.pick(3, &visible, true, false);
+        assert_eq!(s.ids(), [2, 4]);
+        s.pick(1, &visible, true, true);
+        assert_eq!(
+            s.in_order(&visible),
+            [1, 2, 3, 4],
+            "Ctrl+Shift adds the range from the anchor"
+        );
+        s.set(vec![4], Some(4));
+        assert_eq!((s.ids(), s.current()), ([4].as_slice(), Some(4)));
+        s.pick(2, &visible, false, true);
+        assert_eq!(s.in_order(&visible), [2, 3, 4], "the anchor moved with `set`");
     }
 }

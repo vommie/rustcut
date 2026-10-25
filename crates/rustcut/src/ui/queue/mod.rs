@@ -10,7 +10,6 @@ mod drag;
 mod filter;
 mod menu;
 mod pause;
-mod selection;
 mod text;
 mod totals;
 mod view;
@@ -34,7 +33,6 @@ use tokio::sync::broadcast::error::RecvError;
 pub use self::columns::{Column, Layout, layout};
 pub use self::filter::{CHIPS, Chip, Filter};
 pub use self::menu::{MenuKeys, QueueAction, queue_menu, targets};
-pub use self::selection::Selection;
 pub use self::text::{RowText, clock, file_label, kind_number, row_text, short_clock, title};
 pub use self::totals::Overall;
 pub use self::view::QueueView;
@@ -43,6 +41,9 @@ use crate::ui::dispatcher::{CoalesceKey, UiDispatcher, rate};
 use crate::ui::dock::PanelId;
 use crate::ui::menu::ContextMenuBridge;
 use crate::util::model::sync;
+
+/// The queue panel's selection of jobs.
+pub type Selection = crate::util::selection::Selection<JobId>;
 use crate::{MainWindow, Queue, QueueChipView, QueueColumnView, QueueRowView};
 
 const REFRESH: CoalesceKey = CoalesceKey::new("queue", 0);

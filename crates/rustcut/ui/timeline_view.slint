@@ -1,7 +1,8 @@
 // The timeline strip under the video (src/ui/timeline/ computes every position; src/ui/editor/ handles the pointer): a time
-// ruler, the listed sections as numbered blocks, the current section's marks and range, the playhead, the time under the
-// pointer, and while zoomed an overview strip with the visible window. Positions are in track pixels (0 = the track's
-// left edge); the pointer is reported in the same coordinates.
+// ruler, the listed sections as numbered blocks (selected ones outlined, the hovered one brighter; a block's body can be
+// dragged, P9.5), the current section's marks as flags with its range, the playhead, the time under the pointer or the
+// readout of a dragged range, and while zoomed an overview strip with the visible window. Positions are in track pixels
+// (0 = the track's left edge); the pointer is reported in the same coordinates.
 
 import { Theme } from "styles.slint";
 import { Shortcuts } from "shortcuts.slint";
@@ -17,6 +18,7 @@ export struct TimelineBlock {
     label: string,
     selected: bool,
     overlapping: bool,
+    hovered: bool,
 }
 
 /// Sizes of the strip. Rust works in track coordinates and is told whether the pointer is on the ruler.
@@ -46,8 +48,12 @@ export global Timeline {
     in property <bool> hover-shown;
     in property <length> hover-x;
     in property <string> hover-text;
-    // The pointer is on an edge that can be dragged.
-    in property <bool> edge-hovered;
+    // While an edge or a section is dragged: its start, end and length over it (D-P9b).
+    in property <bool> readout-shown;
+    in property <length> readout-x;
+    in property <string> readout-text;
+    // The pointer's shape: 0 default, 1 on an edge, 2 on a section that can be moved, 3 moving one.
+    in property <int> cursor;
     in property <bool> zoomed;
     in property <float> window-start;
     in property <float> window-width: 1;
@@ -55,7 +61,7 @@ export global Timeline {
 
     callback resized(/* track width */ length);
     callback pointer-down(/* x */ length, /* on the ruler */ bool);
-    callback pointer-moved(/* x */ length, /* on the ruler */ bool, /* pressed */ bool, /* shift */ bool);
+    callback pointer-moved(/* x */ length, /* on the ruler */ bool, /* pressed */ bool, /* shift */ bool, /* control */ bool);
     callback pointer-up(/* x */ length);
     callback pointer-left();
     // Mouse wheel: zoom around x, or scroll with Shift or a horizontal wheel; true when used.
@@ -124,14 +130,15 @@ export component TimelineStrip inherits Rectangle {
             border-color: Theme.accent.with-alpha(0.45);
         }
 
+        // A selected section is outlined, the hovered one brighter (D-P9b).
         for block in Timeline.blocks: Rectangle {
             x: block.x;
             y: root.track-y + 5px;
             width: block.width;
             height: TimelineMetrics.track-height - 10px;
             border-radius: 3px;
-            background: Theme.primary.with-alpha(block.selected ? 0.62 : 0.34);
-            border-width: block.selected || block.overlapping ? 1px : 0px;
+            background: Theme.primary.with-alpha(block.hovered ? 0.52 : 0.34);
+            border-width: block.selected ? 2px : block.overlapping ? 1px : 0px;
             border-color: block.overlapping ? Theme.status-corrupt : Theme.text;
 
             Text {
@@ -144,6 +151,7 @@ export component TimelineStrip inherits Rectangle {
             }
         }
 
+        // The marks are flags: a pole over the track with a pennant at its top pointing into the current section.
         if Timeline.mark-start-shown: Rectangle {
             x: Timeline.mark-start-x - 1px;
             y: root.track-y;
@@ -151,20 +159,13 @@ export component TimelineStrip inherits Rectangle {
             height: TimelineMetrics.track-height;
             background: Theme.accent;
 
-            Rectangle {
+            Path {
                 x: 0;
                 y: 0;
-                width: 7px;
-                height: 2px;
-                background: Theme.accent;
-            }
-
-            Rectangle {
-                x: 0;
-                y: parent.height - 2px;
-                width: 7px;
-                height: 2px;
-                background: Theme.accent;
+                width: 9px;
+                height: 8px;
+                commands: "M 0 0 L 9 4 L 0 8 Z";
+                fill: Theme.accent;
             }
         }
 
@@ -175,20 +176,13 @@ export component TimelineStrip inherits Rectangle {
             height: TimelineMetrics.track-height;
             background: Theme.accent;
 
-            Rectangle {
-                x: -5px;
+            Path {
+                x: -7px;
                 y: 0;
-                width: 7px;
-                height: 2px;
-                background: Theme.accent;
-            }
-
-            Rectangle {
-                x: -5px;
-                y: parent.height - 2px;
-                width: 7px;
-                height: 2px;
-                background: Theme.accent;
+                width: 9px;
+                height: 8px;
+                commands: "M 9 0 L 0 4 L 9 8 Z";
+                fill: Theme.accent;
             }
         }
 
@@ -236,6 +230,27 @@ export component TimelineStrip inherits Rectangle {
                 vertical-alignment: center;
             }
         }
+
+        // The dragged range's start, end and length, over it on the ruler.
+        if Timeline.readout-shown: Rectangle {
+            property <length> box-width: readout-label.preferred-width + 12px;
+            x: Math.clamp(Timeline.readout-x - self.box-width / 2, -TimelineMetrics.inset, root.track-width + TimelineMetrics.inset - self.box-width);
+            y: 1px;
+            width: self.box-width;
+            height: TimelineMetrics.ruler-height - 2px;
+            border-radius: 3px;
+            background: Theme.primary;
+
+            readout-label := Text {
+                text: Timeline.readout-text;
+                color: Theme.background;
+                font-size: 10px;
+                font-weight: 600;
+                font-family: "monospace";
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
     }
 
     touch := TouchArea {
@@ -244,7 +259,9 @@ export component TimelineStrip inherits Rectangle {
         width: parent.width;
         height: root.track-y + TimelineMetrics.track-height;
         enabled: Timeline.active;
-        mouse-cursor: Timeline.edge-hovered ? MouseCursor.ew-resize : MouseCursor.default;
+        mouse-cursor: Timeline.cursor == 1 ? MouseCursor.ew-resize
+            : Timeline.cursor == 2 ? MouseCursor.grab
+            : Timeline.cursor == 3 ? MouseCursor.grabbing : MouseCursor.default;
 
         pointer-event(event) => {
             if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
@@ -254,9 +271,10 @@ export component TimelineStrip inherits Rectangle {
             if event.button == PointerEventButton.left && event.kind == PointerEventKind.up {
                 Timeline.pointer-up(self.mouse-x - TimelineMetrics.inset);
             }
-            // Moves arrive while hovering and while dragging; Shift turns snapping to edges off.
+            // Moves arrive while hovering and while dragging; Shift turns snapping to edges off, Ctrl drags finely.
             if event.kind == PointerEventKind.move {
-                Timeline.pointer-moved(self.mouse-x - TimelineMetrics.inset, self.mouse-y < root.track-y, self.pressed, event.modifiers.shift);
+                Timeline.pointer-moved(self.mouse-x - TimelineMetrics.inset, self.mouse-y < root.track-y, self.pressed,
+                    event.modifiers.shift, event.modifiers.control);
             }
         }
 

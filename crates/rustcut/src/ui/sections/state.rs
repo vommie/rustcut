@@ -1,10 +1,13 @@
 //! The sections of the open video as the editor sees them (pure, tested): the current section's start and end marks, the
-//! list of added sections (the core's [`SectionList`], stable ids) with its selection, and every edit the Sections card,
-//! the timeline and the keys make. Times are limited to the video's duration once it is known.
+//! list of added sections (the core's [`SectionList`], stable ids) with its selection of several rows (P9.5), and every
+//! edit the Sections card, the timeline and the keys make (what acts on several rows is in `arrange.rs`). Times are
+//! limited to the video's duration once it is known.
 
 use rustcut_core::edit::{Section, SectionError, SectionId, SectionList};
 use rustcut_core::settings::AutoSection;
 use rustcut_core::time::Timestamp;
+
+use crate::util::selection::Selection;
 
 /// One end of a section.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -62,15 +65,15 @@ pub struct SectionsDraft {
     pub list: SectionList,
     pub start: Option<Timestamp>,
     pub end: Option<Timestamp>,
-    pub selected: Option<SectionId>,
+    pub selection: Selection<SectionId>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SectionsState {
-    list: SectionList,
+    pub(super) list: SectionList,
     start: Option<Timestamp>,
     end: Option<Timestamp>,
-    selected: Option<SectionId>,
+    pub(super) selection: Selection<SectionId>,
     duration: Option<Timestamp>,
 }
 
@@ -80,7 +83,7 @@ impl SectionsState {
         self.list.clear();
         self.start = None;
         self.end = None;
-        self.selected = None;
+        self.selection = Selection::default();
         self.duration = None;
     }
 
@@ -90,7 +93,7 @@ impl SectionsState {
             list: self.list.clone(),
             start: self.start,
             end: self.end,
-            selected: self.selected,
+            selection: self.selection.clone(),
         }
     }
 
@@ -99,7 +102,8 @@ impl SectionsState {
         self.list = draft.list;
         self.start = draft.start;
         self.end = draft.end;
-        self.selected = draft.selected.filter(|id| self.list.get(*id).is_some());
+        self.selection = draft.selection;
+        self.forget_gone();
         if let Some(d) = self.duration {
             self.set_duration(Some(d));
         }
@@ -121,7 +125,7 @@ impl SectionsState {
     /// After a save with "clear sections": the list goes, the marks stay (PyCutRv).
     pub fn clear_list(&mut self) {
         self.list.clear();
-        self.selected = None;
+        self.selection = Selection::default();
     }
 
     /// The video's duration once known (times are limited to it from now on; the list is cut to it).
@@ -129,9 +133,7 @@ impl SectionsState {
         self.duration = duration.filter(|d| d.as_micros() > 0);
         if let Some(d) = self.duration {
             self.list.clamp_to(d);
-            if self.selected.is_some_and(|id| self.list.get(id).is_none()) {
-                self.selected = None;
-            }
+            self.forget_gone();
             self.start = self.start.map(|t| t.min(d));
             self.end = self.end.map(|t| t.min(d));
         }
@@ -232,45 +234,44 @@ impl SectionsState {
             return Err(EditError::Duplicate);
         }
         let id = self.list.push(section);
-        self.selected = Some(id);
+        self.selection.click(id);
         Ok(id)
     }
 
+    /// The current section (the last one clicked) while it is selected.
     pub fn selected(&self) -> Option<SectionId> {
-        self.selected
+        self.selection.current().filter(|id| self.selection.contains(*id))
     }
 
-    /// Selects a section (unknown ids clear the selection).
+    /// Selects only this section (unknown ids clear the selection).
     pub fn select(&mut self, id: Option<SectionId>) {
-        self.selected = id.filter(|id| self.list.get(*id).is_some());
+        match id.filter(|id| self.list.get(*id).is_some()) {
+            Some(id) => self.selection.click(id),
+            None => self.selection.clear(),
+        }
+    }
+
+    /// A click on the row at `index` with the keys held (Ctrl one more or less, Shift a range; as in the queue).
+    pub fn pick(&mut self, index: usize, control: bool, shift: bool) {
+        let Some(id) = self.id_at(index) else { return };
+        let order: Vec<SectionId> = self.list.ids().collect();
+        self.selection.pick(id, &order, control, shift);
+    }
+
+    /// Whether the section is selected.
+    pub fn is_selected(&self, id: SectionId) -> bool {
+        self.selection.contains(id)
+    }
+
+    /// Drops ids that are no longer listed from the selection.
+    pub(super) fn forget_gone(&mut self) {
+        let ids: Vec<SectionId> = self.list.ids().collect();
+        self.selection.retain(|id| ids.contains(&id), |id| ids.contains(&id));
     }
 
     /// The id of the row at `index` (0-based).
     pub fn id_at(&self, index: usize) -> Option<SectionId> {
         self.list.ids().nth(index)
-    }
-
-    /// Deletes the selected section; the row above it is selected next (PyCutRv), else the one that took its place.
-    pub fn delete_selected(&mut self) -> bool {
-        let Some(id) = self.selected else { return false };
-        let Some(index) = self.list.index_of(id) else {
-            return false;
-        };
-        self.list.remove(id);
-        self.selected = index
-            .checked_sub(1)
-            .and_then(|i| self.id_at(i))
-            .or_else(|| self.id_at(index));
-        true
-    }
-
-    /// Moves the selected section one place up or down.
-    pub fn move_selected(&mut self, up: bool) -> bool {
-        match self.selected {
-            Some(id) if up => self.list.move_up(id),
-            Some(id) => self.list.move_down(id),
-            None => false,
-        }
     }
 
     /// A typed start or end of a listed section. Reversed bounds are swapped (the core's rule), equal ones refused.
@@ -401,7 +402,7 @@ impl SectionsState {
                 number: i + 1,
                 start: section.start(),
                 end: section.end(),
-                selected: self.selected == Some(id),
+                selected: self.selection.contains(id),
                 overlapping: overlapping.contains(&id),
             })
             .collect()

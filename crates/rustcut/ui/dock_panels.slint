@@ -1,6 +1,9 @@
 // Contents of the dock panels. Panels read their data from globals, so the dock can place them in any group.
 
 import { Theme } from "styles.slint";
+import { IconButton } from "controls.slint";
+import { Export } from "export_types.slint";
+import { DragLogic, DragState } from "drag.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Dock, DockCardView } from "dock_types.slint";
 import { Playback } from "player_types.slint";
@@ -70,6 +73,19 @@ component DockCard inherits Rectangle {
                 // The card's own text and buttons, right-aligned in its header (P9.1, the review's general note).
                 if root.card.id == "sections": CardHeaderText {
                     text: Sections.summary;
+                }
+
+                // Clearing the list after a save is decided where the sections are (P9.5, Q-P9).
+                if root.card.id == "sections": VerticalLayout {
+                    alignment: center;
+
+                    IconButton {
+                        icon: IconId.clear-sections;
+                        checked: Export.clear-sections;
+                        tooltip: Export.clear-sections ? "The section list is cleared after each save"
+                            : "The sections stay after a save";
+                        clicked => { Export.toggle-clear-sections(); }
+                    }
                 }
             }
         }
@@ -141,6 +157,8 @@ component CardStack inherits Rectangle {
 
     flick := Flickable {
         content-height: stack.preferred-height;
+        // While rows of a card are dragged the stack does not take the gesture for scrolling (its edges scroll it).
+        interactive: !DragState.active;
 
         stack := VerticalLayout {
             padding: 6px;
@@ -149,6 +167,22 @@ component CardStack inherits Rectangle {
 
             for card in root.cards: DockCard {
                 card: card;
+            }
+        }
+    }
+
+    // A list in these cards is dragged (P9.5): near the top and bottom edge the stack scrolls along, faster toward the
+    // edge, and counts the scroll so the list measures the pointer again.
+    Timer {
+        interval: 16ms;
+        running: DragState.active && DragState.area == root.area;
+        triggered => {
+            let step = DragLogic.scroll-step(DragState.pointer-y - flick.absolute-position.y, flick.height);
+            let to = Math.max(Math.min(0px, flick.height - flick.content-height), Math.min(0px, flick.content-y - step));
+            // Only a real move: setting the same place again would end the row's pointer grab.
+            if to != flick.content-y {
+                flick.content-y = to;
+                DragState.scrolls += 1;
             }
         }
     }
