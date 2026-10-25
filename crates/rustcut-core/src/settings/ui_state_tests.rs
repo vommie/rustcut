@@ -213,6 +213,9 @@ fn the_queue_job_and_logs_panels_round_trip_and_old_files_load() {
     let mut state = UiState::default();
     state.queue.state_filter = vec![JobStateKind::Waiting, JobStateKind::Failed];
     state.queue.search = "clip".into();
+    state.queue.folder_filter = vec!["/out/clips".into()];
+    state.queue.profile_filter = vec!["AV1 balanced".into(), "x265".into()];
+    state.queue.filter_any = true;
     state.queue.selected = vec![JobId(7), JobId(3)];
     state.queue.current = Some(JobId(3));
     state.job.collapsed = vec!["filters".into()];
@@ -243,6 +246,8 @@ fn the_queue_job_and_logs_panels_round_trip_and_old_files_load() {
         vec![JobStateKind::Waiting, JobStateKind::Failed]
     );
     assert_eq!((read.queue.selected.clone(), read.queue.current), (Vec::new(), None));
+    // 0.0.40's filter menu: no folder or profile filter, and the filters combine with ALL.
+    assert!(read.queue.folder_filter.is_empty() && read.queue.profile_filter.is_empty() && !read.queue.filter_any);
     assert_eq!(read.timeline.zoom, 2.0);
     assert_eq!(read.logs, LogPanelState::default());
     assert!(read.logs.follow, "following the newest line is the default");
@@ -252,7 +257,9 @@ fn the_queue_job_and_logs_panels_round_trip_and_old_files_load() {
     bad.queue.selected = vec![JobId(1), JobId(1), JobId(2)];
     bad.queue.state_filter = vec![JobStateKind::Held, JobStateKind::Held];
     bad.queue.search = "a".repeat(QueuePanelState::SEARCH_MAX + 5);
+    bad.queue.folder_filter = vec!["/a".into(), "/a".into(), String::new()];
     assert_eq!(bad.sanitize().len(), 1, "only the search is worth a note");
+    assert_eq!(bad.queue.folder_filter, vec!["/a".to_owned()]);
     assert_eq!(bad.queue.selected, vec![JobId(1), JobId(2)]);
     assert_eq!(bad.queue.state_filter, vec![JobStateKind::Held]);
     assert_eq!(bad.queue.search.len(), QueuePanelState::SEARCH_MAX);

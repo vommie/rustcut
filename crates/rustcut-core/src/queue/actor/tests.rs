@@ -306,6 +306,22 @@ async fn a_failing_job_never_stalls_the_queue() {
         .unwrap();
     let row = snapshot(&queue).await.jobs.remove(0);
     assert_eq!((row.state, row.attempt), (JobState::Waiting, 2));
+    // "Render Again (Hold)" while the queue runs: a new attempt that is held at once and never starts.
+    queue.handle.send(QueueCommand::Cancel { ids: vec![a] }).unwrap();
+    queue.handle.send(QueueCommand::SetPaused(false)).unwrap();
+    queue
+        .handle
+        .send(QueueCommand::RestartHeld {
+            ids: vec![b],
+            profile: None,
+        })
+        .unwrap();
+    let jobs = snapshot(&queue).await.jobs;
+    let row_b = jobs.iter().find(|r| r.id == b).unwrap();
+    assert_eq!(
+        (&row_b.state, row_b.attempt, row_b.started_at),
+        (&JobState::Held, 2, None)
+    );
     queue
         .handle
         .request(|reply| QueueCommand::Shutdown { reply })

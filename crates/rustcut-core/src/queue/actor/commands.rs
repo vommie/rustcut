@@ -31,7 +31,8 @@ impl Actor {
             }
             QueueCommand::Hold { ids } => self.switch(&ids, JobStateKind::Waiting, JobState::Held).await,
             QueueCommand::Release { ids } => self.switch(&ids, JobStateKind::Held, JobState::Waiting).await,
-            QueueCommand::Restart { ids, profile } => self.restart(&ids, profile).await,
+            QueueCommand::Restart { ids, profile } => self.restart(&ids, profile, false).await,
+            QueueCommand::RestartHeld { ids, profile } => self.restart(&ids, profile, true).await,
             QueueCommand::Remove { ids, reply } => {
                 let _ = reply.send(self.remove(&ids).await);
             }
@@ -194,8 +195,9 @@ impl Actor {
         self.kick().await;
     }
 
-    /// Done jobs wait again as a new attempt, optionally with another profile.
-    async fn restart(&mut self, ids: &[JobId], profile: Option<Box<RenderProfile>>) {
+    /// Done jobs wait again as a new attempt, optionally with another profile; `held`: they are held at once (before
+    /// the scheduler looks, so none of them starts).
+    async fn restart(&mut self, ids: &[JobId], profile: Option<Box<RenderProfile>>, held: bool) {
         for &id in ids {
             let Some(record) = self.model.get(id) else { continue };
             if !record.state.kind().is_done() {
@@ -217,6 +219,9 @@ impl Actor {
                 }
             }
             self.set_state(id, JobState::Waiting, None).await;
+            if held {
+                self.set_state(id, JobState::Held, None).await;
+            }
         }
         self.kick().await;
     }

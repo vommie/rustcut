@@ -1,0 +1,185 @@
+// The queue's filter menu (P9.6, the UI review's notes 15#1-#3; Q-P9): a flyout from the filter button with the search
+// on top, the rule (ALL: a job matches every filter that is set, ANY: one is enough) and one choice each for the
+// states, the target folders and the profiles. A click picks one value, Ctrl+click several. A press outside, Escape or
+// the button again closes it; the filters stay. src/ui/queue/ fills the choices (`Queue.filter-*`).
+
+import { Theme } from "styles.slint";
+import { IconId } from "icons.slint";
+import { Shortcuts } from "shortcuts.slint";
+import { MultiChoiceButton } from "controls_choice.slint";
+import { TooltipHost } from "tooltip.slint";
+import { SearchField } from "search_field.slint";
+import { Flyout } from "flyout.slint";
+import { Queue } from "queue_types.slint";
+
+/// ALL or ANY in one switch-like button: the knob sits behind the rule that holds; a click switches.
+component RuleSwitch inherits Rectangle {
+    in property <bool> any;
+    callback toggled();
+
+    width: 76px;
+    height: 22px;
+    border-radius: 11px;
+    background: touch.has-hover ? Theme.surface-hover : Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    host := TooltipHost {
+        text: root.any ? "ANY: a job shows when it matches one of the filters that are set"
+            : "ALL: a job shows when it matches every filter that is set";
+    }
+
+    Rectangle {
+        x: root.any ? parent.width / 2 : 2px;
+        y: 2px;
+        width: parent.width / 2 - 2px;
+        height: parent.height - 4px;
+        border-radius: 9px;
+        background: Theme.primary.with-alpha(0.28);
+        border-width: 1px;
+        border-color: Theme.primary;
+        animate x { duration: 120ms; easing: ease-out; }
+    }
+
+    for rule[index] in ["ALL", "ANY"]: Text {
+        x: index * parent.width / 2;
+        width: parent.width / 2;
+        height: parent.height;
+        text: rule;
+        color: (index == 1) == root.any ? Theme.text : Theme.text-muted;
+        font-size: 10px;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => {
+            host.press();
+            root.toggled();
+        }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+}
+
+/// The open filter menu (`Queue.filter-open`), over the window's content (main.slint places it).
+export component QueueFilterFlyout inherits Rectangle {
+    // The filter button in layer coordinates.
+    in property <length> anchor-x;
+    in property <length> anchor-y;
+    in property <length> anchor-width;
+    in property <length> anchor-height;
+
+    function close() {
+        Queue.filter-open = false;
+        Shortcuts.release-focus();
+    }
+
+    init => {
+        search.focus();
+    }
+
+    Flyout {
+        width: parent.width;
+        height: parent.height;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        anchor-width: root.anchor-width;
+        anchor-height: root.anchor-height;
+        panel-width: keys.width;
+        panel-height: keys.height;
+        closed => { root.close(); }
+
+        keys := FocusScope {
+            x: 0;
+            y: 0;
+            width: 280px;
+            height: body.preferred-height;
+
+            key-pressed(event) => {
+                if event.text == Key.Escape {
+                    root.close();
+                    return accept;
+                }
+                reject
+            }
+
+            body := VerticalLayout {
+                width: 280px;
+                padding: 10px;
+                spacing: 8px;
+
+                search := SearchField {
+                    field-width: 260px;
+                    text: Queue.search;
+                    placeholder-text: "Search jobs";
+                    enable-regex-toggle: false;
+                    enable-escape-clear: false;
+                    show-search-icon: true;
+                    clear-tooltip: "Clear the search";
+                    search-changed(text) => { Queue.search-edited(text); }
+                    cleared => { Queue.search-edited(""); }
+                    changed has-focus => { Shortcuts.editing-changed(self.has-focus); }
+                }
+
+                HorizontalLayout {
+                    spacing: 6px;
+
+                    Text {
+                        text: "Jobs match";
+                        color: Theme.text-muted;
+                        font-size: 11px;
+                        vertical-alignment: center;
+                    }
+
+                    RuleSwitch {
+                        any: Queue.filter-any;
+                        toggled => { Queue.toggle-filter-any(); }
+                    }
+
+                    Text {
+                        text: "of these filters";
+                        color: Theme.text-muted;
+                        font-size: 11px;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+                }
+
+                MultiChoiceButton {
+                    icon: IconId.job-states;
+                    items: Queue.filter-states;
+                    text: Queue.filter-states-text;
+                    everything: "Any state";
+                    tooltip: "Show jobs in these states (Ctrl+click picks several)";
+                    picked(entry, control) => { Queue.filter-pick(0, entry, control); }
+                }
+
+                MultiChoiceButton {
+                    icon: IconId.target-folder;
+                    items: Queue.filter-folders;
+                    text: Queue.filter-folders-text;
+                    everything: "Any target folder";
+                    tooltip: "Show jobs that write into these folders (Ctrl+click picks several)";
+                    picked(entry, control) => { Queue.filter-pick(1, entry, control); }
+                }
+
+                MultiChoiceButton {
+                    icon: IconId.panel-render-settings;
+                    items: Queue.filter-profiles;
+                    text: Queue.filter-profiles-text;
+                    everything: "Any profile";
+                    tooltip: "Show jobs saved with these render profiles (Ctrl+click picks several)";
+                    picked(entry, control) => { Queue.filter-pick(2, entry, control); }
+                }
+            }
+        }
+    }
+}

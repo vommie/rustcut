@@ -10,17 +10,16 @@ mod drag;
 mod filter;
 mod menu;
 mod pause;
+mod refresh;
 mod text;
 mod totals;
 mod view;
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
-use az::CheckedAs as _;
 use parking_lot::Mutex;
 use rustcut_core::job::{JobId, JobStateKind};
 use rustcut_core::naming::QueuedTarget;
@@ -31,7 +30,7 @@ use slint::{ComponentHandle as _, ModelRc, VecModel};
 use tokio::sync::broadcast::error::RecvError;
 
 pub use self::columns::{Column, Layout, layout};
-pub use self::filter::{CHIPS, Chip, Filter};
+pub use self::filter::{CHIPS, Chip, Filter, FilterChoice, FilterKind};
 pub use self::menu::{MenuKeys, QueueAction, queue_menu, targets};
 pub use self::text::{RowText, clock, file_label, kind_number, row_text, short_clock, title};
 pub use self::totals::Overall;
@@ -40,11 +39,10 @@ pub use self::view::QueueView;
 use crate::ui::dispatcher::{CoalesceKey, UiDispatcher, rate};
 use crate::ui::dock::PanelId;
 use crate::ui::menu::ContextMenuBridge;
-use crate::util::model::sync;
 
 /// The queue panel's selection of jobs.
 pub type Selection = crate::util::selection::Selection<JobId>;
-use crate::{MainWindow, Queue, QueueChipView, QueueColumnView, QueueRowView};
+use crate::{MainWindow, MultiChoiceItem, Queue, QueueColumnView, QueueRowView};
 
 const REFRESH: CoalesceKey = CoalesceKey::new("queue", 0);
 /// Row heights of the two forms.
@@ -139,7 +137,9 @@ pub struct QueueBridge {
     ui: RefCell<PanelUi>,
     rows: Rc<VecModel<QueueRowView>>,
     columns: Rc<VecModel<QueueColumnView>>,
-    chips: Rc<VecModel<QueueChipView>>,
+    /// The filter menu's state, folder and profile choices, and the values of their entries as shown.
+    filter_models: [Rc<VecModel<MultiChoiceItem>>; 3],
+    filter_values: RefCell<[Vec<String>; 3]>,
     menu: Weak<ContextMenuBridge>,
     hooks: RefCell<QueueHooks>,
     /// The job loaded into the editor (its row is marked).
@@ -177,13 +177,20 @@ impl QueueBridge {
             shared: Arc::new(Mutex::new(Shared::default())),
             ui: RefCell::new(PanelUi {
                 selection: Selection::restore(&saved.selected, saved.current),
-                filter: Filter::new(&saved.state_filter, &saved.search),
+                filter: Filter::restore(
+                    &saved.state_filter,
+                    &saved.folder_filter,
+                    &saved.profile_filter,
+                    &saved.search,
+                    saved.filter_any,
+                ),
                 widths: saved.columns.clone(),
                 ..PanelUi::default()
             }),
             rows: Rc::new(VecModel::default()),
             columns: Rc::new(VecModel::default()),
-            chips: Rc::new(VecModel::default()),
+            filter_models: std::array::from_fn(|_| Rc::new(VecModel::default())),
+            filter_values: RefCell::default(),
             menu: Rc::downgrade(menu),
             hooks: RefCell::new(QueueHooks::default()),
             editing: Cell::new(None),
@@ -202,7 +209,10 @@ impl QueueBridge {
         let q = window.global::<Queue<'_>>();
         q.set_rows(ModelRc::from(Rc::clone(&bridge.rows)));
         q.set_columns(ModelRc::from(Rc::clone(&bridge.columns)));
-        q.set_chips(ModelRc::from(Rc::clone(&bridge.chips)));
+        let [states, folders, profiles] = &bridge.filter_models;
+        q.set_filter_states(ModelRc::from(Rc::clone(states)));
+        q.set_filter_folders(ModelRc::from(Rc::clone(folders)));
+        q.set_filter_profiles(ModelRc::from(Rc::clone(profiles)));
         q.set_search(saved.search.as_str().into());
         q.set_key_move_up(bridge.keys.move_up.as_str().into());
         q.set_key_move_down(bridge.keys.move_down.as_str().into());
@@ -241,6 +251,9 @@ impl QueueBridge {
         state.paused = self.paused();
         let ui = self.ui.borrow();
         state.state_filter.clone_from(&ui.filter.states);
+        state.folder_filter.clone_from(&ui.filter.folders);
+        state.profile_filter.clone_from(&ui.filter.profiles);
+        state.filter_any = ui.filter.any;
         state.search.clone_from(&ui.filter.search);
         state.columns.clone_from(&ui.widths);
         state.selected = ui.selection.ids().to_vec();
@@ -296,160 +309,6 @@ impl QueueBridge {
         self.shared.lock().view.row(id).cloned()
     }
 
-    /// Shows the current view (UI thread).
-    fn refresh(&self) {
-        let Some(window) = self.window.upgrade() else { return };
-        let mut ui = self.ui.borrow_mut();
-        let layout = layout(
-            (ui.width - ROW_PADDING)
-                .max(0.0)
-                .round()
-                .checked_as::<u32>()
-                .unwrap_or_default(),
-            &ui.widths,
-        );
-        let shown: Vec<Column> = layout.slots.iter().map(|s| s.column).collect();
-        let (texts, visible, counts, summary, overall, paused, pause_after, finished, selected, ended, start) = {
-            let mut shared = self.shared.lock();
-            let ended = std::mem::take(&mut shared.ended);
-            let view = &shared.view;
-            let rows: Vec<&JobSummary> = view.rows.iter().filter(|r| ui.filter.matches(r)).collect();
-            let visible: Vec<JobId> = rows.iter().map(|r| r.id).collect();
-            ui.selection
-                .retain(|id| visible.contains(&id), |id| view.row(id).is_some());
-            let texts: Vec<RowText> = rows
-                .iter()
-                .map(|r| row_text(r, view.progress.get(&r.id), view.size(r.id), &shown))
-                .collect();
-            let selected: Vec<JobSummary> = ui
-                .selection
-                .in_order(&visible)
-                .iter()
-                .filter_map(|id| view.row(*id).cloned())
-                .collect();
-            (
-                texts,
-                visible,
-                Filter::counts(&view.rows),
-                view.summary(),
-                view.overall(),
-                view.paused(),
-                view.pause_after_current(),
-                view.rows
-                    .iter()
-                    .filter(|r| r.state.kind() == JobStateKind::Finished)
-                    .count(),
-                selected,
-                ended,
-                (view.processing.as_ref().map(|p| p.paused), pause::waiting(&view.rows)),
-            )
-        };
-        ui.visible.clone_from(&visible);
-        let current = ui.selection.current();
-        let editing = self.editing.get();
-        let rows: Vec<QueueRowView> = texts
-            .into_iter()
-            .map(|t| QueueRowView {
-                id: i32::try_from(t.id.0).unwrap_or(i32::MAX),
-                selected: ui.selection.contains(t.id),
-                current: current == Some(t.id),
-                editing: editing == Some(t.id),
-                name: t.name.into(),
-                state: t.state.into(),
-                kind: t.kind,
-                progress: t.progress,
-                detail: t.detail.into(),
-                tooltip: t.tooltip.into(),
-                cells: ModelRc::new(VecModel::from(
-                    t.cells
-                        .into_iter()
-                        .map(Into::into)
-                        .collect::<Vec<slint::SharedString>>(),
-                )),
-            })
-            .collect();
-        let row_count = rows.len();
-        sync(&self.rows, rows);
-        self.drag_rows_changed(&visible);
-        let column_views = layout
-            .slots
-            .iter()
-            .map(|s| QueueColumnView {
-                id: s.column.id().into(),
-                title: s.column.title().into(),
-                tooltip: s.column.tooltip().into(),
-                x: az::Az::az::<f32>(s.x),
-                width: az::Az::az::<f32>(s.width),
-                right: s.column.right_aligned(),
-                resizable: s.column != Column::Name,
-            })
-            .collect();
-        sync(&self.columns, column_views);
-        let chips = CHIPS
-            .iter()
-            .zip(counts)
-            .map(|(chip, count)| QueueChipView {
-                id: chip.id.into(),
-                title: chip.title.into(),
-                count: i32::try_from(count).unwrap_or(i32::MAX),
-                on: ui.filter.is_on(chip),
-            })
-            .collect();
-        sync(&self.chips, chips);
-        let q = window.global::<Queue<'_>>();
-        q.set_compact(layout.compact);
-        q.set_row_height(if layout.compact { COMPACT_ROW } else { TABLE_ROW });
-        q.set_filtered(ui.filter.is_active());
-        let total: usize = counts.iter().sum();
-        q.set_filter_note(format!("{row_count} of {total} jobs shown").into());
-        q.set_empty_text(
-            if total > 0 && ui.filter.is_active() {
-                "No job matches the filter."
-            } else {
-                self.empty_text.as_str()
-            }
-            .into(),
-        );
-        q.set_summary(summary.as_str().into());
-        q.set_has_overall(overall.is_some());
-        if let Some(o) = overall {
-            q.set_overall(az::Az::az::<f32>(o.fraction));
-            q.set_overall_text(overall_text(&summary, &o, paused).into());
-        }
-        q.set_paused(paused);
-        q.set_pause_after(pause_after);
-        drop(ui);
-        actions::publish_toolbar(&q, &selected, &visible, finished);
-        self.pause_seen(start.0, start.1);
-        if ended && let Some(hook) = self.hooks.borrow().job_ended.as_ref() {
-            hook();
-        }
-        if let Some(hook) = self.hooks.borrow().refreshed.as_ref() {
-            hook();
-        }
-        let (done, status, ended_jobs) = {
-            let mut shared = self.shared.lock();
-            (
-                shared.done.take(),
-                status_of(&shared.view),
-                std::mem::take(&mut shared.ended_jobs),
-            )
-        };
-        if let Some(hook) = self.hooks.borrow().job_done.as_ref() {
-            for row in &ended_jobs {
-                hook(row);
-            }
-        }
-        for hook in &self.hooks.borrow().status {
-            hook(status);
-        }
-        if let Some((finished, failed)) = done
-            && let Some(hook) = self.hooks.borrow().done.as_ref()
-        {
-            hook(finished, failed);
-        }
-    }
-
     /// How busy the queue is now.
     pub fn status(&self) -> QueueStatus {
         status_of(&self.shared.lock().view)
@@ -460,26 +319,6 @@ impl QueueBridge {
             tracing::warn!("[Queue] The queue engine has stopped; the command was dropped");
         }
     }
-}
-
-/// "1 running · 2 waiting — 2 of 5 done · about 0:12:30 left".
-fn overall_text(summary: &str, o: &Overall, paused: bool) -> String {
-    let mut text = format!("{summary} — {} of {} done", o.done, o.total);
-    match (o.eta_secs, paused) {
-        (_, true) if o.done < o.total => text.push_str(" · paused"),
-        (Some(eta), _) => {
-            let eta = short_clock(rustcut_core::time::Timestamp::from_secs(
-                i64::try_from(eta).unwrap_or(i64::MAX),
-            ));
-            let _ = if o.partial {
-                write!(text, " · at least {eta} left")
-            } else {
-                write!(text, " · about {eta} left")
-            };
-        }
-        _ => {}
-    }
-    text
 }
 
 /// Follows the engine's events into the shared view; the UI shows it through coalesced refreshes. A subscriber that

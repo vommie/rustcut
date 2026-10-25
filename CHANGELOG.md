@@ -147,6 +147,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The queue panel, your UI review round 1 (0.0.41): the search and the state chips moved into a filter menu that
+  hangs from the filter button at the right of the top bar: the search on top, a switch for how the filters combine
+  (ALL: a job matches every filter that is set, the default; ANY: one is enough), and one choice each for the states,
+  the target folders and the profiles (a click picks one value, Ctrl+click several; each entry shows how many jobs it
+  has). The button's badge counts the filters that are set, a right click on it shows every job again, and a click
+  outside or Escape closes the menu (the filters stay; they are kept across restarts). The queue's summary and the
+  overall progress moved under the list. "When the queue finishes…" hangs from its button with colored entries ("Do
+  Nothing", "Send Notification", "Quit App", "Suspend Device", "Power Off Device") and the check mark on the right; a
+  dot in the entry's color sits on the button while one is chosen, and a right click resets it to "Do Nothing". The
+  job menu has "Move Up", "Move Down", "Render Again (Hold)" (renders again, held first), "Select All" and "Clear
+  Selection"; a right click below the jobs offers "Select All", "Show Every Job" and "Remove Finished Jobs", a click
+  there clears the selection. The hand's tooltip says "Hold job" / "Hold 3 jobs" / "Release job". In the two-line rows
+  the percentage of a render stands on the second row, on the right; the table has a held delete button per job and
+  the column "Time" (the time left while a job renders, afterwards how long its render took). The pencil on the row of
+  a loaded job is gone (its highlight stays).
+- Context menus open exactly at the pointer (they opened a menu bar's height too low).
 - The Sections card and the timeline, your UI review round 1 (0.0.40): the current section is one row (set the start
   to the playhead, its start, its end, set the end, add it; both times share the width equally, the length is in
   their tooltips and in the Add button's). Sections are selected like jobs in the queue (Ctrl adds or removes one,

@@ -167,6 +167,8 @@ move_bottom = { tabler = "arrow-bar-to-down", doc = "Move to the bottom" }
 queue_pause_after = { tabler = "clock-pause", doc = "Pause after the running jobs" }
 remove_finished = { tabler = "clear-all", doc = "Remove every finished job" }
 filter_clear = { tabler = "filter-off", doc = "Show every job again" }
+queue_filter = { tabler = "filter", doc = "The queue's filter menu (search, states, folders, profiles)" }
+job_states = { tabler = "list-check", doc = "The job states of the queue's filter" }
 copy = { tabler = "copy", doc = "Copy to the clipboard" }
 log_follow = { tabler = "arrow-autofit-down", doc = "Stay at the newest line" }
 job_details = { tabler = "file-description", doc = "Show the job in the Job panel" }
@@ -180,6 +182,11 @@ profile_default_set = { tabler = "star", style = "filled", doc = "The profile ne
 
 # --- Power and quitting ----------------------------------------------------------------------------------------------
 when_done = { tabler = "power", doc = "What happens when the queue is done (nothing, notify, quit, suspend, power off)" }
+when_done_nothing = { tabler = "circle-dashed", doc = "When the queue finishes: do nothing" }
+when_done_notify = { tabler = "bell-ringing", doc = "When the queue finishes: send a notification" }
+when_done_quit = { tabler = "logout", doc = "When the queue finishes: quit RustCut" }
+when_done_suspend = { tabler = "moon", doc = "When the queue finishes: suspend the device" }
+when_done_power_off = { tabler = "power", doc = "When the queue finishes: power the device off" }
 
 # --- Tooltips ------------------------------------------------------------------------------------------------------
 key_left = { tabler = "arrow-left", doc = "The Left arrow key on a key cap" }

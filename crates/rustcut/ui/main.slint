@@ -26,7 +26,9 @@ import { TooltipLayer } from "tooltip_layer.slint";
 import { DialogState } from "dialog_frame.slint";
 import { OptionRowView, Probe, RenderIssueView, RenderSettings } from "render_types.slint";
 import { ConflictJobView, ConflictOptionView, Export, PreviewView } from "export_types.slint";
-import { Queue, QueueChipView, QueueColumnView, QueueRowView } from "queue_types.slint";
+import { Queue, QueueColumnView, QueueRowView } from "queue_types.slint";
+import { QueueFilterFlyout } from "queue_filter.slint";
+import { MultiChoiceItem } from "controls_choice.slint";
 import { Job, JobLoad, JobRowView, JobSectionView, LogLineView, Logs } from "job_types.slint";
 import { ContextMenu, ContextMenuLayer, MenuItemView, MenuLevelView } from "context_menu.slint";
 import { HoldConfirm } from "hold.slint";
@@ -58,7 +60,7 @@ export {
     MediaInfoRow, MediaInfoSection, Shortcuts, Timeline, TimelineBlock, TimelineTick, Sections,
     SectionRowView, Filters, FilterRowView, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe, Export,
     ConflictJobView, ConflictOptionView, PreviewView, TipRow, Tip, TipKey, TipKeys, TipPlacement, TipRect, TipSide,
-    GlobalTooltip, TooltipLogic, DialogState, Queue, QueueRowView, QueueColumnView, QueueChipView, TagRate, TagNodeView,
+    GlobalTooltip, TooltipLogic, DialogState, Queue, QueueRowView, QueueColumnView, MultiChoiceItem, TagRate, TagNodeView,
     TagColumnView, TagHistoryItemModel, TagHistoryRowModel, Job, JobRowView, JobSectionView, Logs, LogLineView, JobLoad,
     ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderRowView,
     ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power, AppTray, Jump, Notices,
@@ -598,6 +600,18 @@ export component MainWindow inherits Window {
         visible: Notices.bell;
         x: parent.width - self.width - 8px;
         y: (root.content-y - self.height) / 2 - root.content-y;
+    }
+
+    // The queue's filter menu hangs from its button (P9.6).
+    if Queue.filter-open: QueueFilterFlyout {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        anchor-x: Queue.filter-anchor-x - root.content-x;
+        anchor-y: Queue.filter-anchor-y - root.content-y;
+        anchor-width: Queue.filter-anchor-width;
+        anchor-height: Queue.filter-anchor-height;
     }
 
     ContextMenuLayer {

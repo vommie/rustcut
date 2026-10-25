@@ -1,0 +1,85 @@
+// A flyout (P9.6, the UI review's notes 15#3 and 19): a panel like a bubble, attached to the button that opened it with an
+// arrow pointing at the button, below it (above when there is no room). A press outside closes it (`closed`), and so
+// does Escape (the owner's key handler). The layer covers the window's content; the anchor comes in layer coordinates
+// (window coordinates minus the content's start below the menu bar). The content gives its size (`panel-width`,
+// `panel-height`) and goes inside as children (an instance's children: `Flyout { ... }`, with explicit sizes, since
+// their `parent` is the flyout, not the panel). The filter menu of the queue uses it; the context menu draws the same
+// arrow when it belongs to a button (the "when done" menu).
+
+import { Theme } from "styles.slint";
+import { TipSide } from "tooltip.slint";
+import { TipArrow } from "tooltip_layer.slint";
+
+/// Where a flyout of `width` x `height` goes for an anchor in an area of `area-width` x `area-height`.
+export global FlyoutLogic {
+    // Below the anchor unless it does not fit there and fits better above.
+    public pure function below(anchor-y: length, anchor-height: length, height: length, area-height: length) -> bool {
+        return anchor-y + anchor-height + 8px + height <= area-height - 4px || anchor-y - 8px - height < 4px;
+    }
+
+    // The panel's left edge: centered on the anchor, kept inside the area, on whole pixels.
+    public pure function left(anchor-x: length, anchor-width: length, width: length, area-width: length) -> length {
+        return Math.round(Math.max(4px, Math.min(area-width - width - 4px, anchor-x + (anchor-width - width) / 2)) / 1px) * 1px;
+    }
+
+    public pure function top(below: bool, anchor-y: length, anchor-height: length, height: length) -> length {
+        return Math.round((below ? anchor-y + anchor-height + 8px : anchor-y - 8px - height) / 1px) * 1px;
+    }
+}
+
+/// The panel with its arrow; the layer around it closes the flyout on a press outside.
+export component Flyout inherits Rectangle {
+    in property <length> anchor-x;
+    in property <length> anchor-y;
+    in property <length> anchor-width;
+    in property <length> anchor-height;
+    in property <length> panel-width: 260px;
+    in property <length> panel-height: 120px;
+    callback closed();
+
+    property <bool> below: FlyoutLogic.below(root.anchor-y, root.anchor-height, root.panel-height, root.height);
+
+    // A press outside the panel closes it (the press does nothing else).
+    TouchArea {
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                root.closed();
+            }
+        }
+        scroll-event(event) => {
+            accept
+        }
+    }
+
+    panel := Rectangle {
+        x: FlyoutLogic.left(root.anchor-x, root.anchor-width, root.panel-width, root.width);
+        y: FlyoutLogic.top(root.below, root.anchor-y, root.anchor-height, root.panel-height);
+        width: root.panel-width;
+        height: root.panel-height;
+        border-radius: 6px;
+        background: Theme.surface-variant;
+        border-width: 1px;
+        border-color: Theme.surface-selected;
+        drop-shadow-blur: 14px;
+        drop-shadow-color: #00000090;
+
+        // Presses between the controls stay inside.
+        TouchArea {
+            x: 0;
+            y: 0;
+            width: panel.width;
+            height: panel.height;
+        }
+
+        @children
+
+        TipArrow {
+            side: root.below ? TipSide.below : TipSide.above;
+            arrow: root.anchor-x + root.anchor-width / 2 - panel.x;
+            fill: Theme.surface-variant;
+            stroke: Theme.surface-selected;
+            bubble-width: panel.width;
+            bubble-height: panel.height;
+        }
+    }
+}

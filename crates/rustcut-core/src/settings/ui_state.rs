@@ -193,6 +193,15 @@ pub struct QueuePanelState {
     #[serde_as(as = "DefaultOnError<VecSkipError<_>>")]
     pub state_filter: Vec<JobStateKind>,
     pub search: String,
+    /// Target folders the filter shows (empty = all; the filter menu, P9.6).
+    #[serde_as(as = "DefaultOnError")]
+    pub folder_filter: Vec<String>,
+    /// Render profiles (their names) the filter shows (empty = all).
+    #[serde_as(as = "DefaultOnError")]
+    pub profile_filter: Vec<String>,
+    /// The filters combine with ANY (a job that matches one of them shows) instead of ALL (it matches every one).
+    #[serde_as(as = "DefaultOnError")]
+    pub filter_any: bool,
     /// Column widths in logical pixels by column id.
     pub columns: std::collections::BTreeMap<String, u32>,
     /// One-time choice for this run of the queue (the default is `Settings.queue.when_done`).
@@ -210,11 +219,21 @@ impl QueuePanelState {
     pub const SELECTED_MAX: usize = 10_000;
     /// Longest search text that is remembered.
     pub const SEARCH_MAX: usize = 500;
+    /// Most folders or profiles a filter remembers.
+    pub const FILTER_VALUES_MAX: usize = 200;
 
     fn sanitize(&mut self, notes: &mut Vec<String>) {
         self.columns.retain(|_, width| *width >= 24 && *width <= 4_000);
         let mut seen = std::collections::HashSet::new();
         self.state_filter.retain(|k| seen.insert(*k));
+        for values in [&mut self.folder_filter, &mut self.profile_filter] {
+            let mut seen = std::collections::HashSet::new();
+            values.retain(|v| !v.is_empty() && seen.insert(v.clone()));
+            if values.len() > Self::FILTER_VALUES_MAX {
+                notes.push("queue filter shortened".into());
+                values.truncate(Self::FILTER_VALUES_MAX);
+            }
+        }
         let mut seen = std::collections::HashSet::new();
         self.selected.retain(|id| seen.insert(*id));
         if self.selected.len() > Self::SELECTED_MAX {

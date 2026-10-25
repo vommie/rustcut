@@ -150,6 +150,12 @@ pub enum QueueCommand {
         ids: Vec<JobId>,
         profile: Option<Box<RenderProfile>>,
     },
+    /// Like `Restart`, but the jobs are held right away ("Render Again (Hold)", P9.6): they wait until released and
+    /// never start in between.
+    RestartHeld {
+        ids: Vec<JobId>,
+        profile: Option<Box<RenderProfile>>,
+    },
     /// Deletes jobs that are not rendering (their RustView stubs are cleaned up; source sidecars are never touched).
     Remove {
         ids: Vec<JobId>,
