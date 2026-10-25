@@ -13,18 +13,25 @@ use std::time::Duration;
 
 use slint::{ComponentHandle, ModelRc, VecModel};
 
-pub use self::model::{Area, NewBubble, Win};
+pub use self::model::{Area, BubbleButton, NewBubble, Win};
 use self::model::{BubbleBoard, Place};
 use super::kind::Kind;
 use super::notice::{Click, Notice};
-use crate::{BubbleView, Bubbles, TipRect};
+use crate::{BubbleButtonView, BubbleView, Bubbles, TipRect};
 
 /// The usual grace time of a check while the user types (Q-N10).
 pub const TYPING: Duration = Duration::from_millis(600);
 
-/// A change of a bubble as it waits for its grace time: the bubble (`None` = a notice without an anchor), the run of
-/// its link and its click; `None` = the bubble goes.
-type Change = Option<(Option<NewBubble>, Option<Rc<dyn Fn()>>, Option<Click>)>;
+/// What runs when a bubble is used: its link (or its click) and its icon buttons in order.
+#[derive(Clone)]
+struct Runs {
+    click: Option<Click>,
+    buttons: Vec<Rc<dyn Fn()>>,
+}
+
+/// A change of a bubble as it waits for its grace time: the bubble (`None` = a notice without an anchor) and what its
+/// link and buttons run; `None` = the bubble goes.
+type Change = Option<(Option<NewBubble>, Runs)>;
 
 /// A window that shows bubbles.
 trait BubbleWindow {
@@ -54,12 +61,15 @@ pub struct BubbleCenter {
     me: Weak<Self>,
     board: RefCell<BubbleBoard>,
     slots: RefCell<HashMap<Win, Slot>>,
-    /// What a click on the bubble of a key runs.
-    clicks: RefCell<HashMap<String, Click>>,
+    /// What a click on the bubble of a key, and on its buttons, runs.
+    clicks: RefCell<HashMap<String, Runs>>,
     /// Changes that wait for their grace time, by key.
     waiting: RefCell<HashMap<String, slint::Timer>>,
     revision: Cell<i32>,
     opacity: Cell<f32>,
+    /// Each bubble's buttons as one model that lives as long as they stay the same: the layer re-publishes every
+    /// epoch, and a new model would make its buttons again under a resting pointer (no hover, no tooltip).
+    button_models: RefCell<HashMap<u64, (Vec<BubbleButton>, ModelRc<BubbleButtonView>)>>,
 }
 
 impl BubbleCenter {
@@ -72,6 +82,7 @@ impl BubbleCenter {
             waiting: RefCell::default(),
             revision: Cell::new(0),
             opacity: Cell::new(opacity(opacity_percent)),
+            button_models: RefCell::default(),
         })
     }
 
@@ -97,6 +108,12 @@ impl BubbleCenter {
         bubbles.on_clicked(move |id| {
             if let Some(center) = me.upgrade() {
                 center.clicked(id);
+            }
+        });
+        let me = Weak::clone(&self.me);
+        bubbles.on_button_clicked(move |id, index| {
+            if let Some(center) = me.upgrade() {
+                center.button_clicked(id, index);
             }
         });
         let me = Weak::clone(&self.me);
@@ -137,11 +154,17 @@ impl BubbleCenter {
     /// Shows `notice` as the bubble of `key` (`None` = its problem is gone), after `grace` when it has one.
     pub fn set(&self, key: &str, notice: Option<&Notice>, grace: Duration) {
         let change = notice.map(|n| {
-            (
-                to_bubble(n),
-                n.actions.first().map(|a| Rc::clone(&a.run)),
-                n.click.clone(),
-            )
+            let link = n.actions.iter().find(|a| a.icon.is_none()).map(|a| Rc::clone(&a.run));
+            let runs = Runs {
+                click: link.map(Click::Run).or_else(|| n.click.clone()),
+                buttons: n
+                    .actions
+                    .iter()
+                    .filter(|a| a.icon.is_some())
+                    .map(|a| Rc::clone(&a.run))
+                    .collect(),
+            };
+            (to_bubble(n), runs)
         });
         if grace.is_zero() {
             self.waiting.borrow_mut().remove(key);
@@ -168,12 +191,8 @@ impl BubbleCenter {
 
     fn apply(&self, key: &str, change: Change) {
         let changed = match change {
-            Some((Some(bubble), run, click)) => {
-                let click = run.map(Click::Run).or(click);
-                match click {
-                    Some(click) => self.clicks.borrow_mut().insert(key.to_owned(), click),
-                    None => self.clicks.borrow_mut().remove(key),
-                };
+            Some((Some(bubble), runs)) => {
+                self.clicks.borrow_mut().insert(key.to_owned(), runs);
                 self.board.borrow_mut().set(key, bubble)
             }
             // A notice without an anchor cannot be a bubble.
@@ -215,11 +234,28 @@ impl BubbleCenter {
         let key = u64::try_from(id)
             .ok()
             .and_then(|id| self.board.borrow().get(id).map(|(key, _)| key.to_owned()));
-        let click = key.and_then(|key| self.clicks.borrow().get(&key).cloned());
+        let click = key.and_then(|key| self.clicks.borrow().get(&key).and_then(|r| r.click.clone()));
         match click {
             Some(Click::Run(run)) => run(),
             Some(Click::Jump(target)) => crate::ui::jump::go(target),
             None => {}
+        }
+    }
+
+    /// An icon button of the bubble `id` (its problem is solved by it, so its check clears the bubble next).
+    fn button_clicked(&self, id: i32, index: i32) {
+        let key = u64::try_from(id)
+            .ok()
+            .and_then(|id| self.board.borrow().get(id).map(|(key, _)| key.to_owned()));
+        let run = key.and_then(|key| {
+            let index = usize::try_from(index).ok()?;
+            self.clicks
+                .borrow()
+                .get(&key)
+                .and_then(|r| r.buttons.get(index).cloned())
+        });
+        if let Some(run) = run {
+            run();
         }
     }
 
@@ -236,10 +272,9 @@ impl BubbleCenter {
         if !slot.window.with(&mut |b| epoch = b.get_epoch()) {
             return;
         }
-        let rows: Vec<BubbleView> = self
-            .board
-            .borrow()
-            .rows(win, epoch)
+        let board_rows = self.board.borrow().rows(win, epoch);
+        let mut models = self.button_models.borrow_mut();
+        let rows: Vec<BubbleView> = board_rows
             .into_iter()
             .map(|r| BubbleView {
                 id: i32::try_from(r.id).unwrap_or(i32::MAX),
@@ -248,6 +283,7 @@ impl BubbleCenter {
                 title: r.title.into(),
                 text: r.detail.into(),
                 link: r.link.into(),
+                buttons: button_model(&mut models, r.id, &r.buttons),
                 anchor: TipRect {
                     x: r.place.x,
                     y: r.place.y,
@@ -257,8 +293,37 @@ impl BubbleCenter {
                 seen: r.seen,
             })
             .collect();
+        // Bubbles that are gone lose their buttons' model.
+        let board = self.board.borrow();
+        models.retain(|id, _| board.get(*id).is_some());
+        drop(board);
+        drop(models);
         crate::util::model::sync_keyed(&slot.model, rows, |r| r.id);
     }
+}
+
+/// The buttons' model of bubble `id`: the same one while they stay the same.
+fn button_model(
+    models: &mut HashMap<u64, (Vec<BubbleButton>, ModelRc<BubbleButtonView>)>,
+    id: u64,
+    buttons: &[BubbleButton],
+) -> ModelRc<BubbleButtonView> {
+    if let Some((known, model)) = models.get(&id)
+        && known.as_slice() == buttons
+    {
+        return model.clone();
+    }
+    let model = ModelRc::new(VecModel::from(
+        buttons
+            .iter()
+            .map(|b| BubbleButtonView {
+                icon: b.icon.to_slint(),
+                tooltip: b.tooltip.as_str().into(),
+            })
+            .collect::<Vec<_>>(),
+    ));
+    models.insert(id, (buttons.to_vec(), model.clone()));
+    model
 }
 
 fn opacity(percent: u8) -> f32 {
@@ -272,7 +337,22 @@ fn to_bubble(notice: &Notice) -> Option<NewBubble> {
         level: notice.level,
         title: notice.title.clone(),
         detail: notice.detail.clone(),
-        link: notice.actions.first().map(|a| a.label.clone()).unwrap_or_default(),
+        link: notice
+            .actions
+            .iter()
+            .find(|a| a.icon.is_none())
+            .map(|a| a.label.clone())
+            .unwrap_or_default(),
+        buttons: notice
+            .actions
+            .iter()
+            .filter_map(|a| {
+                a.icon.map(|icon| BubbleButton {
+                    icon,
+                    tooltip: a.label.clone(),
+                })
+            })
+            .collect(),
         area: anchor.area,
         anchors: anchor.keys.clone(),
     })

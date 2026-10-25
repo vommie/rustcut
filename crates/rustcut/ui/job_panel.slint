@@ -168,19 +168,13 @@ export component JobPanel inherits Rectangle {
             spacing: 4px;
             alignment: start;
 
-            if !Job.can-load: IconButton {
+            IconButton {
                 icon: IconId.job-edit;
                 enabled: Job.can-edit;
                 checked: Job.editing;
-                tooltip: Job.editing ? "The job is loaded into the editor" : "Edit the job in the editor (it is held meanwhile)";
+                tooltip: Job.editing ? "The job is loaded into the editor (a copy: saving makes a new job)"
+                    : "Load the job into the editor: saving makes a new job, this one stays as it is";
                 clicked => { Job.edit(); }
-            }
-
-            if Job.can-load: IconButton {
-                icon: IconId.job-load-new;
-                checked: Job.editing;
-                tooltip: "Load the job into the editor; saving makes a new job";
-                clicked => { Job.load-new(); }
             }
 
             IconButton {

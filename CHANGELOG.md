@@ -9,6 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- "The file exists" and "Job #n writes this file too" under the name field offer a button that solves it (0.0.35): a
+  name with a numbering scheme jumps to the next free number (the counter is switched on when it was off), any other
+  name gets " (n)" with the first free number, like a file manager. The button's tooltip says what it does.
+- A paused queue says so at the start (0.0.35): when jobs wait, a banner says why (it was paused when RustCut ended,
+  or "Start paused") and has "Resume". Settings > Messages > "Queue paused at the start" makes it a toast, a desktop
+  notification or nothing.
 - A tag filter window (0.0.34): the filter button under the tag history opens RustView's whole tag tree with a check
   box per tag. Unchecked tags are hidden in the Tag & Rate panel with everything below them, also tags RustView adds
   there later; a tag below a hidden one can be checked again on its own (the hidden tags above it stay in the tree,
@@ -136,6 +142,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Loading a job into the editor always makes a copy (0.0.35, your decision): the edit button of the queue and of the
+  Job panel loads waiting, held, finished, failed and canceled jobs alike, and Save makes a new job; the loaded job
+  stays as it is (it is no longer held while it is loaded and never updated). If the new job replaces it, remove or
+  hold the old one yourself (the name check says when another job writes the same file). The card's banner names the
+  loaded job; "Save as new" is gone, the context menu has one "Load into the Editor".
+- The queue's pause is saved at once (0.0.35): a queue paused before RustCut crashed or the computer went off stays
+  paused at the next start (before, only a normal quit saved it).
 - The Tag & Rate panel's layout follows PyCutRv (0.0.33): the rating bar on top, expand and collapse beside the tag
   filter, and one row under the tag history with the last rating, the last tags, clearing, Active, Warn and hiding
   branches. The line "RustView connected" is gone: while RustView is unavailable or switched off, its card (the
@@ -534,6 +547,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Removed
 
+- Updating a queued job from the editor, and the message kind "Edited job updated" (0.0.35): loading a job is always
+  a copy now.
 - "Duplicate" of a queued job (context menu and Job panel), on the user's decision (0.0.31): load the job into the
   editor and save it under another name instead.
 

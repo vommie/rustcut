@@ -322,7 +322,7 @@ export component QueuePanel inherits Rectangle {
             edit-button := IconButton {
                 icon: IconId.job-edit;
                 enabled: Queue.can-edit;
-                tooltip: "Edit the job in the editor (it is held meanwhile)";
+                tooltip: "Load the job into the editor: saving makes a new job, this one stays as it is";
                 clicked => { Queue.edit(); }
             }
 

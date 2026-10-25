@@ -28,7 +28,6 @@ export global Job {
     // The job is loaded into the editor right now.
     in property <bool> editing;
     in property <bool> can-edit;
-    in property <bool> can-load;
     in property <bool> can-play;
     in property <bool> can-retry;
     in property <bool> can-log;
@@ -36,7 +35,6 @@ export global Job {
 
     callback toggle-section(/* id */ string);
     callback edit();
-    callback load-new();
     callback play();
     callback reveal();
     callback retry();

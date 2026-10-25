@@ -1,8 +1,9 @@
-//! A queued job loaded into the editor (M4.1, user decisions Q-Q2, Q-Q3, Q-N10): the job's spec is read on the runtime,
-//! a waiting job is held meanwhile, the current session is replaced or asked about first (`editor.on_job_load`), the
-//! job's source opens, and its sections, filters, render settings, target and tags fill the panels. The export's Save
-//! then updates the job (same target file) or makes a new one (`session.rs`); the editing ends there, with "Stop
-//! editing" or when the user opens another file. The queue highlights the job while it is edited.
+//! A queued job loaded into the editor (M4.1, user decisions Q-Q3, Q-N10, Q-P8b): the job's spec is read on the
+//! runtime, the current session is replaced or asked about first (`editor.on_job_load`), the job's source opens, and
+//! its sections, filters, render settings, target and tags fill the panels. Loading always makes a copy (Q-P8b): the
+//! export's Save makes a new job and the loaded one stays as it is, whatever its state (it is neither held nor
+//! updated; replacing it is the user's own step). The link ends with a save, "Stop" or when the user opens another
+//! file; the queue highlights the loaded job meanwhile.
 
 mod session;
 
@@ -10,12 +11,12 @@ use std::cell::{Cell, RefCell};
 use std::path::Path;
 use std::rc::{Rc, Weak};
 
-use rustcut_core::job::{JobId, JobSpec, JobStateKind};
+use rustcut_core::job::{JobId, JobSpec};
 use rustcut_core::queue::{QueueCommand, QueueError, QueueHandle};
 use rustcut_core::settings::OnJobLoad;
 use slint::ComponentHandle as _;
 
-pub use session::{JobEdit, SaveAs};
+pub use session::JobEdit;
 
 use crate::ui::dispatcher::UiDispatcher;
 use crate::ui::editor::Editor;
@@ -45,13 +46,10 @@ pub struct EditingParts<'a> {
     pub opener: &'a Rc<FileOpener>,
 }
 
-/// What the export needs of the editing when it saves.
+/// What the export needs of the loaded job when it saves.
 #[derive(Debug, Clone)]
 pub struct EditInfo {
     pub id: JobId,
-    pub target: std::path::PathBuf,
-    pub overwrite: bool,
-    pub updatable: bool,
     /// The job as it was loaded (facts the panels may not know yet: the probe's summary, the source hash).
     pub spec: Box<JobSpec>,
 }
@@ -59,7 +57,6 @@ pub struct EditInfo {
 /// A job whose spec was read, waiting for the answer to the "ask" question.
 struct Asking {
     id: JobId,
-    state: JobStateKind,
     spec: Box<JobSpec>,
 }
 
@@ -115,20 +112,12 @@ impl JobEditor {
         bridge
     }
 
-    /// The edited job, for the export's Save.
+    /// The loaded job, for the export's Save.
     pub fn info(&self) -> Option<EditInfo> {
         self.session.borrow().as_ref().map(|s| EditInfo {
             id: s.id,
-            target: s.target.clone(),
-            overwrite: s.overwrite,
-            updatable: s.updatable,
             spec: s.spec.clone(),
         })
-    }
-
-    /// What a save writing `target` does now.
-    pub fn save_as(&self, target: &Path, force_new: bool) -> Option<SaveAs> {
-        self.session.borrow().as_ref().map(|s| s.save_as(target, force_new))
     }
 
     /// The card's banner text, when a job is edited.
@@ -136,22 +125,18 @@ impl JobEditor {
         self.session.borrow().as_ref().map(JobEdit::banner)
     }
 
-    /// "Edit in the editor" or "Load as a new job" of job `id`: reads its spec on the runtime first.
     /// What happens to the current session at the next load (`editor.on_job_load`, changed in the Settings window).
     pub fn set_on_job_load(&self, mode: OnJobLoad) {
         self.mode.set(mode);
     }
 
+    /// "Load into the editor" of job `id`: reads its spec on the runtime first.
     pub fn load(&self, id: JobId) {
         if self.loading.get().is_some() {
             Self::tell(
                 Level::Info,
                 "A job is being loaded into the editor; try again in a moment.",
             );
-            return;
-        }
-        if self.session.borrow().as_ref().is_some_and(|s| s.id == id) {
-            Self::tell(Level::Info, &format!("Job {id} is in the editor already."));
             return;
         }
         let handle = self.handle.clone();
@@ -179,21 +164,15 @@ impl JobEditor {
                 return;
             }
         };
-        let Some(state) = self.queue.upgrade().and_then(|q| q.row(id)).map(|r| r.state.kind()) else {
-            return;
-        };
-        if state.is_active() {
-            Self::tell(
-                Level::Warning,
-                &format!("Job {id} is rendering; it can be loaded when it ends."),
-            );
+        // A copy is loaded, so a job in any state can be (also one that renders now).
+        if self.queue.upgrade().and_then(|q| q.row(id)).is_none() {
             return;
         }
         let editing = self.session.borrow().is_some();
         let has_work = self.editor.upgrade().is_some_and(|e| e.has_work());
         match self.mode.get() {
-            OnJobLoad::Ask if has_work && !editing => self.ask(Asking { id, state, spec }),
-            OnJobLoad::Replace | OnJobLoad::Ask => self.begin(id, state, spec),
+            OnJobLoad::Ask if has_work && !editing => self.ask(Asking { id, spec }),
+            OnJobLoad::Replace | OnJobLoad::Ask => self.begin(id, spec),
         }
     }
 
@@ -223,30 +202,25 @@ impl JobEditor {
             return;
         };
         if replace {
-            self.begin(asking.id, asking.state, asking.spec);
+            self.begin(asking.id, asking.spec);
         } else {
             Self::tell(Level::Info, "The job was not loaded; the editor keeps the open video.");
         }
     }
 
-    /// Holds a waiting job and opens the job's source.
-    fn begin(&self, id: JobId, state: JobStateKind, spec: Box<JobSpec>) {
+    /// Opens the job's source (the job itself stays as it is: a copy is edited).
+    fn begin(&self, id: JobId, spec: Box<JobSpec>) {
         let Some(opener) = self.opener.upgrade() else { return };
-        // Another job was edited: it is left as it is.
-        if let Some(previous) = self.session.borrow_mut().take() {
-            self.release(&previous);
-        }
-        if state == JobStateKind::Waiting && self.handle.send(QueueCommand::Hold { ids: vec![id] }).is_err() {
-            tracing::warn!("[Queue] The queue engine has stopped; the job is not held");
-        }
-        tracing::info!(job = id.0, "[Queue] Job loaded into the editor");
+        // Another job was loaded: the link to it ends.
+        self.session.borrow_mut().take();
+        tracing::info!(job = id.0, "[Queue] Job loaded into the editor as a copy");
         let source = spec.source.clone();
         // The player starts at the job's first section (PyCutRv, user decision Q-P8).
         let start = spec.sections.sections().next().map(|s| StartAt {
             position: s.start(),
             paused: None,
         });
-        *self.session.borrow_mut() = Some(JobEdit::new(id, state, spec));
+        *self.session.borrow_mut() = Some(JobEdit::new(id, spec));
         self.loading.set(Some(id));
         let weak = BRIDGE.with(|b| b.borrow().clone());
         opener.open_with(
@@ -299,51 +273,37 @@ impl JobEditor {
             export.load_target(&spec.target);
         }
         self.mark(Some(id));
-        let updatable = self.session.borrow().as_ref().is_some_and(|s| s.updatable);
-        let key = self.export.upgrade().map(|e| e.save_key()).unwrap_or_default();
-        let how = match (updatable, key.is_empty()) {
-            (true, true) => "Save updates it.".to_owned(),
-            (true, false) => format!("Save ({key}) updates it."),
-            (false, _) => "Saving makes a new job.".to_owned(),
-        };
-        Self::tell(Level::Info, &format!("Job {id} is in the editor. {how}"));
+        Self::tell(
+            Level::Info,
+            &format!("Job {id} is in the editor. Saving makes a new job; job {id} stays as it is."),
+        );
     }
 
-    /// The export saved the edited job (updated, or as a new job): the editing ends.
+    /// The export saved the copy as a new job: the link to the loaded job ends.
     pub fn job_saved(&self) {
         self.end();
     }
 
-    /// "Stop editing": the job stays as it is.
+    /// "Stop" on the card's banner: the link to the loaded job ends (the editor keeps what it has).
     pub fn stop(&self) {
         if let Some(id) = self.session.borrow().as_ref().map(|s| s.id) {
-            Self::tell(Level::Info, &format!("Stopped editing job {id}; it stays as it was."));
+            Self::tell(Level::Info, &format!("Job {id} is no longer linked to the editor."));
         }
         self.end();
     }
 
-    /// The user opened another file: the editing ends there.
+    /// The user opened another file: the link ends there.
     pub fn user_opened(&self, path: &Path) {
         let Some(edit) = self.session.borrow_mut().take() else {
             return;
         };
-        self.release(&edit);
         self.mark(None);
-        tracing::info!(job = edit.id.0, file = %path.display(), "[Queue] Editing ended: another file was opened");
+        tracing::info!(job = edit.id.0, file = %path.display(), "[Queue] Loaded job unlinked: another file was opened");
     }
 
-    /// Ends the editing: the job waits again when RustCut held it.
     fn end(&self) {
-        let Some(edit) = self.session.borrow_mut().take() else {
-            return;
-        };
-        self.release(&edit);
-        self.mark(None);
-    }
-
-    fn release(&self, edit: &JobEdit) {
-        if edit.release && self.handle.send(QueueCommand::Release { ids: vec![edit.id] }).is_err() {
-            tracing::warn!("[Queue] The queue engine has stopped; the job is not released");
+        if self.session.borrow_mut().take().is_some() {
+            self.mark(None);
         }
     }
 

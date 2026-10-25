@@ -386,7 +386,7 @@ impl QueueBridge {
         let ids = targets(action, &rows);
         let first = ids.first().copied();
         match action {
-            QueueAction::Edit | QueueAction::LoadAsNew => {
+            QueueAction::Edit => {
                 if let (Some(id), Some(hook)) = (first, self.hooks.borrow().edit.as_ref()) {
                     hook(id);
                 }

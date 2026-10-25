@@ -10,10 +10,8 @@ use crate::ui::menu::{MenuAction, MenuItem};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueueAction {
-    /// Load a waiting or held job into the editor ("Update job").
+    /// Load the job into the editor as a copy: saving makes a new job, the job stays as it is (user decision Q-P8b).
     Edit,
-    /// Load a done job into the editor; saving makes a new job.
-    LoadAsNew,
     Details,
     ShowLog,
     EditTags,
@@ -38,7 +36,6 @@ impl QueueAction {
     pub fn id(&self) -> String {
         match self {
             Self::Edit => "edit".into(),
-            Self::LoadAsNew => "load_new".into(),
             Self::Details => "details".into(),
             Self::ShowLog => "log".into(),
             Self::EditTags => "tags".into(),
@@ -62,7 +59,6 @@ impl QueueAction {
         }
         Some(match id {
             "edit" => Self::Edit,
-            "load_new" => Self::LoadAsNew,
             "details" => Self::Details,
             "log" => Self::ShowLog,
             "tags" => Self::EditTags,
@@ -84,14 +80,13 @@ impl QueueAction {
     pub fn applies_to(&self, state: &JobState) -> bool {
         let kind = state.kind();
         match self {
-            Self::Edit => matches!(kind, JobStateKind::Waiting | JobStateKind::Held),
-            Self::LoadAsNew | Self::Retry | Self::RetryWith(_) | Self::ShowLog => kind.is_done(),
+            Self::Retry | Self::RetryWith(_) | Self::ShowLog => kind.is_done(),
             Self::Play | Self::RemoveFinished => kind == JobStateKind::Finished,
             Self::Hold => kind == JobStateKind::Waiting,
             Self::Release => kind == JobStateKind::Held,
             Self::Cancel => !kind.is_done(),
             Self::Remove => !kind.is_active(),
-            Self::Details | Self::EditTags | Self::Reveal | Self::MoveTop | Self::MoveBottom => true,
+            Self::Edit | Self::Details | Self::EditTags | Self::Reveal | Self::MoveTop | Self::MoveBottom => true,
         }
     }
 
@@ -99,7 +94,7 @@ impl QueueAction {
     const fn single(&self) -> bool {
         matches!(
             self,
-            Self::Edit | Self::LoadAsNew | Self::Details | Self::ShowLog | Self::EditTags | Self::Play
+            Self::Edit | Self::Details | Self::ShowLog | Self::EditTags | Self::Play
         )
     }
 }
@@ -148,19 +143,10 @@ pub fn queue_menu(
         let count = targets(&action, selected).len();
         MenuAction::new(action.id(), counted(title, count, n), Some(icon)).enabled(count > 0)
     };
-    let done_one = n == 1 && selected.first().is_some_and(|r| r.state.kind().is_done());
     let mut items: Vec<MenuItem> = vec![
-        if done_one {
-            entry(
-                QueueAction::LoadAsNew,
-                "Load into the Editor as a New Job",
-                Icon::JobLoadNew,
-            )
-        } else {
-            entry(QueueAction::Edit, "Edit in the Editor", Icon::JobEdit)
-                .tooltip("The job waits (held) while it is edited; saving updates it")
-        }
-        .into(),
+        entry(QueueAction::Edit, "Load into the Editor", Icon::JobEdit)
+            .tooltip("A copy: saving makes a new job, this one stays as it is")
+            .into(),
         entry(QueueAction::Details, "Show in the Job Panel", Icon::JobDetails).into(),
         entry(QueueAction::ShowLog, "Show Log", Icon::PanelLogs).into(),
         entry(QueueAction::EditTags, "Edit Tags and Rating", Icon::JobTags).into(),
@@ -267,8 +253,8 @@ mod tests {
                 .unwrap_or_else(|| panic!("{name} not in {t:?}"))
         };
         assert_eq!(
-            get("Edit in"),
-            ("Edit in the Editor".into(), false),
+            get("Load into"),
+            ("Load into the Editor".into(), false),
             "one job at a time"
         );
         assert_eq!(get("Hold"), ("Hold (1 job)".into(), true));
@@ -281,7 +267,10 @@ mod tests {
 
         let one = [&jobs[2]];
         let t = titles(&queue_menu(&one, 1, &profiles, &MenuKeys::default()));
-        assert!(t.contains(&("Load into the Editor as a New Job".into(), true)));
+        assert!(
+            t.contains(&("Load into the Editor".into(), true)),
+            "a finished job too (Q-P8b)"
+        );
         assert!(t.contains(&("Play Output".into(), true)));
         assert!(t.contains(&("Cancel".into(), false)));
         assert!(t.contains(&("Hold".into(), false)), "nothing to hold or release");

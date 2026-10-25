@@ -42,6 +42,13 @@ pub enum Win {
     Settings,
 }
 
+/// An icon button of a bubble (P8b: the export name check's ways out).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BubbleButton {
+    pub icon: crate::icons::Icon,
+    pub tooltip: String,
+}
+
 /// What a bubble shows and where it may stand.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewBubble {
@@ -51,6 +58,7 @@ pub struct NewBubble {
     pub detail: String,
     /// What a click on it does ("Show the files"); empty = nothing.
     pub link: String,
+    pub buttons: Vec<BubbleButton>,
     pub area: Area,
     /// The anchors in order of preference: it stands at the first one that is shown.
     pub anchors: Vec<String>,
@@ -81,6 +89,7 @@ pub struct Row {
     pub title: String,
     pub detail: String,
     pub link: String,
+    pub buttons: Vec<BubbleButton>,
     pub place: Place,
     /// The epoch its anchor reported in (-1 = none yet: not drawn).
     pub seen: i32,
@@ -191,6 +200,7 @@ impl BubbleBoard {
                     title: s.bubble.title.clone(),
                     detail: s.bubble.detail.clone(),
                     link: s.bubble.link.clone(),
+                    buttons: s.bubble.buttons.clone(),
                     place,
                     seen,
                 }
@@ -230,6 +240,7 @@ mod tests {
             title: title.to_owned(),
             detail: String::new(),
             link: String::new(),
+            buttons: Vec::new(),
             area: Area::Codecs,
             anchors: anchors.iter().map(|a| (*a).to_owned()).collect(),
         }

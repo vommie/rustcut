@@ -83,14 +83,11 @@ export global Export {
     callback toggle-clear-sections();
     callback save();
 
-    // A queued job loaded into the editor (M4.1, user decisions Q-Q2, Q-Q3): the banner over the card, whether Save
-    // updates the job (same target) or makes a new one, and whether stopping would drop edits (then it is held).
+    // A job loaded into the editor (M4.1, user decisions Q-Q3, Q-P8b): the banner over the card (loading is a copy:
+    // Save makes a new job).
     in property <bool> editing;
     in property <string> editing-text;
     in property <string> editing-tooltip;
-    in property <bool> editing-updates;
-    in property <bool> editing-changed;
-    callback save-as-new();
     callback stop-editing();
 
     // The conflict dialog (modal; user decision Q-X1).

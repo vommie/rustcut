@@ -130,8 +130,6 @@ macro_rules! kinds {
 kinds! {
     JobQueued = "job_queued", "Job queued", Saving, Success, Toast, EVENT, desktop false, critical false,
         ("Job 3 queued", "basic_h264_720p - 03.mkv");
-    JobUpdated = "job_updated", "Edited job updated", Saving, Success, Toast, EVENT, desktop false, critical false,
-        ("Job 3 updated", "basic_h264_720p - 03.mkv");
     /// The job cannot be saved as it is (render settings error, copied audio with several sections): a state.
     SaveBlocked = "save_blocked", "The job cannot be saved", Saving, Error, Banner, STATE, desktop true,
         critical false, ("The job cannot be saved", "Copied audio needs one section.");
@@ -208,6 +206,10 @@ kinds! {
         desktop false, critical false, ("config.toml saved with this version", "The copy is in the backup folder.");
     SettingsWindowFailed = "settings_window_failed", "Settings window failed", Settings, Error, Toast, EVENT,
         desktop true, critical false, ("The settings window could not be opened", "No OpenGL context");
+    /// The queue starts paused while jobs wait (user decision Q-P8b): a banner with "Resume" by default; "Nothing" with
+    /// the desktop switch on makes it a desktop notification.
+    QueuePaused = "queue_paused", "Queue paused at the start", Queue, Info, Banner, LOUD, desktop false,
+        critical false, ("The queue is paused", "It was paused when RustCut ended. 3 jobs wait.");
     JobFinished = "job_finished", "Job finished", Queue, Success, Nothing, &[Toast, Nothing], desktop false,
         critical false, ("Job finished", "basic_h264_720p - 03.mkv in /videos/out");
     JobFailed = "job_failed", "Job failed", Queue, Error, Toast, LOUD, desktop true, critical false,
@@ -223,9 +225,9 @@ kinds! {
         ("RustCut quits when the queue is done", "");
     JobLoadFailed = "job_load_failed", "Job cannot be loaded", Editing, Error, Toast, EVENT, desktop true,
         critical false, ("The job cannot be loaded into the editor", "Its spec is unreadable.");
-    /// Loading, editing and leaving a job (Q-N8: no message by default).
-    Editing = "editing", "Job loaded or released", Editing, Info, Nothing, QUIET, desktop false, critical false,
-        ("Job 3 is in the editor", "Save updates it.");
+    /// Loading a job (a copy, Q-P8b) and ending the link (Q-N8: no message by default).
+    Editing = "editing", "Job loaded into the editor", Editing, Info, Nothing, QUIET, desktop false, critical false,
+        ("Job 3 is in the editor", "Saving makes a new job; job 3 stays as it is.");
     TagsUpdated = "tags_updated", "Tags and rating changed", Tags, Success, Toast, EVENT, desktop false,
         critical false, ("Tags and rating of \"Clip\" updated", "");
     TagsFailed = "tags_failed", "Tags not changed", Tags, Error, Toast, EVENT, desktop true, critical false,

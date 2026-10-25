@@ -287,14 +287,7 @@ impl ExportBridge {
         let folder = st.target_folder();
         let file = facts.as_ref().map(|f| st.file(f));
         let scan = folder.as_deref().and_then(|f| self.scan_of(f));
-        let mut queue = self.queue.upgrade().map(|q| q.targets()).unwrap_or_default();
-        // The edited job is no conflict for the save that updates it.
-        let edited = self.editing.borrow().upgrade().and_then(|e| e.info()).map(|e| e.id);
-        if let (Some(id), Some(folder), Some(Ok((_, name)))) = (edited, folder.as_deref(), file.as_ref())
-            && self.updates(&folder.join(name), false)
-        {
-            queue.retain(|q| q.id != id);
-        }
+        let queue = self.queue.upgrade().map(|q| q.targets()).unwrap_or_default();
         let warnings = self.warnings.borrow();
         let fallback = rustcut_core::naming::NameError::Empty;
         let job = self.job_problem(facts.as_ref().map_or(0, |f| f.sections));
@@ -349,16 +342,17 @@ impl ExportBridge {
                 .unwrap_or_default()
                 .into(),
         );
-        self.show_check(&line);
+        let fix = match (&line.level, folder.as_deref(), scan.as_ref(), facts.as_ref()) {
+            (check::Level::Conflict, Some(folder), Some(scan), Some(facts)) => {
+                bubbles::conflict_fix(&st, facts, folder, scan, &queue)
+            }
+            _ => None,
+        };
+        self.show_check(&line, fix);
         // What keeps the job itself from being saved: the banner names it, Save's tooltip too.
         self.show_job_problem(job.as_ref());
         let saving = self.saving.get();
         e.set_can_save(line.can_save() && job.is_none() && !saving);
-        let file_name = e.get_file_name();
-        let updates = folder
-            .as_deref()
-            .filter(|_| !file_name.is_empty())
-            .is_some_and(|f| self.updates(&f.join(file_name.as_str()), false));
         e.set_save_tooltip(
             if saving {
                 "Saving...".to_owned()
@@ -366,16 +360,14 @@ impl ExportBridge {
                 format!("Cannot save: {}", job.text)
             } else if !line.can_save() {
                 format!("Cannot save: {}", line.text)
-            } else if updates {
-                "Update the edited job".to_owned()
             } else if self.editing.borrow().upgrade().is_some_and(|ed| ed.info().is_some()) {
-                "Save as a new job (the edited job stays as it is)".to_owned()
+                "Save as a new job (the loaded job stays as it is)".to_owned()
             } else {
                 "Save the job into the queue".to_owned()
             }
             .into(),
         );
-        self.publish_editing(&e, Some(file_name.as_str()).filter(|f| !f.is_empty()));
+        self.publish_editing(&e);
     }
 
     /// What keeps the job itself from being saved, with the option that solves it.
@@ -540,7 +532,6 @@ fn connect(bridge: &Rc<ExportBridge>, window: &MainWindow) {
         b.publish();
     }));
     e.on_save(on(ExportBridge::save));
-    e.on_save_as_new(on(ExportBridge::save_as_new));
     e.on_stop_editing(on(|b| {
         if let Some(editing) = b.editing.borrow().upgrade() {
             editing.stop();
