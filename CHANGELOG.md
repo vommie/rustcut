@@ -147,6 +147,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- RustCut has its own menu bar, your UI review round 1 and your answers on it (0.0.46): 32 px high instead of 40, every
+  title and the bell vertically centered, the open title and its menu one piece in the menu's color. "Reset Layout"
+  (View), "Reset Filters" (Filters) and the new "Clear All Sections" (Sections) act only when held (the entry fills
+  while it is held; its tooltip shows the hold badge); their keys act at once as before. With a menu open, Up and Down
+  move through the entries, Left and Right go to the neighbor menus, Enter acts and Escape closes; moving the pointer
+  over another title switches to its menu. A held entry in any menu now acts when you let go after the fill, so the
+  next click is no longer lost. The sidebars start right under the menu bar, on the line of the video's top edge.
+- No shadows anywhere (0.0.46): menus, choice lists, flyouts, dialogs, toasts, the bell list, bubbles, tooltips and
+  dragged tabs are flat with their border.
 - The Job panel, the Info panel and the Logs panel, your UI review round 1 (0.0.45): the job's state is a badge in its
   color, the render time has its own row under "Ended", and the RustView row starts with a symbol (written, failed,
   waiting, not written, removed). The source's file row has buttons on its right that play the video in the default

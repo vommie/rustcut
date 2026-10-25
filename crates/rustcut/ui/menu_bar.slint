@@ -1,7 +1,9 @@
-// RustCut's own menu bar (P9.12, user decision Q-P9): Slint's `MenuBar` knows only a click, so the entries that discard
-// something ("Reset Layout", "Reset Filters", "Clear All Sections") could not be held. `AppMenuBar` draws the titles
-// with the metrics of the fluent menu bar it replaces; the open menu is the context menu's `MenuPanel` (the same rows:
-// a held entry fills while it is held, the hold hint is in its tooltip) in `MenuBarLayer` over the window. The keys
+// RustCut's own menu bar (P9.12, user decisions Q-P9, Q-P9.12): Slint's `MenuBar` knows only a click, so the entries that
+// discard something ("Reset Layout", "Reset Filters", "Clear All Sections") could not be held. `AppMenuBar` is 32 px
+// high with everything in it vertically centered; the open title and its menu are one piece in the menu's color (like
+// the tabs, Q-P9.15), flat: no border, no shadow (no shadows anywhere in RustCut). The open menu is the context menu's
+// `MenuPanel` (the same rows: a held entry fills while it is held and acts on the release, the hold hint is in its
+// tooltip) in `MenuBarLayer` over the window. The keys
 // shown in the entries are the keymap's labels: the keys themselves reach the keymap through the main window's key
 // scope. Mouse: a click on a title opens or closes its menu, moving over another title while one is open switches to
 // it, a click anywhere else closes it. Keys while a menu is open: Up and Down move through the usable entries, Left and
@@ -45,7 +47,9 @@ component MenuTitle inherits Rectangle {
     callback hovered();
 
     width: label.preferred-width + 22px;
-    border-radius: 3px;
+    // The tab shape: the open title runs into its menu below it (Q-P9.12).
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
 
     // The open menu hangs from its title.
     changed open => {
@@ -53,12 +57,11 @@ component MenuTitle inherits Rectangle {
             AppMenu.open-x = self.absolute-position.x;
         }
     }
-    background: root.open ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : transparent;
+    background: root.open ? Theme.surface-variant : touch.has-hover ? Theme.surface-hover : transparent;
 
     label := Text {
         x: 11px;
-        y: 4px;
-        height: parent.height - 10px;
+        height: parent.height;
         text: root.text;
         color: Theme.text;
         vertical-alignment: center;
@@ -78,13 +81,13 @@ component MenuTitle inherits Rectangle {
     }
 }
 
-/// The row of menu titles at the top of the main window (40 px like the fluent menu bar).
+/// The row of menu titles at the top of the main window.
 export component AppMenuBar inherits Rectangle {
     in property <[MenuBarMenu]> menus;
     // A menu opened or closed (main.slint gives the keyboard back to its key scope when it closes).
     callback changed-open(/* open */ bool);
 
-    height: 40px;
+    height: 32px;
 
     // A click on the bar beside the titles closes an open menu.
     TouchArea {
@@ -185,6 +188,8 @@ export component MenuBarLayer inherits Rectangle {
     MenuPanel {
         x: Math.max(0px, Math.min(AppMenu.open-x - root.absolute-position.x, root.width - self.width - 4px));
         y: 0px;
+        // One piece with its title: no border, the corner under the title square.
+        attached: true;
         items: root.items;
         key-row: AppMenu.key-row;
         row-hovered(row, level, y) => {

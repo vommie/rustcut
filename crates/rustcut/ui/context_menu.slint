@@ -83,11 +83,21 @@ component MenuRow inherits Rectangle {
         beside: true;
     }
 
+    // A completed hold acts on the release: the menu closes then, so the release never lands on a hidden menu (the next
+    // click was lost, P9.12).
+    property <bool> pending;
+
     logic := HoldLogic {
         pressed: touch.pressed;
         enabled: root.usable && root.item.kind == 0;
         hold: root.item.hold;
-        confirmed => { root.activated(); }
+        confirmed => {
+            if touch.pressed {
+                root.pending = true;
+            } else {
+                root.activated();
+            }
+        }
         short-click => {
             host.reveal();
         }
@@ -183,8 +193,12 @@ component MenuRow inherits Rectangle {
         mouse-cursor: root.usable ? MouseCursor.pointer : MouseCursor.default;
         pointer-event(event) => {
             if event.kind == PointerEventKind.down {
+                root.pending = false;
                 host.press();
                 logic.pressed-down();
+            } else if event.kind == PointerEventKind.up && root.pending {
+                root.pending = false;
+                root.activated();
             }
         }
         clicked => {
@@ -211,6 +225,8 @@ export component MenuPanel inherits Rectangle {
     in property <int> active-row: -1;
     // The row the keys stand on (the menu bar's menus, P9.12; -1 none).
     in property <int> key-row: -1;
+    // Hangs from a menu bar title as one piece with it (Q-P9.12): no border, the top left corner square.
+    in property <bool> attached;
     // An arrow to the button it belongs to, above the panel (`arrow-below`) or under it, at `arrow-at` along the edge.
     in property <bool> arrow;
     in property <bool> arrow-below;
@@ -222,7 +238,8 @@ export component MenuPanel inherits Rectangle {
     height: list.preferred-height;
     background: Theme.surface-variant;
     border-radius: 6px;
-    border-width: 1px;
+    border-top-left-radius: root.attached ? 0px : 6px;
+    border-width: root.attached ? 0px : 1px;
     border-color: Theme.border;
 
     // Clicks between the rows stay inside the menu.
