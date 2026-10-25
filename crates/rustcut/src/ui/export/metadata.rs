@@ -261,7 +261,7 @@ mod tests {
             !missing(inactive, &on).any(),
             "nothing is asked while the panel's Active switch is off"
         );
-        let mut quiet = on.clone();
+        let mut quiet = on;
         Missing {
             tags: true,
             rating: false,
