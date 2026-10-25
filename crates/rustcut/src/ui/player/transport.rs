@@ -7,9 +7,11 @@ use std::time::Instant;
 
 use rustcut_core::time::Timestamp;
 use rustcut_player::Player;
+use slint::ComponentHandle as _;
 
 use super::PlayerBridge;
 use super::shuttle::{REVERSE_TICK, Reverse, ShuttleKey, current_rate, next_rate};
+use crate::Playback;
 
 impl PlayerBridge {
     /// The playhead: where a seek in flight goes, else mpv's position.
@@ -83,10 +85,28 @@ impl PlayerBridge {
         self.command(Player::toggle_pause);
     }
 
-    /// J, K or L.
-    pub fn shuttle(self: &Rc<Self>, key: ShuttleKey) {
-        if !self.is_loaded() {
+    /// Whether the video moves (plays forward or the backward shuttle runs).
+    pub fn is_moving(&self) -> bool {
+        self.reverse.get().is_some() || self.state.lock().playing()
+    }
+
+    /// A key played or paused the video (P9.9, user decision Q-P9.9: only keys): the play or pause symbol flashes when
+    /// the setting is on.
+    pub fn key_flash(&self, play: bool) {
+        if !self.flash.get() || !self.is_loaded() {
             return;
+        }
+        if let Some(window) = self.window.upgrade() {
+            let playback = window.global::<Playback<'_>>();
+            playback.set_flash_play(play);
+            playback.set_flash_serial(playback.get_flash_serial().wrapping_add(1));
+        }
+    }
+
+    /// J, K or L; `Some(moving)` = whether the video moves afterwards, `None` when nothing is loaded.
+    pub fn shuttle(self: &Rc<Self>, key: ShuttleKey) -> Option<bool> {
+        if !self.is_loaded() {
+            return None;
         }
         let now = Instant::now();
         let reverse = self.reverse.get();
@@ -122,6 +142,7 @@ impl PlayerBridge {
                 self.refresh();
             }
         }
+        Some(next != 0)
     }
 
     fn start_reverse(self: &Rc<Self>, rate: i8, now: Instant) {

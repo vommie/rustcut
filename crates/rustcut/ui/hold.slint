@@ -95,6 +95,8 @@ export component HoldRing inherits Rectangle {
     in property <bool> flash;
     // The line around the edge (buttons); menu rows only fill.
     in property <bool> ring: true;
+    // Red for what discards something; the accent color for a hold that only keeps something open (P9.9's rail).
+    in property <color> tint: HoldConfirm.color;
     property <length> t: 2px;
     property <length> w: root.width;
     property <length> h: root.height;
@@ -110,7 +112,7 @@ export component HoldRing inherits Rectangle {
         x: 0;
         width: parent.width * Math.clamp(root.progress, 0, 1);
         height: parent.height;
-        background: HoldConfirm.color.with-alpha(root.flash ? 0.6 : 0.28 * root.progress + 0.06 * (root.progress > 0 ? 1 : 0));
+        background: root.tint.with-alpha(root.flash ? 0.6 : 0.28 * root.progress + 0.06 * (root.progress > 0 ? 1 : 0));
         animate background { duration: 120ms; }
     }
 
@@ -121,7 +123,7 @@ export component HoldRing inherits Rectangle {
             y: 0;
             width: Math.clamp(root.drawn, 0, root.w / 2);
             height: root.t;
-            background: HoldConfirm.color;
+            background: root.tint;
         }
         // Right, downward.
         Rectangle {
@@ -129,7 +131,7 @@ export component HoldRing inherits Rectangle {
             y: 0;
             width: root.t;
             height: Math.clamp(root.drawn - root.w / 2, 0, root.h);
-            background: HoldConfirm.color;
+            background: root.tint;
         }
         // Bottom, to the left.
         Rectangle {
@@ -138,7 +140,7 @@ export component HoldRing inherits Rectangle {
             y: root.h - root.t;
             width: self.len;
             height: root.t;
-            background: HoldConfirm.color;
+            background: root.tint;
         }
         // Left, upward.
         Rectangle {
@@ -147,7 +149,7 @@ export component HoldRing inherits Rectangle {
             y: root.h - self.len;
             width: root.t;
             height: self.len;
-            background: HoldConfirm.color;
+            background: root.tint;
         }
         // Top, from the left back to the center.
         Rectangle {
@@ -155,7 +157,7 @@ export component HoldRing inherits Rectangle {
             y: 0;
             width: Math.clamp(root.drawn - 1.5 * root.w - 2 * root.h, 0, root.w / 2);
             height: root.t;
-            background: HoldConfirm.color;
+            background: root.tint;
         }
     }
 }

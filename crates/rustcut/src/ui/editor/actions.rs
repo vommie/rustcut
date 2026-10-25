@@ -136,10 +136,25 @@ impl Editor {
             }
             Action::Quit => window.invoke_request_quit(),
             Action::OpenSettings => window.invoke_open_settings(),
-            Action::TogglePause => self.with_player(|p| p.toggle_pause()),
-            Action::ShuttleReverse => self.with_player(|p| p.shuttle(ShuttleKey::Reverse)),
-            Action::ShuttleStop => self.with_player(|p| p.shuttle(ShuttleKey::Stop)),
-            Action::ShuttleForward => self.with_player(|p| p.shuttle(ShuttleKey::Forward)),
+            // Keys flash the play or pause symbol when they change between paused and moving (P9.9: only keys).
+            Action::TogglePause => self.with_player(|p| {
+                let moving = p.is_moving();
+                p.toggle_pause();
+                p.key_flash(!moving);
+            }),
+            Action::ShuttleReverse | Action::ShuttleStop | Action::ShuttleForward => self.with_player(|p| {
+                let key = match action {
+                    Action::ShuttleReverse => ShuttleKey::Reverse,
+                    Action::ShuttleStop => ShuttleKey::Stop,
+                    _ => ShuttleKey::Forward,
+                };
+                let moving = p.is_moving();
+                if let Some(now) = p.shuttle(key)
+                    && now != moving
+                {
+                    p.key_flash(now);
+                }
+            }),
             Action::FrameBack => self.with_player(|p| p.step_frame(true)),
             Action::FrameForward => self.with_player(|p| p.step_frame(false)),
             Action::SeekBack => self.with_player(|p| p.seek_by(-self.seek_step.get())),

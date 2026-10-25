@@ -149,6 +149,7 @@ pub fn rail_rows(layout: &DockLayout, side: Side) -> Vec<DockRailItem> {
                 icon: panel.icon().to_slint(),
                 active: *panel == group.active,
                 group_start: index > 0 && tab == 0,
+                group: i32::try_from(index).unwrap_or(i32::MAX),
             });
         }
     }

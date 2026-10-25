@@ -76,6 +76,24 @@ pub static PLAYER: &[Card] = &[
         ],
     },
     Card {
+        title: "Play and pause",
+        description: "",
+        fields: &[
+            switch!(
+                "player.flash_play_pause",
+                "Flash a play or pause symbol",
+                "When a key plays or pauses the video, the symbol shows briefly in its middle.",
+                player.flash_play_pause
+            ),
+            switch!(
+                "player.keep_pause_symbol",
+                "Keep the pause symbol while paused",
+                "A faint pause symbol stays in the middle of the video while it is paused.",
+                player.keep_pause_symbol
+            ),
+        ],
+    },
+    Card {
         title: "Preview audio",
         description: "These change only what you hear in RustCut, never the rendered file.",
         fields: &[

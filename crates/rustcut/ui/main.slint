@@ -9,8 +9,8 @@ import { Theme } from "styles.slint";
 import { PlayerView } from "player_view.slint";
 import { IconId } from "icons.slint";
 import { ResizerBar } from "resizer_bar.slint";
-import { Dock, DockCardView, DockGroupView, DockMetrics, DockRailItem, DockTabView } from "dock_types.slint";
-import { DockSidebar } from "dock_sidebar.slint";
+import { Dock, DockCardView, DockGroupView, DockMetrics, DockRailItem, DockTabView, RailPeek } from "dock_types.slint";
+import { DockPeek, DockSidebar } from "dock_sidebar.slint";
 import { DockOverlay } from "dock_overlay.slint";
 import { Playback } from "player_types.slint";
 import { PlayerTransport } from "player_transport.slint";
@@ -368,8 +368,6 @@ export component MainWindow inherits Window {
                     player := PlayerView {
                         vertical-stretch: 1;
                         frame: root.video-frame;
-                        app-name: root.app-name;
-                        app-version: root.app-version;
                     }
 
                     TimelineStrip { }
@@ -396,6 +394,16 @@ export component MainWindow inherits Window {
 
             StatusLine { }
         }
+
+        // It goes 0.4 s after the pointer left rail and group, unless it was held to stay.
+        Timer {
+            interval: 400ms;
+            running: RailPeek.side >= 0 && !RailPeek.sticky && RailPeek.hover-rail != RailPeek.side && !RailPeek.over-group;
+            triggered => {
+                RailPeek.side = -1;
+                RailPeek.over-group = false;
+            }
+        }
     }
 
     // The banner lies on the top of the video, full width (Q-N8).
@@ -403,6 +411,25 @@ export component MainWindow inherits Window {
         x: player.absolute-position.x;
         y: player.absolute-position.y;
         width: player.width;
+    }
+
+    // A rail icon's group over the video while its sidebar is collapsed (P9.9, Q-P9.9), above the video's banner.
+    if Dock.left-collapsed && RailPeek.side == 0: DockPeek {
+        x: left-sidebar.absolute-position.x + left-sidebar.width;
+        y: left-sidebar.absolute-position.y;
+        width: Dock.left-width;
+        height: left-sidebar.height;
+        side: 0;
+        group: Dock.left-groups[RailPeek.group];
+    }
+
+    if Dock.right-collapsed && RailPeek.side == 1: DockPeek {
+        x: right-sidebar.absolute-position.x - Dock.right-width;
+        y: right-sidebar.absolute-position.y;
+        width: Dock.right-width;
+        height: right-sidebar.height;
+        side: 1;
+        group: Dock.right-groups[RailPeek.group];
     }
 
     ToastLayer {

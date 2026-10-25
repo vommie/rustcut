@@ -276,6 +276,15 @@ fn dialog_settings_have_defaults_bad_values_read_as_defaults_and_ranges_are_kept
 }
 
 #[test]
+fn the_play_pause_symbols_are_on_by_default_and_old_files_load() {
+    // 0.0.46 wrote no symbol switches: both are on (P9.9).
+    let s: Settings = toml::from_str("version = 4\n[player]\nauto_play = false\n").unwrap();
+    assert!(!s.player.auto_play && s.player.flash_play_pause && s.player.keep_pause_symbol);
+    let s: Settings = toml::from_str("version = 4\n[player]\nkeep_pause_symbol = false\n").unwrap();
+    assert!(s.player.flash_play_pause && !s.player.keep_pause_symbol);
+}
+
+#[test]
 fn sidecar_writing_is_on_by_default_and_old_files_load() {
     // 0.0.19 wrote no `[hashing]`.
     let s: Settings = toml::from_str("version = 1\n[queue]\nworkers = 2\n").unwrap();

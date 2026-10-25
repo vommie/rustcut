@@ -26,6 +26,12 @@ export global Playback {
     // A file is dragged over the window; `drop-count` files.
     in property <bool> drop-hover;
     in property <int> drop-count;
+    // P9.9 (user decision Q-P9.9): a key played or paused the video: the symbol flashes (a new serial starts it; the
+    // setting "Flash a play or pause symbol" decides in Rust whether it is counted up), `flash-play` = the play symbol.
+    in property <int> flash-serial;
+    in property <bool> flash-play;
+    // The setting "Keep the pause symbol while paused".
+    in property <bool> keep-pause-symbol: true;
 
     callback toggle-pause();
     callback frame-step(/* back */ bool);
