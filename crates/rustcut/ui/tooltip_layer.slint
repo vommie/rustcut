@@ -77,8 +77,10 @@ component HoldBadge inherits Rectangle {
     }
 }
 
-/// The arrow of a bubble pointing at its element (placement.rs: 7 px out, 14 px wide): a filled triangle that also
-/// covers the bubble's border under its base, and its two outer edges. Placed inside the bubble's rectangle.
+/// The arrow of a bubble pointing at its element (placement.rs: 7 px out, 14 px wide), placed on whole pixels. Two
+/// triangles: the outer one in the border's color ends exactly at the bubble's border line, so its edges flow into
+/// it; the inner one in the fill's color is 1 px smaller and also covers the border line under the opening (review
+/// 15 #10, P9.2: no gap between the tip and the border). Placed inside the bubble's rectangle.
 export component TipArrow inherits Rectangle {
     in property <TipSide> side;
     // The arrow's center along the edge that faces the element.
@@ -90,22 +92,22 @@ export component TipArrow inherits Rectangle {
     in property <length> bubble-height;
 
     property <bool> across: root.side == TipSide.below || root.side == TipSide.above;
+    property <length> start: Math.round((root.arrow - 7px) / 1px) * 1px;
     visible: root.side != TipSide.over;
     width: self.across ? 14px : 9px;
     height: self.across ? 9px : 14px;
-    x: self.across ? root.arrow - 7px : root.side == TipSide.right ? -7px : root.bubble-width - 2px;
-    y: !self.across ? root.arrow - 7px : root.side == TipSide.below ? -7px : root.bubble-height - 2px;
+    x: self.across ? root.start : root.side == TipSide.right ? -7px : root.bubble-width - 2px;
+    y: !self.across ? root.start : root.side == TipSide.below ? -7px : root.bubble-height - 2px;
 
     Path {
         width: 100%;
         height: 100%;
         viewbox-width: root.across ? 14 : 9;
         viewbox-height: root.across ? 9 : 14;
-        commands: root.side == TipSide.below ? "M 0 7.5 L 7 0.5 L 14 7.5 L 14 9 L 0 9 Z"
-            : root.side == TipSide.above ? "M 0 1.5 L 7 8.5 L 14 1.5 L 14 0 L 0 0 Z"
-            : root.side == TipSide.right ? "M 7.5 0 L 0.5 7 L 7.5 14 L 9 14 L 9 0 Z"
-            : "M 1.5 0 L 8.5 7 L 1.5 14 L 0 14 L 0 0 Z";
-        fill: root.fill;
+        commands: root.side == TipSide.below ? "M 0 7 L 7 0 L 14 7 Z"
+            : root.side == TipSide.above ? "M 0 2 L 7 9 L 14 2 Z"
+            : root.side == TipSide.right ? "M 7 0 L 0 7 L 7 14 Z" : "M 2 0 L 9 7 L 2 14 Z";
+        fill: root.stroke;
     }
 
     Path {
@@ -113,11 +115,10 @@ export component TipArrow inherits Rectangle {
         height: 100%;
         viewbox-width: root.across ? 14 : 9;
         viewbox-height: root.across ? 9 : 14;
-        commands: root.side == TipSide.below ? "M 0 7.5 L 7 0.5 L 14 7.5"
-            : root.side == TipSide.above ? "M 0 1.5 L 7 8.5 L 14 1.5"
-            : root.side == TipSide.right ? "M 7.5 0 L 0.5 7 L 7.5 14" : "M 1.5 0 L 8.5 7 L 1.5 14";
-        stroke: root.stroke;
-        stroke-width: 1px;
+        commands: root.side == TipSide.below ? "M 0.41 8 L 7 1.41 L 13.59 8 Z"
+            : root.side == TipSide.above ? "M 0.41 1 L 7 7.59 L 13.59 1 Z"
+            : root.side == TipSide.right ? "M 8 0.41 L 1.41 7 L 8 13.59 Z" : "M 1 0.41 L 7.59 7 L 1 13.59 Z";
+        fill: root.fill;
     }
 }
 

@@ -66,12 +66,7 @@ pub fn banner(b: &Banner) -> BannerView {
         jump_3: jumps(&b.actions, 2),
         clickable: b.clickable,
         progress: b.progress.unwrap_or(-1.0),
-        since: if b.since.is_empty() {
-            String::new()
-        } else {
-            format!("since {}", b.since)
-        }
-        .into(),
+        time: b.time.as_str().into(),
     }
 }
 

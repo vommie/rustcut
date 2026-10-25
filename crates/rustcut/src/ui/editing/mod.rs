@@ -23,6 +23,7 @@ use crate::ui::editor::Editor;
 use crate::ui::export::ExportBridge;
 use crate::ui::filters::FiltersBridge;
 use crate::ui::inspector::InspectorBridge;
+use crate::ui::jump::JumpTarget;
 use crate::ui::notices::{self, Kind, Level, Notice};
 use crate::ui::open::{FileOpener, StartAt};
 use crate::ui::queue::QueueBridge;
@@ -118,11 +119,6 @@ impl JobEditor {
             id: s.id,
             spec: s.spec.clone(),
         })
-    }
-
-    /// The card's banner text, when a job is edited.
-    pub fn banner(&self) -> Option<String> {
-        self.session.borrow().as_ref().map(JobEdit::banner)
     }
 
     /// What happens to the current session at the next load (`editor.on_job_load`, changed in the Settings window).
@@ -273,9 +269,19 @@ impl JobEditor {
             export.load_target(&spec.target);
         }
         self.mark(Some(id));
-        Self::tell(
-            Level::Info,
-            &format!("Job {id} is in the editor. Saving makes a new job; job {id} stays as it is."),
+        let title = self.session.borrow().as_ref().map(JobEdit::title).unwrap_or_default();
+        tracing::info!(message = title, "[Queue]");
+        // The message kind `job_loaded` (D-P9m: nothing by default; the job is highlighted in the queue).
+        let weak = BRIDGE.with(|b| b.borrow().clone());
+        notices::post(
+            Notice::new(Kind::JobLoaded, title)
+                .detail(format!("Saving makes a new job; job {id} stays as it is."))
+                .jump_action("Show the job", JumpTarget::QueueJob(id))
+                .action("Unlink", move || {
+                    if let Some(bridge) = weak.upgrade() {
+                        bridge.stop();
+                    }
+                }),
         );
     }
 
@@ -284,7 +290,7 @@ impl JobEditor {
         self.end();
     }
 
-    /// "Stop" on the card's banner: the link to the loaded job ends (the editor keeps what it has).
+    /// "Unlink" of the `job_loaded` message: the link to the loaded job ends (the editor keeps what it has).
     pub fn stop(&self) {
         if let Some(id) = self.session.borrow().as_ref().map(|s| s.id) {
             Self::tell(Level::Info, &format!("Job {id} is no longer linked to the editor."));

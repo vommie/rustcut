@@ -367,7 +367,6 @@ impl ExportBridge {
             }
             .into(),
         );
-        self.publish_editing(&e);
     }
 
     /// What keeps the job itself from being saved, with the option that solves it.
@@ -532,9 +531,4 @@ fn connect(bridge: &Rc<ExportBridge>, window: &MainWindow) {
         b.publish();
     }));
     e.on_save(on(ExportBridge::save));
-    e.on_stop_editing(on(|b| {
-        if let Some(editing) = b.editing.borrow().upgrade() {
-            editing.stop();
-        }
-    }));
 }

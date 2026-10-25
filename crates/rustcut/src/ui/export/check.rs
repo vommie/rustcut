@@ -1,6 +1,6 @@
 //! The card's live check of the target in words (a free name, a hint, a conflict that Save will ask about, or why the
 //! job cannot be saved) and where its bubble stands (M6.5c, Q-N10: at the name field or the folder choice; a conflict
-//! and similar names lead to the files).
+//! and similar names lead to the files). The words follow the user's review (P9.2): short titles, no list of names.
 
 use std::path::Path;
 
@@ -23,9 +23,6 @@ pub enum At {
     Folder,
 }
 
-/// How many similar names a bubble lists before "and N more".
-const LISTED: usize = 3;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardCheck {
     pub level: Level,
@@ -33,8 +30,9 @@ pub struct CardCheck {
     pub detail: String,
     /// Where its bubble stands (`None` = no bubble: a free name, no video, the folder is being read).
     pub at: Option<At>,
-    /// A click on the bubble shows the target folder's files (the conflict dialog to look).
-    pub browse: bool,
+    /// The bubble's link that shows the target folder's files (the conflict dialog to look): "Show the file" when the
+    /// target exists, else "Show the files"; `None` = no link.
+    pub browse: Option<&'static str>,
 }
 
 impl CardCheck {
@@ -44,12 +42,12 @@ impl CardCheck {
             text: text.into(),
             detail: detail.into(),
             at,
-            browse: false,
+            browse: None,
         }
     }
 
-    const fn browsing(mut self) -> Self {
-        self.browse = true;
+    const fn browsing(mut self, link: &'static str) -> Self {
+        self.browse = Some(link);
         self
     }
 
@@ -120,47 +118,39 @@ pub fn card_check(input: &CardInput<'_>) -> CardCheck {
         queue: input.queue,
         warnings: input.warnings,
     });
-    let asks = "Save asks what to do.";
+    // The user's words (review 44#3), polished.
+    let asks = "If you do not fix it here, Save opens a dialog that helps you resolve it.";
     if found.exists.is_some() {
-        return CardCheck::new(Level::Conflict, "The file exists", asks, Some(At::Name)).browsing();
+        return CardCheck::new(Level::Conflict, "Target filename already exists", asks, Some(At::Name))
+            .browsing("Show the file");
     }
     match found.queued.as_slice() {
         [] => {}
         [one] => {
             return CardCheck::new(
                 Level::Conflict,
-                format!("Job {} writes this file too", one.id),
+                format!("Job {} already uses the target filename", one.id),
                 asks,
                 Some(At::Name),
             )
-            .browsing();
+            .browsing("Show the files");
         }
         many => {
             return CardCheck::new(
                 Level::Conflict,
-                format!("{} queued jobs write this file", many.len()),
+                format!("{} jobs already use the target filename", many.len()),
                 asks,
                 Some(At::Name),
             )
-            .browsing();
+            .browsing("Show the files");
         }
     }
     let title = match found.similar.len() {
         0 => return CardCheck::new(Level::Free, "Free", folder.display().to_string(), None),
-        1 => "1 file in the folder has a similar name".to_owned(),
-        n => format!("{n} files in the folder have similar names"),
+        1 => "1 similar filename in target folder".to_owned(),
+        n => format!("{n} similar filenames in target folder"),
     };
-    let mut names = found
-        .similar
-        .iter()
-        .take(LISTED)
-        .cloned()
-        .collect::<Vec<_>>()
-        .join(", ");
-    if found.similar.len() > LISTED {
-        names = format!("{names} and {} more", found.similar.len() - LISTED);
-    }
-    CardCheck::new(Level::Hint, title, names, Some(At::Name)).browsing()
+    CardCheck::new(Level::Hint, title, "", Some(At::Name)).browsing("Show the files")
 }
 
 #[cfg(test)]
@@ -199,19 +189,24 @@ mod tests {
         let line = card_check(&input("Clip - 01.mkv"));
         assert_eq!(
             (line.level, line.text.as_str(), line.at, line.browse),
-            (Level::Conflict, "The file exists", Some(At::Name), true)
+            (
+                Level::Conflict,
+                "Target filename already exists",
+                Some(At::Name),
+                Some("Show the file")
+            )
         );
-        assert_eq!(card_check(&input("Clip - 02.mkv")).text, "Job #9 writes this file too");
+        let queued = card_check(&input("Clip - 02.mkv"));
+        assert_eq!(
+            (queued.text.as_str(), queued.browse),
+            ("Job #9 already uses the target filename", Some("Show the files"))
+        );
         let hint = card_check(&input("Clip - 03.mkv"));
         assert_eq!(
             (hint.level, hint.text.as_str(), hint.detail.as_str()),
-            (
-                Level::Hint,
-                "2 files in the folder have similar names",
-                "Clip - 01.mkv, clip.mp4"
-            )
+            (Level::Hint, "2 similar filenames in target folder", "")
         );
-        assert!(hint.can_save() && hint.browse);
+        assert!(hint.can_save() && hint.browse == Some("Show the files"));
         let free = card_check(&CardInput {
             base: "Other",
             ..input("Other.mkv")

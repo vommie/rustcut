@@ -1,7 +1,7 @@
 // The toasts (M6.5, user decisions Q-N8): cards that come in from the side of their position, show their level's
 // color and symbol, the title and the detail (the whole text while the pointer rests on them, which also stops their
-// time), the time, a count for repeats, the buttons, a line with the time left, × and, for hints and confirmations,
-// "Don't show again". A click leads to the cause, a right click opens the context menu. The layer places them as the
+// time), the time (hh:mm:ss, left of ×), a count for repeats, the buttons, a line with the time left, × and, for
+// hints and confirmations, "Don't show again". A click leads to the cause, a right click opens the context menu. The layer places them as the
 // settings say (six positions, five ways to stack) and never takes clicks outside the cards. Data: `Notices`.
 
 import { Theme } from "styles.slint";
@@ -143,9 +143,10 @@ component ToastCard inherits Rectangle {
                             }
                         }
 
+                        // Review 34 (P9.2): the time (hh:mm:ss) in the title row, directly left of ×; the mute
+                        // symbol of hints keeps its place while the pointer is elsewhere (nothing shifts).
                         VerticalLayout {
                             alignment: start;
-                            spacing: 2px;
 
                             HorizontalLayout {
                                 alignment: end;
@@ -168,10 +169,18 @@ component ToastCard inherits Rectangle {
                                     }
                                 }
 
-                                if root.toast.mutable && touch.has-hover: NoticeIcon {
+                                if root.toast.mutable: NoticeIcon {
+                                    visible: touch.has-hover;
                                     icon: IconId.notice-mute;
                                     tooltip: "Don't show this kind of message again (Settings > Messages brings it back)";
                                     clicked => { Notices.toast-mute(root.toast.id); }
+                                }
+
+                                Text {
+                                    text: root.toast.time;
+                                    color: Theme.status-deleted;
+                                    font-size: 11px;
+                                    vertical-alignment: center;
                                 }
 
                                 NoticeIcon {
@@ -179,13 +188,6 @@ component ToastCard inherits Rectangle {
                                     tooltip: "Close";
                                     clicked => { Notices.toast-closed(root.toast.id); }
                                 }
-                            }
-
-                            Text {
-                                text: root.toast.time;
-                                color: Theme.status-deleted;
-                                font-size: 11px;
-                                horizontal-alignment: right;
                             }
                         }
                     }

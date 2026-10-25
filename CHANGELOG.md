@@ -147,6 +147,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Messages, your UI review round 1 (0.0.37): toasts show their time as hh:mm:ss in the title row, left of ×. Banners
+  show their symbol larger and centered, and the time their state began (hh:mm:ss, no "since") left of ×; their
+  buttons and the pager ("‹ 1 / 2 ›") stand left of the time, everything centered in height. The bell keeps its
+  color; only its number shows the color of the most serious unread message. In bubbles the arrow joins the border
+  without a gap, and the link and the buttons share one row: the link on the left, the buttons on the right (buttons
+  alone stand on the left).
+- The name check's bubbles say it shorter (0.0.37): "Target filename already exists" with "Show the file", "Job #2
+  already uses the target filename", "3 similar filenames in target folder" (without the list of names), and "If you
+  do not fix it here, Save opens a dialog that helps you resolve it."; the number button's tooltip is just "Take the
+  next free number: 03".
+- The strip "Job #n loaded" in the Job Finalization card is gone (0.0.37): loading a job is the message "Job loaded
+  into the editor" in Settings > Messages, off by default (the loaded job is highlighted in the queue); as a toast it
+  offers "Show the job" and "Unlink". The kind that was called "Job loaded into the editor" before is now "Other
+  notes about loaded jobs" (its setting stays).
 - Shared controls, your UI review round 1 (0.0.36): choices stretch up to one common width (the Quality slider too),
   cut a long choice with "…" and open a list as wide as its longest entry. Number fields have small up and down arrows
   (Shift: ten steps), show their unit inside the field ("px", "s", "frames", "kbit/s") and step with the mouse wheel

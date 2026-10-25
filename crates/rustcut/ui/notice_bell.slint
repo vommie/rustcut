@@ -23,7 +23,8 @@ export component NoticeBell inherits Rectangle {
         y: (parent.height - self.height) / 2;
         icon: IconId.bell;
         size: IconSize.md;
-        color: Notices.unread > 0 ? NoticeLook.color(Notices.unread-level) : Theme.text-muted;
+        // Always the default color; only the badge shows the worst level (review 38, P9.2).
+        color: Theme.text-muted;
     }
 
     if Notices.unread > 0: Rectangle {

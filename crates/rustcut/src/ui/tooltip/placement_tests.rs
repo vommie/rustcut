@@ -194,8 +194,19 @@ proptest! {
         w in 0.0f32..400.0, h in 0.0f32..300.0, beside in any::<bool>(),
     ) {
         let p = place(Rect { x: ax, y: ay, width: aw, height: ah }, w, h, W, H, beside);
-        prop_assert!(p.x >= MARGIN - 0.01 && p.x + w <= W - MARGIN + 0.01, "{:?}", p);
-        prop_assert!(p.y >= MARGIN - 0.01 && p.y + h <= H - MARGIN + 0.01, "{:?}", p);
+        // Whole pixels may move it by half a pixel into the margin.
+        prop_assert!(p.x >= MARGIN - 0.51 && p.x + w <= W - MARGIN + 0.51, "{:?}", p);
+        prop_assert!(p.y >= MARGIN - 0.51 && p.y + h <= H - MARGIN + 0.51, "{:?}", p);
+    }
+
+    #[test]
+    fn a_bubble_and_its_arrow_stand_on_whole_pixels(
+        ax in -100.0f32..1400.0, ay in -100.0f32..900.0, aw in 0.0f32..300.0, ah in 0.0f32..60.0,
+        w in 0.0f32..400.0, h in 0.0f32..300.0, beside in any::<bool>(),
+    ) {
+        // Review 15 #10 (P9.2): the arrow's edges meet the border line only on whole pixels.
+        let p = place(Rect { x: ax, y: ay, width: aw, height: ah }, w, h, W, H, beside);
+        prop_assert!(p.x.fract() == 0.0 && p.y.fract() == 0.0 && p.arrow.fract() == 0.0, "{:?}", p);
     }
 
     #[test]
@@ -209,8 +220,8 @@ proptest! {
         prop_assert!(p.side == Side::Over || !overlaps, "{:?}", p);
         if p.side != Side::Over {
             let edge = if matches!(p.side, Side::Below | Side::Above) { w } else { h };
-            prop_assert!(p.arrow >= (RADIUS + ARROW_HALF).min(edge / 2.0) - 0.01, "{:?}", p);
-            prop_assert!(p.arrow <= edge - (RADIUS + ARROW_HALF).min(edge / 2.0) + 0.01, "{:?}", p);
+            prop_assert!(p.arrow >= (RADIUS + ARROW_HALF).min(edge / 2.0) - 0.51, "{:?}", p);
+            prop_assert!(p.arrow <= edge - (RADIUS + ARROW_HALF).min(edge / 2.0) + 0.51, "{:?}", p);
         }
     }
 }

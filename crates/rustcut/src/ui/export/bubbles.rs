@@ -27,7 +27,7 @@ pub(super) struct CheckBubble {
     level: CheckLevel,
     title: String,
     detail: String,
-    browse: bool,
+    browse: Option<&'static str>,
     fix: Option<Fix>,
 }
 
@@ -115,9 +115,9 @@ impl ExportBridge {
             .detail(bubble.detail)
             .at(Area::Export, [key(bubble.at)])
             .grace(TYPING);
-        if bubble.browse {
+        if let Some(link) = bubble.browse {
             let me = Weak::clone(&self.me);
-            notice = notice.action("Show the files", move || {
+            notice = notice.action(link, move || {
                 if let Some(bridge) = me.upgrade() {
                     bridge.browse_target();
                 }
@@ -127,7 +127,7 @@ impl ExportBridge {
         notice = match bubble.fix {
             Some(Fix::Number(n)) => notice.icon_action(
                 Icon::CounterNextFree,
-                format!("Take the next free number: {n:02} (the counter is switched on)"),
+                format!("Take the next free number: {n:02}"),
                 move || {
                     if let Some(bridge) = me.upgrade() {
                         bridge.take_fix(Fix::Number(n));
