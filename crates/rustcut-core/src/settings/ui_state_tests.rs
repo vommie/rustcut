@@ -40,6 +40,7 @@ fn the_tag_panel_round_trips_is_sanitized_and_old_files_load() {
             filter_collapsed: vec![1],
             filter_width: 400,
             filter_height: 600,
+            show_hidden: true,
         },
         ..UiState::default()
     };
@@ -71,7 +72,8 @@ fn the_tag_panel_round_trips_is_sanitized_and_old_files_load() {
         let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
         assert_eq!((read.timeline.zoom, read.tags.clone()), (4.0, TagPanelState::default()));
     }
-    // A `[tags]` of 0.0.32 has no "Active" switch, no shown tags and no filter window: active, nothing shown, defaults.
+    // A `[tags]` of 0.0.32 has no "Active" switch, no shown tags, no filter window and no eye switch: active, nothing
+    // shown, defaults.
     std::fs::write(
         dir.path().join("ui-state.toml"),
         "version = 1\n[tags]\nhidden = [3]\nlocked = [2]\n",
@@ -79,6 +81,10 @@ fn the_tag_panel_round_trips_is_sanitized_and_old_files_load() {
     .unwrap();
     let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
     assert!(read.tags.active && read.tags.shown.is_empty());
+    assert!(
+        !read.tags.show_hidden,
+        "a file of 0.0.42 has no eye switch: the hidden tags stay hidden"
+    );
     assert_eq!((read.tags.hidden.clone(), read.tags.locked.clone()), (vec![3], vec![2]));
     assert_eq!((read.tags.filter_width, read.tags.filter_height), (380, 560));
 }

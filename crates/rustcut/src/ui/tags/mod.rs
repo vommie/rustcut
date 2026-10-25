@@ -384,10 +384,9 @@ impl TagsBridge {
         let connection = self.connection.borrow();
         let header = view::connection(&connection);
         t.set_connection_text(header.text.into());
-        t.set_connection_detail(header.detail.into());
+        t.set_connection_error(header.error.into());
         t.set_connection_kind(header.kind);
         t.set_can_retry(header.can_retry);
-        t.set_connection_jump(header.jump.map(JumpTarget::hint).unwrap_or_default().into());
         self.connection_jump.set(header.jump);
 
         let editing = state.editing.as_ref();
@@ -413,7 +412,6 @@ impl TagsBridge {
 
         let choice = state.choice();
         t.set_rating(choice.rating.map_or(-1, i32::from));
-        t.set_summary(view::summary(&state).into());
         t.set_has_last_tags(!state.last_tags.is_empty());
         t.set_last_tags_tooltip(view::tag_names(&state, &state.last_tags).into());
         t.set_last_rating(state.last_rating.map_or(-1, i32::from));
@@ -422,7 +420,8 @@ impl TagsBridge {
         t.set_warn(self.warn.get());
         t.set_has_tree(state.tag_count() > 0);
         t.set_empty_text(view::empty_text(&state, &connection).into());
-        t.set_hide_mode(state.hide_mode);
+        t.set_show_hidden(state.show_hidden);
+        t.set_eye_tooltip(view::eye_tooltip(&state).into());
         t.set_hidden_count(i32::try_from(state.hidden_count()).unwrap_or(i32::MAX));
         if t.get_filter_text() != state.filter.as_str() {
             t.set_filter_text(state.filter.as_str().into());
@@ -524,15 +523,12 @@ fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
         }};
     }
     on!(on_retry, |b| b.retry());
-    on!(on_connection_jump_clicked, |b| {
-        if let Some(target) = b.connection_jump.get() {
-            crate::ui::jump::go(target);
-        }
-    });
-    on!(on_open_settings, |_b| crate::ui::jump::go(JumpTarget::Settings {
-        page: crate::ui::settings::page::Page::RustView,
-        key: "rustview.enabled",
-    }));
+    on!(on_connection_jump_clicked, |b| crate::ui::jump::go(
+        b.connection_jump.get().unwrap_or(JumpTarget::Settings {
+            page: crate::ui::settings::page::Page::RustView,
+            key: "rustview.enabled",
+        })
+    ));
     on!(on_apply_edit, |b| b.apply_edit());
     on!(on_cancel_edit, |b| b.cancel_edit());
     on!(on_rating_clicked, |b, rating| b.change(|s| s.click_rating(rating)));
@@ -553,7 +549,7 @@ fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
     on!(on_filter_done, |b| b.publish());
     on!(on_tree_height_changed, |b, height| b.tree_height_changed(height));
     on!(on_history_tag_clicked, |b, id| if let Some(id) = tag_id(id) {
-        b.change(|s| s.click_history(id));
+        b.change(|s| s.click_tag(id));
     });
     on!(on_history_width_changed, |b, width| b.history_width_changed(width));
     on!(on_history_collapsed_changed, |b, collapsed| b
@@ -569,9 +565,7 @@ fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
     on!(on_apply_last_tags, |b| b.change(TagPanel::apply_last_tags));
     on!(on_apply_last_rating, |b| b.change(TagPanel::apply_last_rating));
     on!(on_clear, |b| b.change(TagPanel::clear));
-    on!(on_expand_all, |b| b.change(TagPanel::expand_all));
-    on!(on_collapse_all, |b| b.change(TagPanel::collapse_all));
-    on!(on_toggle_hide_mode, |b| b.change(TagPanel::toggle_hide_mode));
+    on!(on_toggle_show_hidden, |b| b.change(TagPanel::toggle_show_hidden));
     on!(on_toggle_active, |b| b.toggle_active());
     on!(on_open_filter, |b| b.open_filter());
     on!(on_toggle_warn, |b| b.toggle_warn());

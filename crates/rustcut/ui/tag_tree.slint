@@ -1,6 +1,6 @@
 // Copied from RustView (crates/rustview/ui/tag_panel.slint): `TagTreeItem` and `TagTreeList`. RustView's `TagPanel` is
-// replaced by RustCut's wrapper `tag_rate_panel.slint`; the lock marker between the "RustCut begin/end" lines is the only
-// addition. tests/rustview_parity.rs compares both components with the original (ADR-10).
+// replaced by RustCut's wrapper `tag_rate_panel.slint`; the red look of a locked tag between the "RustCut begin/end"
+// lines is the only addition. tests/rustview_parity.rs compares both components with the original (ADR-10).
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize, IconSlot } from "icons.slint";
@@ -87,14 +87,6 @@ export component TagTreeItem inherits Rectangle {
             color: root.tag.is-assigned ? #a6e3a1 : #f9e2af;
         }
 
-        // RustCut begin: a locked tag stays assigned for the next jobs (user decision Q-G2).
-        if root.tag.is-locked : IconSlot {
-            icon: IconId.tag-locked;
-            size: IconSize.sm;
-            color: Theme.accent;
-        }
-        // RustCut end
-
         Text {
             text: root.tag.name;
             color: root.tag.is-selected ? Theme.primary : (
@@ -112,6 +104,67 @@ export component TagTreeItem inherits Rectangle {
             overflow: elide;
         }
     }
+
+    // RustCut begin: a locked tag stays assigned for the next jobs (user decision Q-G2) and is red instead of green,
+    // without a symbol that would push the name aside (P9.8, review note 24#1). The frame changes through the state;
+    // the content is drawn again in red inside the frame, over the copy's (input still reaches the copy's touch area,
+    // the expand button is this one's).
+    states [
+        locked when root.tag.is-locked: {
+            background: root.tag.is-dimmed ? #f38ba818 : #f38ba828;
+            border-color: root.tag.is-dimmed ? #f38ba888 : #f38ba8;
+        }
+    ]
+
+    if root.tag.is-locked: Rectangle {
+        x: 1px;
+        y: 1px;
+        width: parent.width - 2px;
+        height: parent.height - 2px;
+        border-radius: 2px;
+        background: Theme.background;
+
+        Rectangle {
+            border-radius: 2px;
+            background: root.background;
+        }
+
+        HorizontalLayout {
+            opacity: root.tag.is-dimmed ? 0.8 : 1.0;
+            padding-left: (root.tag.depth * root.indent-per-level) + 5px;
+            padding-right: 7px;
+            spacing: 4px;
+            alignment: start;
+
+            NodeButton {
+                has-children: root.tag.has-children;
+                is-expanded: root.tag.is-expanded;
+                button-size: 14px;
+                y: (parent.height - self.height) / 2;
+                toggled(new-state) => {
+                    root.toggle-expanded();
+                }
+            }
+
+            if root.tag.is-assigned: IconSlot {
+                icon: IconId.check;
+                size: IconSize.sm;
+                color: #f38ba8;
+            }
+
+            Text {
+                text: root.tag.name;
+                color: #f38ba8;
+                font-weight: 700;
+                font-size: 11px;
+                vertical-alignment: center;
+                horizontal-alignment: left;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+        }
+    }
+    // RustCut end
 }
 
 export component TagTreeList inherits Rectangle {
