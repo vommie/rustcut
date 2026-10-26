@@ -247,7 +247,7 @@ export component CropPills inherits Rectangle {
     property <length> kw: CropOverlay.kept-width;
 
     size-pill := CropPill {
-        visible: root.kw > 0;
+        visible: root.kw > 0 && CropOverlay.size-text != "";
         text: CropOverlay.size-text;
         x: Math.min(root.kx + 6px, root.px + root.pw - self.width - 4px);
         y: Math.min(root.ky + 6px, root.py + root.ph - self.height - 4px);

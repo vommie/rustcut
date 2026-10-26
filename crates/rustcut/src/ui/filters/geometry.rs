@@ -166,6 +166,38 @@ impl CropView {
         self.sar
     }
 
+    /// The pixel of the crop filter's frame under (`x`, `y`) of the video area; `None` outside the picture.
+    pub fn frame_point(&self, x: f32, y: f32) -> Option<(u32, u32)> {
+        let p = self.picture;
+        if !p.contains(x, y) {
+            return None;
+        }
+        let (sx, sy) = self.scale();
+        let pixel = |offset: f32, scale: f32, size: u32| -> u32 {
+            let v = (f64::from(offset) / f64::from(scale.max(f32::EPSILON))).floor();
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "clamped to the frame first"
+            )]
+            let v = v.clamp(0.0, f64::from(size.saturating_sub(1))) as u32;
+            v
+        };
+        let (px_x, px_y) = (
+            pixel(x - p.x, sx, self.shown.width),
+            pixel(y - p.y, sy, self.shown.height),
+        );
+        // A 1x1 crop of the shown frame, turned back: its left and top edges are the pixel in the crop's frame.
+        let shown = Crop::new(
+            px_y,
+            self.shown.width.saturating_sub(px_x + 1),
+            self.shown.height.saturating_sub(px_y + 1),
+            px_x,
+        );
+        let frame = self.frame_crop(shown);
+        Some((frame.left, frame.top))
+    }
+
     /// The kept area of `crop` in display units of the shown frame.
     pub fn display_rect(&self, crop: Crop) -> DisplayRect {
         let c = self.shown_crop(crop);

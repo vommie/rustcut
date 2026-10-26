@@ -96,6 +96,11 @@ pub struct CardView {
     pub search_sides: usize,
     pub search_samples: u8,
     pub search_sections_only: bool,
+    pub search_color: Option<[u8; 3]>,
+    pub search_similarity: u8,
+    pub search_retries: u8,
+    /// The next click on the video picks a border color.
+    pub picking: bool,
     /// The index of the crop's size multiple in [`MULTIPLES`], and whether a Resize after the crop makes it free.
     pub crop_multiple: usize,
     pub crop_multiple_free: bool,
@@ -174,6 +179,10 @@ pub fn card(state: &FiltersState) -> CardView {
         search_sides: SIDES.iter().position(|s| *s == state.search.sides).unwrap_or(0),
         search_samples: state.search.samples,
         search_sections_only: state.search.sections_only,
+        search_color: state.search.color,
+        search_similarity: state.search.similarity,
+        search_retries: state.search.retries,
+        picking: session.is_some_and(|s| s.mode == CropMode::Pick),
         crop_multiple: MULTIPLES.iter().position(|m| *m == state.multiple).unwrap_or(0),
         crop_multiple_free: state.resize_sets_size(),
         orientation: state.orientation(),

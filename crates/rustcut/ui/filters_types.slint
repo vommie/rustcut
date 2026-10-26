@@ -25,6 +25,8 @@ export struct FilterTips {
     samples: string,
     sections-only: string,
     multiple: string,
+    similarity: string,
+    retries: string,
     shakiness: string,
     accuracy: string,
     stepsize: string,
@@ -83,6 +85,14 @@ export global Filters {
     in property <int> search-sides;
     in property <string> search-samples: "8";
     in property <bool> search-sections-only: true;
+    // A border color picked in the video (auto-crop looks for it instead of black, P9.14), its tolerance in percent,
+    // and the retries; `picking` = the next click on the video picks.
+    in property <bool> search-has-color;
+    in property <color> search-color;
+    in property <string> search-color-text;
+    in property <string> search-similarity: "10";
+    in property <string> search-retries: "2";
+    in property <bool> picking;
     // The crop's size multiple (0: 2, 1: 4, 2: 8, 3: 16), and whether a Resize after the crop sets the output size
     // (then the crop is free: even pixels only).
     in property <int> crop-multiple;
@@ -175,6 +185,12 @@ export global Filters {
     callback edit-search-samples(string) -> bool;
     callback step-search-samples(int);
     callback set-search-sections-only(bool);
+    callback pick-border-color();
+    callback clear-border-color();
+    callback edit-search-similarity(string) -> bool;
+    callback step-search-similarity(int);
+    callback edit-search-retries(string) -> bool;
+    callback step-search-retries(int);
     callback set-crop-multiple(int);
     // The orientation's buttons: a quarter turn, a mirror of the result.
     callback rotate(/* clockwise */ bool);

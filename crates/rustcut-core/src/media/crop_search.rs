@@ -1,6 +1,8 @@
 //! Where auto-crop looks and what counts as a border (Settings > Filters, the Crop menu; 0.0.48): how dark a border may
 //! be (`cropdetect`'s `limit`, which looks at the brightness only: a colored border needs another way, P9.14), which
-//! sides to crop, how many points of the video to look at, and whether only the sections count.
+//! sides to crop, how many points of the video to look at, and whether only the sections count. A border color picked
+//! in the video (P9.14, D-P9l) is found through `colorkey` + `alphaextract` before `cropdetect` (checked with the real
+//! ffmpeg: white, gray and blue bars); when nothing is found auto-crop tries again with more tolerance.
 
 use serde::{Deserialize, Serialize};
 
@@ -46,6 +48,16 @@ pub struct CropSearch {
     pub samples: u8,
     /// Look only inside the sections (the whole video while there are none).
     pub sections_only: bool,
+    /// The border color picked in the video (RGB; 0.0.52); `None` = dark borders (`limit`).
+    pub color: Option<[u8; 3]>,
+    /// How far a pixel's color may be from `color` and still count as border, in percent (`colorkey`'s similarity).
+    pub similarity: u8,
+    /// More tries when nothing was found, each with the tolerance (`limit` or `similarity`) raised by `step` percent
+    /// up to `max_limit` / `max_similarity` (D-P9l: two more tries, by half).
+    pub retries: u8,
+    pub step: u8,
+    pub max_limit: u8,
+    pub max_similarity: u8,
 }
 
 impl Default for CropSearch {
@@ -55,18 +67,87 @@ impl Default for CropSearch {
             sides: CropSides::All,
             samples: 8,
             sections_only: true,
+            color: None,
+            similarity: 10,
+            retries: 2,
+            step: 50,
+            max_limit: 64,
+            max_similarity: 30,
         }
     }
 }
 
 impl CropSearch {
     pub const MAX_SAMPLES: u8 = 32;
+    pub const MAX_RETRIES: u8 = 5;
 
     /// The values limited to what auto-crop accepts.
     pub fn sanitized(self) -> Self {
         Self {
             samples: self.samples.clamp(1, Self::MAX_SAMPLES),
+            similarity: self.similarity.clamp(1, 100),
+            retries: self.retries.min(Self::MAX_RETRIES),
+            step: self.step.clamp(10, 200),
+            max_limit: self.max_limit.max(1),
+            max_similarity: self.max_similarity.clamp(1, 100),
             ..self
+        }
+    }
+
+    /// The tolerance that grows from try to try: the similarity with a color, else the black limit.
+    pub const fn tolerance(self) -> u8 {
+        if self.color.is_some() {
+            self.similarity
+        } else {
+            self.limit
+        }
+    }
+
+    /// The searches of one auto-crop: this one, then up to `retries` more, each tolerance `step` percent above the one
+    /// before (at least one more) and the last one at the maximum (checked with the real ffmpeg: #303030 bars need a
+    /// black limit near 58, which 24 raised by half twice does not reach); a try that would not raise it is left out.
+    pub fn tries(self) -> Vec<Self> {
+        let max = if self.color.is_some() {
+            self.max_similarity
+        } else {
+            self.max_limit
+        };
+        let mut tries = vec![self];
+        let mut last = self;
+        for retry in 1..=self.retries {
+            let now = u32::from(last.tolerance());
+            let raised = if retry == self.retries {
+                u32::from(max)
+            } else {
+                (now * (100 + u32::from(self.step))).div_ceil(100).max(now + 1)
+            };
+            let next = u8::try_from(raised.min(u32::from(max))).unwrap_or(max);
+            if u32::from(next) <= now {
+                break;
+            }
+            last = if self.color.is_some() {
+                Self {
+                    similarity: next,
+                    ..last
+                }
+            } else {
+                Self { limit: next, ..last }
+            };
+            tries.push(last);
+        }
+        tries
+    }
+
+    /// The detection filters of one sample: `cropdetect`, after `colorkey` + `alphaextract` for a picked color (the
+    /// border turns black, the picture white).
+    pub fn detect_filters(self) -> String {
+        match self.color {
+            Some([r, g, b]) => format!(
+                "format=rgba,colorkey=color=0x{r:02X}{g:02X}{b:02X}:similarity={:.2}:blend=0,alphaextract,\
+                 cropdetect=limit=0.1:round=2:reset=0",
+                f64::from(self.similarity) / 100.0
+            ),
+            None => format!("cropdetect=limit={}:round=2:reset=0", self.limit_fraction()),
         }
     }
 
@@ -156,6 +237,40 @@ mod tests {
             crop_sample_times(None, CROP_SAMPLES, &[(s(7), s(8))]),
             vec![Timestamp::from_millis(7_500)]
         );
+    }
+
+    #[test]
+    fn retries_raise_the_tolerance_by_the_step_up_to_the_maximum() {
+        let black = CropSearch::default();
+        assert_eq!(
+            black.tries().iter().map(|s| s.limit).collect::<Vec<_>>(),
+            vec![24, 36, 64]
+        );
+        let near_max = CropSearch { limit: 60, ..black };
+        assert_eq!(
+            near_max.tries().iter().map(|s| s.limit).collect::<Vec<_>>(),
+            vec![60, 64]
+        );
+        let none = CropSearch { retries: 0, ..black };
+        assert_eq!(none.tries().len(), 1);
+        let white = CropSearch {
+            color: Some([255, 255, 255]),
+            ..black
+        };
+        assert_eq!(
+            white.tries().iter().map(|s| s.similarity).collect::<Vec<_>>(),
+            vec![10, 15, 30]
+        );
+        let three = CropSearch { retries: 3, ..black };
+        assert_eq!(
+            three.tries().iter().map(|s| s.limit).collect::<Vec<_>>(),
+            vec![24, 36, 54, 64]
+        );
+        assert_eq!(
+            white.detect_filters(),
+            "format=rgba,colorkey=color=0xFFFFFF:similarity=0.10:blend=0,alphaextract,cropdetect=limit=0.1:round=2:reset=0"
+        );
+        assert_eq!(black.detect_filters(), "cropdetect=limit=0.094:round=2:reset=0");
     }
 
     #[test]

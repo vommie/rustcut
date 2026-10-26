@@ -23,6 +23,8 @@ pub(super) fn tips() -> FilterTips {
         samples: t("filters.crop_search.samples"),
         sections_only: t("filters.crop_search.sections_only"),
         multiple: t("filters.crop_multiple"),
+        similarity: t("filters.crop_search.similarity"),
+        retries: t("filters.crop_search.retries"),
         shakiness: t("filters.deshake.shakiness"),
         accuracy: t("filters.deshake.accuracy"),
         stepsize: t("filters.deshake.stepsize"),
@@ -94,6 +96,14 @@ impl FiltersBridge {
         f.set_search_sides(index(card.search_sides));
         f.set_search_samples(card.search_samples.to_string().into());
         f.set_search_sections_only(card.search_sections_only);
+        let color = card.search_color;
+        f.set_search_has_color(color.is_some());
+        let [r, g, b] = color.unwrap_or_default();
+        f.set_search_color(slint::Color::from_rgb_u8(r, g, b));
+        f.set_search_color_text(format!("#{r:02X}{g:02X}{b:02X}").into());
+        f.set_search_similarity(card.search_similarity.to_string().into());
+        f.set_search_retries(card.search_retries.to_string().into());
+        f.set_picking(card.picking);
         f.set_crop_multiple(index(card.crop_multiple));
         f.set_crop_multiple_free(card.crop_multiple_free);
         // The glyph shows the result (turns, then a mirror left to right); the buttons show the mirrors as set.
@@ -138,9 +148,11 @@ impl FiltersBridge {
         };
         let p = view.picture();
         let crop = st.crop();
-        let k = view.kept_rect(crop);
+        let picking = session.mode == CropMode::Pick;
+        // Picking shows the whole picture without handles: a click picks, it does not drag.
+        let k = if picking { p } else { view.kept_rect(crop) };
         o.set_active(true);
-        o.set_quick(session.mode == CropMode::Quick);
+        o.set_quick(session.mode != CropMode::Edit);
         o.set_picture_x(p.x);
         o.set_picture_y(p.y);
         o.set_picture_width(p.width);
@@ -151,7 +163,7 @@ impl FiltersBridge {
         o.set_kept_height(k.height);
         o.set_handle(session.active_handle().map_or(-1, input::handle_index));
         o.set_dragging(session.dragging());
-        let kept = view.shown_crop(crop).kept(view.shown_size());
+        let kept = view.shown_crop(crop).kept(view.shown_size()).filter(|_| !picking);
         o.set_size_text(
             kept.map(|s| format!("{}×{}", s.width, s.height))
                 .unwrap_or_default()
@@ -162,6 +174,7 @@ impl FiltersBridge {
             match session.mode {
                 CropMode::Edit => "Drag a corner, an edge or the area (Shift keeps the ratio) · Enter or a double click keeps · Esc restores",
                 CropMode::Quick => "Ctrl held: drag the nearest edge or corner · Esc restores",
+                CropMode::Pick => "Click a border to pick its color for auto-crop · Esc cancels",
             }
             .into(),
         );

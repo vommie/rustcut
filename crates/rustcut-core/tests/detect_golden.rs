@@ -15,7 +15,8 @@ use std::process::Command;
 
 use rustcut_core::edit::{Crop, Filter, FilterChain, FilterKind, LavfiTarget, Orientation, Size};
 use rustcut_core::media::{
-    CROP_SAMPLES, CropSearch, CropSides, DetectOptions, Interlacing, crop_sample_times, detect_crop, detect_interlace,
+    CROP_SAMPLES, CropSearch, CropSides, DetectOptions, Interlacing, crop_sample_times, detect_crop,
+    detect_crop_retrying, detect_interlace, pick_color,
 };
 use rustcut_core::time::Timestamp;
 
@@ -151,6 +152,69 @@ fn auto_crop_options_dark_gray_bars_sides_and_sections() {
         &[(Timestamp::from_millis(2_200), Timestamp::from_millis(3_800))],
     );
     assert_eq!(detect(gray, &black), Crop::default());
+}
+
+#[test]
+fn retries_find_dark_gray_bars_and_a_picked_color_finds_white_ones() {
+    let dir = tempfile::tempdir().unwrap();
+    let rt = runtime();
+    let whole = crop_sample_times(Some(Timestamp::from_secs(6)), CROP_SAMPLES, &[]);
+    let retry = |clip: &Path, search: CropSearch| {
+        rt.block_on(detect_crop_retrying(
+            clip,
+            Size::new(640, 480),
+            &whole,
+            "",
+            &search,
+            &DetectOptions::default(),
+        ))
+        .unwrap()
+    };
+    // The #303030 bars of the test above: the default limit 24 finds nothing, nor does 36; the last try at the maximum
+    // (64) does (D-P9l, D-P9w).
+    let gray = boxed(
+        dir.path(),
+        "gray.mp4",
+        "crop=w=600:x=20,drawbox=color=0x8090a0:t=fill,pad=w=640:h=480:x=20:y=62:color=0x303030",
+    );
+    let found = retry(&gray, CropSearch::default());
+    assert_eq!(
+        (found.crop, found.tries, found.search.limit),
+        (Crop::new(62, 20, 62, 20), 3, 64)
+    );
+    let once = retry(
+        &gray,
+        CropSearch {
+            retries: 0,
+            ..CropSearch::default()
+        },
+    );
+    assert_eq!((once.crop, once.tries), (Crop::default(), 1));
+
+    // White bars: the color picked at a border pixel finds them at once.
+    let white = boxed(
+        dir.path(),
+        "white.mp4",
+        "crop=w=600:x=20,drawbox=color=0x8090a0:t=fill,pad=w=640:h=480:x=20:y=62:color=white",
+    );
+    let color = rt
+        .block_on(pick_color(
+            &white,
+            Timestamp::from_secs(1),
+            "",
+            (300, 10),
+            &DetectOptions::default(),
+        ))
+        .unwrap();
+    assert!(color.iter().all(|c| *c >= 250), "{color:?}");
+    let picked = CropSearch {
+        color: Some(color),
+        ..CropSearch::default()
+    };
+    let found = retry(&white, picked);
+    assert_eq!((found.crop, found.tries), (Crop::new(62, 20, 62, 20), 1));
+    // Without the color the white bars are picture.
+    assert_eq!(retry(&white, CropSearch::default()).crop, Crop::default());
 }
 
 #[test]

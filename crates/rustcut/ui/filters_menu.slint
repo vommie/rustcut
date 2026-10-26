@@ -194,8 +194,73 @@ component CropMenu inherits VerticalLayout {
     }
 
     MenuRow {
+        label: "Border";
+        tooltip: "What auto-crop cuts: black (dark) borders, or the color you pick at a border in the video (white, gray, any color).";
+
+        TooltipArea {
+            width: 64px;
+            text: Filters.search-has-color ? "Borders of the color " + Filters.search-color-text : "Dark borders (black up to the limit)";
+
+            Rectangle {
+                y: (parent.height - 22px) / 2;
+                height: 22px;
+                border-radius: 4px;
+                border-width: 1px;
+                border-color: Theme.border;
+                background: Filters.search-has-color ? Filters.search-color : Theme.background;
+
+                if !Filters.search-has-color: Text {
+                    text: "Dark";
+                    color: Theme.text-muted;
+                    font-size: 11px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+
+            IconButton {
+                icon: IconId.color-pick;
+                checked: Filters.picking;
+                enabled: Filters.has-media;
+                tooltip: "Pick a border's color: click a border in the video (auto-crop then looks for that color)";
+                clicked => { Filters.pick-border-color(); }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+
+            IconButton {
+                icon: IconId.close;
+                enabled: Filters.search-has-color;
+                tooltip: "Back to dark borders";
+                clicked => { Filters.clear-border-color(); }
+            }
+        }
+    }
+
+    if Filters.search-has-color: MenuRow {
+        label: "Color tolerance";
+        tooltip: Filters.tips.similarity;
+
+        NumberField {
+            width: 70px;
+            text: Filters.search-similarity;
+            unit: "%";
+            tooltip: Filters.tips.similarity;
+            committed(text) => { return Filters.edit-search-similarity(text); }
+            stepped(steps) => { Filters.step-search-similarity(steps); }
+        }
+    }
+
+    MenuRow {
         label: "Black up to";
         tooltip: Filters.tips.limit;
+        enabled: !Filters.search-has-color;
 
         PlayerSeekBar {
             width: 120px;
@@ -237,6 +302,19 @@ component CropMenu inherits VerticalLayout {
             tooltip: Filters.tips.samples;
             committed(text) => { return Filters.edit-search-samples(text); }
             stepped(steps) => { Filters.step-search-samples(steps); }
+        }
+    }
+
+    MenuRow {
+        label: "Retries";
+        tooltip: Filters.tips.retries;
+
+        NumberField {
+            width: 70px;
+            text: Filters.search-retries;
+            tooltip: Filters.tips.retries;
+            committed(text) => { return Filters.edit-search-retries(text); }
+            stepped(steps) => { Filters.step-search-retries(steps); }
         }
     }
 

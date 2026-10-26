@@ -80,6 +80,7 @@ ratio_landscape = { tabler = "rectangle", doc = "A landscape aspect ratio (Setti
 ratio_portrait = { tabler = "rectangle-vertical", doc = "A portrait aspect ratio" }
 ratio_square = { tabler = "square", doc = "A square aspect ratio" }
 ratio_add = { tabler = "plus", doc = "Add an aspect ratio" }
+color_pick = { tabler = "color-picker", doc = "Pick a border color in the video (auto-crop)" }
 deshake_shakiness = { tabler = "wave-sine", doc = "Deshake: how shaky the video is" }
 deshake_accuracy = { tabler = "target", doc = "Deshake: detection accuracy" }
 deshake_stepsize = { tabler = "grid-dots", doc = "Deshake: search step" }

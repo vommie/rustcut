@@ -147,6 +147,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Auto-crop also finds borders of any color (0.0.52, your UI review note 13#1): in the Crop filter's menu, "Border"
+  has a pipette; click it, then a border in the video, and auto-crop looks for that color (white, gray, blue bars)
+  instead of black. "Color tolerance" says how close a pixel must be; × goes back to dark borders. The color belongs to
+  the video (kept with "keep"), never to the defaults.
+- Auto-crop tries again when it finds nothing (0.0.52, your note 13#1): "Retries" (2 by default) in the Crop menu and
+  Settings > Filters > Auto-crop, each try with more tolerance ("Raise by", 50 %), the last one at the maximum ("Most
+  black" 64, "Most color tolerance" 30 %). Dark gray (#303030) bars are now found without changing anything. The
+  message says which try found them. `config.toml` gets the new `[filters.crop_search]` values; older files load with
+  these defaults.
+
 - The crop's size can stay divisible by 2, 4, 8 or 16 (0.0.51, your UI review note 13): the Crop filter's menu and
   Settings > Filters > Crop have "Divisible by" (2 by default, what every encoder needs). Dragging the crop, the ratio
   button and auto-crop keep its width and height multiples of it; typed edges stay exact. Choosing a number fits the

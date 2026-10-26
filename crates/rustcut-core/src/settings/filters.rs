@@ -61,7 +61,11 @@ impl FilterDefaults {
     /// The values limited to what the filters accept.
     pub fn sanitized(&self) -> Self {
         Self {
-            crop_search: self.crop_search.sanitized(),
+            // A picked border color belongs to one video, never to the defaults.
+            crop_search: CropSearch {
+                color: None,
+                ..self.crop_search.sanitized()
+            },
             deshake: self.deshake.sanitized(),
             crop_ratios: self.ratios().entries(),
             crop_multiple: crop_multiple(self.crop_multiple),

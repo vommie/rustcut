@@ -50,6 +50,36 @@ pub(super) const fn handle_index(handle: Handle) -> i32 {
     }
 }
 
+/// A number of the auto-crop search that the Crop menu types and steps.
+#[derive(Debug, Clone, Copy)]
+enum Search {
+    Similarity,
+    Retries,
+}
+
+impl Search {
+    const fn range(self) -> std::ops::RangeInclusive<u8> {
+        match self {
+            Self::Similarity => 1..=100,
+            Self::Retries => 0..=CropSearch::MAX_RETRIES,
+        }
+    }
+
+    const fn get(self, search: &CropSearch) -> u8 {
+        match self {
+            Self::Similarity => search.similarity,
+            Self::Retries => search.retries,
+        }
+    }
+
+    const fn set(self, search: &mut CropSearch, value: u8) {
+        match self {
+            Self::Similarity => search.similarity = value,
+            Self::Retries => search.retries = value,
+        }
+    }
+}
+
 /// A typed whole number; empty = `empty`.
 fn number(text: &str, empty: Option<i64>) -> Option<i64> {
     let text = text.trim();
@@ -98,6 +128,40 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
         }
     }));
     f.on_set_only_interlaced(change(&this, FiltersState::set_only_interlaced));
+    let pick = with(&this, |b, ()| b.start_pick());
+    f.on_pick_border_color(move || pick(()));
+    let clear = change(&this, |s, ()| s.set_search(|search| search.color = None));
+    f.on_clear_border_color(move || clear(()));
+    // The color tolerance (percent) and the retries: typed or stepped, inside their ranges.
+    for (which, setter) in [(0, Search::Similarity), (1, Search::Retries)] {
+        let typed = Weak::clone(&this);
+        let edit = move |text: slint::SharedString| -> bool {
+            let Some(bridge) = typed.upgrade() else { return false };
+            let text = text.trim().trim_end_matches('%').trim_end();
+            let Some(value) = text.parse::<u8>().ok().filter(|v| setter.range().contains(v)) else {
+                return false;
+            };
+            bridge.update(|s| s.set_search(|search| setter.set(search, value)));
+            true
+        };
+        let step = change(&this, move |s, steps: i32| {
+            s.set_search(|search| {
+                let value = i32::from(setter.get(search)).saturating_add(steps);
+                let (lo, hi) = (*setter.range().start(), *setter.range().end());
+                setter.set(
+                    search,
+                    u8::try_from(value.clamp(i32::from(lo), i32::from(hi))).unwrap_or(lo),
+                );
+            });
+        });
+        if which == 0 {
+            f.on_edit_search_similarity(edit);
+            f.on_step_search_similarity(step);
+        } else {
+            f.on_edit_search_retries(edit);
+            f.on_step_search_retries(step);
+        }
+    }
     f.on_set_crop_multiple(change(&this, |s, i: i32| {
         if let Some(n) = usize::try_from(i).ok().and_then(|i| view::MULTIPLES.get(i)) {
             s.set_multiple(*n);
@@ -330,6 +394,17 @@ impl FiltersBridge {
     /// The pointer over the video (`kind`: 0 down, 1 up, 2 move), with Ctrl's and Shift's state.
     fn pointer(&self, kind: i32, x: f32, y: f32, control: bool, shift: bool) {
         self.hover.set(Some((x, y)));
+        if self
+            .state
+            .borrow()
+            .crop_session()
+            .is_some_and(|s| s.mode == CropMode::Pick)
+        {
+            if kind == 0 {
+                self.pick_at(x, y);
+            }
+            return;
+        }
         match kind {
             0 => {
                 if control && self.state.borrow().crop_session().is_none() {

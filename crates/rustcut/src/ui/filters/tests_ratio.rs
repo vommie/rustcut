@@ -167,3 +167,38 @@ fn choosing_a_multiple_fits_the_crop_and_counts_as_an_option_of_the_menu() {
     assert_eq!(s.multiple, 2);
     assert_eq!(s.kept().multiple, None, "nothing is kept while keep is off");
 }
+
+#[test]
+fn a_click_while_picking_names_the_pixel_of_the_crops_frame() {
+    use rustcut_core::edit::Orientation;
+
+    use super::geometry::CropView;
+    let hd = Size::new(1920, 1080);
+    // Shown half size: the view's (480.4, 270.9) is the frame's pixel (960, 541); outside the picture there is none.
+    let v = CropView::new(hd, 1.0, Orientation::IDENTITY, 960.0, 540.0).unwrap();
+    assert_eq!(v.frame_point(480.4, 270.9), Some((960, 541)));
+    assert_eq!(v.frame_point(-1.0, 10.0), None);
+    // Turned clockwise after the crop: the pixel maps back to the place it is shown.
+    let turned = CropView::new(hd, 1.0, Orientation::CLOCKWISE, 1080.0, 1920.0).unwrap();
+    let (x, y) = turned.frame_point(100.5, 50.5).unwrap();
+    let one = Crop::new(y, 1920 - x - 1, 1080 - y - 1, x);
+    assert_eq!(turned.shown_crop(one), Crop::new(50, 1080 - 101, 1920 - 51, 100));
+}
+
+#[test]
+fn picking_shows_the_whole_frame_and_leaves_the_crop_as_it_was() {
+    let mut s = editing(&["16:9"]);
+    s.end_crop(false);
+    assert!(s.begin_crop(CropMode::Pick));
+    assert!(super::view::card(&s).picking);
+    assert!(!s.crop_pointer_down(480.0, 270.0), "a click picks, it grabs nothing");
+    s.end_crop(false);
+    assert!(!s.chain().is_enabled(FilterKind::Crop));
+    assert!(!super::view::card(&s).picking);
+    // The picked color is the video's: the menu's options still equal the defaults, and a save leaves it out.
+    s.set_search(|search| search.color = Some([255, 255, 255]));
+    assert!(s.options_are_default(FilterKind::Crop));
+    assert_eq!(s.options_as_defaults(FilterKind::Crop).crop_search.color, None);
+    s.reset_options(FilterKind::Crop);
+    assert_eq!(s.search.color, None);
+}

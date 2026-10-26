@@ -16,6 +16,9 @@ pub enum CropMode {
     Edit,
     /// While Ctrl is held over the video: the nearest edge or corner follows the pointer, no aiming needed.
     Quick,
+    /// The Crop menu's "pick the border color": the whole frame shows, a click picks the color under the pointer
+    /// (P9.14, D-P9l); Escape cancels.
+    Pick,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -141,6 +144,7 @@ impl FiltersState {
         match session.mode {
             CropMode::Edit => view.hit(self.crop(), x, y),
             CropMode::Quick => view.nearest(self.crop(), x, y),
+            CropMode::Pick => None,
         }
     }
 
