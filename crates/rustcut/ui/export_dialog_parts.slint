@@ -1,6 +1,7 @@
 // The parts of the conflict dialog (export_dialog.slint): footer buttons, a choice row, the tab bar, the picture of a
 // file with its placeholders and details, and the rows of the "Similar files" list (user decision Q-X6).
 
+import { TabStrip, TabView } from "tabs.slint";
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { TooltipArea } from "tooltip.slint";
@@ -230,51 +231,21 @@ export component OptionRow inherits Rectangle {
     }
 }
 
-/// The dialog's tabs: a click shows one; the shown tab is underlined.
+/// The dialog's tabs (P9.15, Q-P9.15 scope A: the panels' browser-like tabs): a click shows one; counts are badges.
 export component DialogTabs inherits Rectangle {
-    in property <[string]> titles;
+    in property <[TabView]> tabs;
     in property <int> current;
     callback picked(int);
 
-    height: 28px;
+    height: strip.height;
 
-    Rectangle {
-        y: parent.height - 1px;
-        height: 1px;
-        background: Theme.border;
-    }
-
-    HorizontalLayout {
-        alignment: start;
-        spacing: 2px;
-
-        for title[i] in root.titles: Rectangle {
-            width: label.preferred-width + 22px;
-            border-radius: 4px;
-            background: tab.has-hover && i != root.current ? Theme.surface-hover : transparent;
-
-            label := Text {
-                x: 10px;
-                text: title;
-                color: i == root.current ? Theme.text : Theme.text-muted;
-                font-size: 12px;
-                font-weight: i == root.current ? 700 : 500;
-                horizontal-alignment: left;
-                vertical-alignment: center;
-            }
-
-            Rectangle {
-                visible: i == root.current;
-                y: parent.height - 2px;
-                height: 2px;
-                background: Theme.primary;
-            }
-
-            tab := TouchArea {
-                mouse-cursor: MouseCursor.pointer;
-                clicked => { root.picked(i); }
-            }
-        }
+    strip := TabStrip {
+        width: parent.width;
+        tabs: root.tabs;
+        current: root.current;
+        bar: Theme.surface;
+        panel: Theme.surface-variant;
+        picked(index) => { root.picked(index); }
     }
 }
 

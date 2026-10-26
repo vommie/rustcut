@@ -287,25 +287,59 @@ fn no_resize_next_to_a_collapsed_group() {
 }
 
 #[test]
-fn tabs_shrink_to_fit_their_bar() {
+fn tabs_show_their_titles_then_only_the_selected_one_then_a_count() {
+    use plan::metrics::{OVERFLOW_WIDTH, TAB_ICON_WIDTH, TAB_SPACING};
     let panels = [
         PanelId::TagRate,
         PanelId::MediaInfo,
         PanelId::Logs,
         PanelId::RenderSettings,
     ];
-    let wide = plan::tab_slots(&panels, 2000.0);
-    let narrow = plan::tab_slots(&panels, 200.0);
-    let end = |slots: &[plan::TabSlot]| slots.last().map(|s| s.x + s.width).unwrap();
-    assert!(end(&wide) > 300.0);
-    assert!(end(&narrow) <= 200.0 + 1e-3);
-    // The short tab keeps its width; the long ones are cut to a common width.
-    let short = plan::tab_slots(&[PanelId::TagRate, PanelId::Export, PanelId::MediaInfo], 222.0);
-    assert_eq!(short[2].width, plan::preferred_tab_width("Info"));
-    assert!((short[0].width - short[1].width).abs() < 1e-3);
-    assert!(end(&short) <= 222.0 + 1e-3);
-    assert_eq!(plan::insertion_index(&wide, 0.0), 0);
-    assert_eq!(plan::insertion_index(&wide, 5000.0), 4);
+    let end = |l: &plan::TabLayout| {
+        l.slots
+            .iter()
+            .filter(|s| s.shown)
+            .map(|s| s.x + s.width)
+            .fold(0.0, f32::max)
+    };
+    // Room for everything: every title (Q-P9.15 width C applies only when the tabs do not fit).
+    let wide = plan::tab_slots(&panels, Some(PanelId::Logs), 2000.0);
+    assert!(wide.slots.iter().all(|s| s.titled && s.shown) && wide.overflow_x.is_none());
+    // Less room: only the selected tab has its title, the others their symbols.
+    let all = end(&wide);
+    let medium = plan::tab_slots(&panels, Some(PanelId::Logs), all - 10.0);
+    assert_eq!(
+        medium.slots.iter().map(|s| s.titled).collect::<Vec<_>>(),
+        vec![false, false, true, false]
+    );
+    assert!(medium.slots.iter().all(|s| s.shown));
+    assert!((medium.slots[0].width - TAB_ICON_WIDTH).abs() < 1e-3);
+    // Even less: the selected tab, the symbols that fit in their order, and "+n" for the rest.
+    let logs = plan::preferred_tab_width("Logs");
+    let narrow = plan::tab_slots(
+        &panels,
+        Some(PanelId::Logs),
+        logs + TAB_ICON_WIDTH + OVERFLOW_WIDTH + 2.0 * TAB_SPACING,
+    );
+    assert_eq!(
+        narrow.slots.iter().map(|s| s.shown).collect::<Vec<_>>(),
+        vec![true, false, true, false]
+    );
+    assert_eq!(narrow.hidden(), 2);
+    let button = narrow.overflow_x.unwrap();
+    assert!(
+        (button - end(&narrow) - TAB_SPACING).abs() < 1e-3,
+        "the button follows the last tab"
+    );
+    assert!(
+        narrow
+            .slots
+            .iter()
+            .filter(|s| !s.shown)
+            .all(|s| s.width == 0.0 && (s.x - button).abs() < 1e-3)
+    );
+    assert_eq!(plan::insertion_index(&wide.slots, 0.0), 0);
+    assert_eq!(plan::insertion_index(&wide.slots, 5000.0), 4);
 }
 
 fn frame() -> DockFrame {

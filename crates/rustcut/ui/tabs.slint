@@ -1,0 +1,197 @@
+// Tabs like a browser's (P9.15, the user's tab questionnaire Q-P9.15: design A, counts A, scope A): the selected tab is
+// in its panel's color with rounded top corners and small curves into the panel, so it merges with it; the other tabs
+// lie flat on the darker bar, a thin line between two of them, a light tint under the pointer, dim when disabled. A
+// count is a small badge after the title. `TabFace` only draws (the dock's tabs add their own pointer handling for
+// drag & drop); `TabStrip` is a whole bar for dialogs and the Settings window. No shadows, no gradients (Q-P9.12).
+
+import { Theme } from "styles.slint";
+import { IconId, IconSize, IconSlot } from "icons.slint";
+import { TooltipHost } from "tooltip.slint";
+
+/// One tab of a `TabStrip`: its title, its symbol (`IconId.none` = none), a count for the badge ("" = none).
+export struct TabView {
+    title: string,
+    icon: IconId,
+    count: string,
+    enabled: bool,
+}
+
+export global TabMetrics {
+    // The radius of the selected tab's top corners and of the curves into the panel.
+    out property <length> radius: 7px;
+    out property <length> curve: 6px;
+    // The width of a tab that shows only its symbol (the dock's narrow bars).
+    out property <length> icon-width: 34px;
+}
+
+/// What a tab shows. Its bottom edge lies on the panel's top edge; the selected one is drawn in `panel` (the panel's
+/// color) and reaches into it.
+export component TabFace inherits Rectangle {
+    in property <string> title;
+    in property <IconId> icon: IconId.none;
+    in property <string> count;
+    in property <bool> active;
+    in property <bool> hovered;
+    in property <bool> enabled: true;
+    // The title shows (a narrow bar shows only the symbol of a tab that is not selected).
+    in property <bool> show-title: true;
+    // A thin line at the right edge (between two tabs that are not selected).
+    in property <bool> separator;
+    in property <brush> panel: Theme.surface;
+    in property <length> font-size: 11px;
+
+    // The selected tab: the panel's color, rounded on top, square at the bottom.
+    if root.active: Rectangle {
+        border-top-left-radius: TabMetrics.radius;
+        border-top-right-radius: TabMetrics.radius;
+        background: root.panel;
+    }
+
+    // Its curves into the panel at both bottom corners (the bar's color cut out by a quarter circle).
+    if root.active: Path {
+        x: -TabMetrics.curve;
+        y: root.height - TabMetrics.curve;
+        width: TabMetrics.curve;
+        height: TabMetrics.curve;
+        viewbox-width: 6;
+        viewbox-height: 6;
+        commands: "M 6 0 L 6 6 L 0 6 A 6 6 0 0 0 6 0 Z";
+        fill: root.panel;
+    }
+
+    if root.active: Path {
+        x: root.width;
+        y: root.height - TabMetrics.curve;
+        width: TabMetrics.curve;
+        height: TabMetrics.curve;
+        viewbox-width: 6;
+        viewbox-height: 6;
+        commands: "M 0 0 L 0 6 L 6 6 A 6 6 0 0 1 0 0 Z";
+        fill: root.panel;
+    }
+
+    // A tab that is not selected: a light tint under the pointer.
+    if !root.active && root.hovered && root.enabled: Rectangle {
+        x: 2px;
+        y: 3px;
+        width: parent.width - 4px;
+        height: parent.height - 6px;
+        border-radius: 5px;
+        background: Theme.surface-hover.with-alpha(0.7);
+    }
+
+    if root.separator: Rectangle {
+        x: parent.width - 1px;
+        y: (parent.height - self.height) / 2;
+        width: 1px;
+        height: 14px;
+        background: Theme.border;
+    }
+
+    Rectangle {
+        opacity: root.enabled ? 1 : 0.4;
+
+    HorizontalLayout {
+        padding-left: root.show-title ? 10px : 0px;
+        padding-right: root.show-title ? 10px : 0px;
+        spacing: 6px;
+        alignment: root.show-title ? start : center;
+
+        if root.icon != IconId.none: IconSlot {
+            icon: root.icon;
+            size: IconSize.md;
+            color: root.active ? Theme.primary : Theme.text-muted;
+        }
+
+        if root.show-title: Text {
+            text: root.title;
+            font-size: root.font-size;
+            font-weight: root.active ? 700 : 400;
+            color: root.active ? Theme.text : Theme.text-muted;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+
+        if root.show-title && root.count != "": VerticalLayout {
+            alignment: center;
+
+            Rectangle {
+                width: Math.max(18px, badge.preferred-width + 10px);
+                height: 16px;
+                border-radius: 8px;
+                background: root.active ? Theme.primary.with-alpha(0.25) : Theme.surface-hover;
+
+                badge := Text {
+                    text: root.count;
+                    font-size: 10px;
+                    font-weight: 600;
+                    color: root.active ? Theme.text : Theme.text-muted;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+    }
+}
+
+/// A bar of tabs (dialogs, the Settings window): a click shows one. The bar is darker than the panel below it, which
+/// starts at the bar's bottom edge.
+export component TabStrip inherits Rectangle {
+    in property <[TabView]> tabs;
+    in property <int> current;
+    in property <brush> panel: Theme.surface;
+    in property <brush> bar: Theme.background;
+    callback picked(int);
+
+    height: 34px;
+    background: root.bar;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+
+    // The panel's top edge; the selected tab covers it.
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.border;
+    }
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-top: 5px;
+        alignment: start;
+        spacing: 2px;
+
+        for tab[i] in root.tabs: Rectangle {
+            // As wide as the bold title needs, so the tab does not grow when it is selected.
+            width: 20px + (tab.icon != IconId.none ? IconSize.md + 6px : 0px) + measure.preferred-width
+                + (tab.count != "" ? 30px : 0px);
+
+            measure := Text {
+                visible: false;
+                text: tab.title;
+                font-size: 12px;
+                font-weight: 700;
+            }
+
+            TabFace {
+                title: tab.title;
+                icon: tab.icon;
+                count: tab.count;
+                active: i == root.current;
+                hovered: touch.has-hover;
+                enabled: tab.enabled;
+                separator: i != root.current && i + 1 != root.current && i + 1 < root.tabs.length;
+                panel: root.panel;
+                font-size: 12px;
+            }
+
+            touch := TouchArea {
+                enabled: tab.enabled;
+                mouse-cursor: i == root.current ? MouseCursor.default : MouseCursor.pointer;
+                clicked => { root.picked(i); }
+            }
+        }
+    }
+}

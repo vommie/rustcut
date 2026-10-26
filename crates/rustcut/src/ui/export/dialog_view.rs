@@ -2,29 +2,42 @@
 //! choices (each with the key that picks it), the queued jobs and the footer. The previews have their own models
 //! (`previews.rs`), filled in place as the files are read; closing the dialog stops them.
 
-use slint::{ComponentHandle as _, ModelRc, SharedString, VecModel};
+use slint::{ComponentHandle as _, ModelRc, VecModel};
 
 use super::ExportBridge;
 use super::dialog::{Choice, ConflictDialog, Tab};
 use super::save::Pending;
+use crate::icons::Icon;
 use crate::ui::queue::title as state_title;
-use crate::{ConflictJobView, ConflictOptionView, Export, GlobalTooltip};
+use crate::{ConflictJobView, ConflictOptionView, Export, GlobalTooltip, TabView};
 
-/// The titles of the tabs with what they hold ("Similar files (12)").
-pub(super) fn tab_titles(dialog: &ConflictDialog) -> Vec<String> {
+/// The tabs with what they hold: title, the count for its badge ("" = none) and symbol (P9.15, Q-P9.15 counts A).
+pub(super) fn tab_labels(dialog: &ConflictDialog) -> Vec<(String, String, Icon)> {
     dialog
         .tabs()
         .into_iter()
         .map(|tab| match tab {
-            Tab::Similar => format!("{} ({})", tab.title(), dialog.series.len() + dialog.others.len()),
-            Tab::Queue => format!("{} ({})", tab.title(), dialog.conflicts.queued.len()),
-            Tab::Known => format!(
-                "{} ({})",
-                tab.title(),
-                dialog.known.as_ref().map_or(0, |k| k.files.len())
+            Tab::Similar => (
+                tab.title().to_owned(),
+                (dialog.series.len() + dialog.others.len()).to_string(),
+                Icon::TabSimilar,
             ),
-            Tab::Decision if dialog.browse => format!("Target ({})", dialog.target_count()),
-            Tab::Decision => tab.title().to_owned(),
+            Tab::Queue => (
+                tab.title().to_owned(),
+                dialog.conflicts.queued.len().to_string(),
+                Icon::PanelQueue,
+            ),
+            Tab::Known => (
+                tab.title().to_owned(),
+                dialog.known.as_ref().map_or(0, |k| k.files.len()).to_string(),
+                Icon::TabKnown,
+            ),
+            Tab::Decision if dialog.browse => (
+                "Target".to_owned(),
+                dialog.target_count().to_string(),
+                Icon::ExistingFile,
+            ),
+            Tab::Decision => (tab.title().to_owned(), String::new(), Icon::TabDecision),
         })
         .collect()
 }
@@ -80,8 +93,16 @@ impl ExportBridge {
         e.set_dialog_file_tail(format!("{separator}{}", dialog.file).into());
         e.set_dialog_folder(folder.into());
         e.set_dialog_has_existing(c.exists.is_some());
-        let titles: Vec<SharedString> = tab_titles(dialog).into_iter().map(Into::into).collect();
-        e.set_dialog_tabs(ModelRc::new(VecModel::from(titles)));
+        let tabs: Vec<TabView> = tab_labels(dialog)
+            .into_iter()
+            .map(|(title, count, icon)| TabView {
+                title: title.into(),
+                icon: icon.to_slint(),
+                count: count.into(),
+                enabled: true,
+            })
+            .collect();
+        e.set_dialog_tabs(ModelRc::new(VecModel::from(tabs)));
         let tabs = dialog.tabs();
         e.set_dialog_tab(
             tabs.iter()

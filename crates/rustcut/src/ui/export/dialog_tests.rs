@@ -308,13 +308,16 @@ fn tabs_switch_and_wrap_and_a_tab_without_content_is_refused() {
 
 #[test]
 fn the_files_dialog_opens_on_the_similar_files_when_the_target_is_free() {
-    // Review 48 (P9.3): nothing has the name yet, so the dialog shows the similar files and "Target (0)".
+    // Review 48 (P9.3): nothing has the name yet, so the dialog shows the similar files and "Target" with 0 (a badge
+    // since P9.15).
     let st = export(false);
     let free = dialog(&st, Conflicts::default(), Vec::new()).browsing();
     assert_eq!((free.tab, free.target_count()), (Tab::Similar, 0));
     assert_eq!(
-        super::dialog_view::tab_titles(&free).first().map(String::as_str),
-        Some("Target (0)")
+        super::dialog_view::tab_labels(&free)
+            .first()
+            .map(|(title, count, _)| (title.as_str(), count.as_str())),
+        Some(("Target", "0"))
     );
     let taken = dialog(&st, exists(), Vec::new()).browsing();
     assert_eq!((taken.tab, taken.target_count()), (Tab::Decision, 1));

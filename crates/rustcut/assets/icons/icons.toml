@@ -81,6 +81,13 @@ ratio_portrait = { tabler = "rectangle-vertical", doc = "A portrait aspect ratio
 ratio_square = { tabler = "square", doc = "A square aspect ratio" }
 ratio_add = { tabler = "plus", doc = "Add an aspect ratio" }
 color_pick = { tabler = "color-picker", doc = "Pick a border color in the video (auto-crop)" }
+tab_decision = { tabler = "arrows-split-2", doc = "The conflict dialog's Decision tab" }
+tab_similar = { tabler = "files", doc = "The conflict dialog's Similar files tab" }
+tab_known = { tabler = "versions", doc = "The known-source dialog's Made from it tab" }
+tab_look = { tabler = "palette", doc = "Settings > Messages: Look & behavior" }
+tab_kinds = { tabler = "list-check", doc = "Settings > Messages: Message kinds" }
+tab_muted = { tabler = "bell-off", doc = "Settings > Messages: Muted" }
+tab_file = { tabler = "file-settings", doc = "A settings file's tab (the newer-file dialog)" }
 deshake_shakiness = { tabler = "wave-sine", doc = "Deshake: how shaky the video is" }
 deshake_accuracy = { tabler = "target", doc = "Deshake: detection accuracy" }
 deshake_stepsize = { tabler = "grid-dots", doc = "Deshake: search step" }

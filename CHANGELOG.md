@@ -205,6 +205,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Every tab bar looks like a browser's (0.0.53, your UI review note 01#2 and your tab questionnaire): the selected tab
+  is in its panel's color with rounded top corners and small curves into the panel, so it merges with it; the other
+  tabs lie flat on the darker bar with a thin line between them and a light tint under the pointer. When the tabs do
+  not fit, only the selected one keeps its title and the others show their symbols (the tooltip names them); when
+  even that is too wide, a "+n" button lists the rest. A dragged tab lifts and follows the pointer while the others
+  move aside. The same tabs are in the dialogs (counts as small badges: "Made from it 10") and in Settings > Messages.
+
 - Dragging the crop on the video is free; hold Shift to keep its ratio (0.0.50, your note 13): the chosen ratio while
   the crop has it, else the crop's own. The aspect-ratio choice in the Filters card is gone (your note 13#2); the
   ratio you chose is remembered, and the one an older version kept (`crop_aspect` in `ui-state.toml`) is taken over as
