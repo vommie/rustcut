@@ -1,11 +1,16 @@
-//! The Filters card and cropping on the video. The pure parts are `state` (the chain and every card operation, the
-//! preview text, the crop session), `geometry` (frame pixels <-> video area through rotation, mirrors, pixel aspect
-//! and letterboxing) and `view` (what the card shows). This bridge keeps the state on the UI thread, handles the
-//! callbacks (`input.rs`), sends the preview's video filters to the player's command thread, and runs the picture
-//! checks (auto-crop, interlace) on the tokio runtime; their results come back through `slint::spawn_local`, checked
-//! against the file they were made for.
+//! The Filters card, its options menus and cropping on the video. The pure parts are `state` (the chain and every card
+//! operation, the preview text, the crop session), `options` (what each menu shows, reset, compared with and saved as
+//! the defaults), `geometry` (frame pixels <-> video area through rotation, mirrors, pixel aspect and letterboxing) and
+//! `view` (what the card and the menus show). This bridge keeps the state on the UI thread, handles the callbacks
+//! (`input.rs`, `menu.rs`, `drag.rs`), shows the state (`publish.rs`), sends the preview's video filters to the
+//! player's command thread, and runs the picture checks (auto-crop, interlace) on the tokio runtime; their results come
+//! back through `slint::spawn_local`, checked against the file they were made for.
 
+mod drag;
 mod input;
+mod menu;
+mod options;
+mod publish;
 mod tasks;
 
 pub mod geometry;
@@ -15,6 +20,8 @@ pub mod view;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_menu;
 
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
@@ -30,10 +37,11 @@ use rustcut_player::VideoFilter;
 use slint::{ComponentHandle as _, ModelRc, SharedString, VecModel};
 
 use self::state::{CropMode, FiltersState, InterlaceHint, Source};
+use crate::app::SettingsWriter;
+use crate::ui::menu::ContextMenuBridge;
 use crate::ui::notices::{self, Kind, Level, Notice};
 use crate::ui::player::PlayerBridge;
-use crate::util::model::sync;
-use crate::{CropOverlay, FilterRowView, Filters, MainWindow};
+use crate::{FilterRowView, Filters, MainWindow};
 
 /// How long Ctrl must be held over the video before the quick crop shows (a shortcut like Ctrl+O is faster than this).
 const QUICK_DELAY: Duration = Duration::from_millis(220);
@@ -76,6 +84,26 @@ pub struct FiltersBridge {
     quick_timer: slint::Timer,
     /// The sections' time ranges (from the editor), for auto-crop.
     sections: RefCell<Option<SectionsSource>>,
+    /// "Save as default" of the menus writes `[filters]` (Settings > Filters).
+    writer: SettingsWriter,
+    /// The rows' context menu and the resize ratio menu.
+    menu: Weak<ContextMenuBridge>,
+    /// A row being dragged (P9.4), and the rows' shifts meanwhile.
+    drag: RefCell<Option<drag::FiltersDrag>>,
+    drag_shifts: Rc<VecModel<f32>>,
+    /// The filter whose options menu is open, and whether menus stay open while the pointer works elsewhere (kept).
+    menu_kind: Cell<Option<FilterKind>>,
+    menu_pinned: Cell<bool>,
+}
+
+/// What the bridge needs besides the window (the app owns them).
+pub struct Parts<'a> {
+    pub player: &'a Rc<PlayerBridge>,
+    pub runtime: tokio::runtime::Handle,
+    pub settings: &'a Settings,
+    pub export: &'a ExportPanelState,
+    pub writer: SettingsWriter,
+    pub menu: &'a Rc<ContextMenuBridge>,
 }
 
 /// Where the bridge reads the sections' time ranges.
@@ -83,13 +111,15 @@ type SectionsSource = Box<dyn Fn() -> Vec<(Timestamp, Timestamp)>>;
 
 impl FiltersBridge {
     /// Takes over the Filters card and the crop overlay. The app owns the only strong reference.
-    pub fn install(
-        window: &MainWindow,
-        player: &Rc<PlayerBridge>,
-        runtime: tokio::runtime::Handle,
-        settings: &Settings,
-        export: &ExportPanelState,
-    ) -> Rc<Self> {
+    pub fn install(window: &MainWindow, parts: Parts<'_>) -> Rc<Self> {
+        let Parts {
+            player,
+            runtime,
+            settings,
+            export,
+            writer,
+            menu,
+        } = parts;
         let state = FiltersState::new(
             settings.filters.clone(),
             export.preview_filters,
@@ -118,14 +148,23 @@ impl FiltersBridge {
             hover: Cell::new(None),
             quick_timer: slint::Timer::default(),
             sections: RefCell::new(None),
+            writer,
+            menu: Rc::downgrade(menu),
+            drag: RefCell::new(None),
+            drag_shifts: Rc::new(VecModel::default()),
+            menu_kind: Cell::new(None),
+            menu_pinned: Cell::new(export.filter_menu_pinned),
         });
         let filters = window.global::<Filters<'_>>();
         filters.set_rows(ModelRc::from(Rc::clone(&bridge.rows)));
+        filters.set_tips(publish::tips());
         filters.set_deinterlacers(strings(view::DEINTERLACERS.iter().map(|d| d.ffmpeg_name())));
         filters.set_algorithms(strings(view::ALGORITHMS.iter().map(|a| a.ffmpeg_flag())));
         filters.set_aspects(strings(CropAspect::ALL.iter().map(|a| a.label())));
         filters.set_interpolations(strings(["Bicubic", "Bilinear", "Linear", "None"].into_iter()));
         input::connect(&bridge, window);
+        menu::connect(&bridge, window);
+        drag::connect(&bridge, window);
         let this = Rc::downgrade(&bridge);
         crate::ui::media_info::add_probe_hook(move |info| {
             if let Some(bridge) = this.upgrade() {
@@ -202,6 +241,7 @@ impl FiltersBridge {
         export.filters = st.kept_chain();
         export.crop_search = st.kept_search();
         export.crop_aspect = st.aspect;
+        export.filter_menu_pinned = self.menu_pinned.get();
     }
 
     /// Shows the keys of the filter actions in the card's tooltips.
@@ -348,123 +388,6 @@ impl FiltersBridge {
             player.set_video_filter(filter.clone());
         }
         *self.sent.borrow_mut() = filter;
-    }
-
-    fn publish_card(&self) {
-        let Some(window) = self.window.upgrade() else { return };
-        let card = view::card(&self.state.borrow());
-        let f = window.global::<Filters<'_>>();
-        f.set_has_media(card.has_media);
-        f.set_preview(card.preview);
-        f.set_keep(card.keep);
-        f.set_output(card.output.as_str().into());
-        f.set_output_warning(card.output_warning);
-        sync(
-            &self.rows,
-            card.rows
-                .iter()
-                .map(|r| FilterRowView {
-                    kind: kind_id(r.kind).into(),
-                    title: r.kind.label().into(),
-                    tooltip: kind_tooltip(r.kind).into(),
-                    enabled: r.enabled,
-                    can_up: r.can_up,
-                    can_down: r.can_down,
-                })
-                .collect(),
-        );
-        f.set_deinterlacer(index(card.deinterlacer));
-        f.set_field_rate(card.field_rate);
-        f.set_field_rate_supported(card.field_rate_supported);
-        f.set_interlace_hint(card.interlace_hint.as_str().into());
-        f.set_interlace_level(card.interlace_level as i32);
-        f.set_interlace_detail(card.interlace_detail.as_str().into());
-        f.set_interlace_rows(ModelRc::new(VecModel::from(
-            card.interlace_rows
-                .iter()
-                .map(|(label, value)| crate::TipRow {
-                    label: label.as_str().into(),
-                    value: value.as_str().into(),
-                    heading: false,
-                })
-                .collect::<Vec<_>>(),
-        )));
-        let c = card.crop;
-        f.set_crop_edges(strings([c.top, c.right, c.bottom, c.left].iter().map(u32::to_string)));
-        f.set_crop_editing(card.crop_editing);
-        f.set_can_edit_crop(card.can_edit_crop);
-        f.set_auto_crop_running(card.auto_crop_running);
-        f.set_aspect(index(card.aspect));
-        // The glyph shows the result (turns, then a mirror left to right); the buttons show the mirrors as set.
-        let (turns, mirrored) = card.orientation.orientation().turns_and_mirror();
-        f.set_orientation_turns(i32::from(turns));
-        f.set_orientation_mirrored(mirrored);
-        f.set_orientation_turn(i32::from(card.orientation.normalized().turns));
-        f.set_orientation_mirror_horizontal(card.orientation.mirror_horizontal);
-        f.set_orientation_mirror_vertical(card.orientation.mirror_vertical);
-        f.set_orientation_label(card.orientation.label().into());
-        f.set_resize_width(card.resize_width.as_str().into());
-        f.set_resize_height(card.resize_height.as_str().into());
-        f.set_resize_auto_width(card.resize_auto_width.as_str().into());
-        f.set_resize_auto_height(card.resize_auto_height.as_str().into());
-        f.set_algorithm(index(card.resize_algorithm));
-        let d = card.deshake;
-        f.set_deshake_values(strings(
-            [
-                d.shakiness.to_string(),
-                d.accuracy.to_string(),
-                d.stepsize.to_string(),
-                d.smoothing.to_string(),
-                d.zoom.to_string(),
-            ]
-            .into_iter(),
-        ));
-        f.set_deshake_optzoom(i32::from(d.optzoom));
-        f.set_deshake_borders(i32::from(d.crop == rustcut_core::edit::DeshakeCrop::Keep));
-        f.set_deshake_interpolation(input::interpolation_index(d.interpolation));
-        f.set_deshake_tripod(d.tripod);
-    }
-
-    fn publish_overlay(&self) {
-        let Some(window) = self.window.upgrade() else { return };
-        let st = self.state.borrow();
-        let o = window.global::<CropOverlay<'_>>();
-        let (Some(session), Some(view)) = (st.crop_session(), st.crop_view()) else {
-            o.set_active(false);
-            return;
-        };
-        let p = view.picture();
-        let crop = st.crop();
-        let k = view.kept_rect(crop);
-        o.set_active(true);
-        o.set_quick(session.mode == CropMode::Quick);
-        o.set_picture_x(p.x);
-        o.set_picture_y(p.y);
-        o.set_picture_width(p.width);
-        o.set_picture_height(p.height);
-        o.set_kept_x(k.x);
-        o.set_kept_y(k.y);
-        o.set_kept_width(k.width);
-        o.set_kept_height(k.height);
-        o.set_handle(session.active_handle().map_or(-1, input::handle_index));
-        o.set_dragging(session.dragging());
-        let kept = view.shown_crop(crop).kept(view.shown_size());
-        let lock = match st.aspect {
-            CropAspect::Free => String::new(),
-            aspect => format!(" · {}", aspect.label()),
-        };
-        o.set_size_text(
-            kept.map(|s| format!("{}×{}{lock}", s.width, s.height))
-                .unwrap_or_default()
-                .into(),
-        );
-        o.set_hint(
-            match session.mode {
-                CropMode::Edit => "Drag a corner, an edge or the area · Enter keeps · Esc restores",
-                CropMode::Quick => "Ctrl held: drag the nearest edge or corner · Esc restores",
-            }
-            .into(),
-        );
     }
 }
 

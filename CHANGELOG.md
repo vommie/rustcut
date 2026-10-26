@@ -147,6 +147,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Every filter but Orientation has an options menu (0.0.49, your filter questionnaire): the adjustments button at the
+  end of its row opens a bubble beside it, with an arrow to the button, the options in groups and every change at
+  once. Deinterlace: the deinterlacer, "Output" (frames or fields), "Field order", "Only interlaced frames", and what
+  the interlace check counted with "Analyze Again". Crop: how auto-crop searches ("Black up to", "Search", "Sample
+  points", "Only inside the sections"). Deshake: every value, each labeled by a small symbol whose tooltip names and
+  explains it. Resize: the scaler. The menu's header jumps to Settings > Filters, pins the menu (it then stays open
+  while you work on the video or in other panels; remembered across restarts), saves the options as the defaults for
+  every new video, and resets them to those defaults (held; both are off while the options are the defaults). A click
+  outside, Escape, × or the button again closes it.
+- Filters move by drag & drop (0.0.49, your UI review note 12#1): drag a row by its grip or its free space; the other
+  rows make room, Escape cancels. A right click on a row offers Switch On/Off, Options, Move Up, Move Down and Reset
+  Options (held).
+
 - Settings > Filters has new defaults (0.0.48, your filter questionnaire): Deinterlace "Output" (frames or fields),
   "Field order" (auto, top or bottom first) and "Only interlaced frames"; a new "Auto-crop" card with "Black up to"
   (how bright a border may be: 24 finds black bars, around 50 also dark gray ones), "Search" (all edges, top and
@@ -162,6 +175,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   "Play and pause" switches either off (both are on; older settings files load unchanged).
 
 ### Changed
+
+- The Filters card is rebuilt (0.0.49, layout A of your filter questionnaire): one row per filter with its name as the
+  on/off button (filled and bold when on), its values always visible (dimmed while it is off; changing them keeps it
+  off), and rows of fixed heights, so nothing jumps when a filter switches. Crop has two lines: its tools with the
+  size it keeps, then its four edges. Deshake shows its main values in one dim line. The output size, the preview,
+  keep and reset sit in the card's header; reset has a backspace symbol instead of the one that looked like reload.
+  Resize shows what an empty side comes to as a dim number instead of "auto" (your note 13#3), and its 16:9 and 4:3
+  helpers sit in a small menu of its ratio button. The move arrows are gone (drag & drop and the row's menu).
+- The tooltips of the filter options say what is recommended; Settings > Filters and the menus share them (0.0.49).
+  `ui-state.toml` remembers whether the menus are pinned (`[export] filter_menu_pinned`; older files load with it off).
 
 - Rotate and Mirror are one filter, Orientation (0.0.48, your UI review round 1 and your answers): turn right or left
   (one or none, like radio buttons; a second click takes the turn back) and mirror left to right and top to bottom

@@ -19,7 +19,8 @@ import { MediaInfoPanel, MediaInfoRow, MediaInfoSection } from "media_info_panel
 import { Shortcuts } from "shortcuts.slint";
 import { Timeline, TimelineBlock, TimelineStrip, TimelineTick } from "timeline_view.slint";
 import { SectionRowView, Sections } from "sections_card.slint";
-import { FilterRowView, Filters } from "filters_card.slint";
+import { FilterRowView, FilterTips, Filters } from "filters_types.slint";
+import { FilterMenuFlyout } from "filters_menu.slint";
 import { CropOverlay } from "crop_overlay.slint";
 import { GlobalTooltip, Tip, TipKey, TipKeys, TipPlacement, TipRect, TipRow, TipSide, TooltipLogic } from "tooltip.slint";
 import { TooltipLayer } from "tooltip_layer.slint";
@@ -59,7 +60,7 @@ import { DragLogic, DragState } from "drag.slint";
 export {
     Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
     MediaInfoRow, MediaInfoSection, Shortcuts, Timeline, TimelineBlock, TimelineTick, Sections,
-    SectionRowView, Filters, FilterRowView, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe, Export,
+    SectionRowView, Filters, FilterRowView, FilterTips, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe, Export,
     ConflictJobView, ConflictOptionView, PreviewView, TipRow, Tip, TipKey, TipKeys, TipPlacement, TipRect, TipSide,
     GlobalTooltip, TooltipLogic, DialogState, Queue, QueueRowView, QueueColumnView, MultiChoiceItem, TagRate, TagNodeView,
     TagColumnView, TagHistoryItemModel, TagHistoryRowModel, Job, JobRowView, JobSectionView, Logs, LogLineView, JobLoad,
@@ -329,8 +330,17 @@ export component MainWindow inherits Window {
                 DragState.cancel();
                 return accept;
             }
+            // A filter's options menu closes (a pinned one only when no action takes Escape, P9.13).
+            if event.text == Key.Escape && Filters.menu-kind != "" && !Filters.menu-pinned {
+                Filters.close-menu();
+                return accept;
+            }
             if Shortcuts.key-pressed(event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift,
                 event.modifiers.meta, event.repeat) {
+                return accept;
+            }
+            if event.text == Key.Escape && Filters.menu-kind != "" {
+                Filters.close-menu();
                 return accept;
             }
             reject
@@ -520,6 +530,18 @@ export component MainWindow inherits Window {
         anchor-y: Queue.filter-anchor-y - root.content-y;
         anchor-width: Queue.filter-anchor-width;
         anchor-height: Queue.filter-anchor-height;
+    }
+
+    // A filter's options menu hangs beside its adjustments button (P9.13).
+    if Filters.menu-kind != "": FilterMenuFlyout {
+        x: 0;
+        y: root.bar-height;
+        width: parent.width;
+        height: parent.height - root.bar-height;
+        anchor-x: Filters.menu-anchor-x - root.content-x;
+        anchor-y: Filters.menu-anchor-y - root.content-y;
+        anchor-width: Filters.menu-anchor-width;
+        anchor-height: Filters.menu-anchor-height;
     }
 
     ContextMenuLayer {

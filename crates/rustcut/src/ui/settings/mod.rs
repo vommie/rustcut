@@ -44,6 +44,12 @@ use crate::{
     ProfileItemView, RenderIssueView, SettingCardView, SettingRowView, SettingsUi, SettingsWindow, TooltipSettings,
 };
 
+/// The help text of the option `key` (`config.toml`'s name, as `Field::key`); empty for an unknown key. The filters'
+/// options menus show the same texts as Settings > Filters (P9.13).
+pub fn option_help(key: &str) -> &'static str {
+    catalog::field(key).map_or("", |f| f.help)
+}
+
 /// What the window asks of other parts of the app (set by the app after install).
 #[derive(Default)]
 pub struct Hooks {

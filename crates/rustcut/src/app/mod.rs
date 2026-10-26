@@ -40,7 +40,7 @@ use crate::ui::dock::{DockBridge, PanelId, persist as dock_persist};
 use crate::ui::editing::{EditingParts, JobEditor};
 use crate::ui::editor::Editor;
 use crate::ui::export::{ExportBridge, ExportParts};
-use crate::ui::filters::FiltersBridge;
+use crate::ui::filters::{self, FiltersBridge};
 use crate::ui::inspector::InspectorBridge;
 use crate::ui::jump::JumpBridge;
 use crate::ui::keymap::{Action, Keymap};
@@ -295,10 +295,14 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     media.set_write_sidecar(loaded.settings.hashing.write_sidecar);
     let filters = FiltersBridge::install(
         &main,
-        &player,
-        runtime.handle().clone(),
-        &loaded.settings,
-        &loaded.ui_state.export,
+        filters::Parts {
+            player: &player,
+            runtime: runtime.handle().clone(),
+            settings: &loaded.settings,
+            export: &loaded.ui_state.export,
+            writer: writer.clone(),
+            menu: &menu,
+        },
     );
     let editor = Editor::install(
         &main,

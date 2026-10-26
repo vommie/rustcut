@@ -1,0 +1,205 @@
+// What the Filters card (`filters_card.slint`), its header (`dock_panels.slint`) and the filters' options menus
+// (`filters_menu.slint`) show; src/ui/filters/ fills the `Filters` global and handles its callbacks.
+
+import { TipRow } from "tooltip.slint";
+
+export struct FilterRowView {
+    kind: string,
+    title: string,
+    tooltip: string,
+    enabled: bool,
+    // Lines of the row (Crop has two: its tools, then its edges).
+    lines: int,
+    // The adjustments button opens an options menu (Orientation has none).
+    has-menu: bool,
+}
+
+// The tooltips of the menus' options: the Settings > Filters catalog's labels and help texts (one place for both).
+export struct FilterTips {
+    deinterlacer: string,
+    output: string,
+    field-order: string,
+    only-interlaced: string,
+    limit: string,
+    sides: string,
+    samples: string,
+    sections-only: string,
+    shakiness: string,
+    accuracy: string,
+    stepsize: string,
+    smoothing: string,
+    tripod: string,
+    max-shift: string,
+    max-angle: string,
+    zoom: string,
+    optzoom: string,
+    zoom-speed: string,
+    borders: string,
+    interpolation: string,
+    scaler: string,
+}
+
+export global Filters {
+    // A video is probed: sizes and the crop on the video are known.
+    in property <bool> has-media;
+    in property <bool> preview;
+    in property <bool> keep;
+    // The output size for the card's header ("1280×540"), what it means, and whether it is a problem (the crop removes
+    // the whole picture).
+    in property <string> output;
+    in property <string> output-tooltip;
+    in property <bool> output-warning;
+    in property <[FilterRowView]> rows;
+    in property <FilterTips> tips;
+
+    in property <[string]> deinterlacers;
+    in property <int> deinterlacer;
+    in property <bool> field-rate;
+    // The deinterlacer knows fields, the field order and "only interlaced frames" (kerndeint does not).
+    in property <bool> field-options;
+    // 0 auto, 1 top first, 2 bottom first.
+    in property <int> field-order;
+    in property <bool> only-interlaced;
+    // The interlace check: the row's short hint ("progressive"), 0 hidden, 1 plain, 2 worth acting on.
+    in property <string> interlace-hint;
+    in property <int> interlace-level;
+    in property <string> interlace-detail;
+    // What ffmpeg's idet counted (the hint's tooltip), and in one line for the menu ("1450 interlaced · 12 progressive").
+    in property <[TipRow]> interlace-rows;
+    in property <string> interlace-counts;
+    in property <bool> interlace-checking;
+
+    // Top, right, bottom, left as seen in the output.
+    in property <[string]> crop-edges: ["0", "0", "0", "0"];
+    // What the crop keeps ("1280×540"; empty before the probe).
+    in property <string> crop-size;
+    in property <bool> crop-editing;
+    in property <bool> can-edit-crop;
+    in property <bool> auto-crop-running;
+    in property <[string]> aspects;
+    in property <int> aspect;
+    // How auto-crop searches (the Crop menu): the black limit 0..255, the sides (0 all, 1 top + bottom, 2 sides), the
+    // sample points, only inside the sections.
+    in property <int> search-limit: 24;
+    in property <int> search-sides;
+    in property <string> search-samples: "8";
+    in property <bool> search-sections-only: true;
+
+    // The orientation's result for the glyph (quarter turns clockwise, then mirrored left to right) and in words; the
+    // two mirror switches as set.
+    in property <int> orientation-turns;
+    in property <bool> orientation-mirrored;
+    in property <string> orientation-label;
+    in property <bool> orientation-mirror-horizontal;
+    in property <bool> orientation-mirror-vertical;
+    // The turn that is on: 0 none, 1 right, 3 left.
+    in property <int> orientation-turn;
+
+    in property <string> resize-width;
+    in property <string> resize-height;
+    // What an empty side comes to (the field's dim placeholder, the review's note 13#3).
+    in property <string> resize-auto-width;
+    in property <string> resize-auto-height;
+    in property <[string]> algorithms;
+    in property <int> algorithm;
+
+    // Shakiness, accuracy, search step, smoothing, zoom, max shift ("" = no limit), max angle ("" = no limit), zoom
+    // speed (percent per frame, "0.25").
+    in property <[string]> deshake-values: ["5", "10", "12", "10", "0", "", "", "0.25"];
+    in property <int> deshake-optzoom;
+    in property <int> deshake-borders;
+    in property <[string]> interpolations;
+    in property <int> deshake-interpolation;
+    in property <bool> deshake-tripod;
+    // The Deshake row's dim line ("shakiness 5 · smoothing 10").
+    in property <string> deshake-summary;
+
+    // The keys of the actions, for the tooltips.
+    in property <string> key-preview;
+    in property <string> key-keep;
+    in property <string> key-reset;
+    in property <string> key-crop-edit;
+    in property <string> key-auto-crop;
+    in property <string> key-rotate-left;
+    in property <string> key-rotate-right;
+    in property <string> key-mirror-horizontal;
+    in property <string> key-mirror-vertical;
+
+    // Drag & drop of the rows (P9.4): the rows' shifts, the gap where the dragged one lands, the ghost under the
+    // pointer. A drop snaps the rows into the new order without animation (`drag-instant`).
+    in property <bool> dragging;
+    in property <string> drag-kind;
+    in property <[length]> drag-shifts;
+    in property <bool> drag-instant;
+    in property <length> drag-gap-y;
+    in property <length> drag-gap-height;
+    in property <length> drag-ghost-y;
+    in property <length> drag-ghost-height;
+    in property <string> drag-title;
+    // One line of a row and the space between rows: every row is a whole number of lines high (no jitter).
+    out property <length> line-height: 28px;
+    out property <length> row-spacing: 2px;
+
+    // The options menu (P9.13 step 3, Q-P9.13): the filter whose menu is open ("" = none), its title, whether it stays
+    // open while the pointer works elsewhere (its pin, kept), whether its options equal the defaults of Settings >
+    // Filters (reset and save have nothing to do), and the adjustments button it hangs from (window coordinates).
+    in property <string> menu-kind;
+    in property <string> menu-title;
+    in property <bool> menu-pinned;
+    in property <bool> menu-default;
+    in-out property <length> menu-anchor-x;
+    in-out property <length> menu-anchor-y;
+    in-out property <length> menu-anchor-width;
+    in-out property <length> menu-anchor-height;
+
+    callback toggle(/* kind */ string);
+    callback reset();
+    callback set-preview(bool);
+    callback set-keep(bool);
+    callback set-deinterlacer(int);
+    callback set-field-rate(bool);
+    callback set-field-order(int);
+    callback set-only-interlaced(bool);
+    // The menu's "Analyze Again": the interlace check runs once more.
+    callback analyze-again();
+    // A typed edge (0 top, 1 right, 2 bottom, 3 left); false = not a number (the field stays open and turns red).
+    callback edit-crop(int, string) -> bool;
+    callback step-crop(int, /* steps */ int);
+    callback crop-edit();
+    callback auto-crop();
+    callback set-aspect(int);
+    callback set-search-limit(int);
+    callback set-search-sides(int);
+    callback edit-search-samples(string) -> bool;
+    callback step-search-samples(int);
+    callback set-search-sections-only(bool);
+    // The orientation's buttons: a quarter turn, a mirror of the result.
+    callback rotate(/* clockwise */ bool);
+    callback mirror(/* horizontal */ bool);
+    // 0 = width, 1 = height; empty = automatic.
+    callback edit-resize(int, string) -> bool;
+    callback step-resize(int, int);
+    // The ratio button's menu (16:9, 4:3), hanging from the button (window coordinates).
+    callback resize-ratio-menu(/* x */ length, /* y */ length, /* width */ length, /* height */ length);
+    callback set-algorithm(int);
+    // 0 shakiness, 1 accuracy, 2 search step, 3 smoothing, 4 zoom, 5 max shift, 6 max angle, 7 zoom speed.
+    callback edit-deshake(int, string) -> bool;
+    callback step-deshake(int, int);
+    // 0 automatic zoom, 1 borders, 2 interpolation.
+    callback set-deshake-choice(int, int);
+    callback set-tripod(bool);
+    // A right click on a row (window coordinates): its menu (switch, options, move up and down); "Options..." hangs the
+    // options menu from the row's adjustments button (its top left corner).
+    callback row-menu(/* kind */ string, /* x */ length, /* y */ length, /* button x */ length, /* button y */ length);
+    // Drag & drop: the pointer in the list's coordinates (0 = the top of the first row).
+    callback drag-start(/* row */ int, /* pointer */ length);
+    callback drag-move(/* pointer */ length);
+    callback drag-end();
+    // The options menu: open (or close when it is open) the menu of `kind`, close it, pin it, and its header tools.
+    callback open-menu(/* kind */ string);
+    callback close-menu();
+    callback set-menu-pinned(bool);
+    callback menu-reset();
+    callback menu-save();
+    callback menu-jump();
+}

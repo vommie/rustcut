@@ -133,6 +133,8 @@ pub struct ExportPanelState {
     /// The aspect ratio a crop keeps while it is dragged on the video.
     #[serde_as(as = "DefaultOnError")]
     pub crop_aspect: CropAspect,
+    /// A filter's options menu stays open while the pointer works elsewhere (its pin, P9.13; 0.0.49).
+    pub filter_menu_pinned: bool,
     /// Render profile of the next job (id): the profile the Render Settings panel's working copy came from.
     pub profile: Option<String>,
     /// The Render Settings panel's working copy (the last used settings; user decision Q-E4). A value this version
@@ -161,6 +163,7 @@ impl Default for ExportPanelState {
             filters: None,
             crop_search: None,
             crop_aspect: CropAspect::Free,
+            filter_menu_pinned: false,
             profile: None,
             render: None,
             probe: ProbeState::default(),

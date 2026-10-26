@@ -1,0 +1,606 @@
+// A filter's options menu (P9.13 step 3, Q-P9.13 look A): a bubble beside the row's adjustments button with an arrow to
+// it, groups with headings, the label on the left and the control on the right; every change applies at once (the
+// preview follows). It opens on a click and stays until a click outside, Escape or the button again; pinned, it stays
+// while the pointer works elsewhere (on the video, in other panels) until × or the button. Its header: jump to
+// Settings > Filters, pin, save as the defaults, reset to the defaults (held). Deshake labels its values with flat
+// symbols to stay compact (the user's note); every symbol and label has a short tooltip with a recommendation (the
+// Settings catalog's help texts, `Filters.tips`). src/ui/filters/menu.rs opens it and handles the header.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { ChoiceButton, IconButton, NumberField, SegmentedChoice, Switch } from "controls.slint";
+import { TooltipArea } from "tooltip.slint";
+import { PlayerSeekBar } from "player_seek_bar.slint";
+import { Playback } from "player_types.slint";
+import { Flyout } from "flyout.slint";
+import { Filters } from "filters_types.slint";
+
+global MenuMetrics {
+    out property <length> width: 320px;
+    // A choice of three segments whose texts must not be cut ("Bottom first", "Top + bottom").
+    out property <length> wide-choice: 236px;
+    out property <length> row-height: 26px;
+}
+
+component Heading inherits Text {
+    color: Theme.text-muted;
+    font-size: 10px;
+    font-weight: 700;
+    height: 20px;
+    vertical-alignment: bottom;
+}
+
+/// A label on the left (its tooltip explains the option) and the control on the right (the children).
+component MenuRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> tooltip;
+    in property <bool> enabled: true;
+
+    height: MenuMetrics.row-height;
+    spacing: 8px;
+
+    TooltipArea {
+        title: root.label;
+        text: root.tooltip;
+        horizontal-stretch: 1;
+        min-width: 60px;
+
+        Text {
+            width: parent.width;
+            height: parent.height;
+            text: root.label;
+            color: root.enabled ? Theme.text : Theme.text-muted;
+            font-size: 12px;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    @children
+}
+
+/// A value labeled by a flat symbol (Deshake): the symbol's tooltip names and explains it.
+component IconCell inherits HorizontalLayout {
+    in property <IconId> icon;
+    in property <string> title;
+    in property <string> tooltip;
+    in property <bool> enabled: true;
+
+    spacing: 4px;
+    horizontal-stretch: 1;
+
+    TooltipArea {
+        width: 20px;
+        title: root.title;
+        text: root.tooltip;
+
+        AppIcon {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            icon: root.icon;
+            size: IconSize.sm;
+            color: root.enabled ? Theme.text-muted : Theme.status-deleted;
+        }
+    }
+
+    @children
+}
+
+component DeinterlaceMenu inherits VerticalLayout {
+    spacing: 2px;
+
+    MenuRow {
+        label: "Deinterlacer";
+        tooltip: Filters.tips.deinterlacer;
+
+        ChoiceButton {
+            width: 130px;
+            items: Filters.deinterlacers;
+            current: Filters.deinterlacer;
+            tooltip: Filters.tips.deinterlacer;
+            selected(index) => { Filters.set-deinterlacer(index); }
+        }
+    }
+
+    MenuRow {
+        label: "Output";
+        tooltip: Filters.tips.output;
+        enabled: Filters.field-options;
+
+        SegmentedChoice {
+            width: 160px;
+            items: ["Frames", "Fields (2×)"];
+            current: Filters.field-rate ? 1 : 0;
+            enabled: Filters.field-options;
+            tooltip: Filters.field-options ? Filters.tips.output : "kerndeint makes frames only.";
+            selected(index) => { Filters.set-field-rate(index == 1); }
+        }
+    }
+
+    MenuRow {
+        label: "Field order";
+        tooltip: Filters.tips.field-order;
+        enabled: Filters.field-options;
+
+        SegmentedChoice {
+            width: MenuMetrics.wide-choice;
+            items: ["Auto", "Top first", "Bottom first"];
+            current: Filters.field-order;
+            enabled: Filters.field-options;
+            tooltip: Filters.field-options ? Filters.tips.field-order : "kerndeint has no field order.";
+            selected(index) => { Filters.set-field-order(index); }
+        }
+    }
+
+    MenuRow {
+        label: "Only interlaced frames";
+        tooltip: Filters.tips.only-interlaced;
+        enabled: Filters.field-options;
+
+        VerticalLayout {
+            alignment: center;
+
+            Switch {
+                checked: Filters.only-interlaced;
+                enabled: Filters.field-options;
+                tooltip: Filters.field-options ? Filters.tips.only-interlaced : "kerndeint treats every frame.";
+                toggled => { Filters.set-only-interlaced(!Filters.only-interlaced); }
+            }
+        }
+    }
+
+    Heading {
+        text: "DETECTION";
+    }
+
+    MenuRow {
+        label: "Detected";
+        tooltip: "What ffmpeg's interlace check counted in a few hundred frames.";
+
+        TooltipArea {
+            title: "Interlace check";
+            text: Filters.interlace-detail;
+            rows: Filters.interlace-rows;
+            min-width: 0;
+            preferred-width: counts.preferred-width;
+            horizontal-stretch: 0;
+
+            counts := Text {
+                width: parent.width;
+                height: parent.height;
+                text: !Playback.has-video ? "No video" : Filters.interlace-counts;
+                color: Filters.interlace-level == 2 ? Theme.accent : Theme.text-muted;
+                font-size: 11px;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+
+        IconButton {
+            icon: IconId.analyze-again;
+            enabled: Playback.has-video && !Filters.interlace-checking;
+            tooltip: "Analyze again";
+            clicked => { Filters.analyze-again(); }
+        }
+    }
+}
+
+component CropMenu inherits VerticalLayout {
+    spacing: 2px;
+
+    Heading {
+        text: "AUTO-CROP";
+    }
+
+    MenuRow {
+        label: "Black up to";
+        tooltip: Filters.tips.limit;
+
+        PlayerSeekBar {
+            width: 120px;
+            value: Filters.search-limit / 255;
+            changed(value, final) => { Filters.set-search-limit(Math.round(value * 255)); }
+        }
+
+        Text {
+            width: 26px;
+            text: Filters.search-limit;
+            color: Theme.text;
+            font-size: 12px;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+        }
+    }
+
+    MenuRow {
+        label: "Search";
+        tooltip: Filters.tips.sides;
+
+        SegmentedChoice {
+            // The short label leaves room for the long middle segment.
+            width: MenuMetrics.wide-choice + 10px;
+            items: ["All", "Top + bottom", "Sides"];
+            current: Filters.search-sides;
+            tooltip: Filters.tips.sides;
+            selected(index) => { Filters.set-search-sides(index); }
+        }
+    }
+
+    MenuRow {
+        label: "Sample points";
+        tooltip: Filters.tips.samples;
+
+        NumberField {
+            width: 70px;
+            text: Filters.search-samples;
+            tooltip: Filters.tips.samples;
+            committed(text) => { return Filters.edit-search-samples(text); }
+            stepped(steps) => { Filters.step-search-samples(steps); }
+        }
+    }
+
+    MenuRow {
+        label: "Only inside the sections";
+        tooltip: Filters.tips.sections-only;
+
+        VerticalLayout {
+            alignment: center;
+
+            Switch {
+                checked: Filters.search-sections-only;
+                tooltip: Filters.tips.sections-only;
+                toggled => { Filters.set-search-sections-only(!Filters.search-sections-only); }
+            }
+        }
+    }
+}
+
+/// One Deshake number labeled by a symbol.
+component DeshakeNumber inherits IconCell {
+    in property <int> param;
+    in property <string> unit;
+    in property <string> placeholder;
+    in property <bool> field-enabled: true;
+
+    enabled: root.field-enabled;
+
+    NumberField {
+        min-width: 60px;
+        text: Filters.deshake-values[root.param];
+        placeholder: root.placeholder;
+        unit: root.unit;
+        enabled: root.field-enabled;
+        tooltip: root.title;
+        committed(text) => { return Filters.edit-deshake(root.param, text); }
+        stepped(steps) => { Filters.step-deshake(root.param, steps); }
+    }
+}
+
+component DeshakeMenu inherits VerticalLayout {
+    spacing: 4px;
+
+    Heading {
+        text: "DETECTION";
+    }
+
+    HorizontalLayout {
+        spacing: 12px;
+
+        DeshakeNumber {
+            param: 0;
+            icon: IconId.deshake-shakiness;
+            title: "Shakiness";
+            tooltip: Filters.tips.shakiness;
+        }
+
+        DeshakeNumber {
+            param: 1;
+            icon: IconId.deshake-accuracy;
+            title: "Accuracy";
+            tooltip: Filters.tips.accuracy;
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 12px;
+
+        DeshakeNumber {
+            param: 2;
+            icon: IconId.deshake-stepsize;
+            title: "Search step";
+            tooltip: Filters.tips.stepsize;
+            unit: "px";
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+        }
+    }
+
+    Heading {
+        text: "CAMERA PATH";
+    }
+
+    HorizontalLayout {
+        spacing: 12px;
+
+        DeshakeNumber {
+            param: 3;
+            icon: IconId.deshake-smoothing;
+            title: "Smoothing";
+            tooltip: Filters.tips.smoothing;
+            unit: "frames";
+        }
+
+        IconCell {
+            icon: IconId.deshake-tripod;
+            title: "Virtual tripod";
+            tooltip: Filters.tips.tripod;
+
+            VerticalLayout {
+                alignment: center;
+
+                Switch {
+                    checked: Filters.deshake-tripod;
+                    tooltip: "Virtual tripod";
+                    toggled => { Filters.set-tripod(!Filters.deshake-tripod); }
+                }
+            }
+
+            Rectangle {
+                horizontal-stretch: 1;
+            }
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 12px;
+
+        DeshakeNumber {
+            param: 5;
+            icon: IconId.deshake-max-shift;
+            title: "Max shift";
+            tooltip: Filters.tips.max-shift;
+            unit: "px";
+            placeholder: "No limit";
+        }
+
+        DeshakeNumber {
+            param: 6;
+            icon: IconId.deshake-max-angle;
+            title: "Max angle";
+            tooltip: Filters.tips.max-angle;
+            unit: "°";
+            placeholder: "No limit";
+        }
+    }
+
+    Heading {
+        text: "ZOOM AND BORDERS";
+    }
+
+    HorizontalLayout {
+        spacing: 12px;
+
+        DeshakeNumber {
+            param: 4;
+            icon: IconId.deshake-zoom;
+            title: "Zoom";
+            tooltip: Filters.tips.zoom;
+            unit: "%";
+        }
+
+        DeshakeNumber {
+            param: 7;
+            icon: IconId.deshake-zoom-speed;
+            title: "Zoom speed";
+            tooltip: Filters.tips.zoom-speed;
+            unit: "%";
+            field-enabled: Filters.deshake-optzoom == 2;
+        }
+    }
+
+    IconCell {
+        icon: IconId.deshake-optzoom;
+        title: "Automatic zoom";
+        tooltip: Filters.tips.optzoom;
+
+        SegmentedChoice {
+            items: ["None", "Static", "Adaptive"];
+            current: Filters.deshake-optzoom;
+            tooltip: Filters.tips.optzoom;
+            selected(index) => { Filters.set-deshake-choice(0, index); }
+        }
+    }
+
+    IconCell {
+        icon: IconId.deshake-borders;
+        title: "Borders";
+        tooltip: Filters.tips.borders;
+
+        SegmentedChoice {
+            items: ["Black", "Previous frame"];
+            current: Filters.deshake-borders;
+            tooltip: Filters.tips.borders;
+            selected(index) => { Filters.set-deshake-choice(1, index); }
+        }
+    }
+
+    Heading {
+        text: "QUALITY";
+    }
+
+    IconCell {
+        icon: IconId.deshake-interpolation;
+        title: "Interpolation";
+        tooltip: Filters.tips.interpolation;
+
+        ChoiceButton {
+            items: Filters.interpolations;
+            current: Filters.deshake-interpolation;
+            tooltip: Filters.tips.interpolation;
+            selected(index) => { Filters.set-deshake-choice(2, index); }
+        }
+    }
+
+    Rectangle {
+        height: 1px;
+        background: Theme.border;
+    }
+
+    HorizontalLayout {
+        spacing: 6px;
+
+        AppIcon {
+            y: (parent.height - self.height) / 2;
+            icon: IconId.render-only;
+            size: IconSize.sm;
+            color: Theme.text-muted;
+        }
+
+        Text {
+            text: "Render only (two passes): not in the preview.";
+            color: Theme.text-muted;
+            font-size: 11px;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+    }
+}
+
+component ResizeMenu inherits VerticalLayout {
+    MenuRow {
+        label: "Scaler";
+        tooltip: Filters.tips.scaler;
+
+        ChoiceButton {
+            width: 130px;
+            items: Filters.algorithms;
+            current: Filters.algorithm;
+            tooltip: Filters.tips.scaler;
+            selected(index) => { Filters.set-algorithm(index); }
+        }
+    }
+}
+
+/// The open menu (`Filters.menu-kind`), over the window's content (main.slint places it).
+export component FilterMenuFlyout inherits Rectangle {
+    // The adjustments button in layer coordinates.
+    in property <length> anchor-x;
+    in property <length> anchor-y;
+    in property <length> anchor-width;
+    in property <length> anchor-height;
+
+    Flyout {
+        width: parent.width;
+        height: parent.height;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        anchor-width: root.anchor-width;
+        anchor-height: root.anchor-height;
+        panel-width: content.width;
+        panel-height: content.height;
+        beside: true;
+        modal: !Filters.menu-pinned;
+        closed => { Filters.close-menu(); }
+
+        content := Rectangle {
+            x: 0;
+            y: 0;
+            width: MenuMetrics.width;
+            height: body.preferred-height;
+
+            body := VerticalLayout {
+                width: MenuMetrics.width;
+                padding: 10px;
+                padding-top: 6px;
+                spacing: 4px;
+
+                HorizontalLayout {
+                    height: 28px;
+                    spacing: 2px;
+
+                    Text {
+                        text: Filters.menu-title;
+                        color: Theme.text;
+                        font-size: 13px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                        overflow: elide;
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+
+                        IconButton {
+                            icon: IconId.jump-to;
+                            tooltip: "Show the defaults of these options in Settings > Filters";
+                            clicked => { Filters.menu-jump(); }
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+
+                        IconButton {
+                            icon: Filters.menu-pinned ? IconId.menu-pinned : IconId.menu-pin;
+                            checked: Filters.menu-pinned;
+                            tooltip: Filters.menu-pinned
+                                ? "Pinned: the menu stays open while you work on the video or in other panels (click: a click outside closes it again)"
+                                : "Pin: keep the menu open while you work on the video or in other panels";
+                            clicked => { Filters.set-menu-pinned(!Filters.menu-pinned); }
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+
+                        IconButton {
+                            icon: IconId.filter-save-default;
+                            enabled: !Filters.menu-default;
+                            tooltip: Filters.menu-default ? "These are the defaults of Settings > Filters"
+                                : "Save these options as the defaults for every new video (Settings > Filters)";
+                            clicked => { Filters.menu-save(); }
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+
+                        IconButton {
+                            icon: IconId.filter-reset;
+                            hold: true;
+                            enabled: !Filters.menu-default;
+                            tooltip: Filters.menu-default ? "These are the defaults of Settings > Filters"
+                                : "Reset these options to the defaults of Settings > Filters";
+                            clicked => { Filters.menu-reset(); }
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+
+                        IconButton {
+                            icon: IconId.close;
+                            tooltip: "Close";
+                            clicked => { Filters.close-menu(); }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    height: 1px;
+                    background: Theme.border;
+                }
+
+                if Filters.menu-kind == "deinterlace": DeinterlaceMenu { }
+                if Filters.menu-kind == "crop": CropMenu { }
+                if Filters.menu-kind == "deshake": DeshakeMenu { }
+                if Filters.menu-kind == "resize": ResizeMenu { }
+            }
+        }
+    }
+}

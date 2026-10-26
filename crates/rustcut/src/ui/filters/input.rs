@@ -2,12 +2,14 @@
 
 use std::rc::{Rc, Weak};
 
-use rustcut_core::edit::{CropAspect, DeshakeCrop, DeshakeInterpolation};
+use rustcut_core::edit::{CropAspect, DeshakeCrop, DeshakeInterpolation, DeshakeParams};
+use rustcut_core::media::CropSearch;
 use slint::ComponentHandle as _;
 
 use super::geometry::Handle;
 use super::state::{CropMode, CropSession, Edge, FiltersState};
 use super::{FiltersBridge, QUICK_DELAY, kind_from_id, view};
+use crate::util::amount::{limit, parse_hundredths};
 use crate::{CropOverlay, Filters, MainWindow};
 
 /// The interpolations in the order of the card's list.
@@ -21,8 +23,9 @@ const INTERPOLATIONS: [DeshakeInterpolation; 4] = [
 const PIXEL_STEP: i32 = 2;
 /// Pixels per step of a resize field (a common multiple of the codecs' block sizes).
 const RESIZE_STEP: i32 = 16;
-/// One step of each deshake number (shakiness, accuracy, search step, smoothing, zoom), as in Settings > Filters.
-const DESHAKE_STEPS: [i64; 5] = [1, 1, 1, 5, 1];
+/// One step of each deshake number (shakiness, accuracy, search step, smoothing, zoom, max shift, max angle, zoom
+/// speed in hundredths), as in Settings > Filters.
+const DESHAKE_STEPS: [i64; 8] = [1, 1, 1, 5, 1, 10, 1, 5];
 
 pub(super) fn interpolation_index(i: DeshakeInterpolation) -> i32 {
     INTERPOLATIONS
@@ -79,12 +82,6 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
             s.toggle(kind);
         }
     }));
-    let move_filter = change(&this, |s, (id, up): (slint::SharedString, bool)| {
-        if let Some(kind) = kind_from_id(&id) {
-            s.move_filter(kind, up);
-        }
-    });
-    f.on_move(move |id, up| move_filter((id, up)));
     let reset = with(&this, |b, ()| b.reset());
     f.on_reset(move || reset(()));
     f.on_set_preview(change(&this, |s, on| s.preview = on));
@@ -95,6 +92,43 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
         }
     }));
     f.on_set_field_rate(change(&this, FiltersState::set_field_rate));
+    f.on_set_field_order(change(&this, |s, i: i32| {
+        if let Some(order) = usize::try_from(i).ok().and_then(|i| view::FIELD_ORDERS.get(i)) {
+            s.set_field_order(*order);
+        }
+    }));
+    f.on_set_only_interlaced(change(&this, FiltersState::set_only_interlaced));
+    f.on_set_search_limit(change(&this, |s, v: i32| {
+        s.set_search(|search| search.limit = u8::try_from(v.clamp(0, 255)).unwrap_or(search.limit));
+    }));
+    f.on_set_search_sides(change(&this, |s, i: i32| {
+        if let Some(sides) = usize::try_from(i).ok().and_then(|i| view::SIDES.get(i)) {
+            s.set_search(|search| search.sides = *sides);
+        }
+    }));
+    let edit_samples = Weak::clone(&this);
+    f.on_edit_search_samples(move |text| {
+        let Some(bridge) = edit_samples.upgrade() else {
+            return false;
+        };
+        let Some(value) = number(&text, None)
+            .and_then(|v| u8::try_from(v).ok())
+            .filter(|v| (1..=CropSearch::MAX_SAMPLES).contains(v))
+        else {
+            return false;
+        };
+        bridge.update(|s| s.set_search(|search| search.samples = value));
+        true
+    });
+    f.on_step_search_samples(change(&this, |s, steps: i32| {
+        s.set_search(|search| {
+            let value = i32::from(search.samples).saturating_add(steps);
+            search.samples = u8::try_from(value.clamp(1, i32::from(CropSearch::MAX_SAMPLES))).unwrap_or(search.samples);
+        });
+    }));
+    f.on_set_search_sections_only(change(&this, |s, on: bool| {
+        s.set_search(|search| search.sections_only = on);
+    }));
     let edit_crop = Weak::clone(&this);
     f.on_edit_crop(move |edge, text| {
         let (Some(bridge), Some(edge)) = (edit_crop.upgrade(), Edge::from_index(edge)) else {
@@ -153,9 +187,6 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
         }
     });
     f.on_step_resize(move |which, steps| step_resize((which, steps)));
-    f.on_resize_ratio(change(&this, |s, which: i32| {
-        s.resize_to_ratio(if which == 0 { 16.0 / 9.0 } else { 4.0 / 3.0 });
-    }));
     f.on_set_algorithm(change(&this, |s, i: i32| {
         if let Some(a) = usize::try_from(i).ok().and_then(|i| view::ALGORITHMS.get(i)) {
             s.set_resize_algorithm(*a);
@@ -166,8 +197,10 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
         let Some(bridge) = edit_deshake.upgrade() else {
             return false;
         };
-        let Some(value) = number(&text, None) else { return false };
-        bridge.update(|s| set_deshake_value(s, param, value));
+        let Some(params) = typed_deshake(bridge.state.borrow().deshake(), param, &text) else {
+            return false;
+        };
+        bridge.update(|s| s.set_deshake(params));
         true
     });
     let step_deshake = change(&this, |s, (param, steps): (i32, i32)| {
@@ -220,6 +253,7 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
     o.on_resized(move |w, h| resized((w, h)));
 }
 
+/// One deshake number (a step starts a limit that is off at 0).
 fn deshake_value(s: &FiltersState, param: i32) -> i64 {
     let p = s.deshake();
     match param {
@@ -227,6 +261,9 @@ fn deshake_value(s: &FiltersState, param: i32) -> i64 {
         1 => i64::from(p.accuracy),
         2 => i64::from(p.stepsize),
         3 => i64::from(p.smoothing),
+        5 => i64::from(p.max_shift.unwrap_or(0)),
+        6 => i64::from(p.max_angle.unwrap_or(0)),
+        7 => i64::from(p.zoom_speed),
         _ => i64::from(p.zoom),
     }
 }
@@ -235,14 +272,46 @@ fn deshake_value(s: &FiltersState, param: i32) -> i64 {
 fn set_deshake_value(s: &mut FiltersState, param: i32, value: i64) {
     let mut p = s.deshake();
     let small = |v: i64| u8::try_from(v.clamp(0, 255)).unwrap_or(0);
+    let wide = |v: i64, max: u16| u16::try_from(v.clamp(0, i64::from(max))).unwrap_or(0);
     match param {
         0 => p.shakiness = small(value),
         1 => p.accuracy = small(value),
         2 => p.stepsize = small(value),
-        3 => p.smoothing = u16::try_from(value.clamp(0, 1000)).unwrap_or(0),
+        3 => p.smoothing = wide(value, 1000),
+        5 => p.max_shift = Some(wide(value, DeshakeParams::MAX_SHIFT)),
+        6 => p.max_angle = Some(small(value.min(i64::from(DeshakeParams::MAX_ANGLE)))),
+        7 => p.zoom_speed = wide(value, DeshakeParams::ZOOM_SPEED_MAX),
         _ => p.zoom = i8::try_from(value.clamp(-100, 100)).unwrap_or(0),
     }
     s.set_deshake(p);
+}
+
+/// The deshake parameters with one typed value (`None` = refused: not a number, or out of range for the limits and
+/// the zoom speed). Max shift and max angle take an empty text as "no limit"; the zoom speed is a decimal percent.
+pub(super) fn typed_deshake(current: DeshakeParams, param: i32, text: &str) -> Option<DeshakeParams> {
+    let mut p = current;
+    match param {
+        5 => p.max_shift = limit(text, DeshakeParams::MAX_SHIFT, "px").ok()?,
+        6 => {
+            p.max_angle = match limit(text, u16::from(DeshakeParams::MAX_ANGLE), "°").ok()? {
+                Some(v) => Some(u8::try_from(v).ok()?),
+                None => None,
+            };
+        }
+        7 => p.zoom_speed = parse_hundredths(text, DeshakeParams::ZOOM_SPEED_MAX)?,
+        _ => {
+            let value = number(text, None)?;
+            let small = |v: i64| u8::try_from(v.clamp(0, 255)).ok();
+            match param {
+                0 => p.shakiness = small(value)?,
+                1 => p.accuracy = small(value)?,
+                2 => p.stepsize = small(value)?,
+                3 => p.smoothing = u16::try_from(value.clamp(0, 1000)).ok()?,
+                _ => p.zoom = i8::try_from(value.clamp(-100, 100)).ok()?,
+            }
+        }
+    }
+    Some(p)
 }
 
 impl FiltersBridge {

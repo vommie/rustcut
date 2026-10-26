@@ -1,151 +1,190 @@
-// The Filters card of the Export panel (src/ui/filters/ fills the `Filters` global and handles its callbacks): the preview
-// and keep switches, reset, the output size, and one row per filter in chain order (switch, title, move up/down) with
-// its parameters while it is on. Buttons are icons with tooltips (user rule 2026-10-23).
+// The Filters card of the Export panel (P9.13, Q-P9.13 layout A; src/ui/filters/ fills the `Filters` global and handles
+// its callbacks). One row per filter in chain order: a grip to drag it to another place (P9.4), its name as the on/off
+// button (filled when on), its basic values always visible (dimmed while it is off; typing a value keeps it off,
+// Q-P9.13 C), and the adjustments button that opens its options menu (`filters_menu.slint`; Orientation has none, its
+// slot stays empty). Every row is a whole number of lines high, so nothing jumps when a filter switches. The output
+// size, the preview, keep and reset sit in the card's header (`dock_panels.slint`). Buttons are icons with tooltips
+// (user rule 2026-10-23).
 
 import { Theme } from "styles.slint";
-import { IconId, IconSize } from "icons.slint";
-import { ChoiceButton, FieldIcon, IconButton, NumberField, Switch } from "controls.slint";
-import { TipRow, TooltipArea } from "tooltip.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { ChoiceButton, FieldIcon, IconButton, NumberField } from "controls.slint";
+import { TooltipArea, TooltipHost } from "tooltip.slint";
 import { Playback } from "player_types.slint";
+import { DragArea, DragGhost, DragMotion, DragState, DropGap } from "drag.slint";
+import { FilterRowView, Filters } from "filters_types.slint";
 
-export struct FilterRowView {
-    kind: string,
-    title: string,
-    tooltip: string,
-    enabled: bool,
-    can-up: bool,
-    can-down: bool,
+/// The width of every filter's name button (the values start on one line).
+global FilterMetrics {
+    out property <length> name-width: 84px;
+    out property <length> grip-width: 14px;
+    out property <length> spacing: 4px;
+    // The adjustments button (an `IconButton`) or the empty slot of Orientation.
+    out property <length> options-width: 26px;
 }
 
-export global Filters {
-    // A video is probed: sizes and the crop on the video are known.
-    in property <bool> has-media;
-    in property <bool> preview;
-    in property <bool> keep;
-    // "Output 1920×1080"; a warning when the chain removes the whole picture.
-    in property <string> output;
-    in property <bool> output-warning;
-    in property <[FilterRowView]> rows;
+/// A filter's name: the on/off button (filled, bold and outlined when on; PyCutRv). Its width is fixed, so the bold
+/// name never moves the values.
+component NameButton inherits Rectangle {
+    in property <FilterRowView> item;
 
-    in property <[string]> deinterlacers;
-    in property <int> deinterlacer;
-    in property <bool> field-rate;
-    in property <bool> field-rate-supported;
-    // The interlace check: 0 hidden, 1 plain, 2 worth acting on.
-    in property <string> interlace-hint;
-    in property <int> interlace-level;
-    in property <string> interlace-detail;
-    // What ffmpeg's idet counted (the note's tooltip).
-    in property <[TipRow]> interlace-rows;
+    width: FilterMetrics.name-width;
+    height: 24px;
+    border-radius: 4px;
+    background: root.item.enabled ? Theme.primary.with-alpha(touch.has-hover ? 0.3 : 0.22)
+        : touch.pressed ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : Theme.surface;
+    border-width: 1px;
+    border-color: root.item.enabled ? Theme.primary : Theme.border;
 
-    // Top, right, bottom, left as seen in the output.
-    in property <[string]> crop-edges: ["0", "0", "0", "0"];
-    in property <bool> crop-editing;
-    in property <bool> can-edit-crop;
-    in property <bool> auto-crop-running;
-    in property <[string]> aspects;
-    in property <int> aspect;
+    host := TooltipHost {
+        text: (root.item.enabled ? "On (click: switch off). " : "Off (click: switch on). ") + root.item.tooltip;
+    }
 
-    // The orientation's result for the glyph (quarter turns clockwise, then mirrored left to right) and in words; the
-    // two mirror switches as set.
-    in property <int> orientation-turns;
-    in property <bool> orientation-mirrored;
-    in property <string> orientation-label;
-    in property <bool> orientation-mirror-horizontal;
-    in property <bool> orientation-mirror-vertical;
-    // The turn that is on: 0 none, 1 right, 3 left.
-    in property <int> orientation-turn;
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => {
+            host.press();
+            Filters.toggle(root.item.kind);
+        }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
 
-    in property <string> resize-width;
-    in property <string> resize-height;
-    in property <string> resize-auto-width;
-    in property <string> resize-auto-height;
-    in property <[string]> algorithms;
-    in property <int> algorithm;
-
-    // Shakiness, accuracy, step size, smoothing, zoom.
-    in property <[string]> deshake-values: ["5", "10", "12", "10", "0"];
-    in property <int> deshake-optzoom;
-    in property <int> deshake-borders;
-    in property <[string]> interpolations;
-    in property <int> deshake-interpolation;
-    in property <bool> deshake-tripod;
-
-    // The keys of the actions, for the tooltips.
-    in property <string> key-preview;
-    in property <string> key-keep;
-    in property <string> key-reset;
-    in property <string> key-crop-edit;
-    in property <string> key-auto-crop;
-    in property <string> key-rotate-left;
-    in property <string> key-rotate-right;
-    in property <string> key-mirror-horizontal;
-    in property <string> key-mirror-vertical;
-
-    callback toggle(/* kind */ string);
-    callback move(/* kind */ string, /* up */ bool);
-    callback reset();
-    callback set-preview(bool);
-    callback set-keep(bool);
-    callback set-deinterlacer(int);
-    callback set-field-rate(bool);
-    // A typed edge (0 top, 1 right, 2 bottom, 3 left); false = not a number (the field stays open and turns red).
-    callback edit-crop(int, string) -> bool;
-    callback step-crop(int, /* steps */ int);
-    callback crop-edit();
-    callback auto-crop();
-    callback set-aspect(int);
-    // The orientation's buttons: a quarter turn, a mirror of the result.
-    callback rotate(/* clockwise */ bool);
-    callback mirror(/* horizontal */ bool);
-    // 0 = width, 1 = height; empty = automatic.
-    callback edit-resize(int, string) -> bool;
-    callback step-resize(int, int);
-    callback resize-ratio(/* 0 = 16:9, 1 = 4:3 */ int);
-    callback set-algorithm(int);
-    // 0 shakiness, 1 accuracy, 2 step size, 3 smoothing, 4 zoom.
-    callback edit-deshake(int, string) -> bool;
-    callback step-deshake(int, int);
-    // 0 automatic zoom, 1 borders, 2 interpolation.
-    callback set-deshake-choice(int, int);
-    callback set-tripod(bool);
+    Text {
+        x: 8px;
+        width: parent.width - 12px;
+        text: root.item.title;
+        color: root.item.enabled ? Theme.text : Theme.text-muted;
+        font-size: 12px;
+        font-weight: root.item.enabled ? 700 : 400;
+        vertical-alignment: center;
+        overflow: elide;
+    }
 }
 
-component Label inherits Text {
-    color: Theme.text-muted;
-    font-size: 11px;
-    vertical-alignment: center;
-    overflow: elide;
+/// The button that opens (and closes) a filter's options menu; the menu hangs from it.
+component OptionsButton inherits IconButton {
+    in property <string> kind;
+
+    icon: IconId.filter-options;
+    checked: Filters.menu-kind == root.kind;
+    tooltip: Filters.menu-kind == root.kind ? "Close the options" : "Options";
+    clicked => {
+        Filters.menu-anchor-x = self.absolute-position.x;
+        Filters.menu-anchor-y = self.absolute-position.y;
+        Filters.menu-anchor-width = self.width;
+        Filters.menu-anchor-height = self.height;
+        Filters.open-menu(root.kind);
+    }
+}
+
+/// The interlace check's short result next to the deinterlacer ("progressive", "interlaced"), its counts in the tooltip.
+component InterlacePill inherits TooltipArea {
+    title: "Interlace check";
+    text: Filters.interlace-detail;
+    rows: Filters.interlace-rows;
     min-width: 0;
+    preferred-width: label.preferred-width + 12px;
+    horizontal-stretch: 0;
+
+    pill := Rectangle {
+        x: 0;
+        y: (parent.height - self.height) / 2;
+        width: Math.min(parent.width, label.preferred-width + 12px);
+        height: 18px;
+        border-radius: 9px;
+        border-width: 1px;
+        border-color: Filters.interlace-level == 2 ? Theme.accent : Theme.border;
+
+        label := Text {
+            x: 6px;
+            width: parent.width - 12px;
+            text: Filters.interlace-hint;
+            color: Filters.interlace-level == 2 ? Theme.accent : Theme.text-muted;
+            font-size: 10px;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
 }
 
-component DeinterlaceParams inherits HorizontalLayout {
-    spacing: 4px;
+component DeinterlaceValues inherits HorizontalLayout {
+    spacing: FilterMetrics.spacing;
 
     ChoiceButton {
+        min-width: 40px;
         items: Filters.deinterlacers;
         current: Filters.deinterlacer;
         tip-title: "Deinterlacer";
-        tip-rows: [
-            { label: "bwdif", value: "Motion adaptive, the best all-rounder" },
-            { label: "yadif", value: "Faster and a bit softer" },
-            { label: "w3fdif", value: "Sharp on calm footage" },
-            { label: "kerndeint", value: "Fast" },
-        ];
+        tooltip: Filters.tips.deinterlacer;
         selected(index) => { Filters.set-deinterlacer(index); }
     }
 
+    // Only for a playable video: a file that does not play is never checked (P8).
+    if Filters.interlace-level > 0 && Playback.has-video: InterlacePill { }
+
+    Rectangle {
+        horizontal-stretch: 0.01;
+    }
+}
+
+/// Line 1 of Crop: edit on the video, auto-crop, the aspect lock, and the size the crop keeps.
+component CropTools inherits HorizontalLayout {
+    spacing: 2px;
+
     IconButton {
-        text: "2×";
-        checked: Filters.field-rate && Filters.field-rate-supported;
-        enabled: Filters.field-rate-supported;
-        tooltip: Filters.field-rate-supported
-            ? "One frame per field (50p from 25i): smoother motion, twice the frames to encode."
-            : "kerndeint has one frame per frame only.";
-        clicked => { Filters.set-field-rate(!Filters.field-rate); }
+        icon: IconId.crop-edit;
+        checked: Filters.crop-editing;
+        enabled: Filters.can-edit-crop;
+        tooltip: Filters.crop-editing
+            ? "Done: keep the crop (Enter). Escape restores the crop from before."
+            : "Edit the crop on the video: drag the corners, the edges or the area. Quicker: hold Ctrl over the video and drag the nearest edge.";
+        shortcut: Filters.key-crop-edit;
+        clicked => { Filters.crop-edit(); }
     }
 
-    Rectangle { horizontal-stretch: 1; }
+    IconButton {
+        icon: IconId.crop-auto;
+        enabled: Filters.has-media && !Filters.auto-crop-running;
+        checked: Filters.auto-crop-running;
+        tooltip: Filters.auto-crop-running
+            ? "Looking for black borders..."
+            : "Detect the black borders at several points of the video and crop them (the options menu says how).";
+        shortcut: Filters.key-auto-crop;
+        clicked => { Filters.auto-crop(); }
+    }
+
+    ChoiceButton {
+        compact: true;
+        icon: IconId.crop-aspect;
+        items: Filters.aspects;
+        current: Filters.aspect;
+        tooltip: "Aspect ratio the crop keeps while it is dragged on the video: " + Filters.aspects[Filters.aspect]
+            + " (Source = the uncropped picture's).";
+        selected(index) => { Filters.set-aspect(index); }
+    }
+
+    TooltipArea {
+        text: "What the crop keeps, as seen in the output";
+        horizontal-stretch: 1;
+        min-width: 0;
+
+        Text {
+            width: parent.width;
+            height: parent.height;
+            text: Filters.crop-size;
+            color: Theme.text-muted;
+            font-size: 11px;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
 }
 
 component CropField inherits HorizontalLayout {
@@ -160,79 +199,76 @@ component CropField inherits HorizontalLayout {
         tooltip: root.name + " edge as seen in the output (pixels; the wheel changes it by 2)";
     }
 
-    value := NumberField {
+    NumberField {
+        min-width: 30px;
         text: Filters.crop-edges[root.edge];
         tooltip: root.name + " edge in pixels";
+        spin: false;
         committed(text) => { return Filters.edit-crop(root.edge, text); }
         stepped(steps) => { Filters.step-crop(root.edge, steps); }
     }
 }
 
-component CropParams inherits VerticalLayout {
-    spacing: 4px;
+/// Line 2 of Crop: the four edges as seen in the output.
+component CropEdges inherits HorizontalLayout {
+    spacing: FilterMetrics.spacing;
 
-    HorizontalLayout {
-        spacing: 4px;
+    CropField {
+        edge: 0;
+        icon: IconId.edge-top;
+        name: "Top";
+    }
 
-        CropField {
-            edge: 0;
-            icon: IconId.edge-top;
-            name: "Top";
-        }
+    CropField {
+        edge: 1;
+        icon: IconId.edge-right;
+        name: "Right";
+    }
 
-        CropField {
-            edge: 1;
-            icon: IconId.edge-right;
-            name: "Right";
-        }
+    CropField {
+        edge: 2;
+        icon: IconId.edge-bottom;
+        name: "Bottom";
+    }
 
-        CropField {
-            edge: 2;
-            icon: IconId.edge-bottom;
-            name: "Bottom";
-        }
+    CropField {
+        edge: 3;
+        icon: IconId.edge-left;
+        name: "Left";
+    }
+}
 
-        CropField {
-            edge: 3;
-            icon: IconId.edge-left;
-            name: "Left";
+/// Deshake shows only what is set (Q-P9.13: everything else is in its menu).
+component DeshakeValues inherits HorizontalLayout {
+    spacing: FilterMetrics.spacing;
+
+    TooltipArea {
+        text: "Open the options to change them.";
+        horizontal-stretch: 1;
+        min-width: 0;
+
+        Text {
+            width: parent.width;
+            height: parent.height;
+            text: Filters.deshake-summary;
+            color: Theme.text-muted;
+            font-size: 11px;
+            font-italic: true;
+            vertical-alignment: center;
+            overflow: elide;
         }
     }
 
-    HorizontalLayout {
-        spacing: 4px;
+    TooltipArea {
+        width: 16px;
+        text: "Render only (two passes): the preview does not show it.";
 
-        IconButton {
-            icon: IconId.crop-edit;
-            checked: Filters.crop-editing;
-            enabled: Filters.can-edit-crop;
-            tooltip: Filters.crop-editing
-                ? "Done: keep the crop (Enter). Escape restores the crop from before."
-                : "Edit the crop on the video: drag the corners, the edges or the area. Quicker: hold Ctrl over the video and drag the nearest edge.";
-            shortcut: Filters.key-crop-edit;
-            clicked => { Filters.crop-edit(); }
+        AppIcon {
+            y: (parent.height - self.height) / 2;
+            icon: IconId.render-only;
+            size: IconSize.sm;
+            color: Theme.text-muted;
         }
-
-        IconButton {
-            icon: IconId.crop-auto;
-            enabled: Filters.has-media && !Filters.auto-crop-running;
-            checked: Filters.auto-crop-running;
-            tooltip: Filters.auto-crop-running
-                ? "Looking for black borders..."
-                : "Detect the black borders at several points of the video and crop them.";
-            shortcut: Filters.key-auto-crop;
-            clicked => { Filters.auto-crop(); }
-        }
-
-        ChoiceButton {
-            icon: IconId.crop-aspect;
-            items: Filters.aspects;
-            current: Filters.aspect;
-            tooltip: "Aspect ratio the crop keeps while it is dragged on the video (Source = the uncropped picture's).";
-            selected(index) => { Filters.set-aspect(index); }
-        }
-
-        Rectangle { horizontal-stretch: 1; }
     }
 }
 
@@ -266,10 +302,10 @@ component OrientationGlyph inherits Rectangle {
     }
 }
 
-component OrientationParams inherits HorizontalLayout {
+component OrientationValues inherits HorizontalLayout {
     in property <bool> active;
 
-    spacing: 4px;
+    spacing: 2px;
 
     IconButton {
         icon: IconId.rotate-left;
@@ -319,353 +355,207 @@ component OrientationParams inherits HorizontalLayout {
         }
     }
 
-    Rectangle { horizontal-stretch: 1; }
-}
-
-component ResizeParams inherits VerticalLayout {
-    spacing: 4px;
-
-    HorizontalLayout {
-        spacing: 4px;
-
-        FieldIcon {
-            icon: IconId.size-width;
-            tooltip: "Width in pixels; empty keeps the aspect ratio of the height";
-        }
-
-        NumberField {
-            text: Filters.resize-width;
-            placeholder: Filters.resize-auto-width;
-            unit: "px";
-            tooltip: "Width in pixels (empty = automatic)";
-            committed(text) => { return Filters.edit-resize(0, text); }
-            stepped(steps) => { Filters.step-resize(0, steps); }
-        }
-
-        FieldIcon {
-            icon: IconId.size-height;
-            tooltip: "Height in pixels; empty keeps the aspect ratio of the width";
-        }
-
-        NumberField {
-            text: Filters.resize-height;
-            placeholder: Filters.resize-auto-height;
-            unit: "px";
-            tooltip: "Height in pixels (empty = automatic)";
-            committed(text) => { return Filters.edit-resize(1, text); }
-            stepped(steps) => { Filters.step-resize(1, steps); }
-        }
-    }
-
-    HorizontalLayout {
-        spacing: 4px;
-
-        IconButton {
-            text: "16:9";
-            tooltip: "Height for 16:9 from the width (even)";
-            clicked => { Filters.resize-ratio(0); }
-        }
-
-        IconButton {
-            text: "4:3";
-            tooltip: "Height for 4:3 from the width (even)";
-            clicked => { Filters.resize-ratio(1); }
-        }
-
-        ChoiceButton {
-            items: Filters.algorithms;
-            current: Filters.algorithm;
-            tip-title: "Scaling algorithm";
-            tooltip: "The output has square pixels.";
-            tip-rows: [
-                { label: "bicubic", value: "ffmpeg's balanced default" },
-                { label: "lanczos", value: "The sharpest for shrinking" },
-                { label: "spline", value: "Sharp, close to lanczos" },
-                { label: "bilinear", value: "The fastest" },
-            ];
-            selected(index) => { Filters.set-algorithm(index); }
-        }
-
-        Rectangle { horizontal-stretch: 1; }
+    Rectangle {
+        horizontal-stretch: 0.01;
     }
 }
 
-component DeshakeField inherits HorizontalLayout {
-    in property <int> param;
-    in property <string> name;
-    in property <string> tooltip;
+component ResizeValues inherits HorizontalLayout {
+    spacing: 2px;
 
-    spacing: 4px;
-
-    TooltipArea {
-        text: root.tooltip;
-        horizontal-stretch: 1;
+    NumberField {
         min-width: 30px;
+        text: Filters.resize-width;
+        placeholder: Filters.resize-auto-width;
+        unit: "px";
+        spin: false;
+        tooltip: "Width in pixels; empty keeps the aspect ratio of the height (the dim number is what it comes to)";
+        committed(text) => { return Filters.edit-resize(0, text); }
+        stepped(steps) => { Filters.step-resize(0, steps); }
+    }
 
-        Label {
-            width: parent.width;
-            height: parent.height;
-            text: root.name;
-        }
+    Text {
+        text: "×";
+        color: Theme.text-muted;
+        font-size: 11px;
+        vertical-alignment: center;
     }
 
     NumberField {
-        width: 58px;
-        horizontal-stretch: 0;
-        text: Filters.deshake-values[root.param];
-        tooltip: root.tooltip;
-        committed(text) => { return Filters.edit-deshake(root.param, text); }
-        stepped(steps) => { Filters.step-deshake(root.param, steps); }
+        min-width: 30px;
+        text: Filters.resize-height;
+        placeholder: Filters.resize-auto-height;
+        unit: "px";
+        spin: false;
+        tooltip: "Height in pixels; empty keeps the aspect ratio of the width (the dim number is what it comes to)";
+        committed(text) => { return Filters.edit-resize(1, text); }
+        stepped(steps) => { Filters.step-resize(1, steps); }
+    }
+
+    IconButton {
+        icon: IconId.ratio-presets;
+        tooltip: "The height for a ratio (16:9, 4:3) from the width";
+        clicked => {
+            Filters.resize-ratio-menu(self.absolute-position.x, self.absolute-position.y, self.width, self.height);
+        }
     }
 }
 
-component DeshakeParams inherits VerticalLayout {
-    spacing: 4px;
-
-    Label {
-        text: "Applied in the render (two passes); the preview does not show it.";
-        wrap: word-wrap;
-    }
-
-    HorizontalLayout {
-        spacing: 8px;
-
-        VerticalLayout {
-            spacing: 4px;
-
-            DeshakeField {
-                param: 0;
-                name: "Shakiness";
-                tooltip: "How shaky the video is: 1 (little) to 10 (very). Higher is slower.";
-            }
-
-            DeshakeField {
-                param: 1;
-                name: "Accuracy";
-                tooltip: "Detection accuracy, 1 to 15 (at least the shakiness). Higher is slower.";
-            }
-
-            DeshakeField {
-                param: 2;
-                name: "Step size";
-                tooltip: "Search step in pixels, 1 to 32: smaller is more accurate and slower.";
-            }
-        }
-
-        VerticalLayout {
-            spacing: 4px;
-
-            DeshakeField {
-                param: 3;
-                name: "Smoothing";
-                tooltip: "Frames that smooth the camera path (2n + 1), 0 to 1000: higher is steadier but follows pans later.";
-            }
-
-            DeshakeField {
-                param: 4;
-                name: "Zoom %";
-                tooltip: "Extra zoom in percent, -100 to 100 (hides moving borders).";
-            }
-
-            HorizontalLayout {
-                spacing: 4px;
-
-                TooltipArea {
-                    text: "Virtual tripod: keep the camera fixed on the first frame.";
-                    horizontal-stretch: 1;
-                    min-width: 30px;
-
-                    Label {
-                        width: parent.width;
-                        height: parent.height;
-                        text: "Tripod";
-                    }
-                }
-
-                VerticalLayout {
-                    alignment: center;
-                    width: 44px;
-
-                    Switch {
-                        checked: Filters.deshake-tripod;
-                        tooltip: "Virtual tripod: keep the camera fixed on the first frame.";
-                        toggled => { Filters.set-tripod(!Filters.deshake-tripod); }
-                    }
-                }
-            }
-        }
-    }
-
-    HorizontalLayout {
-        spacing: 4px;
-
-        ChoiceButton {
-            items: ["No auto zoom", "Static zoom", "Adaptive zoom"];
-            current: Filters.deshake-optzoom;
-            tip-title: "Automatic zoom against moving borders";
-            tip-rows: [
-                { label: "Static", value: "One zoom for the whole video" },
-                { label: "Adaptive", value: "Follows the motion" },
-            ];
-            selected(index) => { Filters.set-deshake-choice(0, index); }
-        }
-
-        ChoiceButton {
-            items: ["Black borders", "Previous frame"];
-            current: Filters.deshake-borders;
-            tooltip: "What fills the area the stabilized picture leaves: black, or the previous frame's content.";
-            selected(index) => { Filters.set-deshake-choice(1, index); }
-        }
-
-        Rectangle { horizontal-stretch: 0.01; }
-    }
-
-    HorizontalLayout {
-        spacing: 4px;
-
-        ChoiceButton {
-            items: Filters.interpolations;
-            current: Filters.deshake-interpolation;
-            tooltip: "Interpolation of the moved picture: bicubic is the smoothest, no is the fastest.";
-            selected(index) => { Filters.set-deshake-choice(2, index); }
-        }
-
-        Rectangle { horizontal-stretch: 1; }
-    }
-}
-
+/// One filter. Its free space and its grip drag it (P9.4); a right click opens its menu.
 component FilterRow inherits Rectangle {
     in property <FilterRowView> item;
+    // How far the row moves aside while another one is dragged, and whether it is the dragged one (the ghost shows it
+    // under the pointer, so it is hidden here and keeps its place: its grip holds the pointer).
+    in property <length> drag-shift;
+    in property <bool> lifted;
+    callback drag-started(/* window y of the press */ length);
+    callback drag-moved(/* window y */ length);
+    callback drag-ended();
 
-    border-radius: 4px;
-    background: root.item.enabled ? Theme.surface : transparent;
+    height: root.item.lines * Filters.line-height;
 
-    VerticalLayout {
-        padding: 4px;
-        spacing: 4px;
+    body := Rectangle {
+        y: root.lifted ? 0px : root.drag-shift;
+        animate y { duration: Filters.drag-instant ? 0ms : DragMotion.shift; easing: ease-out; }
+        width: parent.width;
+        height: parent.height;
+        opacity: root.lifted ? 0 : 1;
+        border-radius: 4px;
+        background: area.has-hover && !Filters.dragging ? Theme.surface-hover.with-alpha(0.5) : transparent;
 
-        HorizontalLayout {
-            spacing: 6px;
-            height: 24px;
-
-            VerticalLayout {
-                alignment: center;
-
-                Switch {
-                    checked: root.item.enabled;
-                    tooltip: (root.item.enabled ? "Switch off: " : "Switch on: ") + root.item.tooltip;
-                    toggled => { Filters.toggle(root.item.kind); }
-                }
+        area := DragArea {
+            mouse-cursor: MouseCursor.move;
+            menu(x, y) => {
+                Filters.row-menu(root.item.kind, x, y, body.absolute-position.x + body.width - FilterMetrics.options-width,
+                    body.absolute-position.y + 2px);
             }
-
-            TooltipArea {
-                text: root.item.tooltip;
-                horizontal-stretch: 0;
-                min-width: title.preferred-width;
-
-                title := Text {
-                    width: parent.width;
-                    height: parent.height;
-                    text: root.item.title;
-                    color: root.item.enabled ? Theme.text : Theme.text-muted;
-                    font-size: 12px;
-                    font-weight: 600;
-                    vertical-alignment: center;
-                }
-            }
-
-            // Only for a playable video: a file that does not play is never checked (P8).
-            if root.item.kind == "deinterlace" && Filters.interlace-level > 0 && Playback.has-video: TooltipArea {
-                title: "Interlace check";
-                text: Filters.interlace-detail;
-                rows: Filters.interlace-rows;
-                horizontal-stretch: 1;
-
-                Text {
-                    width: parent.width;
-                    height: parent.height;
-                    text: Filters.interlace-hint;
-                    color: Filters.interlace-level == 2 ? Theme.accent : Theme.text-muted;
-                    font-size: 11px;
-                    vertical-alignment: center;
-                    overflow: elide;
-                }
-            }
-
-            if !(root.item.kind == "deinterlace" && Filters.interlace-level > 0 && Playback.has-video): Rectangle { horizontal-stretch: 1; }
-
-            IconButton {
-                icon: IconId.move-up;
-                icon-size: IconSize.sm;
-                enabled: root.item.can-up;
-                tooltip: "Earlier in the chain (the filters run from top to bottom)";
-                clicked => { Filters.move(root.item.kind, true); }
-            }
-
-            IconButton {
-                icon: IconId.move-down;
-                icon-size: IconSize.sm;
-                enabled: root.item.can-down;
-                tooltip: "Later in the chain (the filters run from top to bottom)";
-                clicked => { Filters.move(root.item.kind, false); }
-            }
+            drag-started(y) => { root.drag-started(y); }
+            drag-moved(y) => { root.drag-moved(y); }
+            drag-ended => { root.drag-ended(); }
         }
 
-        if root.item.enabled && root.item.kind == "deinterlace": DeinterlaceParams { }
-        if root.item.enabled && root.item.kind == "crop": CropParams { }
-        if root.item.enabled && root.item.kind == "deshake": DeshakeParams { }
-        if root.item.enabled && root.item.kind == "orientation": OrientationParams { active: true; }
-        if root.item.enabled && root.item.kind == "resize": ResizeParams { }
+        VerticalLayout {
+            padding-top: 2px;
+            padding-bottom: 2px;
+            spacing: 4px;
+
+            HorizontalLayout {
+                height: 24px;
+                spacing: FilterMetrics.spacing;
+
+                // The handle (the row's free space drags too).
+                Rectangle {
+                    width: FilterMetrics.grip-width;
+
+                    AppIcon {
+                        y: (parent.height - self.height) / 2;
+                        icon: IconId.drag-grip;
+                        size: IconSize.sm;
+                        color: Theme.status-deleted;
+                    }
+                }
+
+                NameButton {
+                    item: root.item;
+                }
+
+                // The values stay usable while the filter is off; they are dimmed (Q-P9.13).
+                values := Rectangle {
+                    horizontal-stretch: 1;
+                    min-width: 0;
+                    opacity: root.item.enabled ? 1 : 0.5;
+
+                    HorizontalLayout {
+                        if root.item.kind == "deinterlace": DeinterlaceValues { }
+                        if root.item.kind == "crop": CropTools { }
+                        if root.item.kind == "deshake": DeshakeValues { }
+                        if root.item.kind == "orientation": OrientationValues {
+                            active: root.item.enabled;
+                        }
+                        if root.item.kind == "resize": ResizeValues { }
+                    }
+                }
+
+                if root.item.has-menu: OptionsButton {
+                    kind: root.item.kind;
+                }
+
+                if !root.item.has-menu: Rectangle {
+                    width: FilterMetrics.options-width;
+                }
+            }
+
+            if root.item.kind == "crop": HorizontalLayout {
+                height: 24px;
+                padding-left: FilterMetrics.grip-width + FilterMetrics.spacing;
+
+                Rectangle {
+                    opacity: root.item.enabled ? 1 : 0.5;
+
+                    CropEdges { }
+                }
+            }
+        }
     }
 }
 
 /// The body of the Filters card.
-export component FiltersCardBody inherits VerticalLayout {
-    padding: 8px;
-    padding-top: 0px;
-    spacing: 4px;
+export component FiltersCardBody inherits Rectangle {
+    VerticalLayout {
+        padding: 8px;
+        padding-top: 0px;
+        padding-left: 4px;
 
-    HorizontalLayout {
-        spacing: 4px;
+        list-area := Rectangle {
+            height: list.preferred-height;
 
-        IconButton {
-            icon: Filters.preview ? IconId.filter-preview : IconId.filter-preview-off;
-            checked: Filters.preview;
-            tooltip: Filters.preview ? "The player shows the filters (click: show the video without them)"
-                : "The player shows the video without filters (click: show them)";
-            shortcut: Filters.key-preview;
-            clicked => { Filters.set-preview(!Filters.preview); }
+            // The card stack scrolled under the pointer: the pointer is measured again (`DragState.scrolls`).
+            property <int> scrolls: DragState.scrolls;
+            changed scrolls => {
+                if Filters.dragging {
+                    Filters.drag-move(DragState.pointer-y - list.absolute-position.y);
+                }
+            }
+
+            list := VerticalLayout {
+                width: parent.width;
+                height: parent.height;
+                alignment: start;
+                spacing: Filters.row-spacing;
+
+                for row[index] in Filters.rows: FilterRow {
+                    item: row;
+                    drag-shift: index < Filters.drag-shifts.length ? Filters.drag-shifts[index] : 0px;
+                    lifted: Filters.dragging && Filters.drag-kind == row.kind;
+                    // Drag & drop (P9.4): window coordinates turn into the list's coordinates.
+                    drag-started(y) => {
+                        DragState.pointer-y = y;
+                        Filters.drag-start(index, y - list.absolute-position.y);
+                    }
+                    drag-moved(y) => {
+                        DragState.pointer-y = y;
+                        Filters.drag-move(y - list.absolute-position.y);
+                    }
+                    drag-ended => { Filters.drag-end(); }
+                }
+            }
+
+            // Where the dragged filter would land (the other rows moved aside).
+            if Filters.dragging: DropGap {
+                x: 0px;
+                y: Filters.drag-gap-y;
+                width: parent.width;
+                height: Math.max(0px, Filters.drag-gap-height - Filters.row-spacing);
+            }
+
+            // The dragged filter under the pointer.
+            if Filters.dragging: DragGhost {
+                x: 0px;
+                y: Filters.drag-ghost-y;
+                width: parent.width;
+                height: Filters.drag-ghost-height;
+                title: Filters.drag-title;
+            }
         }
-
-        IconButton {
-            icon: Filters.keep ? IconId.filter-kept : IconId.filter-keep;
-            checked: Filters.keep;
-            tooltip: Filters.keep ? "The filters stay for the next video and the next start (click: start each video without filters)"
-                : "Keep these filters for the next video and the next start";
-            shortcut: Filters.key-keep;
-            clicked => { Filters.set-keep(!Filters.keep); }
-        }
-
-        IconButton {
-            icon: IconId.filter-reset;
-            hold: true;
-            tooltip: "Reset every filter: off, default values, default order (the key resets at once)";
-            shortcut: Filters.key-reset;
-            clicked => { Filters.reset(); }
-        }
-
-        Text {
-            text: Filters.output;
-            horizontal-stretch: 1;
-            horizontal-alignment: right;
-            color: Filters.output-warning ? Theme.status-corrupt : Theme.text-muted;
-            font-size: 11px;
-            vertical-alignment: center;
-            overflow: elide;
-        }
-    }
-
-    for row in Filters.rows: FilterRow {
-        item: row;
     }
 }
