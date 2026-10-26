@@ -2,8 +2,8 @@
 //! gets, and the crop session on the video (the edit mode with handles, or the quick mode while Ctrl is held).
 
 use rustcut_core::edit::{
-    Crop, CropAspect, DeinterlaceRate, Deinterlacer, DeshakeParams, FieldParity, Filter, FilterChain, FilterKind,
-    OrientationParams, ResizeAlgorithm, Size,
+    Crop, DeinterlaceRate, Deinterlacer, DeshakeParams, FieldParity, Filter, FilterChain, FilterKind,
+    OrientationParams, RatioChoice, RatioSet, ResizeAlgorithm, Size,
 };
 use rustcut_core::media::{CropSearch, IdetCounts, Interlacing};
 use rustcut_core::settings::FilterDefaults;
@@ -86,7 +86,9 @@ pub struct FiltersState {
     source: Option<Source>,
     pub preview: bool,
     pub keep: bool,
-    pub aspect: CropAspect,
+    /// The crop's ratio choice (the ratio button on the crop, P9.14) and the presets of Settings > Filters.
+    pub ratio: RatioChoice,
+    pub(super) ratios: RatioSet,
     pub interlace: InterlaceHint,
     /// How auto-crop searches (kept and reset with the chain).
     pub search: CropSearch,
@@ -102,28 +104,36 @@ pub fn default_chain(defaults: &FilterDefaults) -> FilterChain {
 }
 
 impl FiltersState {
-    /// The defaults a fresh chain gets from now on (the current chain stays as it is).
+    /// The defaults a fresh chain gets from now on (the current chain stays as it is); the ratio choice keeps its label
+    /// when the presets changed (the source's ratio when it is gone).
     pub fn set_defaults(&mut self, defaults: FilterDefaults) {
+        let label = self.ratios.label(self.ratio).to_owned();
+        self.ratios = defaults.ratios();
+        self.ratio = self.ratios.choice_of(&label).unwrap_or_default();
         self.defaults = defaults;
     }
 
-    /// The state at startup: the kept chain and search when "keep" was on, else the defaults.
+    /// The state at startup: the kept chain and search when "keep" was on, else the defaults; `ratio` = the label of
+    /// the crop's ratio choice (the source's ratio when it is unknown).
     pub fn new(
         defaults: FilterDefaults,
         preview: bool,
         keep: bool,
         kept: (Option<FilterChain>, Option<CropSearch>),
-        aspect: CropAspect,
+        ratio: Option<&str>,
     ) -> Self {
         let chain = kept.0.filter(|_| keep).unwrap_or_else(|| default_chain(&defaults));
         let search = kept.1.filter(|_| keep).unwrap_or(defaults.crop_search).sanitized();
+        let ratios = defaults.ratios();
+        let ratio = ratio.and_then(|label| ratios.choice_of(label)).unwrap_or_default();
         Self {
             chain,
             defaults,
             source: None,
             preview,
             keep,
-            aspect,
+            ratio,
+            ratios,
             interlace: InterlaceHint::None,
             search,
             auto_crop_running: false,
@@ -156,6 +166,16 @@ impl FiltersState {
 
     pub const fn defaults(&self) -> &FilterDefaults {
         &self.defaults
+    }
+
+    /// The crop's aspect ratio presets (Settings > Filters).
+    pub const fn ratios(&self) -> &RatioSet {
+        &self.ratios
+    }
+
+    /// The label of the crop's ratio choice ("O" or a preset's), kept in `ui-state.toml`.
+    pub fn ratio_choice_label(&self) -> &str {
+        self.ratios.label(self.ratio)
     }
 
     /// Another video is opening: a crop session ends (kept), the picture checks start over, and the filters go back to
@@ -441,18 +461,6 @@ impl FiltersState {
 
     pub fn set_deshake(&mut self, params: DeshakeParams) {
         self.chain.set(Filter::Deshake(params.sanitized()));
-    }
-
-    /// Chooses the aspect lock; while the crop is edited, the crop takes that shape at once.
-    pub fn set_aspect(&mut self, aspect: CropAspect) {
-        self.aspect = aspect;
-        if self.crop.is_some()
-            && let Some(view) = self.crop_view()
-            && let Some(ratio) = aspect.ratio(view.shown_aspect())
-        {
-            let fitted = view.fit_aspect(self.crop(), ratio);
-            self.chain.set(Filter::Crop(fitted));
-        }
     }
 
     // --- What the player and the card show ---------------------------------------------------------------------------

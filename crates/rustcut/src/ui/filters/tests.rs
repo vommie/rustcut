@@ -8,7 +8,7 @@
 )]
 
 use proptest::prelude::*;
-use rustcut_core::edit::{Crop, CropAspect, FilterKind, Orientation, Size};
+use rustcut_core::edit::{Crop, FilterKind, Orientation, Size};
 use rustcut_core::media::{IdetCounts, Interlacing};
 use rustcut_core::settings::FilterDefaults;
 
@@ -190,7 +190,7 @@ fn source(size: Size, rotation: u16) -> Source {
 }
 
 fn state() -> FiltersState {
-    let mut s = FiltersState::new(FilterDefaults::default(), true, false, (None, None), CropAspect::Free);
+    let mut s = FiltersState::new(FilterDefaults::default(), true, false, (None, None), None);
     s.file_opened();
     s.source_known(source(HD, 0));
     s.set_view(960.0, 540.0);
@@ -287,7 +287,7 @@ fn resize_helpers_take_the_height_from_the_width() {
 
 #[test]
 fn the_preview_follows_the_toggle_the_source_rotation_and_crop_editing() {
-    let mut s = FiltersState::new(FilterDefaults::default(), true, false, (None, None), CropAspect::Free);
+    let mut s = FiltersState::new(FilterDefaults::default(), true, false, (None, None), None);
     s.set_crop(Crop::new(0, 0, 0, 100));
     s.switch_on(FilterKind::Crop);
     assert_eq!(s.preview_filter().lavfi, "", "nothing before the probe");
@@ -321,7 +321,7 @@ fn a_crop_session_drags_and_escape_restores() {
     assert!(s.chain().is_enabled(FilterKind::Crop));
     // The whole frame fills the 960x540 area: grab the left edge and pull it 50 view pixels in.
     assert!(s.crop_pointer_down(0.0, 270.0));
-    assert!(s.crop_pointer_moved(50.0, 280.0));
+    assert!(s.crop_pointer_moved(50.0, 280.0, false));
     assert!(s.crop_pointer_up());
     assert_eq!(s.crop(), Crop::new(0, 0, 0, 100));
     s.end_crop(false);
@@ -330,7 +330,7 @@ fn a_crop_session_drags_and_escape_restores() {
     // Quick mode grabs the nearest edge from anywhere over the picture.
     assert!(s.begin_crop(CropMode::Quick));
     assert!(s.crop_pointer_down(470.0, 30.0));
-    s.crop_pointer_moved(470.0, 60.0);
+    s.crop_pointer_moved(470.0, 60.0, false);
     s.crop_pointer_up();
     s.end_crop(true);
     assert_eq!(s.crop(), Crop::new(60, 0, 0, 0));
@@ -350,9 +350,9 @@ fn keep_carries_the_chain_to_the_next_video_and_start() {
     s.file_opened();
     assert_eq!(s.orientation().turns, 3);
     let kept = (s.kept_chain(), s.kept_search());
-    let restarted = FiltersState::new(FilterDefaults::default(), true, true, kept.clone(), CropAspect::Free);
+    let restarted = FiltersState::new(FilterDefaults::default(), true, true, kept.clone(), None);
     assert_eq!((restarted.orientation().turns, restarted.search.limit), (3, 60));
-    let off = FiltersState::new(FilterDefaults::default(), true, false, kept, CropAspect::Free);
+    let off = FiltersState::new(FilterDefaults::default(), true, false, kept, None);
     assert_eq!((off.orientation().turns, off.search.limit), (0, 24));
 }
 

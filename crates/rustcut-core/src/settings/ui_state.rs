@@ -130,9 +130,14 @@ pub struct ExportPanelState {
     #[serde_as(as = "DefaultOnError")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub crop_search: Option<CropSearch>,
-    /// The aspect ratio a crop keeps while it is dragged on the video.
+    /// The aspect ratio a crop kept while it was dragged (0.0.49 and older; read for `crop_ratio` when that is missing,
+    /// written for older versions).
     #[serde_as(as = "DefaultOnError")]
     pub crop_aspect: CropAspect,
+    /// The crop's ratio choice: "O" (the source's) or a preset's label (0.0.50, P9.14); `None` = from `crop_aspect`.
+    #[serde_as(as = "DefaultOnError")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crop_ratio: Option<String>,
     /// A filter's options menu stays open while the pointer works elsewhere (its pin, P9.13; 0.0.49).
     pub filter_menu_pinned: bool,
     /// Render profile of the next job (id): the profile the Render Settings panel's working copy came from.
@@ -163,6 +168,7 @@ impl Default for ExportPanelState {
             filters: None,
             crop_search: None,
             crop_aspect: CropAspect::Free,
+            crop_ratio: None,
             filter_menu_pinned: false,
             profile: None,
             render: None,

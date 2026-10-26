@@ -6,7 +6,7 @@
 
 use std::rc::{Rc, Weak};
 
-use rustcut_core::edit::FilterKind;
+use rustcut_core::edit::{FilterKind, RatioPreset};
 use slint::ComponentHandle as _;
 
 use super::view::{self, RowView};
@@ -60,6 +60,18 @@ pub fn row_items(row: &RowView) -> Vec<MenuItem> {
         );
     }
     items
+}
+
+/// The resize ratio menu: a heading and one entry per preset (its id = the preset's index).
+pub fn resize_ratio_items(presets: &[RatioPreset]) -> Vec<MenuItem> {
+    std::iter::once(MenuItem::Heading("Height from the width".into()))
+        .chain(
+            presets
+                .iter()
+                .enumerate()
+                .map(|(i, p)| MenuAction::new(i.to_string(), p.label.clone(), None).into()),
+        )
+        .collect()
 }
 
 impl FiltersBridge {
@@ -166,17 +178,19 @@ impl FiltersBridge {
         }
     }
 
-    /// The resize's ratio button: the height for 16:9 or 4:3 from the width.
+    /// The resize's ratio button: the height for one of the crop's ratios (Settings > Filters, 13#4) from the width.
     fn resize_ratio_menu(&self, anchor: [f32; 4]) {
         let Some(menu) = self.menu.upgrade() else { return };
-        let items: Vec<MenuItem> = vec![
-            MenuAction::new("16:9", "Height for 16:9", None).into(),
-            MenuAction::new("4:3", "Height for 4:3", None).into(),
-        ];
+        let presets = self.state.borrow().ratios().presets.clone();
+        let items = resize_ratio_items(&presets);
         let this = Weak::clone(&self.me);
         menu.show_at(&items, anchor, move |id| {
-            let ratio = if id == "4:3" { 4.0 / 3.0 } else { 16.0 / 9.0 };
-            if let Some(bridge) = this.upgrade() {
+            let ratio = id
+                .parse::<usize>()
+                .ok()
+                .and_then(|i| presets.get(i))
+                .map(|p| p.ratio.value());
+            if let (Some(bridge), Some(ratio)) = (this.upgrade(), ratio) {
                 bridge.update(|s| s.resize_to_ratio(ratio));
             }
         });

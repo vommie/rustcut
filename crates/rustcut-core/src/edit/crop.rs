@@ -49,6 +49,23 @@ impl CropAspect {
         }
     }
 
+    /// The ratio choice of 0.0.50 this lock became: the source's ("O") or a preset's label; `None` for Free.
+    pub const fn ratio_label(self) -> Option<&'static str> {
+        match self {
+            Self::Free => None,
+            Self::Source => Some(super::ORIGINAL_LABEL),
+            other => Some(other.label()),
+        }
+    }
+
+    /// The lock an older RustCut understands for a ratio choice (Free for one it does not know).
+    pub fn from_ratio_label(label: &str) -> Self {
+        Self::ALL
+            .into_iter()
+            .find(|a| a.ratio_label() == Some(label))
+            .unwrap_or(Self::Free)
+    }
+
     /// The display width / height to keep; `source` is the uncropped picture's. `None` = free.
     pub fn ratio(self, source: f64) -> Option<f64> {
         match self {
@@ -194,6 +211,16 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
+
+    #[test]
+    fn an_old_aspect_lock_becomes_a_ratio_choice_and_back() {
+        assert_eq!(CropAspect::Free.ratio_label(), None);
+        assert_eq!(CropAspect::Source.ratio_label(), Some("O"));
+        assert_eq!(CropAspect::Wide.ratio_label(), Some("16:9"));
+        assert_eq!(CropAspect::from_ratio_label("9:16"), CropAspect::Portrait);
+        assert_eq!(CropAspect::from_ratio_label("O"), CropAspect::Source);
+        assert_eq!(CropAspect::from_ratio_label("21:9"), CropAspect::Free);
+    }
 
     #[test]
     fn clockwise_moves_left_to_top() {

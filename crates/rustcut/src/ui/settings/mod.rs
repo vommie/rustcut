@@ -17,6 +17,7 @@ mod input;
 mod messages;
 pub mod page;
 mod profiles;
+mod ratios;
 mod view;
 
 use std::cell::{Cell, RefCell};
@@ -41,7 +42,8 @@ const PROFILE_JUMP_KEY: &str = "settings:profiles.selected";
 
 use crate::{
     FolderRowView, HoldConfirm, HotkeyChipView, HotkeyRowView, MainWindow, MessageKindView, OptionRowView,
-    ProfileItemView, RenderIssueView, SettingCardView, SettingRowView, SettingsUi, SettingsWindow, TooltipSettings,
+    ProfileItemView, RatioChipView, RenderIssueView, SettingCardView, SettingRowView, SettingsUi, SettingsWindow,
+    TooltipSettings,
 };
 
 /// The help text of the option `key` (`config.toml`'s name, as `Field::key`); empty for an unknown key. The filters'
@@ -68,6 +70,7 @@ struct Models {
     /// One row model per card slot, so a card keeps its elements while its rows change, and the rows it shows.
     card_rows: RefCell<Vec<CardSlot>>,
     folders: Rc<VecModel<FolderRowView>>,
+    ratios: Rc<VecModel<RatioChipView>>,
     profiles: Rc<VecModel<ProfileItemView>>,
     issues: Rc<VecModel<RenderIssueView>>,
     video: Rc<VecModel<OptionRowView>>,
@@ -147,6 +150,7 @@ impl SettingsBridge {
                 cards: Rc::new(VecModel::default()),
                 card_rows: RefCell::default(),
                 folders: Rc::new(VecModel::default()),
+                ratios: Rc::new(VecModel::default()),
                 profiles: Rc::new(VecModel::default()),
                 issues: Rc::new(VecModel::default()),
                 video: Rc::new(VecModel::default()),
@@ -302,6 +306,7 @@ impl SettingsBridge {
         ui.set_pages(ModelRc::from(Rc::clone(&m.pages)));
         ui.set_cards(ModelRc::from(Rc::clone(&m.cards)));
         ui.set_folders(ModelRc::from(Rc::clone(&m.folders)));
+        ui.set_ratios(ModelRc::from(Rc::clone(&m.ratios)));
         ui.set_folder_drag_shifts(ModelRc::from(Rc::clone(&self.folder_shifts)));
         ui.set_profiles(ModelRc::from(Rc::clone(&m.profiles)));
         ui.set_profile_issues(ModelRc::from(Rc::clone(&m.issues)));
@@ -323,6 +328,7 @@ impl SettingsBridge {
             );
         }
         input::connect(&self.me, &window);
+        ratios::connect(&self.me, &window);
         let this = Weak::clone(&self.me);
         let weak = window.as_weak();
         window.window().on_close_requested(move || {
@@ -420,6 +426,7 @@ impl SettingsBridge {
             Special::Hotkeys => 3,
             Special::About => 4,
             Special::Messages => 5,
+            Special::CropRatios => 6,
         });
         ui.set_resettable(!catalog::cards(page).is_empty() || page == Page::Hotkeys);
         let cards = view::cards(page, &settings, &self.errors.borrow(), self);
@@ -429,6 +436,7 @@ impl SettingsBridge {
             Special::Profiles => self.publish_profiles(&ui, &settings),
             Special::Hotkeys => self.publish_hotkeys(&ui),
             Special::Messages => self.publish_messages(&ui, &settings),
+            Special::CropRatios => self.publish_ratios(&settings),
             Special::None | Special::About => {}
         }
     }

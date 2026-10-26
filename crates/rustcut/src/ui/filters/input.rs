@@ -2,7 +2,7 @@
 
 use std::rc::{Rc, Weak};
 
-use rustcut_core::edit::{CropAspect, DeshakeCrop, DeshakeInterpolation, DeshakeParams};
+use rustcut_core::edit::{DeshakeCrop, DeshakeInterpolation, DeshakeParams};
 use rustcut_core::media::CropSearch;
 use slint::ComponentHandle as _;
 
@@ -150,11 +150,6 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
     f.on_crop_edit(move || crop_edit(()));
     let auto_crop = with(&this, |b, ()| b.auto_crop());
     f.on_auto_crop(move || auto_crop(()));
-    f.on_set_aspect(change(&this, |s, i: i32| {
-        if let Some(a) = usize::try_from(i).ok().and_then(|i| CropAspect::ALL.get(i)) {
-            s.set_aspect(*a);
-        }
-    }));
     f.on_rotate(change(&this, FiltersState::turn));
     f.on_mirror(change(&this, FiltersState::flip));
     let edit_resize = Weak::clone(&this);
@@ -240,10 +235,22 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
     }));
 
     let o = window.global::<CropOverlay<'_>>();
-    let pointer = with(&this, |b, (kind, x, y, control): (i32, f32, f32, bool)| {
-        b.pointer(kind, x, y, control);
+    let pointer = with(&this, |b, (kind, x, y, control, shift): (i32, f32, f32, bool, bool)| {
+        b.pointer(kind, x, y, control, shift);
     });
-    o.on_pointer(move |kind, x, y, control| pointer((kind, x, y, control)));
+    o.on_pointer(move |kind, x, y, control, shift| pointer((kind, x, y, control, shift)));
+    let cycle = with(&this, |b, landscape: bool| {
+        if b.state.borrow_mut().cycle_ratio(landscape) {
+            b.publish();
+        }
+    });
+    o.on_cycle_ratio(cycle);
+    let double = with(&this, |b, (x, y): (f32, f32)| {
+        if b.state.borrow().inside_crop(x, y) {
+            b.end_crop(true);
+        }
+    });
+    o.on_double_clicked(move |x, y| double((x, y)));
     let left = with(&this, |b, ()| b.pointer_left());
     o.on_left(move || left(()));
     let resized = with(&this, |b, (w, h): (f32, f32)| {
@@ -315,8 +322,8 @@ pub(super) fn typed_deshake(current: DeshakeParams, param: i32, text: &str) -> O
 }
 
 impl FiltersBridge {
-    /// The pointer over the video (`kind`: 0 down, 1 up, 2 move), with Ctrl's state.
-    fn pointer(&self, kind: i32, x: f32, y: f32, control: bool) {
+    /// The pointer over the video (`kind`: 0 down, 1 up, 2 move), with Ctrl's and Shift's state.
+    fn pointer(&self, kind: i32, x: f32, y: f32, control: bool, shift: bool) {
         self.hover.set(Some((x, y)));
         match kind {
             0 => {
@@ -352,7 +359,7 @@ impl FiltersBridge {
                     }
                     _ => {}
                 }
-                if self.state.borrow_mut().crop_pointer_moved(x, y) {
+                if self.state.borrow_mut().crop_pointer_moved(x, y, shift) {
                     if dragging {
                         self.publish_card();
                     }
@@ -391,7 +398,7 @@ impl FiltersBridge {
         };
         if started {
             if let Some((x, y)) = self.hover.get() {
-                self.state.borrow_mut().crop_pointer_moved(x, y);
+                self.state.borrow_mut().crop_pointer_moved(x, y, false);
             }
             self.publish();
         }

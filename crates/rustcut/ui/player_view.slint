@@ -7,7 +7,7 @@ import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Playback } from "player_types.slint";
 import { Shortcuts } from "shortcuts.slint";
-import { CropCursor, CropOverlay, CropOverlayView } from "crop_overlay.slint";
+import { CropCursor, CropOverlay, CropOverlayView, CropPills } from "crop_overlay.slint";
 
 /// The play or pause symbol over the video (user decision Q-P9.9): a dark translucent disc with the white symbol.
 component PlaySymbol inherits Rectangle {
@@ -65,11 +65,17 @@ export component PlayerView inherits Rectangle {
                 return;
             }
             if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
-                CropOverlay.pointer(0, self.mouse-x, self.mouse-y, event.modifiers.control);
+                CropOverlay.pointer(0, self.mouse-x, self.mouse-y, event.modifiers.control, event.modifiers.shift);
             } else if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
-                CropOverlay.pointer(1, self.mouse-x, self.mouse-y, event.modifiers.control);
+                CropOverlay.pointer(1, self.mouse-x, self.mouse-y, event.modifiers.control, event.modifiers.shift);
             } else if event.kind == PointerEventKind.move {
-                CropOverlay.pointer(2, self.mouse-x, self.mouse-y, event.modifiers.control);
+                CropOverlay.pointer(2, self.mouse-x, self.mouse-y, event.modifiers.control, event.modifiers.shift);
+            }
+        }
+
+        double-clicked => {
+            if Playback.has-video && CropOverlay.active {
+                CropOverlay.double-clicked(self.mouse-x, self.mouse-y);
             }
         }
 
@@ -86,6 +92,14 @@ export component PlayerView inherits Rectangle {
             Playback.wheel(event.delta-y);
             accept
         }
+    }
+
+    // The crop's size and ratio button lie over the pointer area (the button takes its own clicks).
+    if CropOverlay.active && Playback.has-video: CropPills {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
     }
 
     // While paused a faint pause symbol stays in the middle (setting, Q-P9.9: 40 %).

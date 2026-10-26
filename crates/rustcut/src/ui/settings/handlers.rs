@@ -44,6 +44,14 @@ impl SettingsBridge {
         if page == Page::Messages {
             self.reset_kinds();
         }
+        if page == Page::Filters {
+            self.update(|s| {
+                s.filters.crop_ratios = rustcut_core::edit::DEFAULT_RATIOS
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect();
+            });
+        }
         let refused: Vec<String> = std::mem::take(&mut *self.errors.borrow_mut()).into_keys().collect();
         for key in refused {
             notices::clear(&bubble_key(&key));

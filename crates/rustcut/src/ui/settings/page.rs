@@ -30,6 +30,8 @@ pub enum Special {
     Hotkeys,
     About,
     Messages,
+    /// The crop's aspect ratios (Filters, P9.14).
+    CropRatios,
 }
 
 impl Page {
@@ -111,6 +113,7 @@ impl Page {
     pub const fn special(self) -> Special {
         match self {
             Self::Export => Special::Folders,
+            Self::Filters => Special::CropRatios,
             Self::Profiles => Special::Profiles,
             Self::Hotkeys => Special::Hotkeys,
             Self::About => Special::About,

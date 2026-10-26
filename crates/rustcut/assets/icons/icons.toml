@@ -76,6 +76,10 @@ menu_pinned = { tabler = "pinned", doc = "The options menu is pinned" }
 analyze_again = { tabler = "analyze", doc = "Run the interlace check again" }
 render_only = { tabler = "info-circle", doc = "A filter that only the render applies (not the preview)" }
 ratio_presets = { tabler = "aspect-ratio", doc = "Resize: the height for a ratio from the width" }
+ratio_landscape = { tabler = "rectangle", doc = "A landscape aspect ratio (Settings > Filters, RustView's)" }
+ratio_portrait = { tabler = "rectangle-vertical", doc = "A portrait aspect ratio" }
+ratio_square = { tabler = "square", doc = "A square aspect ratio" }
+ratio_add = { tabler = "plus", doc = "Add an aspect ratio" }
 deshake_shakiness = { tabler = "wave-sine", doc = "Deshake: how shaky the video is" }
 deshake_accuracy = { tabler = "target", doc = "Deshake: detection accuracy" }
 deshake_stepsize = { tabler = "grid-dots", doc = "Deshake: search step" }

@@ -147,6 +147,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The crop has a ratio button like RustView's crop tool (0.0.50, your UI review note 13): while the crop is edited on
+  the video, the pill at its top right shows the ratio; a left click goes through the landscape ratios, a right click
+  through the portrait ones (square ones are in both; O is the video's own). Each ratio keeps the area of the crop you
+  made and the edges it touches, so going through the ratios and back gives the same crop. It reads "Free" once you
+  drag the crop out of that shape. A double click inside the crop keeps it, like Enter.
+- Settings > Filters > Crop ratios (0.0.50): the ratios as chips, as in RustView: add one ("16:9", "2.39:1" or "1.85"),
+  remove one (held), or go back to the default list (held). Resize's ratio button offers the same list (your note
+  13#4). `config.toml` gets `[filters] crop_ratios`; older files load with RustView's default list.
+
 - Every filter but Orientation has an options menu (0.0.49, your filter questionnaire): the adjustments button at the
   end of its row opens a bubble beside it, with an arrow to the button, the options in groups and every change at
   once. Deinterlace: the deinterlacer, "Output" (frames or fields), "Field order", "Only interlaced frames", and what
@@ -175,6 +184,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   "Play and pause" switches either off (both are on; older settings files load unchanged).
 
 ### Changed
+
+- Dragging the crop on the video is free; hold Shift to keep its ratio (0.0.50, your note 13): the chosen ratio while
+  the crop has it, else the crop's own. The aspect-ratio choice in the Filters card is gone (your note 13#2); the
+  ratio you chose is remembered, and the one an older version kept (`crop_aspect` in `ui-state.toml`) is taken over as
+  `crop_ratio`.
 
 - The Filters card is rebuilt (0.0.49, layout A of your filter questionnaire): one row per filter with its name as the
   on/off button (filled and bold when on), its values always visible (dimmed while it is off; changing them keeps it
