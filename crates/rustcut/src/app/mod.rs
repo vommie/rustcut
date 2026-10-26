@@ -527,12 +527,12 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     shutdown::watch_signals(runtime.handle(), ui, main.as_weak());
 
     // A newer settings file or an unusable queue database: their dialogs come first (M6.5d).
-    let _problems = ProblemsBridge::install(
+    let problems = ProblemsBridge::install(
         &main,
         ProblemParts {
             runtime: runtime.handle().clone(),
             paths: &loaded.paths,
-            writer,
+            writer: writer.clone(),
             ui_read_only: Rc::clone(&loaded.ui_read_only),
             store: store.clone(),
             queue: queue_service.handle.clone(),
@@ -542,6 +542,21 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         loaded.newer.clone(),
         store_problem,
     );
+    // The Diagnostics page's facts (P9.16): the settings, the paths and what the services know now.
+    {
+        let paths = loaded.paths.clone();
+        let (render, tags, problems) = (Rc::downgrade(&render), Rc::downgrade(&tags), Rc::downgrade(&problems));
+        let ui_read_only = Rc::clone(&loaded.ui_read_only);
+        settings_window.hooks().diagnostics = Some(Box::new(move || {
+            let mut facts = crate::ui::settings::diagnostics::facts(&writer.current(), &paths);
+            facts.config_writable = writer.writable();
+            facts.ui_state_writable = !ui_read_only.get();
+            facts.capabilities = render.upgrade().and_then(|r| r.capabilities());
+            facts.connection = tags.upgrade().map(|t| t.connection_state());
+            facts.database_in_memory = problems.upgrade().is_some_and(|p| p.queue_in_memory());
+            facts
+        }));
+    }
     if let Some(first) = cli.files.first() {
         opener.open(first.clone());
     }

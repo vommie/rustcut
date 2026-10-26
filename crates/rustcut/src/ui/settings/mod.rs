@@ -7,6 +7,7 @@
 //! (created at the first open, hidden on close), its models and the page state kept in `ui-state.toml`.
 
 mod catalog;
+pub mod diagnostics;
 mod field;
 mod folder_drag;
 mod folder_path;
@@ -59,6 +60,8 @@ pub struct Hooks {
     pub probe_rustview: Option<Box<dyn Fn()>>,
     /// What the capability check knows about the encoders (the profile editor offers those that work).
     pub encoders: Option<Box<dyn Fn() -> Encoders>>,
+    /// What the app knows for the Diagnostics page (the capability check, RustView's connection, the queue's database).
+    pub diagnostics: Option<Box<dyn Fn() -> rustcut_core::diagnostics::Facts>>,
 }
 
 /// A card's row model and the rows it shows.
@@ -108,6 +111,8 @@ pub struct SettingsBridge {
     /// A target folder that is dragged (P9.7) and how far each row moves aside meanwhile.
     folder_drag: RefCell<Option<folder_drag::FolderDrag>>,
     folder_shifts: Rc<VecModel<f32>>,
+    /// The Diagnostics page's last report and whether its checks run (P9.16).
+    diag: RefCell<diagnostics::DiagState>,
 }
 
 impl SettingsBridge {
@@ -163,6 +168,7 @@ impl SettingsBridge {
             tested: RefCell::new(None),
             tested_timer: slint::Timer::default(),
             messages_shown: RefCell::default(),
+            diag: RefCell::default(),
             folder_drag: RefCell::new(None),
             folder_shifts: Rc::new(VecModel::default()),
         });
@@ -329,6 +335,7 @@ impl SettingsBridge {
         }
         input::connect(&self.me, &window);
         ratios::connect(&self.me, &window);
+        diagnostics::connect(&self.me, &window);
         let this = Weak::clone(&self.me);
         let weak = window.as_weak();
         window.window().on_close_requested(move || {
@@ -427,6 +434,7 @@ impl SettingsBridge {
             Special::About => 4,
             Special::Messages => 5,
             Special::CropRatios => 6,
+            Special::Diagnostics => 7,
         });
         ui.set_resettable(!catalog::cards(page).is_empty() || page == Page::Hotkeys);
         let cards = view::cards(page, &settings, &self.errors.borrow(), self);
@@ -437,6 +445,7 @@ impl SettingsBridge {
             Special::Hotkeys => self.publish_hotkeys(&ui),
             Special::Messages => self.publish_messages(&ui, &settings),
             Special::CropRatios => self.publish_ratios(&settings),
+            Special::Diagnostics => self.publish_diagnostics(),
             Special::None | Special::About => {}
         }
     }

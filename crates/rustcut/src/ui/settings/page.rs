@@ -18,6 +18,8 @@ pub enum Page {
     Desktop,
     Appearance,
     Advanced,
+    /// What RustCut needs and how it is doing (P9.16).
+    Diagnostics,
     About,
 }
 
@@ -32,10 +34,12 @@ pub enum Special {
     Messages,
     /// The crop's aspect ratios (Filters, P9.14).
     CropRatios,
+    /// The checks of Settings > Diagnostics (P9.16).
+    Diagnostics,
 }
 
 impl Page {
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
         Self::General,
         Self::Player,
         Self::Editor,
@@ -51,6 +55,7 @@ impl Page {
         Self::Desktop,
         Self::Appearance,
         Self::Advanced,
+        Self::Diagnostics,
         Self::About,
     ];
 
@@ -72,6 +77,7 @@ impl Page {
             Self::Desktop => "desktop",
             Self::Appearance => "appearance",
             Self::Advanced => "advanced",
+            Self::Diagnostics => "diagnostics",
             Self::About => "about",
         }
     }
@@ -93,6 +99,7 @@ impl Page {
             Self::Desktop => "Desktop Integration",
             Self::Appearance => "Appearance",
             Self::Advanced => "Advanced & Logs",
+            Self::Diagnostics => "Diagnostics",
             Self::About => "About",
         }
     }
@@ -118,6 +125,7 @@ impl Page {
             Self::Hotkeys => Special::Hotkeys,
             Self::About => Special::About,
             Self::Messages => Special::Messages,
+            Self::Diagnostics => Special::Diagnostics,
             _ => Special::None,
         }
     }

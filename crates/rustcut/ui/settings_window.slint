@@ -16,6 +16,7 @@ import { DragLogic, DragState } from "drag.slint";
 import { BubbleLayer } from "bubble.slint";
 import { SettingsFolders } from "settings_folders.slint";
 import { SettingsCropRatios } from "settings_ratios.slint";
+import { SettingsDiagnostics } from "settings_diagnostics.slint";
 import { SettingsProfiles } from "settings_profiles.slint";
 import { SettingsHotkeys } from "settings_hotkeys.slint";
 import { SettingsAbout } from "settings_about.slint";
@@ -175,6 +176,8 @@ export component SettingsWindow inherits Window {
                             if SettingsUi.special == 5: SettingsMessages { }
 
                             if SettingsUi.special == 6: SettingsCropRatios { }
+
+                            if SettingsUi.special == 7: SettingsDiagnostics { }
                         }
                     }
 

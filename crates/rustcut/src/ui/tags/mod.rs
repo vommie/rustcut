@@ -97,6 +97,11 @@ pub struct TagsBridge {
 }
 
 impl TagsBridge {
+    /// Whether RustView can be reached (the Diagnostics page).
+    pub fn connection_state(&self) -> ConnectionState {
+        self.connection.borrow().clone()
+    }
+
     /// The names of the tags `ids` as the tree has them ("Travel, Iceland").
     pub fn names_of(&self, ids: &[u32]) -> String {
         view::tag_names(&self.state.borrow(), ids)

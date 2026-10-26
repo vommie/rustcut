@@ -51,7 +51,11 @@ pub fn connection(state: &ConnectionState) -> ConnectionView {
             error: reason.clone(),
             kind: 2,
             can_retry: true,
-            jump: Some(rustview_option("rustview.binary")),
+            // The diagnosis says what is wrong (P9.16, the review's note 28#1).
+            jump: Some(JumpTarget::Settings {
+                page: Page::Diagnostics,
+                key: "diagnostics.rustview",
+            }),
         },
         ConnectionState::Disabled => ConnectionView {
             text: "RustView is switched off".into(),
@@ -125,7 +129,19 @@ mod tests {
             down.error, "RustView cannot be started: not installed",
             "the error is the button's tooltip"
         );
+        // The button leads to the diagnosis of RustView (P9.16, 28#1); switched off, to the switch.
+        assert_eq!(
+            down.jump.map(JumpTarget::element_key).as_deref(),
+            Some("settings:diagnostics.rustview")
+        );
         assert!(!connection(&ConnectionState::Disabled).can_retry);
+        assert_eq!(
+            connection(&ConnectionState::Disabled)
+                .jump
+                .map(JumpTarget::element_key)
+                .as_deref(),
+            Some("settings:rustview.enabled")
+        );
     }
 
     #[test]
