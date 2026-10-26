@@ -5,10 +5,10 @@
 use std::rc::Weak;
 
 use rustcut_core::edit::{FilterKind, LavfiTarget};
-use rustcut_core::media::{crop_sample_times, detect_crop, detect_interlace};
+use rustcut_core::media::{crop_sample_times, detect_crop_retrying, detect_interlace, pick_color};
 
 use super::FiltersBridge;
-use super::state::{Edge, InterlaceHint, Source};
+use super::state::{CropMode, Edge, InterlaceHint, Source};
 use crate::ui::notices::{Kind, Level, Notice};
 
 impl FiltersBridge {
@@ -72,6 +72,73 @@ impl FiltersBridge {
         );
     }
 
+    /// The Crop menu's "pick the border color": the whole frame shows and the next click on the video picks.
+    pub fn start_pick(&self) {
+        if self.suspended.get() {
+            return;
+        }
+        if self.state.borrow().crop_session().is_some() {
+            self.state.borrow_mut().end_crop(true);
+        }
+        if self.state.borrow_mut().begin_crop(CropMode::Pick) {
+            tracing::debug!("[Filters] Picking a border color");
+            // An open menu that is not pinned would take the click on the video (a press outside closes it).
+            if !self.menu_pinned.get() {
+                self.menu_kind.set(None);
+            }
+        }
+        self.publish();
+    }
+
+    /// A click while picking: the color of the frame's pixel there (read by ffmpeg at the playhead), then auto-crop
+    /// with it (an action: the crop switches on).
+    pub(super) fn pick_at(&self, x: f32, y: f32) {
+        let point = self.state.borrow().crop_view().and_then(|view| view.frame_point(x, y));
+        self.state.borrow_mut().end_crop(false);
+        self.publish();
+        let Some(point) = point else { return };
+        let job = {
+            let st = self.state.borrow();
+            let prefix = st.chain().before(FilterKind::Crop).to_lavfi(LavfiTarget::Preview);
+            match (self.file.borrow().clone(), prefix) {
+                (Some(file), Ok(prefix)) => Some((file, prefix)),
+                _ => None,
+            }
+        };
+        let Some((file, prefix)) = job else { return };
+        let at = self
+            .player
+            .upgrade()
+            .map_or(rustcut_core::time::Timestamp::ZERO, |p| p.position());
+        tracing::info!(x = point.0, y = point.1, at = %at, "[Filters] Border color picked at");
+        let options = self.detect.borrow().clone();
+        let task = self
+            .runtime
+            .spawn(async move { pick_color(&file, at, &prefix, point, &options).await });
+        let generation = self.generation.get();
+        let bridge = Weak::clone(&self.me);
+        let spawned = slint::spawn_local(async move {
+            let Ok(result) = task.await else { return };
+            let Some(bridge) = bridge.upgrade() else { return };
+            if bridge.generation.get() != generation {
+                return;
+            }
+            match result {
+                Ok(rgb) => {
+                    tracing::info!(color = ?rgb, "[Filters] Border color");
+                    bridge.update(|s| s.set_search(|search| search.color = Some(rgb)));
+                    bridge.auto_crop();
+                }
+                Err(e) => {
+                    Self::tell(Notice::new(Kind::AutoCropFailed, "The color could not be read").detail(e.to_string()));
+                }
+            }
+        });
+        if let Err(e) = spawned {
+            tracing::error!(error = %e, "[Filters] The event loop is gone; no color pick");
+        }
+    }
+
     /// Detects the black borders over several points of the video and crops them (the button, the key).
     pub fn auto_crop(&self) {
         let job = {
@@ -113,7 +180,7 @@ impl FiltersBridge {
         let options = self.detect.borrow().clone();
         let task = self
             .runtime
-            .spawn(async move { detect_crop(&file, frame, &times, &prefix, &search, &options).await });
+            .spawn(async move { detect_crop_retrying(&file, frame, &times, &prefix, &search, &options).await });
         *self.crop_task.borrow_mut() = Some(task.abort_handle());
         let generation = self.generation.get();
         let bridge = Weak::clone(&self.me);
@@ -135,7 +202,17 @@ impl FiltersBridge {
                 }
                 Ok(found) if found.crop.is_identity() => {
                     bridge.publish_card();
-                    Self::tell(Notice::new(Kind::AutoCrop, "No black borders found").level(Level::Info));
+                    let what = if found.search.color.is_some() {
+                        "No borders of that color"
+                    } else {
+                        "No black borders"
+                    };
+                    let tries = if found.tries > 1 {
+                        format!(" in {} tries", found.tries)
+                    } else {
+                        String::new()
+                    };
+                    Self::tell(Notice::new(Kind::AutoCrop, format!("{what} found{tries}")).level(Level::Info));
                 }
                 Ok(found) => {
                     tracing::info!(crop = ?found.crop, samples = found.samples_used, "[Filters] Black borders");
@@ -162,9 +239,18 @@ impl FiltersBridge {
                         (v > 0).then(|| format!("{v} {name}"))
                     })
                     .collect();
+                    let title = if found.search.color.is_some() {
+                        "Borders of the picked color cropped"
+                    } else {
+                        "Black borders cropped"
+                    };
+                    let retried = match (found.tries, found.search.color) {
+                        (1, _) => String::new(),
+                        (n, Some(_)) => format!(" (try {n}: tolerance {} %)", found.search.similarity),
+                        (n, None) => format!(" (try {n}: black up to {})", found.search.limit),
+                    };
                     Self::tell(
-                        Notice::new(Kind::AutoCrop, "Black borders cropped")
-                            .detail(format!("{} pixels", parts.join(", "))),
+                        Notice::new(Kind::AutoCrop, title).detail(format!("{} pixels{retried}", parts.join(", "))),
                     );
                 }
                 Err(e) => {

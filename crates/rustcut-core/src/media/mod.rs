@@ -8,6 +8,7 @@ mod detect;
 mod ffprobe;
 mod formats;
 mod model;
+mod pixel;
 mod preview;
 mod probe;
 mod summary;
@@ -16,7 +17,7 @@ mod timing;
 pub use crop_search::{CROP_SAMPLES, CropSearch, CropSides, crop_sample_times};
 pub use detect::{
     CropBox, CropDetection, DetectOptions, IdetCounts, Interlacing, combine_crop_samples, cropdetect_args, detect_crop,
-    detect_interlace, idet_args, idet_start, parse_cropdetect, parse_idet,
+    detect_crop_retrying, detect_interlace, idet_args, idet_start, parse_cropdetect, parse_idet,
 };
 pub use ffprobe::{DecodeError, decode, decode_timing};
 pub use formats::{VIDEO_FORMATS, is_video_file, video_extensions};
@@ -24,6 +25,7 @@ pub use model::{
     AudioStream, ColorInfo, Container, FieldOrder, FrameRateMode, FrameTiming, MediaInfo, Ratio, Stream, StreamKind,
     VideoStream,
 };
+pub use pixel::{pick_args, pick_color};
 pub use preview::{
     DEFAULT_PARALLEL, Preview, PreviewBatch, PreviewError, PreviewEvent, PreviewOptions, PreviewPrograms,
     PreviewRequest, PreviewService, PreviewSlot, THUMB_HEIGHT, THUMB_WIDTH, Thumbnail, picture_time, thumbnail_args,

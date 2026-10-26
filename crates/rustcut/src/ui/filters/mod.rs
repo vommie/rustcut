@@ -358,7 +358,7 @@ impl FiltersBridge {
         let session = self.state.borrow().crop_session().map(|s| s.mode);
         match session {
             Some(CropMode::Edit) => self.end_crop(true),
-            Some(CropMode::Quick) | None => {
+            Some(CropMode::Quick | CropMode::Pick) | None => {
                 // Without a video the card is closed (the state manager, M6.5e) and its key does nothing.
                 if !self.state.borrow_mut().begin_crop(CropMode::Edit) {
                     tracing::debug!("[Filters] No video: the crop is not edited");

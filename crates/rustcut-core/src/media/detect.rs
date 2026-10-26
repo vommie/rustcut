@@ -43,7 +43,7 @@ impl Default for DetectOptions {
 }
 
 impl DetectOptions {
-    fn program(&self) -> &Path {
+    pub(crate) fn program(&self) -> &Path {
         self.program.as_deref().unwrap_or_else(|| Path::new("ffmpeg"))
     }
 }
@@ -89,12 +89,15 @@ pub struct CropDetection {
     /// Samples that showed some picture (black samples say nothing about the borders).
     pub samples_used: usize,
     pub samples_taken: usize,
+    /// The search that found it (its tolerance) and how many tries it took (0.0.52).
+    pub search: CropSearch,
+    pub tries: usize,
 }
 
 /// The ffmpeg arguments of one crop sample at `at`: the filters before the crop (`prefix`, lavfi text, may be empty) so
 /// the borders are found in the frame the crop gets, then `cropdetect` over a few frames.
 pub fn cropdetect_args(file: &Path, at: Timestamp, prefix: &str, search: &CropSearch) -> Vec<OsString> {
-    let detect = format!("cropdetect=limit={}:round=2:reset=0", search.limit_fraction());
+    let detect = search.detect_filters();
     let filters = if prefix.is_empty() {
         detect
     } else {
@@ -178,19 +181,66 @@ pub async fn detect_crop(
             Err(e) => tracing::warn!(error = %e, "[Media] A crop sample task ended abnormally"),
         }
     }
+    // With a picked color a sample without that color anywhere at its edges (a fade to black covers the bars too) says
+    // nothing about them while another sample saw them, as a black sample says nothing about black bars.
+    if search.color.is_some() {
+        let whole = |b: &CropBox| b.x1 == 0 && b.y1 == 0 && b.x2 + 1 >= frame.width && b.y2 + 1 >= frame.height;
+        if boxes.iter().any(|b| !whole(b)) {
+            boxes.retain(|b| !whole(b));
+        }
+    }
     match (combine_crop_samples(&boxes, frame), first_error) {
         (Some(crop), _) => Ok(CropDetection {
             crop: search.sides.keep(crop),
             samples_used: boxes.len(),
             samples_taken: times.len(),
+            search: *search,
+            tries: 1,
         }),
         (None, Some(error)) => Err(error),
         (None, None) => Ok(CropDetection {
             crop: Crop::default(),
             samples_used: 0,
             samples_taken: times.len(),
+            search: *search,
+            tries: 1,
         }),
     }
+}
+
+/// [`detect_crop`] with the tries of `search` ([`CropSearch::tries`]): the next try runs only while nothing was found
+/// in samples that showed a picture. Must run on the tokio runtime.
+pub async fn detect_crop_retrying(
+    file: &Path,
+    frame: Size,
+    times: &[Timestamp],
+    prefix: &str,
+    search: &CropSearch,
+    options: &DetectOptions,
+) -> Result<CropDetection, ProbeError> {
+    let mut found = None;
+    for (index, attempt) in search.tries().into_iter().enumerate() {
+        let result = detect_crop(file, frame, times, prefix, &attempt, options).await?;
+        let done = result.samples_used == 0 || !result.crop.is_identity();
+        tracing::debug!(
+            try_number = index + 1,
+            tolerance = attempt.tolerance(),
+            done,
+            "[Media] Auto-crop try"
+        );
+        found = Some(CropDetection {
+            tries: index + 1,
+            ..result
+        });
+        if done {
+            break;
+        }
+    }
+    found.ok_or_else(|| ProbeError::Failed {
+        program: options.program().display().to_string(),
+        status: "not run".into(),
+        message: "no try".into(),
+    })
 }
 
 /// What `idet`'s multi-frame detection counted.

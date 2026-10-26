@@ -45,7 +45,14 @@ impl FiltersState {
         let defaults = self.defaults().sanitized();
         match kind {
             FilterKind::Deinterlace => self.deinterlace() == defaults.deinterlace(),
-            FilterKind::Crop => self.search == defaults.crop_search && self.multiple == defaults.crop_multiple,
+            // The picked color belongs to the video, never to the defaults.
+            FilterKind::Crop => {
+                CropSearch {
+                    color: None,
+                    ..self.search
+                } == defaults.crop_search
+                    && self.multiple == defaults.crop_multiple
+            }
             FilterKind::Deshake => self.deshake() == defaults.deshake,
             FilterKind::Resize => self.resize().2 == defaults.resize_algorithm,
             FilterKind::Orientation => true,
@@ -87,7 +94,10 @@ impl FiltersState {
                 }
             }
             FilterKind::Crop => {
-                defaults.crop_search = self.search;
+                defaults.crop_search = CropSearch {
+                    color: None,
+                    ..self.search
+                };
                 defaults.crop_multiple = self.multiple;
             }
             FilterKind::Deshake => defaults.deshake = self.deshake(),

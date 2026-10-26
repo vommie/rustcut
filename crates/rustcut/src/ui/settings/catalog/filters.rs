@@ -185,6 +185,54 @@ pub static FILTERS: &[Card] = &[
                 enabled: always,
                 indent: false,
             },
+            number!(
+                "filters.crop_search.similarity",
+                "Color tolerance",
+                "With a picked border color: how far a pixel's color may be from it and still count as border. 10 % \
+                 suits clean bars; more also takes noisy ones, too much eats into the picture.",
+                filters.crop_search.similarity: u8,
+                1..=100,
+                1,
+                "%"
+            ),
+            number!(
+                "filters.crop_search.retries",
+                "Retries",
+                "When nothing is found, auto-crop tries again with more tolerance, the last try at the maximum. 2 \
+                 (recommended) finds dark gray or noisy bars; 0 tries once.",
+                filters.crop_search.retries: u8,
+                0..=5,
+                1,
+                ""
+            ),
+            number!(
+                "filters.crop_search.step",
+                "Raise by",
+                "How much more tolerance each retry has, in percent of the one before (50 = by half).",
+                filters.crop_search.step: u8,
+                10..=200,
+                10,
+                "%"
+            ),
+            number!(
+                "filters.crop_search.max_limit",
+                "Most black",
+                "The highest black limit a retry uses. 64 still finds #303030 bars; much higher cuts into dark \
+                 pictures.",
+                filters.crop_search.max_limit: u8,
+                1..=255,
+                1,
+                ""
+            ),
+            number!(
+                "filters.crop_search.max_similarity",
+                "Most color tolerance",
+                "The highest color tolerance a retry uses (30 % recommended).",
+                filters.crop_search.max_similarity: u8,
+                1..=100,
+                1,
+                "%"
+            ),
             switch!(
                 "filters.crop_search.sections_only",
                 "Only inside the sections",
