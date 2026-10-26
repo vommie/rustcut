@@ -207,6 +207,17 @@ fn retries_find_dark_gray_bars_and_a_picked_color_finds_white_ones() {
         ))
         .unwrap();
     assert!(color.iter().all(|c| *c >= 250), "{color:?}");
+    // The playhead on the last frame (6 s at 25 fps: it starts at 5.96 s, nothing starts at 5.99 s): the frame shown.
+    let at_end = rt
+        .block_on(pick_color(
+            &white,
+            Timestamp::from_millis(5_990),
+            "",
+            (300, 10),
+            &DetectOptions::default(),
+        ))
+        .unwrap();
+    assert!(at_end.iter().all(|c| *c >= 250), "{at_end:?}");
     let picked = CropSearch {
         color: Some(color),
         ..CropSearch::default()
