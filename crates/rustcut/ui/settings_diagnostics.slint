@@ -1,0 +1,257 @@
+// Settings > Diagnostics (P9.16, the review's note 28#1; RustView's Debug page in RustCut's controls): two cards,
+// Dependencies and Health, each with a one-line summary; what needs attention comes first, the checks that passed are one
+// row that lists them on a click (remembered). A check can carry commands that fix it (copy buttons). Each row has a jump
+// mark (`settings:diagnostics.<id>`): the Tag & Rate panel's RustView card leads to `rustview`. "Check again" runs every
+// check; "Copy report" puts all of them on the clipboard. src/ui/settings/diagnostics.rs fills `SettingsUi.diag-*`.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { IconButton } from "controls.slint";
+import { TooltipArea } from "tooltip.slint";
+import { SettingsCard } from "settings_card.slint";
+import { DiagCheckView, DiagGroupView, SettingsUi } from "settings_types.slint";
+import { JumpFlash } from "jump.slint";
+
+global DiagStyle {
+    public pure function icon(status: int) -> IconId {
+        if status == 3 {
+            return IconId.status-error;
+        }
+        if status == 2 {
+            return IconId.status-warning;
+        }
+        if status == 1 {
+            return IconId.notice-info;
+        }
+        return IconId.status-ok;
+    }
+
+    public pure function color(status: int) -> color {
+        if status == 3 {
+            return Theme.status-corrupt;
+        }
+        if status == 2 {
+            return Theme.accent;
+        }
+        if status == 1 {
+            return Theme.primary;
+        }
+        return Theme.status-ok;
+    }
+}
+
+/// A command that fixes a check, with a copy button.
+component FixLine inherits HorizontalLayout {
+    in property <string> command;
+
+    spacing: 6px;
+
+    Rectangle {
+        horizontal-stretch: 1;
+        border-radius: 4px;
+        background: Theme.background;
+
+        Text {
+            x: 8px;
+            width: parent.width - 16px;
+            text: root.command;
+            font-family: "monospace";
+            font-size: 11px;
+            color: Theme.text;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    IconButton {
+        icon: IconId.copy;
+        tooltip: "Copy the command";
+        clicked => { SettingsUi.diag-copy-line(root.command); }
+    }
+}
+
+component CheckRow inherits Rectangle {
+    in property <DiagCheckView> check;
+
+    height: body.preferred-height;
+
+    body := VerticalLayout {
+        spacing: 4px;
+        padding-top: 2px;
+        padding-bottom: 2px;
+
+        HorizontalLayout {
+            spacing: 8px;
+
+            VerticalLayout {
+                alignment: start;
+                padding-top: 1px;
+
+                AppIcon {
+                    icon: DiagStyle.icon(root.check.status);
+                    size: IconSize.md;
+                    color: DiagStyle.color(root.check.status);
+                }
+            }
+
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: 1px;
+
+                Text {
+                    text: root.check.title;
+                    color: Theme.text;
+                    font-size: 12px;
+                    font-weight: root.check.status >= 2 ? 700 : 400;
+                    wrap: word-wrap;
+                }
+
+                if root.check.detail != "": Text {
+                    text: root.check.detail;
+                    color: Theme.text-muted;
+                    font-size: 11px;
+                    wrap: word-wrap;
+                }
+            }
+        }
+
+        for line in root.check.fix: FixLine {
+            command: line;
+        }
+    }
+
+    JumpFlash {
+        key: "settings:diagnostics." + root.check.id;
+    }
+}
+
+/// The row that stands for the checks that passed; a click lists them.
+component PassedRow inherits Rectangle {
+    in property <int> count;
+    in property <bool> shown;
+    callback toggled();
+
+    height: 26px;
+    border-radius: 4px;
+    background: area.has-hover ? Theme.surface-hover : Theme.surface-variant;
+
+    area := TooltipArea {
+        width: parent.width;
+        height: parent.height;
+        text: root.shown ? "Hide the checks that passed" : "Show the checks that passed";
+
+        TouchArea {
+            width: parent.width;
+            height: parent.height;
+            mouse-cursor: MouseCursor.pointer;
+            clicked => { root.toggled(); }
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: 4px;
+        padding-right: 8px;
+        spacing: 6px;
+
+        VerticalLayout {
+            alignment: center;
+
+            AppIcon {
+                icon: root.shown ? IconId.chevron-down : IconId.chevron-right;
+                size: IconSize.md;
+                color: Theme.text-muted;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+
+            AppIcon {
+                icon: IconId.status-ok;
+                size: IconSize.md;
+                color: Theme.status-ok;
+            }
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: root.count == 1 ? "1 check passed" : root.count + " checks passed";
+            color: Theme.text;
+            font-size: 12px;
+            vertical-alignment: center;
+        }
+    }
+}
+
+component CheckCard inherits SettingsCard {
+    in property <DiagGroupView> group;
+    in property <bool> passed-shown;
+    callback passed-toggled();
+
+    HorizontalLayout {
+        Text {
+            text: SettingsUi.diag-running ? "Checking…" : root.group.summary;
+            color: root.group.alarming ? Theme.accent : Theme.text-muted;
+            font-size: 12px;
+            font-weight: root.group.alarming ? 700 : 400;
+        }
+    }
+
+    for check in root.group.attention: CheckRow {
+        check: check;
+    }
+
+    if root.group.passed.length > 0: PassedRow {
+        count: root.group.passed.length;
+        shown: root.passed-shown;
+        toggled => { root.passed-toggled(); }
+    }
+
+    if root.passed-shown: VerticalLayout {
+        spacing: 6px;
+        padding-left: 12px;
+
+        for check in root.group.passed: CheckRow {
+            check: check;
+        }
+    }
+}
+
+export component SettingsDiagnostics inherits VerticalLayout {
+    spacing: 16px;
+
+    HorizontalLayout {
+        spacing: 6px;
+        alignment: end;
+
+        IconButton {
+            icon: IconId.reload;
+            enabled: !SettingsUi.diag-running;
+            tooltip: "Check again";
+            clicked => { SettingsUi.diag-check(); }
+        }
+
+        IconButton {
+            icon: IconId.copy;
+            enabled: !SettingsUi.diag-running;
+            tooltip: "Copy the report (to paste it into a message)";
+            clicked => { SettingsUi.diag-copy(); }
+        }
+    }
+
+    CheckCard {
+        title: "Dependencies";
+        description: "The programs and libraries RustCut uses.";
+        group: SettingsUi.diag-dependencies;
+        passed-shown: SettingsUi.diag-passed-shown[0];
+        passed-toggled => { SettingsUi.diag-passed-toggled(0); }
+    }
+
+    CheckCard {
+        title: "Health";
+        description: "RustCut's files and folders, the space for renders, and RustView.";
+        group: SettingsUi.diag-health;
+        passed-shown: SettingsUi.diag-passed-shown[1];
+        passed-toggled => { SettingsUi.diag-passed-toggled(1); }
+    }
+}

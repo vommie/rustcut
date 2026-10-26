@@ -318,6 +318,7 @@ fn the_settings_window_round_trips_and_old_files_load() {
             hotkey_search: "crop".into(),
             messages_tab: 1,
             messages_search: "failed".into(),
+            diagnostics_passed: [true, false],
         },
         ..UiState::default()
     };
@@ -348,6 +349,10 @@ hotkey_search = \"x\"
     assert_eq!(
         (read.settings.messages_tab, read.settings.hotkey_search.as_str()),
         (0, "x")
+    );
+    assert_eq!(
+        read.settings.diagnostics_passed, [false; 2],
+        "0.0.54's field starts folded"
     );
     std::fs::write(dir.path().join("ui-state.toml"), "version = 1\nsettings = 3\n").unwrap();
     let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();

@@ -147,6 +147,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Settings > Diagnostics (0.0.54, your UI review note 28#1, like RustView's Debug page): two cards, Dependencies
+  (ffmpeg, ffprobe, mpv, vid.stab, the encoders that work, RustView's program) and Health (config.toml and
+  ui-state.toml, the queue database, the folders RustCut writes, the target folders, the free space for renders and
+  the cache, RustView's connection and library). What needs attention comes first, with the commands that fix it and a
+  copy button; the checks that passed fold into one row (remembered). "Check again" runs them again, "Copy report"
+  copies all of them for a message. Nothing is written while checking.
+
 - Auto-crop also finds borders of any color (0.0.52, your UI review note 13#1): in the Crop filter's menu, "Border"
   has a pipette; click it, then a border in the video, and auto-crop looks for that color (white, gray, blue bars)
   instead of black. "Color tolerance" says how close a pixel must be; × goes back to dark borders. The color belongs to
@@ -204,6 +211,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   "Play and pause" switches either off (both are on; older settings files load unchanged).
 
 ### Changed
+
+- The button of the Tag & Rate panel's RustView card leads to the RustView check of Settings > Diagnostics while
+  RustView cannot be reached (0.0.54, your note 28#1); its tooltip still says the error.
 
 - Every tab bar looks like a browser's (0.0.53, your UI review note 01#2 and your tab questionnaire): the selected tab
   is in its panel's color with rounded top corners and small curves into the panel, so it merges with it; the other

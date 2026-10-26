@@ -28,7 +28,7 @@ pub fn cards(page: Page) -> &'static [Card] {
         Page::Editor => editing::EDITOR,
         Page::Filters => filters::FILTERS,
         Page::Export => editing::EXPORT,
-        Page::Profiles | Page::Hotkeys | Page::About => &[],
+        Page::Profiles | Page::Hotkeys | Page::Diagnostics | Page::About => &[],
         Page::Queue => work::QUEUE,
         Page::RustView => work::RUSTVIEW,
         Page::Warnings => app::WARNINGS,

@@ -62,6 +62,11 @@ pub struct ProblemsBridge {
 }
 
 impl ProblemsBridge {
+    /// The queue runs in memory: its database could not be used (the Diagnostics page).
+    pub fn queue_in_memory(&self) -> bool {
+        self.db.borrow().is_some() || self.temporary.borrow().is_some()
+    }
+
     /// Shows the dialogs `newer` and `store` call for. The app owns the only strong reference.
     pub fn install(
         window: &MainWindow,

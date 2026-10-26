@@ -58,6 +58,8 @@ pub struct SettingsWindowState {
     /// The Messages page's tab (0 look, 1 kinds, 2 muted) and its search (0.0.26).
     pub messages_tab: u8,
     pub messages_search: String,
+    /// The Diagnostics page lists the checks that passed (Dependencies, Health; 0.0.54).
+    pub diagnostics_passed: [bool; 2],
 }
 
 impl SettingsWindowState {
@@ -75,6 +77,7 @@ impl Default for SettingsWindowState {
             hotkey_search: String::new(),
             messages_tab: 0,
             messages_search: String::new(),
+            diagnostics_passed: [false; 2],
         }
     }
 }

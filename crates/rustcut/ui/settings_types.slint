@@ -31,6 +31,24 @@ export struct SettingCardView {
     rows: [SettingRowView],
 }
 
+// One check of Settings > Diagnostics (P9.16). `status`: 0 ok, 1 info, 2 warning, 3 problem; `fix` = commands that
+// fix it (each with a copy button).
+export struct DiagCheckView {
+    id: string,
+    status: int,
+    title: string,
+    detail: string,
+    fix: [string],
+}
+
+// The checks of one card: what needs attention (problems first), what passed, and the header's summary.
+export struct DiagGroupView {
+    attention: [DiagCheckView],
+    passed: [DiagCheckView],
+    summary: string,
+    alarming: bool,
+}
+
 // One aspect ratio of the crop (Settings > Filters, P9.14): its label and whether it is landscape (0), portrait (1) or
 // square (2).
 export struct RatioChipView {
@@ -101,7 +119,7 @@ export global SettingsUi {
     in property <[string]> pages;
     in property <int> page;
     in property <string> page-title;
-    // 0 none, 1 target folders, 2 render profiles, 3 hotkeys, 4 About, 5 Messages, 6 crop ratios (Filters).
+    // 0 none, 1 target folders, 2 render profiles, 3 hotkeys, 4 About, 5 Messages, 6 crop ratios (Filters), 7 Diagnostics.
     in property <int> special;
     in property <[SettingCardView]> cards;
     // The page has generic options that can go back to their defaults.
@@ -129,6 +147,16 @@ export global SettingsUi {
     // A button row.
     callback action(/* key */ string);
     callback close();
+
+    // Diagnostics (P9.16): the two cards, whether the checks run, which cards list the checks that passed.
+    in property <DiagGroupView> diag-dependencies;
+    in property <DiagGroupView> diag-health;
+    in property <bool> diag-running;
+    in property <[bool]> diag-passed-shown: [false, false];
+    callback diag-check();
+    callback diag-copy();
+    callback diag-copy-line(string);
+    callback diag-passed-toggled(/* 0 dependencies, 1 health */ int);
 
     // Filters: the crop's aspect ratios (P9.14). A typed ratio is added (false = refused: the field stays open with a
     // bubble that says why), typed again after a refusal, or the field closed.

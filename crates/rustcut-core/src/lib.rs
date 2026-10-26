@@ -6,6 +6,7 @@
 
 pub mod actor;
 pub mod app_identity;
+pub mod diagnostics;
 pub mod edit;
 pub mod hashing;
 pub mod job;
