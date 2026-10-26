@@ -133,7 +133,7 @@ component DeinterlaceValues inherits HorizontalLayout {
     }
 }
 
-/// Line 1 of Crop: edit on the video, auto-crop, the aspect lock, and the size the crop keeps.
+/// Line 1 of Crop: edit on the video, auto-crop, and the size the crop keeps (the ratios are on the crop itself, P9.14).
 component CropTools inherits HorizontalLayout {
     spacing: 2px;
 
@@ -143,7 +143,7 @@ component CropTools inherits HorizontalLayout {
         enabled: Filters.can-edit-crop;
         tooltip: Filters.crop-editing
             ? "Done: keep the crop (Enter). Escape restores the crop from before."
-            : "Edit the crop on the video: drag the corners, the edges or the area. Quicker: hold Ctrl over the video and drag the nearest edge.";
+            : "Edit the crop on the video: drag the corners, the edges or the area (Shift keeps the ratio; the button on the crop picks one). Quicker: hold Ctrl over the video and drag the nearest edge.";
         shortcut: Filters.key-crop-edit;
         clicked => { Filters.crop-edit(); }
     }
@@ -157,16 +157,6 @@ component CropTools inherits HorizontalLayout {
             : "Detect the black borders at several points of the video and crop them (the options menu says how).";
         shortcut: Filters.key-auto-crop;
         clicked => { Filters.auto-crop(); }
-    }
-
-    ChoiceButton {
-        compact: true;
-        icon: IconId.crop-aspect;
-        items: Filters.aspects;
-        current: Filters.aspect;
-        tooltip: "Aspect ratio the crop keeps while it is dragged on the video: " + Filters.aspects[Filters.aspect]
-            + " (Source = the uncropped picture's).";
-        selected(index) => { Filters.set-aspect(index); }
     }
 
     TooltipArea {

@@ -31,6 +31,13 @@ export struct SettingCardView {
     rows: [SettingRowView],
 }
 
+// One aspect ratio of the crop (Settings > Filters, P9.14): its label and whether it is landscape (0), portrait (1) or
+// square (2).
+export struct RatioChipView {
+    label: string,
+    kind: int,
+}
+
 // A named target folder of the Export & Naming page.
 export struct FolderRowView {
     label: string,
@@ -94,7 +101,7 @@ export global SettingsUi {
     in property <[string]> pages;
     in property <int> page;
     in property <string> page-title;
-    // 0 none, 1 target folders, 2 render profiles, 3 hotkeys, 4 About, 5 Messages.
+    // 0 none, 1 target folders, 2 render profiles, 3 hotkeys, 4 About, 5 Messages, 6 crop ratios (Filters).
     in property <int> special;
     in property <[SettingCardView]> cards;
     // The page has generic options that can go back to their defaults.
@@ -122,6 +129,15 @@ export global SettingsUi {
     // A button row.
     callback action(/* key */ string);
     callback close();
+
+    // Filters: the crop's aspect ratios (P9.14). A typed ratio is added (false = refused: the field stays open with a
+    // bubble that says why), typed again after a refusal, or the field closed.
+    in property <[RatioChipView]> ratios;
+    callback add-ratio(string) -> bool;
+    callback ratio-typed(string);
+    callback ratio-canceled();
+    callback remove-ratio(int);
+    callback reset-ratios();
 
     // Export & Naming: the named target folders.
     in property <[FolderRowView]> folders;

@@ -1,8 +1,11 @@
 // The crop drawn over the video while it is edited (src/ui/filters/ computes every number: where the picture is, the
 // kept area, the handle under the pointer). Outside the kept area the picture is dimmed; the edit mode shows handles at
-// the corners and edges, the quick mode (Ctrl held) highlights the edge or corner nearest to the pointer.
+// the corners and edges, the quick mode (Ctrl held) highlights the edge or corner nearest to the pointer. Over the
+// video's pointer area lie the kept size and the ratio button (`CropPills`, P9.14 like RustView's crop tool: a left
+// click goes through the landscape ratios of Settings > Filters, a right click through the portrait ones).
 
 import { Theme } from "styles.slint";
+import { TooltipHost } from "tooltip.slint";
 
 export global CropOverlay {
     in property <bool> active;
@@ -19,12 +22,19 @@ export global CropOverlay {
     // 0 top-left, 1 top, 2 top-right, 3 right, 4 bottom-right, 5 bottom, 6 bottom-left, 7 left, 8 inside, -1 none.
     in property <int> handle: -1;
     in property <bool> dragging;
-    // "1440×1080 · 4:3"
+    // "1440×1080"
     in property <string> size-text;
+    // The ratio button: "16:9", "O" (the source's), or "Free" when the crop left the chosen ratio's shape.
+    in property <string> ratio-label;
     in property <string> hint;
 
-    // The pointer over the video in its coordinates: 0 down, 1 up, 2 move. `control` = Ctrl is held.
-    callback pointer(/* kind */ int, /* x */ length, /* y */ length, /* control */ bool);
+    // The pointer over the video in its coordinates: 0 down, 1 up, 2 move. `control` = Ctrl is held, `shift` = Shift
+    // (a drag keeps the ratio).
+    callback pointer(/* kind */ int, /* x */ length, /* y */ length, /* control */ bool, /* shift */ bool);
+    // A double click (inside the crop it keeps the crop, like Enter).
+    callback double-clicked(/* x */ length, /* y */ length);
+    // The ratio button: the next landscape (left click) or portrait (right click) ratio.
+    callback cycle-ratio(/* landscape */ bool);
     callback left();
     callback resized(/* width */ length, /* height */ length);
 }
@@ -183,24 +193,6 @@ export component CropOverlayView inherits Rectangle {
         }
     }
 
-    // Size of the kept area.
-    if root.kw > 0: Rectangle {
-        x: Math.min(root.kx + 6px, root.px + root.pw - self.width - 4px);
-        y: Math.min(root.ky + 6px, root.py + root.ph - self.height - 4px);
-        width: size-label.preferred-width + 12px;
-        height: 20px;
-        border-radius: 10px;
-        background: #11111bd0;
-
-        size-label := Text {
-            text: CropOverlay.size-text;
-            color: Theme.text;
-            font-size: 11px;
-            vertical-alignment: center;
-            horizontal-alignment: center;
-        }
-    }
-
     // What the keys do.
     if CropOverlay.hint != "": Rectangle {
         x: (parent.width - self.width) / 2;
@@ -217,6 +209,80 @@ export component CropOverlayView inherits Rectangle {
             vertical-alignment: center;
             horizontal-alignment: center;
             overflow: elide;
+        }
+    }
+}
+
+/// A pill over the video (the kept size, the ratio button).
+component CropPill inherits Rectangle {
+    in property <string> text;
+    in property <bool> hovered;
+
+    width: label.preferred-width + 14px;
+    height: 20px;
+    border-radius: 10px;
+    background: root.hovered ? #313244e8 : #11111bd0;
+    border-width: root.hovered ? 1px : 0px;
+    border-color: Theme.primary;
+
+    label := Text {
+        text: root.text;
+        color: Theme.text;
+        font-size: 11px;
+        font-weight: 600;
+        vertical-alignment: center;
+        horizontal-alignment: center;
+    }
+}
+
+/// The kept size (top left inside the crop) and the ratio button (top right) of the crop being edited; above the
+/// video's pointer area (the ratio button takes its clicks, the size lets them through).
+export component CropPills inherits Rectangle {
+    property <length> px: CropOverlay.picture-x;
+    property <length> py: CropOverlay.picture-y;
+    property <length> pw: CropOverlay.picture-width;
+    property <length> ph: CropOverlay.picture-height;
+    property <length> kx: CropOverlay.kept-x;
+    property <length> ky: CropOverlay.kept-y;
+    property <length> kw: CropOverlay.kept-width;
+
+    size-pill := CropPill {
+        visible: root.kw > 0;
+        text: CropOverlay.size-text;
+        x: Math.min(root.kx + 6px, root.px + root.pw - self.width - 4px);
+        y: Math.min(root.ky + 6px, root.py + root.ph - self.height - 4px);
+    }
+
+    if !CropOverlay.quick && root.kw > 0: CropPill {
+        text: CropOverlay.ratio-label;
+        hovered: ratio-touch.has-hover;
+        x: Math.min(root.px + root.pw - self.width - 4px, Math.max(size-pill.x + size-pill.width + 6px,
+            root.kx + root.kw - self.width - 6px));
+        y: size-pill.y;
+
+        host := TooltipHost {
+            title: "Aspect ratio";
+            text: "O = the source's own; Free = the crop left the ratio's shape. Left click: the next landscape ratio, right click: the next portrait ratio (Settings > Filters). Shift while dragging keeps the ratio.";
+        }
+
+        ratio-touch := TouchArea {
+            mouse-cursor: MouseCursor.pointer;
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down {
+                    host.press();
+                    if event.button == PointerEventButton.right {
+                        CropOverlay.cycle-ratio(false);
+                    }
+                }
+            }
+            clicked => { CropOverlay.cycle-ratio(true); }
+            changed has-hover => {
+                if self.has-hover {
+                    host.enter();
+                } else {
+                    host.leave();
+                }
+            }
         }
     }
 }

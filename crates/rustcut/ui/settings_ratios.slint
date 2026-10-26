@@ -1,0 +1,120 @@
+// Settings > Filters: the aspect ratios of the crop (P9.14, the review's note 13; RustView's chip editor): the ratio
+// button on the crop goes through them (a left click through the landscape ones, a right click through the portrait
+// ones, square ones on both) and Resize offers them. The chip is RustView's `RatioChip`
+// (`crates/rustview/ui/settings_page_image_edit.slint`), its remove button held (user decision Q-Q4). src/ui/settings/
+// ratios.rs fills `SettingsUi.ratios` and handles the callbacks; every change is saved at once.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { IconButton, NumberField } from "controls.slint";
+import { SettingsCard } from "settings_card.slint";
+import { RatioChipView, SettingsUi } from "settings_types.slint";
+import { JumpFlash } from "jump.slint";
+
+/// A ratio as a chip: its shape, the ratio, a held button that removes it.
+component RatioChip inherits Rectangle {
+    in property <RatioChipView> chip;
+
+    callback remove();
+
+    height: 28px;
+    width: layout.preferred-width;
+    border-radius: 14px;
+    background: Theme.surface-variant;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    layout := HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 2px;
+        spacing: 6px;
+
+        VerticalLayout {
+            alignment: center;
+
+            AppIcon {
+                icon: root.chip.kind == 0 ? IconId.ratio-landscape : (root.chip.kind == 1 ? IconId.ratio-portrait : IconId.ratio-square);
+                size: IconSize.md;
+                color: Theme.primary;
+            }
+        }
+
+        Text {
+            text: root.chip.label;
+            font-size: 12px;
+            font-weight: 600;
+            color: Theme.text;
+            vertical-alignment: center;
+        }
+
+        VerticalLayout {
+            alignment: center;
+
+            IconButton {
+                icon: IconId.close;
+                icon-size: IconSize.sm;
+                hold: true;
+                tooltip: "Remove " + root.chip.label;
+                clicked => { root.remove(); }
+            }
+        }
+    }
+}
+
+component RatiosCard inherits SettingsCard {
+    title: "Crop ratios";
+    description: "The ratio button on the crop goes through these: a left click through the landscape ones, a right click through the portrait ones (square ones are on both); O, the video's own ratio, is always there. Shift while dragging keeps the ratio. Resize offers them too.";
+
+    // The ratios as chips that wrap.
+    FlexboxLayout {
+        flex-wrap: FlexboxLayoutWrap.wrap;
+        spacing: 6px;
+        padding: 4px;
+
+        for chip[index] in SettingsUi.ratios: RatioChip {
+            chip: chip;
+            remove => { SettingsUi.remove-ratio(index); }
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 6px;
+        padding-left: 4px;
+        padding-right: 4px;
+
+        NumberField {
+            width: 180px;
+            horizontal-stretch: 0;
+            text: "";
+            placeholder: "Add a ratio, e.g. 16:9";
+            alignment: left;
+            tooltip: "Width:height (16:9), a decimal ratio (2.39:1) or one number (1.85 = 1.85:1)";
+            bubble: "settings:filters.crop_ratios";
+            committed(text) => { return SettingsUi.add-ratio(text); }
+            typed(text) => { SettingsUi.ratio-typed(text); }
+            canceled => { SettingsUi.ratio-canceled(); }
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+        }
+
+        IconButton {
+            icon: IconId.filter-reset;
+            hold: true;
+            tooltip: "Back to the default ratios";
+            clicked => { SettingsUi.reset-ratios(); }
+        }
+    }
+}
+
+/// The card with its jump mark (the flash lies over the whole card).
+export component SettingsCropRatios inherits Rectangle {
+    VerticalLayout {
+        RatiosCard { }
+    }
+
+    JumpFlash {
+        key: "settings:filters.crop_ratios";
+    }
+}

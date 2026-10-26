@@ -1,7 +1,6 @@
 //! Shows the filters: the card (its rows, its header and the open options menu, all through the `Filters` global) and
 //! the crop overlay on the video.
 
-use rustcut_core::edit::CropAspect;
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 
 use super::state::CropMode;
@@ -90,7 +89,6 @@ impl FiltersBridge {
         f.set_crop_editing(card.crop_editing);
         f.set_can_edit_crop(card.can_edit_crop);
         f.set_auto_crop_running(card.auto_crop_running);
-        f.set_aspect(index(card.aspect));
         f.set_search_limit(i32::from(card.search_limit));
         f.set_search_sides(index(card.search_sides));
         f.set_search_samples(card.search_samples.to_string().into());
@@ -151,18 +149,15 @@ impl FiltersBridge {
         o.set_handle(session.active_handle().map_or(-1, input::handle_index));
         o.set_dragging(session.dragging());
         let kept = view.shown_crop(crop).kept(view.shown_size());
-        let lock = match st.aspect {
-            CropAspect::Free => String::new(),
-            aspect => format!(" · {}", aspect.label()),
-        };
         o.set_size_text(
-            kept.map(|s| format!("{}×{}{lock}", s.width, s.height))
+            kept.map(|s| format!("{}×{}", s.width, s.height))
                 .unwrap_or_default()
                 .into(),
         );
+        o.set_ratio_label(st.ratio_label().into());
         o.set_hint(
             match session.mode {
-                CropMode::Edit => "Drag a corner, an edge or the area · Enter keeps · Esc restores",
+                CropMode::Edit => "Drag a corner, an edge or the area (Shift keeps the ratio) · Enter or a double click keeps · Esc restores",
                 CropMode::Quick => "Ctrl held: drag the nearest edge or corner · Esc restores",
             }
             .into(),

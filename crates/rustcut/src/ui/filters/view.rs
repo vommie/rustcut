@@ -2,8 +2,8 @@
 //! copies it into the `Filters` global.
 
 use rustcut_core::edit::{
-    ChainError, Crop, CropAspect, DeinterlaceRate, Deinterlacer, DeshakeParams, FieldParity, Filter, FilterKind,
-    OrientationParams, ResizeAlgorithm, Size,
+    ChainError, Crop, DeinterlaceRate, Deinterlacer, DeshakeParams, FieldParity, Filter, FilterKind, OrientationParams,
+    ResizeAlgorithm, Size,
 };
 use rustcut_core::media::{CropSides, Interlacing};
 
@@ -90,7 +90,6 @@ pub struct CardView {
     pub crop_quick: bool,
     pub can_edit_crop: bool,
     pub auto_crop_running: bool,
-    pub aspect: usize,
     pub search_limit: u8,
     pub search_sides: usize,
     pub search_samples: u8,
@@ -166,7 +165,6 @@ pub fn card(state: &FiltersState) -> CardView {
         crop_quick: session.is_some_and(|s| s.mode == CropMode::Quick),
         can_edit_crop: state.crop_view().is_some(),
         auto_crop_running: state.auto_crop_running,
-        aspect: CropAspect::ALL.iter().position(|a| *a == state.aspect).unwrap_or(0),
         search_limit: state.search.limit,
         search_sides: SIDES.iter().position(|s| *s == state.search.sides).unwrap_or(0),
         search_samples: state.search.samples,

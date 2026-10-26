@@ -1,9 +1,12 @@
 //! The crop being edited on the video (pure, tested with the state): the edit mode with handles, or the quick mode while
-//! Ctrl is held; hovering, grabbing and dragging go through the [`CropView`](super::geometry::CropView) geometry.
+//! Ctrl is held; hovering, grabbing and dragging go through the [`CropView`](super::geometry::CropView) geometry. The
+//! ratio button on the crop (P9.14, RustView's crop tool) goes through the presets of Settings > Filters and places
+//! each like the crop the user made (`placement.rs`); a drag is free, with Shift it keeps the proportions.
 
-use rustcut_core::edit::{Crop, Filter, FilterKind};
+use rustcut_core::edit::{Crop, FREE_LABEL, Filter, FilterKind, RatioChoice};
 
-use super::geometry::Handle;
+use super::geometry::{CropView, Handle};
+use super::placement::{self, Placement};
 use super::state::FiltersState;
 
 /// How the crop is being edited on the video.
@@ -30,6 +33,10 @@ pub struct CropSession {
     original: (Crop, bool),
     hover: Option<Handle>,
     drag: Option<CropDrag>,
+    /// What the ratio button keeps: the area and the anchors of the crop the user made.
+    placement: Placement,
+    /// The crop still has the shape of the chosen ratio (else the button reads "Free").
+    follows: bool,
 }
 
 impl CropSession {
@@ -41,25 +48,58 @@ impl CropSession {
     pub const fn dragging(&self) -> bool {
         self.drag.is_some()
     }
+
+    pub const fn follows(&self) -> bool {
+        self.follows
+    }
+}
+
+/// How far a crop may be from a ratio's shape and still have it: two pixels (the crop is on even pixels).
+fn slack(view: &CropView) -> f64 {
+    2.0 * view.pixel_width().max(1.0)
 }
 
 impl FiltersState {
+    /// The display ratio of the chosen ratio (width / height); `None` before the picture is known.
+    pub fn chosen_ratio(&self) -> Option<f64> {
+        let view = self.crop_view()?;
+        self.ratios.value(self.ratio, view.shown_aspect())
+    }
+
+    /// The ratio button's text: the chosen ratio while the crop has its shape, else "Free".
+    pub fn ratio_label(&self) -> &str {
+        if self.crop.is_some_and(|s| s.follows) {
+            self.ratios.label(self.ratio)
+        } else {
+            FREE_LABEL
+        }
+    }
+
+    /// Whether the crop has the shape of the chosen ratio.
+    fn crop_follows(&self, view: &CropView, crop: Crop) -> bool {
+        self.chosen_ratio()
+            .is_some_and(|r| placement::follows(view.display_rect(crop), r, slack(view)))
+    }
+
     /// Starts editing the crop on the video (switching the crop on). `false` while the picture is not known.
     pub fn begin_crop(&mut self, mode: CropMode) -> bool {
-        if self.crop_view().is_none() {
+        let Some(view) = self.crop_view() else {
             return false;
-        }
+        };
         if let Some(session) = &mut self.crop {
             session.mode = mode;
             return true;
         }
-        let original = (self.crop(), self.chain.is_enabled(FilterKind::Crop));
+        let crop = self.crop();
+        let original = (crop, self.chain.is_enabled(FilterKind::Crop));
         self.chain.set_enabled(FilterKind::Crop, true);
         self.crop = Some(CropSession {
             mode,
             original,
             hover: None,
             drag: None,
+            placement: Placement::of(view.display_rect(crop), view.display_size(), view.pixel_width()),
+            follows: self.crop_follows(&view, crop),
         });
         true
     }
@@ -76,6 +116,25 @@ impl FiltersState {
         }
     }
 
+    /// The ratio button: the next landscape (left click) or portrait (right click) ratio, placed like the crop the user
+    /// made. `false` without a session.
+    pub fn cycle_ratio(&mut self, landscape: bool) -> bool {
+        let (Some(session), Some(view)) = (self.crop, self.crop_view()) else {
+            return false;
+        };
+        self.ratio = self.ratios.next(self.ratio, landscape);
+        let Some(ratio) = self.chosen_ratio() else {
+            self.ratio = RatioChoice::Original;
+            return false;
+        };
+        let crop = view.crop_of_display(session.placement.place(ratio, view.display_size()));
+        self.chain.set(Filter::Crop(crop));
+        if let Some(s) = &mut self.crop {
+            s.follows = true;
+        }
+        true
+    }
+
     fn handle_at(&self, session: &CropSession, x: f32, y: f32) -> Option<Handle> {
         let view = self.crop_view()?;
         match session.mode {
@@ -84,15 +143,41 @@ impl FiltersState {
         }
     }
 
-    /// The pointer moved over the video: the hovered handle, or the drag. `true` when the crop or the highlight changed.
-    pub fn crop_pointer_moved(&mut self, x: f32, y: f32) -> bool {
+    /// Whether (`x`, `y`) lies inside the kept area while the crop is edited (a double click there keeps it).
+    pub fn inside_crop(&self, x: f32, y: f32) -> bool {
+        self.crop.is_some()
+            && self
+                .crop_view()
+                .is_some_and(|view| view.hit(self.crop(), x, y) == Some(Handle::Inside))
+    }
+
+    /// The pointer moved over the video: the hovered handle, or the drag (`shift` keeps the proportions: the chosen
+    /// ratio while the crop has it, else the crop's own). `true` when the crop or the highlight changed.
+    pub fn crop_pointer_moved(&mut self, x: f32, y: f32, shift: bool) -> bool {
         let Some(session) = self.crop else { return false };
         if let Some(drag) = session.drag {
             let Some(view) = self.crop_view() else { return false };
-            let ratio = self.aspect.ratio(view.shown_aspect());
+            let ratio = if !shift {
+                None
+            } else if session.follows {
+                self.chosen_ratio()
+            } else {
+                Some(view.display_rect(drag.start).ratio()).filter(|r| *r > 0.0)
+            };
             let crop = view.drag(drag.start, drag.handle, x - drag.from.0, y - drag.from.1, ratio);
             let changed = crop != self.crop();
             self.chain.set(Filter::Crop(crop));
+            let rect = view.display_rect(crop);
+            let (size, tolerance) = (view.display_size(), view.pixel_width());
+            let follows = self.crop_follows(&view, crop);
+            if let Some(s) = &mut self.crop {
+                if drag.handle == Handle::Inside {
+                    s.placement = s.placement.moved(rect, size, tolerance);
+                } else {
+                    s.placement = Placement::of(rect, size, tolerance);
+                    s.follows = follows;
+                }
+            }
             return changed;
         }
         let hover = self.handle_at(&session, x, y);

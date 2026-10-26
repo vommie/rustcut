@@ -10,6 +10,7 @@ mod drag;
 mod input;
 mod menu;
 mod options;
+mod placement;
 mod publish;
 mod tasks;
 
@@ -22,6 +23,8 @@ pub mod view;
 mod tests;
 #[cfg(test)]
 mod tests_menu;
+#[cfg(test)]
+mod tests_ratio;
 
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
@@ -125,7 +128,7 @@ impl FiltersBridge {
             export.preview_filters,
             export.keep_filters,
             (export.filters.clone(), export.crop_search),
-            export.crop_aspect,
+            export.crop_ratio.as_deref().or(export.crop_aspect.ratio_label()),
         );
         let bridge = Rc::new_cyclic(|me| Self {
             me: Weak::clone(me),
@@ -160,7 +163,6 @@ impl FiltersBridge {
         filters.set_tips(publish::tips());
         filters.set_deinterlacers(strings(view::DEINTERLACERS.iter().map(|d| d.ffmpeg_name())));
         filters.set_algorithms(strings(view::ALGORITHMS.iter().map(|a| a.ffmpeg_flag())));
-        filters.set_aspects(strings(CropAspect::ALL.iter().map(|a| a.label())));
         filters.set_interpolations(strings(["Bicubic", "Bilinear", "Linear", "None"].into_iter()));
         input::connect(&bridge, window);
         menu::connect(&bridge, window);
@@ -240,7 +242,9 @@ impl FiltersBridge {
         export.keep_filters = st.keep;
         export.filters = st.kept_chain();
         export.crop_search = st.kept_search();
-        export.crop_aspect = st.aspect;
+        let label = st.ratio_choice_label();
+        export.crop_aspect = CropAspect::from_ratio_label(label);
+        export.crop_ratio = Some(label.to_owned());
         export.filter_menu_pinned = self.menu_pinned.get();
     }
 

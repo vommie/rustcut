@@ -40,7 +40,7 @@ impl JobEdit {
 mod tests {
     use std::path::PathBuf;
 
-    use rustcut_core::edit::{CropAspect, Filter, FilterChain, FilterKind, Orientation, Section};
+    use rustcut_core::edit::{Filter, FilterChain, FilterKind, Orientation, Section};
     use rustcut_core::job::{JOB_SPEC_VERSION, JobMetadata, TargetNaming, TargetSpec};
     use rustcut_core::render::{DEFAULT_PROFILE_ID, ProfileLibrary, RateControl, Selection};
     use rustcut_core::settings::{ExportPanelState, ExportSettings, FilterDefaults, TagPanelState, TargetFolder};
@@ -99,13 +99,7 @@ mod tests {
         sections.load(job.sections.clone());
         sections.set_duration(Some(Timestamp::from_secs(600)));
 
-        let mut filters = FiltersState::new(
-            FilterDefaults::default(),
-            true,
-            false,
-            (None, None),
-            CropAspect::default(),
-        );
+        let mut filters = FiltersState::new(FilterDefaults::default(), true, false, (None, None), None);
         filters.file_opened();
         filters.load_chain(job.filters.clone());
 

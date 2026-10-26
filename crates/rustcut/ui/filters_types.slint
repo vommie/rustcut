@@ -76,8 +76,6 @@ export global Filters {
     in property <bool> crop-editing;
     in property <bool> can-edit-crop;
     in property <bool> auto-crop-running;
-    in property <[string]> aspects;
-    in property <int> aspect;
     // How auto-crop searches (the Crop menu): the black limit 0..255, the sides (0 all, 1 top + bottom, 2 sides), the
     // sample points, only inside the sections.
     in property <int> search-limit: 24;
@@ -167,7 +165,6 @@ export global Filters {
     callback step-crop(int, /* steps */ int);
     callback crop-edit();
     callback auto-crop();
-    callback set-aspect(int);
     callback set-search-limit(int);
     callback set-search-sides(int);
     callback edit-search-samples(string) -> bool;

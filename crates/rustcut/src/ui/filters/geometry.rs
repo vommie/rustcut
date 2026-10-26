@@ -7,6 +7,8 @@
 
 use rustcut_core::edit::{Crop, Orientation, Size};
 
+use super::placement::DisplayRect;
+
 /// A handle within this many logical pixels of the pointer can be grabbed.
 pub const GRAB: f32 = 8.0;
 /// Fewer shown pixels than this never stay in a direction (unless the frame itself is smaller).
@@ -137,6 +139,44 @@ impl CropView {
     /// The frame the crop filter gets.
     pub const fn frame(&self) -> Size {
         self.frame
+    }
+
+    /// The shown frame in display units (a pixel is `sar` wide): what a ratio of the crop refers to.
+    pub fn display_size(&self) -> (f64, f64) {
+        (f64::from(self.shown.width) * self.sar, f64::from(self.shown.height))
+    }
+
+    /// One shown pixel's width in display units.
+    pub const fn pixel_width(&self) -> f64 {
+        self.sar
+    }
+
+    /// The kept area of `crop` in display units of the shown frame.
+    pub fn display_rect(&self, crop: Crop) -> DisplayRect {
+        let c = self.shown_crop(crop);
+        let (w, h) = (f64::from(self.shown.width), f64::from(self.shown.height));
+        let (l, t) = (f64::from(c.left), f64::from(c.top));
+        let (r, b) = (w - f64::from(c.right), h - f64::from(c.bottom));
+        DisplayRect {
+            x: l * self.sar,
+            y: t,
+            width: (r - l) * self.sar,
+            height: b - t,
+        }
+    }
+
+    /// The crop that keeps `rect` (display units of the shown frame), on even pixels like a drag.
+    pub fn crop_of_display(&self, rect: DisplayRect) -> Crop {
+        let (l, r) = even_span(rect.x / self.sar, rect.right() / self.sar, self.shown.width);
+        let (t, b) = even_span(rect.y, rect.bottom(), self.shown.height);
+        let shown = Crop::new(
+            t,
+            self.shown.width.saturating_sub(r),
+            self.shown.height.saturating_sub(b),
+            l,
+        )
+        .with_even_size(self.shown);
+        self.frame_crop(shown)
     }
 
     /// The crop as it looks on screen (edges of the shown frame).

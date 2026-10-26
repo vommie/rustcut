@@ -8,7 +8,7 @@
 )]
 
 use rustcut_core::edit::{
-    CropAspect, DeinterlaceRate, Deinterlacer, DeshakeParams, FieldParity, Filter, FilterKind, ResizeAlgorithm, Size,
+    DeinterlaceRate, Deinterlacer, DeshakeParams, FieldParity, Filter, FilterKind, ResizeAlgorithm, Size,
 };
 use rustcut_core::media::CropSides;
 use rustcut_core::settings::FilterDefaults;
@@ -20,7 +20,7 @@ use super::view;
 use crate::ui::menu::MenuItem;
 
 fn state_with(defaults: FilterDefaults) -> FiltersState {
-    let mut s = FiltersState::new(defaults, true, false, (None, None), CropAspect::Free);
+    let mut s = FiltersState::new(defaults, true, false, (None, None), None);
     s.file_opened();
     s.source_known(Source {
         size: Size::new(1920, 1080),
