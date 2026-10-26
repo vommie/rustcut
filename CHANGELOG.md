@@ -808,6 +808,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Picking a border color with the pipette on a video's last frame failed with "The color could not be read"
+  (0.0.56): the color is now read from the frame shown there.
 - The status line no longer keeps "Not saved: …" of an earlier attempt after the job was saved (0.0.33).
 - "Render Again" of a finished job failed at once ("exists already and overwriting was not chosen") (0.0.31): the job
   renders again and replaces its own output once the new render is verified (a failed or canceled job still never
