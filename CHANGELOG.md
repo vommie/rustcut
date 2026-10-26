@@ -147,6 +147,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- A shareable log (0.0.55, your UI review's note on the whole review): beside the log, RustCut writes
+  `rustcut-shareable.DATE.log`, the same lines with file names, folders and paths, tag names, user and host names, MD5
+  sums and the videos' titles replaced by placeholders that stay the same within a run (`<file-3>.mkv`, `<dir-2>`,
+  `<tag-4>`, `<user>`, `<md5-1>`, `<meta-1>`), so it is safe to send. The Logs panel's spy button shows every log that
+  way (the job logs too) and copies it so. Settings > Advanced & Logs > Shareable log switches the file and each kind
+  (all on by default). `config.toml` gets `[advanced] shareable_log` and `[advanced.redact]`, `ui-state.toml` the
+  panel's choice; older files load with these defaults.
+
 - Settings > Diagnostics (0.0.54, your UI review note 28#1, like RustView's Debug page): two cards, Dependencies
   (ffmpeg, ffprobe, mpv, vid.stab, the encoders that work, RustView's program) and Health (config.toml and
   ui-state.toml, the queue database, the folders RustCut writes, the target folders, the free space for renders and

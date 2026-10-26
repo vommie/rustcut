@@ -188,8 +188,22 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
     if before.advanced.log_level != after.advanced.log_level {
         p.log.apply(&after.advanced.log_level);
     }
-    if before.advanced.log_keep_days != after.advanced.log_keep_days {
-        p.log.reopen(&p.paths.log_dir(), after.advanced.log_keep_days);
+    if before.advanced.log_keep_days != after.advanced.log_keep_days
+        || before.advanced.shareable_log != after.advanced.shareable_log
+    {
+        p.log.reopen(
+            &p.paths.log_dir(),
+            after.advanced.log_keep_days,
+            after.advanced.shareable_log,
+        );
+    }
+    if before.advanced.redact != after.advanced.redact {
+        super::redaction::set_kinds(after.advanced.redact);
+    }
+    if before.export.target_folders != after.export.target_folders {
+        for folder in &after.export.target_folders {
+            super::redaction::learn_dir(&folder.path);
+        }
     }
 }
 

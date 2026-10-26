@@ -78,12 +78,15 @@ export global Logs {
     in property <string> summary;
     in property <string> search;
     in property <bool> errors-only;
+    // The shareable copy: file names, folders, tags, user and host, MD5 sums and titles replaced (P9.17).
+    in property <bool> shareable;
     // Stay at the newest line when the log changes.
     in property <bool> follow: true;
     in property <bool> loading;
 
     callback search-edited(string);
     callback toggle-errors-only();
+    callback toggle-shareable();
     callback toggle-follow();
     callback copy();
     callback refresh();

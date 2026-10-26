@@ -5,6 +5,9 @@
 //! Logging starts before the settings are read, so the file layer buffers what is logged until [`LogControl::open_file`]
 //! knows the folder and the retention; then the buffer goes first into the file. The file is written by
 //! `tracing-appender`'s background thread, never by the thread that logs.
+//!
+//! Beside it, the shareable copy (P9.17, on by default, `advanced.shareable_log`): the same lines with file names,
+//! folders, tags, user and host, MD5 sums and titles replaced (`app::redaction`), in `rustcut-shareable.DATE.log`.
 
 use std::io::Write as _;
 use std::path::Path;
@@ -23,8 +26,9 @@ use super::log_book::LogBook;
 /// Lines logged before the file is open are kept up to this size (startup logs a few kilobytes).
 const EARLY_BUFFER_LIMIT: usize = 1 << 20;
 
-/// File names: `rustcut.2026-10-23.log`.
+/// File names: `rustcut.2026-10-23.log`, the shareable copy `rustcut-shareable.2026-10-23.log`.
 const FILE_PREFIX: &str = "rustcut";
+const SHAREABLE_PREFIX: &str = "rustcut-shareable";
 const FILE_SUFFIX: &str = "log";
 
 /// Changes the log filter after startup and owns the log file's writer thread (dropping it flushes the file).
@@ -33,6 +37,8 @@ pub struct LogControl {
     from_env: bool,
     file: FileSink,
     guard: Arc<Mutex<Option<WorkerGuard>>>,
+    shareable: FileSink,
+    shareable_guard: Arc<Mutex<Option<WorkerGuard>>>,
     book: LogBook,
 }
 
@@ -43,12 +49,16 @@ pub struct LevelSetter {
     from_env: bool,
     file: FileSink,
     guard: Arc<Mutex<Option<WorkerGuard>>>,
+    shareable: FileSink,
+    shareable_guard: Arc<Mutex<Option<WorkerGuard>>>,
 }
 
 impl LevelSetter {
-    /// Writes the daily files to `dir` again, keeping the newest `keep_days` (older ones are deleted now).
-    pub fn reopen(&self, dir: &Path, keep_days: u16) {
-        open_file(&self.file, &self.guard, dir, keep_days);
+    /// Writes the daily files to `dir` again, keeping the newest `keep_days` (older ones are deleted now), with the
+    /// shareable copy or without it.
+    pub fn reopen(&self, dir: &Path, keep_days: u16, shareable: bool) {
+        open_file(&self.file, &self.guard, dir, keep_days, FILE_PREFIX);
+        open_shareable(&self.shareable, &self.shareable_guard, dir, keep_days, shareable);
     }
 
     /// Uses `level` unless `RUST_LOG` was given (the environment wins).
@@ -76,6 +86,7 @@ pub fn init() -> LogControl {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let (layer, handle) = reload::Layer::new(filter);
     let file = FileSink::default();
+    let shareable = FileSink::redacting();
     let book = LogBook::default();
     let installed = tracing_subscriber::registry()
         .with(layer)
@@ -87,6 +98,12 @@ pub fn init() -> LogControl {
                 .with_ansi(false)
                 .with_writer(file.clone()),
         )
+        .with(
+            fmt::layer()
+                .with_target(false)
+                .with_ansi(false)
+                .with_writer(shareable.clone()),
+        )
         .try_init()
         .is_ok();
     LogControl {
@@ -94,6 +111,8 @@ pub fn init() -> LogControl {
         from_env,
         file,
         guard: Arc::new(Mutex::new(None)),
+        shareable,
+        shareable_guard: Arc::new(Mutex::new(None)),
         book,
     }
 }
@@ -116,17 +135,31 @@ impl LogControl {
             from_env: self.from_env,
             file: self.file.clone(),
             guard: Arc::clone(&self.guard),
+            shareable: self.shareable.clone(),
+            shareable_guard: Arc::clone(&self.shareable_guard),
         }
     }
 
-    /// Starts writing the log to daily files in `dir`, keeping the newest `keep_days` (at least one).
-    pub fn open_file(&self, dir: &Path, keep_days: u16) {
-        open_file(&self.file, &self.guard, dir, keep_days);
+    /// Starts writing the log to daily files in `dir`, keeping the newest `keep_days` (at least one), and the shareable
+    /// copy beside it when `shareable`.
+    pub fn open_file(&self, dir: &Path, keep_days: u16, shareable: bool) {
+        open_file(&self.file, &self.guard, dir, keep_days, FILE_PREFIX);
+        open_shareable(&self.shareable, &self.shareable_guard, dir, keep_days, shareable);
     }
 }
 
-/// Starts writing the log to daily files in `dir` (again), keeping the newest `keep_days`.
-fn open_file(file: &FileSink, guard: &Mutex<Option<WorkerGuard>>, dir: &Path, keep_days: u16) {
+/// The shareable copy: written like the log (`on`), or not at all.
+fn open_shareable(file: &FileSink, guard: &Mutex<Option<WorkerGuard>>, dir: &Path, keep_days: u16, on: bool) {
+    if on {
+        open_file(file, guard, dir, keep_days, SHAREABLE_PREFIX);
+    } else {
+        file.close();
+        guard.lock().take();
+    }
+}
+
+/// Starts writing the log to daily files in `dir` (again) named `prefix.DATE.log`, keeping the newest `keep_days`.
+fn open_file(file: &FileSink, guard: &Mutex<Option<WorkerGuard>>, dir: &Path, keep_days: u16, prefix: &str) {
     {
         if let Err(e) = std::fs::create_dir_all(dir) {
             file.close();
@@ -135,7 +168,7 @@ fn open_file(file: &FileSink, guard: &Mutex<Option<WorkerGuard>>, dir: &Path, ke
         }
         let appender = RollingFileAppender::builder()
             .rotation(Rotation::DAILY)
-            .filename_prefix(FILE_PREFIX)
+            .filename_prefix(prefix)
             .filename_suffix(FILE_SUFFIX)
             .max_log_files(usize::from(keep_days.max(1)))
             .build(dir);
@@ -144,7 +177,7 @@ fn open_file(file: &FileSink, guard: &Mutex<Option<WorkerGuard>>, dir: &Path, ke
                 let (writer, new_guard) = tracing_appender::non_blocking(appender);
                 file.open(writer);
                 *guard.lock() = Some(new_guard);
-                tracing::info!(dir = %dir.display(), keep_days, "[App] Logging to files");
+                tracing::info!(dir = %dir.display(), keep_days, prefix, "[App] Logging to files");
             }
             Err(e) => {
                 file.close();
@@ -154,9 +187,13 @@ fn open_file(file: &FileSink, guard: &Mutex<Option<WorkerGuard>>, dir: &Path, ke
     }
 }
 
-/// Where the file layer writes: a buffer until the file is open, then the non-blocking file writer.
+/// Where a file layer writes: a buffer until the file is open, then the non-blocking file writer. A redacting sink
+/// writes every line as the shareable copy shows it.
 #[derive(Clone, Default)]
-struct FileSink(Arc<Mutex<FileState>>);
+struct FileSink {
+    state: Arc<Mutex<FileState>>,
+    redacted: bool,
+}
 
 enum FileState {
     Buffering { lines: Vec<u8>, dropped: usize },
@@ -174,11 +211,27 @@ impl Default for FileState {
 }
 
 impl FileSink {
+    fn redacting() -> Self {
+        Self {
+            redacted: true,
+            ..Self::default()
+        }
+    }
+
+    /// `bytes` as this sink writes them.
+    fn shown(&self, bytes: &[u8]) -> Vec<u8> {
+        if self.redacted {
+            super::redaction::redact(&String::from_utf8_lossy(bytes)).into_bytes()
+        } else {
+            bytes.to_vec()
+        }
+    }
+
     fn open(&self, mut writer: NonBlocking) {
-        let mut state = self.0.lock();
+        let mut state = self.state.lock();
         if let FileState::Buffering { lines, dropped } = &*state {
             // The non-blocking writer only queues; a failure means its thread is gone and nothing could be logged anyway.
-            writer.write_all(lines).ok();
+            writer.write_all(&self.shown(lines)).ok();
             if *dropped > 0 {
                 writeln!(
                     writer,
@@ -191,13 +244,14 @@ impl FileSink {
     }
 
     fn close(&self) {
-        *self.0.lock() = FileState::Off;
+        *self.state.lock() = FileState::Off;
     }
 }
 
 impl std::io::Write for FileSink {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        match &mut *self.0.lock() {
+        let redacted = self.redacted;
+        match &mut *self.state.lock() {
             FileState::Buffering { lines, dropped } => {
                 if lines.len() + buf.len() <= EARLY_BUFFER_LIMIT {
                     lines.extend_from_slice(buf);
@@ -206,13 +260,18 @@ impl std::io::Write for FileSink {
                 }
                 Ok(buf.len())
             }
+            FileState::Open(writer) if redacted => {
+                // The shareable line (one event per write); the caller counts the original bytes.
+                writer.write_all(super::redaction::redact(&String::from_utf8_lossy(buf)).as_bytes())?;
+                Ok(buf.len())
+            }
             FileState::Open(writer) => writer.write(buf),
             FileState::Off => Ok(buf.len()),
         }
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        match &mut *self.0.lock() {
+        match &mut *self.state.lock() {
             FileState::Open(writer) => writer.flush(),
             FileState::Buffering { .. } | FileState::Off => Ok(()),
         }
@@ -265,10 +324,49 @@ mod tests {
         let chunk = vec![b'x'; EARLY_BUFFER_LIMIT / 2 + 1];
         sink.write_all(&chunk).unwrap();
         sink.write_all(&chunk).unwrap();
-        let FileState::Buffering { lines, dropped } = &*sink.0.lock() else {
+        let FileState::Buffering { lines, dropped } = &*sink.state.lock() else {
             panic!("still buffering")
         };
         assert_eq!((lines.len(), *dropped), (chunk.len(), chunk.len()));
+    }
+
+    #[test]
+    fn the_shareable_copy_hides_paths_from_the_first_line_on() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut sink = FileSink::redacting();
+        sink.write_all(b"INFO [Open] Opened path=/home/someone/Videos/holiday.mp4\n")
+            .unwrap();
+        let appender = RollingFileAppender::builder()
+            .rotation(Rotation::DAILY)
+            .filename_prefix(SHAREABLE_PREFIX)
+            .filename_suffix(FILE_SUFFIX)
+            .build(dir.path())
+            .unwrap();
+        let (writer, guard) = tracing_appender::non_blocking(appender);
+        sink.open(writer);
+        sink.write_all(b"INFO [Render] Done /home/someone/Videos/holiday.mp4\n")
+            .unwrap();
+        drop(guard);
+        let file = std::fs::read_dir(dir.path()).unwrap().next().unwrap().unwrap().path();
+        assert!(
+            file.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("rustcut-shareable.")
+        );
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(!text.contains("holiday") && !text.contains("/home/someone"), "{text}");
+        let (first, second) = text.split_once('\n').unwrap();
+        let tail = |l: &str| {
+            l.rsplit_once(' ')
+                .map(|(_, t)| t.trim_start_matches("path=").to_owned())
+                .unwrap()
+        };
+        assert_eq!(
+            tail(first),
+            tail(second.trim_end()),
+            "the same file, the same placeholder"
+        );
     }
 
     #[test]

@@ -396,6 +396,10 @@ pub struct AdvancedSettings {
     pub log_level: String,
     /// Days of log files kept.
     pub log_keep_days: u16,
+    /// Write the shareable copy of the log beside it (`rustcut-shareable.DATE.log`; 0.0.55, P9.17).
+    pub shareable_log: bool,
+    /// What the shareable copy replaces (every kind by default, user decision Q-P9).
+    pub redact: crate::redact::RedactKinds,
 }
 
 impl Default for AdvancedSettings {
@@ -405,6 +409,8 @@ impl Default for AdvancedSettings {
             ffprobe: None,
             log_level: "info".into(),
             log_keep_days: 14,
+            shareable_log: true,
+            redact: crate::redact::RedactKinds::default(),
         }
     }
 }
