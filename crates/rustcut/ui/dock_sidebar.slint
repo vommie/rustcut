@@ -35,15 +35,9 @@ export component DockGroup inherits Rectangle {
         height: parent.height - DockMetrics.tab-bar-height;
         clip: true;
 
-        Rectangle {
-            y: 0;
-            height: 1px;
-            background: Theme.border;
-        }
-
         DockPanelContent {
-            y: 1px;
-            height: parent.height - 1px;
+            y: 0px;
+            height: parent.height;
             key: root.group.active_key;
         }
     }

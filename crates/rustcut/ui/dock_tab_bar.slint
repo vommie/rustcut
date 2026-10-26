@@ -1,9 +1,12 @@
-// A panel group's tab bar in RustView's sidebar tab style (adapted from RustView's ui/sidebar_panel_tab_bar.slint): tabs
-// at the positions Rust computed, drag detection that reports window coordinates, and the group's buttons at the end.
+// A panel group's tab bar (adapted from RustView's ui/sidebar_panel_tab_bar.slint; P9.15: browser-like tabs, Q-P9.15):
+// the tabs at the positions Rust computed, the selected one merging with the panel below, drag detection that reports
+// window coordinates, a "+n" button for the tabs that do not fit, and the group's buttons at the end.
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize, IconSlot } from "icons.slint";
 import { Dock, DockGroupView, DockMetrics, DockTabView } from "dock_types.slint";
+import { TooltipHost } from "tooltip.slint";
+import { TabFace, TabMetrics } from "tabs.slint";
 
 /// Distance in pixels (squared) the mouse moves with the button down before a press becomes a drag.
 global DragThreshold {
@@ -15,30 +18,45 @@ component DockTabItem inherits Rectangle {
 
     height: DockMetrics.tab-height;
 
+    host := TooltipHost {
+        // A tab that shows only its symbol says its name.
+        text: root.tab.titled ? "" : root.tab.title;
+    }
+
     card := Rectangle {
         x: root.tab.shift;
         width: 100%;
         height: 100%;
-        border-radius: 4px;
         animate x { duration: 180ms; easing: ease-out; }
         opacity: root.tab.placeholder ? 0.22 : 1.0;
         animate opacity { duration: 120ms; }
 
-        background: root.tab.active
-            ? (touch.has-hover ? Theme.surface-selected-hover : Theme.surface-selected)
-            : (touch.has-hover ? Theme.surface-hover : Theme.surface-variant);
-        border-width: 1px;
-        border-color: root.tab.active
-            ? (touch.has-hover ? Theme.accent : Theme.primary)
-            : (touch.has-hover ? Theme.primary : Theme.border);
+        TabFace {
+            title: root.tab.title;
+            icon: root.tab.icon;
+            active: root.tab.active;
+            hovered: touch.has-hover;
+            show-title: root.tab.titled;
+            separator: root.tab.separator;
+            panel: Theme.surface;
+        }
 
         touch := TouchArea {
             property <length> press-x;
             property <length> press-y;
             property <bool> drag-active;
 
+            changed has-hover => {
+                if self.has-hover {
+                    host.enter();
+                } else {
+                    host.leave();
+                }
+            }
+
             pointer-event(event) => {
                 if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                    host.press();
                     self.press-x = self.mouse-x;
                     self.press-y = self.mouse-y;
                     self.drag-active = false;
@@ -74,27 +92,103 @@ component DockTabItem inherits Rectangle {
                 }
             }
         }
+    }
+}
 
-        HorizontalLayout {
-            padding-left: 8px;
-            padding-right: 8px;
-            spacing: 6px;
-            alignment: start;
+/// The "+n" button of the tabs that do not fit: a list of them (a click shows one).
+component DockOverflow inherits Rectangle {
+    in property <DockGroupView> group;
 
-            IconSlot {
-                icon: root.tab.icon;
-                size: IconSize.md;
-                color: root.tab.active ? Theme.primary : Theme.text-muted;
+    width: DockMetrics.overflow-width;
+    height: DockMetrics.tab-height;
+
+    host := TooltipHost {
+        text: root.group.overflow == 1 ? "1 more panel" : root.group.overflow + " more panels";
+    }
+
+    Rectangle {
+        x: 4px;
+        y: (parent.height - self.height) / 2;
+        width: parent.width - 8px;
+        height: 18px;
+        border-radius: 9px;
+        background: touch.has-hover ? Theme.surface-selected : Theme.surface-hover;
+
+        Text {
+            text: "+" + root.group.overflow;
+            font-size: 10px;
+            font-weight: 600;
+            color: Theme.text;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => {
+            host.press();
+            popup.show();
+        }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
             }
+        }
+    }
 
-            Text {
-                text: root.tab.title;
-                font-size: 11px;
-                font-weight: root.tab.active ? 700 : 400;
-                color: root.tab.active ? Theme.primary : Theme.text;
-                vertical-alignment: center;
-                horizontal-stretch: 1;
-                overflow: elide;
+    popup := PopupWindow {
+        x: 0;
+        y: root.height + 2px;
+        width: list.preferred-width;
+        height: list.preferred-height;
+        close-policy: close-on-click;
+
+        Rectangle {
+            background: Theme.surface;
+            border-radius: 4px;
+            border-width: 1px;
+            border-color: Theme.border;
+
+            list := VerticalLayout {
+                padding: 3px;
+                spacing: 1px;
+
+                for tab in root.group.tabs: Rectangle {
+                    visible: !tab.shown;
+                    height: tab.shown ? 0px : 24px;
+                    min-width: 140px;
+                    border-radius: 3px;
+                    background: entry.has-hover ? Theme.surface-hover : transparent;
+
+                    entry := TouchArea {
+                        clicked => {
+                            Dock.tab-clicked(tab.key);
+                            popup.close();
+                        }
+                    }
+
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 12px;
+                        spacing: 6px;
+
+                        IconSlot {
+                            icon: tab.icon;
+                            size: IconSize.md;
+                            color: Theme.text-muted;
+                        }
+
+                        Text {
+                            text: tab.title;
+                            color: Theme.text;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
             }
         }
     }
@@ -105,11 +199,12 @@ export component DockTabGhost inherits Rectangle {
     in property <string> title;
     in property <IconId> icon;
 
+    // The lifted tab (Q-P9.15 drag A): rounded all round, outlined.
     height: DockMetrics.tab-height;
-    border-radius: 4px;
+    border-radius: TabMetrics.radius;
     background: Theme.surface-selected-hover;
-    border-width: 1.5px;
-    border-color: Theme.accent;
+    border-width: 1px;
+    border-color: Theme.primary;
     clip: true;
 
     HorizontalLayout {
@@ -127,7 +222,7 @@ export component DockTabGhost inherits Rectangle {
             text: root.title;
             font-size: 11px;
             font-weight: 700;
-            color: Theme.accent;
+            color: Theme.text;
             vertical-alignment: center;
             horizontal-stretch: 1;
             overflow: elide;
@@ -164,6 +259,7 @@ export component DockTabBar inherits Rectangle {
     in property <DockGroupView> group;
 
     height: DockMetrics.tab-bar-height;
+    background: Theme.background;
     clip: true;
 
     // Double click on the empty part of the bar: maximize or restore the group.
@@ -171,16 +267,29 @@ export component DockTabBar inherits Rectangle {
         double-clicked => { Dock.bar-double-clicked(root.side, root.index); }
     }
 
+    // The panel's top edge; the selected tab covers it (a collapsed group shows no panel).
+    if root.group.shows_body: Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.border;
+    }
+
     tabs := Rectangle {
         x: 4px;
-        y: (parent.height - DockMetrics.tab-height) / 2;
+        y: parent.height - DockMetrics.tab-height;
         height: DockMetrics.tab-height;
         width: buttons.x - 4px;
 
         for tab in root.group.tabs: DockTabItem {
+            visible: tab.shown;
             x: tab.x;
             width: tab.width;
             tab: tab;
+        }
+
+        if root.group.overflow > 0: DockOverflow {
+            x: root.group.overflow_x;
+            group: root.group;
         }
     }
 

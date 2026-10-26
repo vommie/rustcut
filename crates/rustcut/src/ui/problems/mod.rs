@@ -423,7 +423,17 @@ impl ProblemsBridge {
         let newer = self.newer.borrow();
         p.set_newer_open(newer.is_some());
         if let Some(d) = newer.as_ref() {
-            p.set_newer_tabs(strings(d.files.iter().map(|f| f.file.name().to_owned())));
+            p.set_newer_tabs(ModelRc::new(VecModel::from(
+                d.files
+                    .iter()
+                    .map(|f| crate::TabView {
+                        title: f.file.name().into(),
+                        icon: crate::icons::Icon::TabFile.to_slint(),
+                        count: SharedString::new(),
+                        enabled: true,
+                    })
+                    .collect::<Vec<_>>(),
+            )));
             p.set_newer_tab(i32::try_from(d.tab).unwrap_or(0));
             p.set_newer_text(d.text().into());
             p.set_newer_unknown_title(d.unknown_title().into());

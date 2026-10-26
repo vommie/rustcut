@@ -1,6 +1,7 @@
 // The data of the Job Finalization card and of the conflict dialog (src/ui/export/ fills `Export` and handles its
 // callbacks). The queue panel's global is in queue_types.slint.
 
+import { TabView } from "tabs.slint";
 import { TipRow } from "tooltip.slint";
 
 // One way out of a target conflict or a start problem. `file` is the name it leads to; `recommended` adds
@@ -97,7 +98,7 @@ export global Export {
     in property <bool> dialog-has-existing;
     // The tabs (user decision Q-X6): titles with counts, the shown one and what it is (0 decision, 1 other name,
     // 2 similar files, 3 queue).
-    in property <[string]> dialog-tabs;
+    in property <[TabView]> dialog-tabs;
     in property <int> dialog-tab;
     in property <int> dialog-tab-kind;
     in property <[ConflictOptionView]> dialog-tab-options;

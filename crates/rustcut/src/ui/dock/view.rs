@@ -63,22 +63,33 @@ pub fn group_rows(layout: &DockLayout, side: Side, drag: Option<&DraggedTab>) ->
         .enumerate()
         .map(|(index, (group, placement))| {
             let at = GroupRef { side, index };
-            let slots = plan::tab_slots(&group.tabs, plan::tabs_area_width(sidebar, index));
-            let shifts = shifts(&group.tabs, &slots, at, drag);
+            let layout = plan::tab_slots(&group.tabs, Some(group.active), plan::tabs_area_width(sidebar, index));
+            let slots = &layout.slots;
+            let shifts = shifts(&group.tabs, slots, at, drag);
             let tabs = group
                 .tabs
                 .iter()
-                .zip(&slots)
+                .enumerate()
+                .zip(slots)
                 .zip(shifts)
-                .map(|((panel, slot), shift)| DockTabView {
-                    key: panel.key().into(),
-                    title: panel.title().into(),
-                    icon: panel.icon().to_slint(),
-                    active: *panel == group.active,
-                    x: slot.x,
-                    width: slot.width,
-                    shift,
-                    placeholder: drag.is_some_and(|d| d.panel == *panel),
+                .map(|(((i, panel), slot), shift)| {
+                    let active = *panel == group.active;
+                    // A thin line between two tabs that are not selected (P9.15).
+                    let next = group.tabs.get(i + 1).zip(slots.get(i + 1));
+                    let separator = !active && next.is_some_and(|(p, s)| s.shown && *p != group.active);
+                    DockTabView {
+                        key: panel.key().into(),
+                        title: panel.title().into(),
+                        icon: panel.icon().to_slint(),
+                        active,
+                        x: slot.x,
+                        width: slot.width,
+                        shift,
+                        placeholder: drag.is_some_and(|d| d.panel == *panel),
+                        titled: slot.titled,
+                        shown: slot.shown,
+                        separator,
+                    }
                 })
                 .collect();
             let next_shows_body = placements.get(index + 1).is_some_and(|p| p.shows_body);
@@ -96,6 +107,8 @@ pub fn group_rows(layout: &DockLayout, side: Side, drag: Option<&DraggedTab>) ->
                     fixed: placement.fixed,
                     frac: placement.frac,
                     resizable_below: placement.shows_body && next_shows_body,
+                    overflow: i32::try_from(layout.hidden()).unwrap_or(0),
+                    overflow_x: layout.overflow_x.unwrap_or_default(),
                 },
                 tabs,
             }
@@ -204,7 +217,8 @@ mod tests {
         let layout = DockLayout::default();
         let rows = group_rows(&layout, Side::Right, Some(&drag(PanelId::Queue, RIGHT, 1)));
         let shifts: Vec<f32> = rows[0].tabs.iter().map(|t| t.shift).collect();
-        assert_eq!(shifts, [0.0, 104.0, 104.0]);
+        let room = 100.0 + TAB_SPACING;
+        assert_eq!(shifts, [0.0, room, room]);
         assert!(rows[0].tabs.iter().all(|t| !t.placeholder));
     }
 

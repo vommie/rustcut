@@ -4,6 +4,7 @@
 // real place (the row says where for a few seconds), and "Don't show again" for hints and confirmations; "Muted" lists
 // what is muted with the way back. The search filters the two lists. Data and callbacks: `SettingsUi`.
 
+import { TabStrip } from "tabs.slint";
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { ChoiceButton, IconButton, Switch } from "controls.slint";
@@ -13,33 +14,6 @@ import { SettingsRow } from "settings_row.slint";
 import { SettingsSearch } from "settings_search.slint";
 import { MessageKindView, SettingsUi } from "settings_types.slint";
 import { BubbleAnchor } from "bubble.slint";
-
-component MessageTab inherits Rectangle {
-    in property <string> text;
-    in property <bool> active;
-    callback clicked();
-
-    height: 28px;
-    width: label.preferred-width + 24px;
-    horizontal-stretch: 0;
-    border-radius: 5px;
-    background: root.active ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : Theme.surface;
-    border-width: 1px;
-    border-color: root.active ? Theme.primary.with-alpha(0.6) : Theme.border;
-
-    label := Text {
-        text: root.text;
-        color: root.active ? Theme.primary : Theme.text;
-        font-weight: root.active ? 700 : 400;
-        vertical-alignment: center;
-        horizontal-alignment: center;
-    }
-
-    touch := TouchArea {
-        mouse-cursor: MouseCursor.pointer;
-        clicked => { root.clicked(); }
-    }
-}
 
 // The level's color dot.
 component LevelDot inherits Rectangle {
@@ -257,27 +231,17 @@ component KindRow inherits VerticalLayout {
 export component SettingsMessages inherits VerticalLayout {
     spacing: 16px;
 
-    HorizontalLayout {
-        spacing: 6px;
-        alignment: start;
-
-        look-tab := MessageTab {
-            text: "Look & behavior";
-            active: SettingsUi.messages-tab == 0;
-            clicked => { SettingsUi.messages-tab-selected(0); }
-        }
-
-        MessageTab {
-            text: "Message kinds (" + SettingsUi.kinds-count + ")";
-            active: SettingsUi.messages-tab == 1;
-            clicked => { SettingsUi.messages-tab-selected(1); }
-        }
-
-        muted-tab := MessageTab {
-            text: "Muted (" + SettingsUi.muted-count + ")";
-            active: SettingsUi.messages-tab == 2;
-            clicked => { SettingsUi.messages-tab-selected(2); }
-        }
+    // The page's tabs (P9.15, Q-P9.15 scope A: the panels' browser-like tabs, counts as badges).
+    TabStrip {
+        tabs: [
+            { title: "Look & behavior", icon: IconId.tab-look, count: "", enabled: true },
+            { title: "Message kinds", icon: IconId.tab-kinds, count: SettingsUi.kinds-count, enabled: true },
+            { title: "Muted", icon: IconId.tab-muted, count: SettingsUi.muted-count, enabled: true },
+        ];
+        current: SettingsUi.messages-tab;
+        bar: Theme.surface;
+        panel: Theme.background;
+        picked(index) => { SettingsUi.messages-tab-selected(index); }
     }
 
     if SettingsUi.messages-tab == 0: VerticalLayout {

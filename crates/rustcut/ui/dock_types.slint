@@ -16,6 +16,11 @@ export struct DockTabView {
     shift: length,
     /// The tab being dragged (shown faded at its place).
     placeholder: bool,
+    /// The title shows (a narrow bar shows only the selected tab's title), the tab is in the bar (else behind "+n"),
+    /// and a thin line follows it (P9.15).
+    titled: bool,
+    shown: bool,
+    separator: bool,
 }
 
 /// One panel group of a sidebar.
@@ -35,6 +40,9 @@ export struct DockGroupView {
     frac: float,
     /// The bar below this group can be dragged (both neighbors show their bodies).
     resizable_below: bool,
+    /// Tabs behind the "+n" button and where it starts in the bar (P9.15).
+    overflow: int,
+    overflow_x: length,
 }
 
 /// One icon of a collapsed sidebar's rail.
@@ -78,6 +86,7 @@ export global DockMetrics {
     in property <length> sidebar-padding: 6px;
     in property <length> tab-bar-height: 30px;
     in property <length> tab-height: 26px;
+    in property <length> overflow-width: 34px;
     in property <length> bar-button: 22px;
     in property <length> resizer: 6px;
     in property <length> rail-width: 36px;

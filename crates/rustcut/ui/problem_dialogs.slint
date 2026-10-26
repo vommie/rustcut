@@ -4,6 +4,7 @@
 // copy the details). Modal over the main window like the conflict dialog; keys: 1-5 pick a way, Up/Down move, Tab
 // switches the tab, Enter confirms, Escape takes the safe way (continue without saving, a temporary queue).
 
+import { TabView } from "tabs.slint";
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { IconButton } from "controls.slint";
@@ -16,7 +17,7 @@ import { DialogFrame, DialogHeader, DialogState } from "dialog_frame.slint";
 export global Problems {
     // ---- A file from a newer RustCut.
     in property <bool> newer-open;
-    in property <[string]> newer-tabs;
+    in property <[TabView]> newer-tabs;
     in property <int> newer-tab;
     in property <string> newer-text;
     // "3 settings this version does not know" (empty = none) and the list.
@@ -135,7 +136,7 @@ export component NewerFileDialog inherits Rectangle {
                 }
 
                 if Problems.newer-tabs.length > 1: DialogTabs {
-                    titles: Problems.newer-tabs;
+                    tabs: Problems.newer-tabs;
                     current: Problems.newer-tab;
                     picked(index) => {
                         Problems.newer-set-tab(index);

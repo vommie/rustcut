@@ -15,11 +15,15 @@ pub mod metrics {
     /// with the new menu bar).
     pub const SIDEBAR_TOP_PADDING: f32 = 0.0;
     pub const TAB_BAR_HEIGHT: f32 = 30.0;
+    /// A tab stands on the bar's bottom edge (the selected one merges with its panel, P9.15).
     pub const TAB_HEIGHT: f32 = 26.0;
-    pub const TAB_SPACING: f32 = 4.0;
-    /// Narrowest tab (icon only) and widest tab.
+    pub const TAB_SPACING: f32 = 2.0;
+    /// Narrowest tab (a selected one cut to fit) and widest tab.
     pub const TAB_MIN_WIDTH: f32 = 30.0;
     pub const TAB_MAX_WIDTH: f32 = 140.0;
+    /// A tab that shows only its symbol, and the "+n" button of the tabs that do not fit (Q-P9.15 width C).
+    pub const TAB_ICON_WIDTH: f32 = 34.0;
+    pub const OVERFLOW_WIDTH: f32 = 34.0;
     /// Square buttons at the end of a tab bar (collapse, maximize; the first group also collapses the sidebar).
     pub const BAR_BUTTON: f32 = 22.0;
     pub const BAR_BUTTON_SPACING: f32 = 2.0;
@@ -36,8 +40,9 @@ pub mod metrics {
 }
 
 use metrics::{
-    BAR_BUTTON, BAR_BUTTON_SPACING, EDGE_STRIP, MIN_BODY, RESIZER, SIDEBAR_PADDING, SIDEBAR_TOP_PADDING, SPLIT_BAND,
-    TAB_BAR_HEIGHT, TAB_BAR_INSET, TAB_MAX_WIDTH, TAB_MIN_WIDTH, TAB_SPACING,
+    BAR_BUTTON, BAR_BUTTON_SPACING, EDGE_STRIP, MIN_BODY, OVERFLOW_WIDTH, RESIZER, SIDEBAR_PADDING,
+    SIDEBAR_TOP_PADDING, SPLIT_BAND, TAB_BAR_HEIGHT, TAB_BAR_INSET, TAB_ICON_WIDTH, TAB_MAX_WIDTH, TAB_MIN_WIDTH,
+    TAB_SPACING,
 };
 
 /// Vertical placement of one group inside its sidebar (see the module docs).
@@ -161,43 +166,97 @@ pub fn tabs_area_width(sidebar: &Sidebar, index: usize) -> f32 {
 pub struct TabSlot {
     pub x: f32,
     pub width: f32,
+    /// The title shows (else only the symbol).
+    pub titled: bool,
+    /// The tab is in the bar (else behind the "+n" button, at its place with no width).
+    pub shown: bool,
 }
 
-/// Tabs side by side at their preferred widths. When they do not fit `area`, the widest ones shrink first (all tabs above
-/// a common cap are cut to it), down to icon-only tabs.
-pub fn tab_slots(panels: &[PanelId], area: f32) -> Vec<TabSlot> {
+/// The tabs of a bar and where the "+n" button starts (`None` while every tab is in the bar).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TabLayout {
+    pub slots: Vec<TabSlot>,
+    pub overflow_x: Option<f32>,
+}
+
+impl TabLayout {
+    /// The tabs behind the "+n" button.
+    pub fn hidden(&self) -> usize {
+        self.slots.iter().filter(|s| !s.shown).count()
+    }
+}
+
+/// The tabs of a bar `area` wide (Q-P9.15 width C): every tab with its title while they fit; else the selected one
+/// with its title and the others with their symbols only; else the selected one, as many others in their order as fit,
+/// and a "+n" button for the rest.
+pub fn tab_slots(panels: &[PanelId], active: Option<PanelId>, area: f32) -> TabLayout {
     let preferred: Vec<f32> = panels.iter().map(|p| preferred_tab_width(p.title())).collect();
     let spacing = TAB_SPACING * panels.len().saturating_sub(1) as f32;
-    let cap = width_cap(&preferred, (area - spacing).max(0.0));
-    let mut x = 0.0;
-    preferred
-        .into_iter()
-        .map(|w| {
-            let width = w.min(cap).max(TAB_MIN_WIDTH);
-            let slot = TabSlot { x, width };
-            x += width + TAB_SPACING;
-            slot
-        })
-        .collect()
-}
-
-/// The largest cap with `sum(min(width, cap)) <= available` (no cap when everything fits).
-fn width_cap(widths: &[f32], available: f32) -> f32 {
-    if widths.iter().sum::<f32>() <= available {
-        return f32::MAX;
-    }
-    let mut sorted = widths.to_vec();
-    sorted.sort_by(f32::total_cmp);
-    let mut used = 0.0;
-    for (i, w) in sorted.iter().enumerate() {
-        let rest = (sorted.len() - i) as f32;
-        let cap = (available - used) / rest;
-        if cap <= *w {
-            return cap.max(0.0);
+    let selected = active.and_then(|a| panels.iter().position(|p| *p == a)).unwrap_or(0);
+    let place = |widths: &[(f32, bool, bool)]| -> TabLayout {
+        let mut x = 0.0;
+        let mut slots: Vec<TabSlot> = widths
+            .iter()
+            .map(|&(width, titled, shown)| {
+                let slot = TabSlot {
+                    x,
+                    width: if shown { width } else { 0.0 },
+                    titled,
+                    shown,
+                };
+                if shown {
+                    x += width + TAB_SPACING;
+                }
+                slot
+            })
+            .collect();
+        let overflow_x = slots.iter().any(|s| !s.shown).then_some(x);
+        for slot in slots.iter_mut().filter(|s| !s.shown) {
+            slot.x = x;
         }
-        used += w;
+        TabLayout { slots, overflow_x }
+    };
+    if preferred.iter().sum::<f32>() + spacing <= area {
+        return place(&preferred.iter().map(|w| (*w, true, true)).collect::<Vec<_>>());
     }
-    f32::MAX
+    let narrow: Vec<(f32, bool, bool)> = preferred
+        .iter()
+        .enumerate()
+        .map(|(i, w)| {
+            if i == selected {
+                (*w, true, true)
+            } else {
+                (TAB_ICON_WIDTH, false, true)
+            }
+        })
+        .collect();
+    if narrow.iter().map(|(w, ..)| w).sum::<f32>() + spacing <= area {
+        return place(&narrow);
+    }
+    // The selected tab (cut when even it alone does not fit) and the symbols that fit before the button.
+    let room = (area - OVERFLOW_WIDTH - TAB_SPACING).max(0.0);
+    let own = preferred
+        .get(selected)
+        .copied()
+        .unwrap_or(TAB_MIN_WIDTH)
+        .min(room)
+        .max(TAB_MIN_WIDTH);
+    let mut used = own;
+    let widths: Vec<(f32, bool, bool)> = narrow
+        .iter()
+        .enumerate()
+        .map(|(i, &(w, titled, _))| {
+            if i == selected {
+                return (own, titled, true);
+            }
+            let fits = used + TAB_SPACING + w <= room;
+            if fits {
+                used += TAB_SPACING + w;
+            }
+            (w, titled, fits)
+        })
+        .collect();
+    place(&widths)
 }
 
 /// Where a tab dropped at `x` (relative to the tab bar) is inserted: before the first tab whose center is right of `x`.
@@ -313,7 +372,7 @@ fn hit_sidebar(layout: &DockLayout, frame: &DockFrame, side: Side, x: f32, y: f3
         let at = GroupRef { side, index };
         let bar = Rect { h: TAB_BAR_HEIGHT, ..g };
         if y < bar.bottom() || !placement.shows_body {
-            let slots = tab_slots(&group.tabs, tabs_area_width(sidebar, index));
+            let slots = tab_slots(&group.tabs, Some(group.active), tabs_area_width(sidebar, index)).slots;
             let tab_index = insertion_index(&slots, x - bar.x - TAB_BAR_INSET);
             return Some(Hit {
                 target: DropTarget::Tabs {

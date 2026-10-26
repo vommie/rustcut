@@ -377,6 +377,7 @@ fn set_metrics(window: &MainWindow) {
     m.set_sidebar_padding(metrics::SIDEBAR_PADDING);
     m.set_tab_bar_height(metrics::TAB_BAR_HEIGHT);
     m.set_tab_height(metrics::TAB_HEIGHT);
+    m.set_overflow_width(metrics::OVERFLOW_WIDTH);
     m.set_bar_button(metrics::BAR_BUTTON);
     m.set_resizer(metrics::RESIZER);
     m.set_rail_width(metrics::RAIL_WIDTH);
