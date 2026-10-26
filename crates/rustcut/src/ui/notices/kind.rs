@@ -174,6 +174,10 @@ kinds! {
         critical false, ("The video is interlaced", "Switch Deinterlace on in the Filters card.");
     FiltersReset = "filters_reset", "Filters reset", Filters, Info, Status, QUIET, desktop false, critical false,
         ("Filters reset", "");
+    /// The output size after every filter is odd, or no multiple of the encoder's blocks (P9.14: one bubble on the
+    /// Filters card's header, never more).
+    OutputSize = "output_size", "Output size", Filters, Warning, Bubble, BUBBLE, desktop false, critical false,
+        ("1918×1078 is not a multiple of 16", "H.264 codes blocks of 16: the encoder fills the rest.");
     /// A filter menu's "save as default" (P9.13): Settings > Filters took its options.
     FilterDefaultsSaved = "filter_defaults_saved", "Filter defaults saved", Filters, Success, Status, QUIET,
         desktop false, critical false, ("Deshake options saved as the defaults", "");

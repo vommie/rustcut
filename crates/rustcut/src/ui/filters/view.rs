@@ -21,6 +21,8 @@ pub const ALGORITHMS: [ResizeAlgorithm; 4] = [
 ];
 /// The field orders in the order of the menu's segments.
 pub const FIELD_ORDERS: [FieldParity; 3] = [FieldParity::Auto, FieldParity::TopFirst, FieldParity::BottomFirst];
+/// The crop's size multiples, in the order of the menu's segments.
+pub const MULTIPLES: [u8; 4] = rustcut_core::settings::CROP_MULTIPLES;
 /// The sides auto-crop searches, in the order of the menu's segments.
 pub const SIDES: [CropSides; 3] = [CropSides::All, CropSides::TopBottom, CropSides::LeftRight];
 
@@ -94,6 +96,9 @@ pub struct CardView {
     pub search_sides: usize,
     pub search_samples: u8,
     pub search_sections_only: bool,
+    /// The index of the crop's size multiple in [`MULTIPLES`], and whether a Resize after the crop makes it free.
+    pub crop_multiple: usize,
+    pub crop_multiple_free: bool,
     pub orientation: OrientationParams,
     /// Typed sizes ("" = automatic) and what "automatic" comes to (the fields' dim placeholders).
     pub resize_width: String,
@@ -169,6 +174,8 @@ pub fn card(state: &FiltersState) -> CardView {
         search_sides: SIDES.iter().position(|s| *s == state.search.sides).unwrap_or(0),
         search_samples: state.search.samples,
         search_sections_only: state.search.sections_only,
+        crop_multiple: MULTIPLES.iter().position(|m| *m == state.multiple).unwrap_or(0),
+        crop_multiple_free: state.resize_sets_size(),
         orientation: state.orientation(),
         resize_width: width.map(|w| w.to_string()).unwrap_or_default(),
         resize_height: height.map(|h| h.to_string()).unwrap_or_default(),

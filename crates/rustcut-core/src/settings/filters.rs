@@ -28,6 +28,9 @@ pub struct FilterDefaults {
     pub resize_algorithm: ResizeAlgorithm,
     /// The aspect ratios the crop's ratio button goes through and Resize offers ("16:9", "2.39:1"; 0.0.50, P9.14).
     pub crop_ratios: Vec<String>,
+    /// The crop's width and height are multiples of this (2, 4, 8 or 16) while the crop sets the output size
+    /// (0.0.51, P9.14).
+    pub crop_multiple: u8,
 }
 
 impl Default for FilterDefaults {
@@ -41,8 +44,17 @@ impl Default for FilterDefaults {
             deshake: DeshakeParams::default(),
             resize_algorithm: ResizeAlgorithm::Lanczos,
             crop_ratios: DEFAULT_RATIOS.iter().map(ToString::to_string).collect(),
+            crop_multiple: 2,
         }
     }
+}
+
+/// The multiples the crop offers.
+pub const CROP_MULTIPLES: [u8; 4] = [2, 4, 8, 16];
+
+/// `n` as one of [`CROP_MULTIPLES`]: the largest that does not exceed it (2 for anything smaller).
+pub fn crop_multiple(n: u8) -> u8 {
+    CROP_MULTIPLES.iter().rev().copied().find(|m| *m <= n).unwrap_or(2)
 }
 
 impl FilterDefaults {
@@ -52,6 +64,7 @@ impl FilterDefaults {
             crop_search: self.crop_search.sanitized(),
             deshake: self.deshake.sanitized(),
             crop_ratios: self.ratios().entries(),
+            crop_multiple: crop_multiple(self.crop_multiple),
             ..self.clone()
         }
     }
@@ -121,6 +134,7 @@ mod tests {
             DEFAULT_RATIOS.len(),
             "0.0.50's ratios start with RustView's list"
         );
+        assert_eq!(f.crop_multiple, 2, "0.0.51's multiple starts at even sizes");
     }
 
     #[test]
@@ -135,6 +149,7 @@ mod tests {
         );
         let text = toml::to_string(&defaults.sanitized()).unwrap();
         assert!(text.contains("crop_ratios = [\"21:9\", \"4:5\"]"), "{text}");
+        assert_eq!([0, 3, 4, 9, 16, 200].map(crop_multiple), [2, 2, 4, 8, 16, 16]);
     }
 
     #[test]

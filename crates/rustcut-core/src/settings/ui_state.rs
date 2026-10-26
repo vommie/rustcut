@@ -130,6 +130,10 @@ pub struct ExportPanelState {
     #[serde_as(as = "DefaultOnError")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub crop_search: Option<CropSearch>,
+    /// The crop's size multiple, kept with the filters (written only while `keep_filters` is on; 0.0.51).
+    #[serde_as(as = "DefaultOnError")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crop_multiple: Option<u8>,
     /// The aspect ratio a crop kept while it was dragged (0.0.49 and older; read for `crop_ratio` when that is missing,
     /// written for older versions).
     #[serde_as(as = "DefaultOnError")]
@@ -167,6 +171,7 @@ impl Default for ExportPanelState {
             keep_filters: false,
             filters: None,
             crop_search: None,
+            crop_multiple: None,
             crop_aspect: CropAspect::Free,
             crop_ratio: None,
             filter_menu_pinned: false,

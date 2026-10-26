@@ -98,6 +98,11 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
         }
     }));
     f.on_set_only_interlaced(change(&this, FiltersState::set_only_interlaced));
+    f.on_set_crop_multiple(change(&this, |s, i: i32| {
+        if let Some(n) = usize::try_from(i).ok().and_then(|i| view::MULTIPLES.get(i)) {
+            s.set_multiple(*n);
+        }
+    }));
     f.on_set_search_limit(change(&this, |s, v: i32| {
         s.set_search(|search| search.limit = u8::try_from(v.clamp(0, 255)).unwrap_or(search.limit));
     }));

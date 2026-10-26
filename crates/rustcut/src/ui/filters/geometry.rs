@@ -91,6 +91,8 @@ pub struct CropView {
     sar: f64,
     /// Where the shown frame is in the video area (letterboxed like mpv).
     picture: Rect,
+    /// Dragged and placed crops keep a width and height that are multiples of this (2 = even, P9.14).
+    multiple: u32,
 }
 
 impl CropView {
@@ -118,7 +120,20 @@ impl CropView {
                 width: w,
                 height: h,
             },
+            multiple: 2,
         })
+    }
+
+    /// Dragged and placed crops keep a width and height that are multiples of `n` (2, 4, 8, 16).
+    #[must_use]
+    pub fn with_multiple(mut self, n: u32) -> Self {
+        self.multiple = n.max(2);
+        self
+    }
+
+    /// The multiple the crop's size keeps.
+    pub const fn multiple(&self) -> u32 {
+        self.multiple
     }
 
     /// Where the whole (uncropped) frame is shown.
@@ -169,6 +184,8 @@ impl CropView {
     pub fn crop_of_display(&self, rect: DisplayRect) -> Crop {
         let (l, r) = even_span(rect.x / self.sar, rect.right() / self.sar, self.shown.width);
         let (t, b) = even_span(rect.y, rect.bottom(), self.shown.height);
+        let (l, r) = fit_span(l, r, self.shown.width, self.multiple, true, true);
+        let (t, b) = fit_span(t, b, self.shown.height, self.multiple, true, true);
         let shown = Crop::new(
             t,
             self.shown.width.saturating_sub(r),
@@ -282,6 +299,7 @@ impl CropView {
         // Edges as coordinates of the shown frame: left, top, right, bottom.
         let (mut l, mut t) = (f64::from(c.left), f64::from(c.top));
         let (mut r, mut b) = (w - f64::from(c.right), h - f64::from(c.bottom));
+        let start_edges = (l, t, r, b);
         let (dxp, dyp) = (f64::from(dx / sx), f64::from(dy / sy));
         let min_w = f64::from(MIN_KEPT.min(self.shown.width));
         let min_h = f64::from(MIN_KEPT.min(self.shown.height));
@@ -310,6 +328,17 @@ impl CropView {
         }
         let (l, r) = even_span(l, r, self.shown.width);
         let (t, b) = even_span(t, b, self.shown.height);
+        // The edges that moved (Shift moves the other axis too) take up the difference to the multiple; a moved area
+        // keeps its size.
+        let (l, r, t, b) = if handle == Handle::Inside {
+            (l, r, t, b)
+        } else {
+            let moved = |now: u32, then: f64| (f64::from(now) - then).abs() >= 1.0;
+            let (l0, t0, r0, b0) = start_edges;
+            let (l, r) = fit_span(l, r, self.shown.width, self.multiple, moved(l, l0), moved(r, r0));
+            let (t, b) = fit_span(t, b, self.shown.height, self.multiple, moved(t, t0), moved(b, b0));
+            (l, r, t, b)
+        };
         let shown = Crop::new(
             t,
             self.shown.width.saturating_sub(r),
@@ -402,6 +431,52 @@ impl CropView {
 #[expect(clippy::cast_precision_loss, reason = "frame sizes stay below 2^24")]
 fn px(n: u32) -> f32 {
     n as f32
+}
+
+/// The even span `lo..hi` of a `size`-pixel side with its length moved to the nearest multiple of `n` by the edges that
+/// move (`moves_lo`, `moves_hi`; both: shared, the start staying even); growing only where there is room, else
+/// shrinking. A side shorter than `n` and `n` = 2 leave the span as it is.
+fn fit_span(lo: u32, hi: u32, size: u32, n: u32, moves_lo: bool, moves_hi: bool) -> (u32, u32) {
+    let kept = hi.saturating_sub(lo);
+    if n <= 2 || kept < n || size < n || !(moves_lo || moves_hi) {
+        return (lo, hi);
+    }
+    let down = kept / n * n;
+    let up = down + n;
+    let room_lo = if moves_lo { lo } else { 0 };
+    let room_hi = if moves_hi { size.saturating_sub(hi) } else { 0 };
+    let target = if kept - down > n / 2 && up - kept <= room_lo + room_hi {
+        up
+    } else {
+        down
+    };
+    if target == kept {
+        return (lo, hi);
+    }
+    // The low edge takes an even share; the high edge the rest.
+    let share = |d: u32, room: u32| -> u32 {
+        if moves_lo && moves_hi {
+            ((d / 2) & !1).min(room & !1)
+        } else if moves_lo {
+            d
+        } else {
+            0
+        }
+    };
+    if target > kept {
+        let d = target - kept;
+        let first = share(d, room_lo);
+        let (lo2, hi2) = (lo - first.min(lo), hi + (d - first));
+        if hi2 <= size {
+            return (lo2, hi2);
+        }
+        let shrink = kept - down;
+        let first = share(shrink, shrink);
+        return (lo + first, hi - (shrink - first));
+    }
+    let d = kept - target;
+    let first = share(d, d);
+    (lo + first, hi - (d - first))
 }
 
 /// The span `lo..hi` of a `size`-pixel side on even pixels, at least [`MIN_KEPT`] (an even number) long or the whole

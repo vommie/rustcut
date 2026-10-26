@@ -22,6 +22,7 @@ pub(super) fn tips() -> FilterTips {
         sides: t("filters.crop_search.sides"),
         samples: t("filters.crop_search.samples"),
         sections_only: t("filters.crop_search.sections_only"),
+        multiple: t("filters.crop_multiple"),
         shakiness: t("filters.deshake.shakiness"),
         accuracy: t("filters.deshake.accuracy"),
         stepsize: t("filters.deshake.stepsize"),
@@ -93,6 +94,8 @@ impl FiltersBridge {
         f.set_search_sides(index(card.search_sides));
         f.set_search_samples(card.search_samples.to_string().into());
         f.set_search_sections_only(card.search_sections_only);
+        f.set_crop_multiple(index(card.crop_multiple));
+        f.set_crop_multiple_free(card.crop_multiple_free);
         // The glyph shows the result (turns, then a mirror left to right); the buttons show the mirrors as set.
         let (turns, mirrored) = card.orientation.orientation().turns_and_mirror();
         f.set_orientation_turns(i32::from(turns));

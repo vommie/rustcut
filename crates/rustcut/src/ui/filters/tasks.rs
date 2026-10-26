@@ -140,7 +140,8 @@ impl FiltersBridge {
                 Ok(found) => {
                     tracing::info!(crop = ?found.crop, samples = found.samples_used, "[Filters] Black borders");
                     bridge.update(|s| {
-                        s.set_crop(found.crop);
+                        let fitted = s.fitted_crop(found.crop);
+                        s.set_crop(fitted);
                         s.switch_on(FilterKind::Crop);
                     });
                     let shown = bridge.state.borrow().shown_crop();

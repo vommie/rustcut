@@ -24,6 +24,7 @@ export struct FilterTips {
     sides: string,
     samples: string,
     sections-only: string,
+    multiple: string,
     shakiness: string,
     accuracy: string,
     stepsize: string,
@@ -82,6 +83,10 @@ export global Filters {
     in property <int> search-sides;
     in property <string> search-samples: "8";
     in property <bool> search-sections-only: true;
+    // The crop's size multiple (0: 2, 1: 4, 2: 8, 3: 16), and whether a Resize after the crop sets the output size
+    // (then the crop is free: even pixels only).
+    in property <int> crop-multiple;
+    in property <bool> crop-multiple-free;
 
     // The orientation's result for the glyph (quarter turns clockwise, then mirrored left to right) and in words; the
     // two mirror switches as set.
@@ -170,6 +175,7 @@ export global Filters {
     callback edit-search-samples(string) -> bool;
     callback step-search-samples(int);
     callback set-search-sections-only(bool);
+    callback set-crop-multiple(int);
     // The orientation's buttons: a quarter turn, a mirror of the result.
     callback rotate(/* clockwise */ bool);
     callback mirror(/* horizontal */ bool);

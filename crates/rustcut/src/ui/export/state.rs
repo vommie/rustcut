@@ -38,11 +38,7 @@ impl JobFacts {
 
 /// The short codec name of the template variable `codec`.
 pub const fn codec_label(family: CodecFamily) -> &'static str {
-    match family {
-        CodecFamily::Av1 => "AV1",
-        CodecFamily::Hevc => "HEVC",
-        CodecFamily::H264 => "H.264",
-    }
+    family.label()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

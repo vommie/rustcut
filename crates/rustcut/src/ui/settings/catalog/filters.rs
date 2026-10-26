@@ -130,6 +130,18 @@ pub static FILTERS: &[Card] = &[
         ],
     },
     Card {
+        title: "Crop",
+        description: "",
+        fields: &[choice!(
+            "filters.crop_multiple",
+            "Divisible by",
+            "The crop's width and height while it is dragged or found: 2 is what every encoder needs; 16 suits H.264, \
+             8 HEVC and AV1 (their block sizes; no pixels coded for nothing). Typed edges stay exact.",
+            filters.crop_multiple,
+            [(2, "2"), (4, "4"), (8, "8"), (16, "16")]
+        )],
+    },
+    Card {
         title: "Auto-crop",
         description: "How auto-crop looks for black borders. Each video starts with these; the Crop filter's menu \
                       changes them for one video.",

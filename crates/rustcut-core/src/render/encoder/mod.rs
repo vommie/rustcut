@@ -36,6 +36,27 @@ pub enum CodecFamily {
     H264,
 }
 
+impl CodecFamily {
+    /// The name the UI shows.
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Av1 => "AV1",
+            Self::Hevc => "HEVC",
+            Self::H264 => "H.264",
+        }
+    }
+
+    /// The block size the encoders of this codec code a picture in: another width or height is padded up to it
+    /// (checked with ffmpeg's `trace_headers`: x264 codes 1918x1078 as 120x68 macroblocks of 16 and crops; x265 codes
+    /// 1920x1080, its smallest coding block being 8; AV1's mode info covers 8x8 pixels).
+    pub const fn block_multiple(self) -> u32 {
+        match self {
+            Self::H264 => 16,
+            Self::Hevc | Self::Av1 => 8,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EncoderBackend {

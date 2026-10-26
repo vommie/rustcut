@@ -6,6 +6,7 @@
 //! player's command thread, and runs the picture checks (auto-crop, interlace) on the tokio runtime; their results come
 //! back through `slint::spawn_local`, checked against the file they were made for.
 
+mod advice;
 mod drag;
 mod input;
 mod menu;
@@ -34,17 +35,22 @@ use std::time::Duration;
 
 use rustcut_core::edit::{CropAspect, FilterKind};
 use rustcut_core::media::{DetectOptions, MediaInfo};
+use rustcut_core::render::CodecFamily;
 use rustcut_core::settings::{ExportPanelState, Settings};
 use rustcut_core::time::Timestamp;
 use rustcut_player::VideoFilter;
 use slint::{ComponentHandle as _, ModelRc, SharedString, VecModel};
 
-use self::state::{CropMode, FiltersState, InterlaceHint, Source};
+use self::state::{CropMode, FiltersState, InterlaceHint, Kept, Source};
 use crate::app::SettingsWriter;
 use crate::ui::menu::ContextMenuBridge;
 use crate::ui::notices::{self, Kind, Level, Notice};
 use crate::ui::player::PlayerBridge;
 use crate::{FilterRowView, Filters, MainWindow};
+
+/// The output size bubble's key and its anchor in the Filters card's header (`dock_panels.slint`).
+const ADVICE_KEY: &str = "filters.output-size";
+const ADVICE_ANCHOR: &str = "filters.header";
 
 /// How long Ctrl must be held over the video before the quick crop shows (a shortcut like Ctrl+O is faster than this).
 const QUICK_DELAY: Duration = Duration::from_millis(220);
@@ -97,6 +103,10 @@ pub struct FiltersBridge {
     /// The filter whose options menu is open, and whether menus stay open while the pointer works elsewhere (kept).
     menu_kind: Cell<Option<FilterKind>>,
     menu_pinned: Cell<bool>,
+    /// The codec of the render settings' working copy, and the output size bubble shown for it (posted only when it
+    /// changes, P9.14).
+    codec: Cell<Option<CodecFamily>>,
+    advice: RefCell<Option<advice::SizeAdvice>>,
 }
 
 /// What the bridge needs besides the window (the app owns them).
@@ -127,7 +137,11 @@ impl FiltersBridge {
             settings.filters.clone(),
             export.preview_filters,
             export.keep_filters,
-            (export.filters.clone(), export.crop_search),
+            Kept {
+                chain: export.filters.clone(),
+                search: export.crop_search,
+                multiple: export.crop_multiple,
+            },
             export.crop_ratio.as_deref().or(export.crop_aspect.ratio_label()),
         );
         let bridge = Rc::new_cyclic(|me| Self {
@@ -157,6 +171,8 @@ impl FiltersBridge {
             drag_shifts: Rc::new(VecModel::default()),
             menu_kind: Cell::new(None),
             menu_pinned: Cell::new(export.filter_menu_pinned),
+            codec: Cell::new(None),
+            advice: RefCell::new(None),
         });
         let filters = window.global::<Filters<'_>>();
         filters.set_rows(ModelRc::from(Rc::clone(&bridge.rows)));
@@ -225,6 +241,41 @@ impl FiltersBridge {
         *self.sections.borrow_mut() = Some(Box::new(source));
     }
 
+    /// The codec the render settings encode with (their working copy changed): the output size bubble follows it.
+    pub fn set_codec(&self, family: CodecFamily) {
+        if self.codec.replace(Some(family)) != Some(family) {
+            self.publish_advice();
+        }
+    }
+
+    /// The bubble on the Filters card's header about the output size (P9.14), posted only when its words change.
+    fn publish_advice(&self) {
+        let advice = {
+            let st = self.state.borrow();
+            match (st.source(), self.codec.get()) {
+                (Some(source), Some(family)) => st
+                    .chain()
+                    .output_size(source.size)
+                    .ok()
+                    .and_then(|size| advice::size_advice(size, source.size, family)),
+                _ => None,
+            }
+        };
+        if *self.advice.borrow() == advice {
+            return;
+        }
+        match &advice {
+            Some(a) => notices::post(
+                Notice::new(Kind::OutputSize, a.title.as_str())
+                    .detail(a.detail.as_str())
+                    .key(ADVICE_KEY)
+                    .at(notices::Area::Export, [ADVICE_ANCHOR.to_owned()]),
+            ),
+            None => notices::clear(ADVICE_KEY),
+        }
+        *self.advice.borrow_mut() = advice;
+    }
+
     /// The ffmpeg that auto-crop and the interlace check run (changed in the Settings window).
     pub fn set_ffmpeg(&self, program: Option<PathBuf>) {
         self.detect.borrow_mut().program = program;
@@ -240,8 +291,10 @@ impl FiltersBridge {
         let st = self.state.borrow();
         export.preview_filters = st.preview;
         export.keep_filters = st.keep;
-        export.filters = st.kept_chain();
-        export.crop_search = st.kept_search();
+        let kept = st.kept();
+        export.filters = kept.chain;
+        export.crop_search = kept.search;
+        export.crop_multiple = kept.multiple;
         let label = st.ratio_choice_label();
         export.crop_aspect = CropAspect::from_ratio_label(label);
         export.crop_ratio = Some(label.to_owned());
@@ -350,6 +403,7 @@ impl FiltersBridge {
     /// The card, the overlay and the player's video filters.
     fn publish(&self) {
         self.publish_card();
+        self.publish_advice();
         self.publish_overlay();
         self.send_preview();
     }

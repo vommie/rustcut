@@ -8,7 +8,7 @@ import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Dock, DockCardView } from "dock_types.slint";
 import { Playback } from "player_types.slint";
 import { Jump, JumpFlash } from "jump.slint";
-import { BubbleLayer } from "bubble.slint";
+import { BubbleAnchor, BubbleLayer } from "bubble.slint";
 import { MediaInfoPanelView } from "media_info_panel.slint";
 import { Sections, SectionsCardBody } from "sections_card.slint";
 import { FiltersCardBody } from "filters_card.slint";
@@ -103,6 +103,11 @@ component DockCard inherits Rectangle {
                         text: Filters.output;
                         color: Filters.output-warning ? Theme.status-corrupt : Theme.text-muted;
                         overflow: elide;
+                    }
+
+                    // The output size's bubble (odd, or no multiple of the codec's blocks; P9.14).
+                    BubbleAnchor {
+                        key: "filters.header";
                     }
                 }
 

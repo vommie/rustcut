@@ -363,9 +363,15 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     // The card checks the job again when the render settings or the source's description change (Q-N6).
     {
         let weak = Rc::downgrade(&export);
+        let (filters_weak, render_weak) = (Rc::downgrade(&filters), Rc::downgrade(&render));
+        // The Filters card's output size bubble follows the codec (P9.14).
+        filters.set_codec(render.working_profile().video.encoder.spec().family);
         render.set_changed_hook(move || {
             if let Some(export) = weak.upgrade() {
                 export.job_changed();
+            }
+            if let (Some(filters), Some(render)) = (filters_weak.upgrade(), render_weak.upgrade()) {
+                filters.set_codec(render.working_profile().video.encoder.spec().family);
             }
         });
         let weak = Rc::downgrade(&export);

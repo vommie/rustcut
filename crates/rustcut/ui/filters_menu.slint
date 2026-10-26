@@ -43,7 +43,7 @@ component MenuRow inherits HorizontalLayout {
         title: root.label;
         text: root.tooltip;
         horizontal-stretch: 1;
-        min-width: 60px;
+        min-width: 40px;
 
         Text {
             width: parent.width;
@@ -252,6 +252,27 @@ component CropMenu inherits VerticalLayout {
                 tooltip: Filters.tips.sections-only;
                 toggled => { Filters.set-search-sections-only(!Filters.search-sections-only); }
             }
+        }
+    }
+
+    Heading {
+        text: "SIZE";
+    }
+
+    MenuRow {
+        label: "Divisible by";
+        tooltip: Filters.tips.multiple;
+        enabled: !Filters.crop-multiple-free;
+
+        SegmentedChoice {
+            width: 160px;
+            items: ["2", "4", "8", "16"];
+            current: Filters.crop-multiple;
+            enabled: !Filters.crop-multiple-free;
+            tooltip: Filters.crop-multiple-free
+                ? "Resize after the crop sets the output size: the crop stays free (even pixels)."
+                : Filters.tips.multiple;
+            selected(index) => { Filters.set-crop-multiple(index); }
         }
     }
 }
