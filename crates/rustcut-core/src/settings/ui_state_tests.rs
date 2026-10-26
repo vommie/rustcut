@@ -256,6 +256,7 @@ fn the_queue_job_and_logs_panels_round_trip_and_old_files_load() {
         errors_only: true,
         follow: false,
         source: LogSource::App,
+        shareable: true,
     };
     save(dir.path(), &state).unwrap();
     assert_eq!(
@@ -381,6 +382,7 @@ fn the_log_source_round_trips_and_unknown_sources_read_as_the_job() {
         std::fs::write(dir.path().join("ui-state.toml"), text).unwrap();
         let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
         assert_eq!((read.logs.source, read.logs.search.as_str()), (LogSource::Job, "x"));
+        assert!(!read.logs.shareable, "0.0.55's shareable view starts off");
     }
 }
 

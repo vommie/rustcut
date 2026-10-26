@@ -336,6 +336,10 @@ impl TagsBridge {
     }
 
     fn tree_changed(&self, tree: std::sync::Arc<TagTree>) {
+        // The shareable log hides the tag names (P9.17).
+        for tag in &tree.tags {
+            crate::app::redaction::learn_tag(&tag.name);
+        }
         tracing::debug!(tags = tree.tags.len(), "[Tags] Tag tree loaded");
         self.state.borrow_mut().set_tree(tree);
         self.publish();

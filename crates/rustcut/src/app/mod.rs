@@ -7,6 +7,7 @@ mod live;
 pub mod log_book;
 mod logging;
 mod persistence;
+pub mod redaction;
 mod services;
 mod shutdown;
 mod tools;
@@ -114,7 +115,23 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     let paths = AppPaths::resolve(cli.home.as_deref()).ok_or(AppError::NoHome)?;
     let loaded = persistence::load_all(paths);
     log.apply_setting(&loaded.settings.advanced.log_level);
-    log.open_file(&loaded.paths.log_dir(), loaded.settings.advanced.log_keep_days);
+    redaction::set_kinds(loaded.settings.advanced.redact);
+    for dir in [
+        &loaded.paths.config_dir,
+        &loaded.paths.data_dir,
+        &loaded.paths.state_dir,
+        &loaded.paths.cache_dir,
+    ] {
+        redaction::learn_dir(dir);
+    }
+    for folder in &loaded.settings.export.target_folders {
+        redaction::learn_dir(&folder.path);
+    }
+    log.open_file(
+        &loaded.paths.log_dir(),
+        loaded.settings.advanced.log_keep_days,
+        loaded.settings.advanced.shareable_log,
+    );
 
     let single_instance = loaded.settings.general.single_instance;
     let socket = instance::socket_path(&loaded.paths.config_dir);
@@ -375,6 +392,17 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             }
         });
         let weak = Rc::downgrade(&export);
+        crate::ui::media_info::add_probe_hook(|info| {
+            // The shareable log hides the video's titles (P9.17).
+            if let Some(info) = info {
+                for title in std::iter::once(&info.container.title)
+                    .chain(info.streams.iter().map(|s| &s.title))
+                    .flatten()
+                {
+                    redaction::learn_meta(title);
+                }
+            }
+        });
         crate::ui::media_info::add_probe_hook(move |_| {
             if let Some(export) = weak.upgrade() {
                 export.job_changed();

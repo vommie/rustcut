@@ -14,6 +14,7 @@ pub mod media;
 pub mod naming;
 pub mod process;
 pub mod queue;
+pub mod redact;
 pub mod render;
 pub mod rustview;
 pub mod settings;

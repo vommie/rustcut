@@ -443,3 +443,13 @@ fn a_file_of_0_0_32_gets_one_metadata_warning() {
     assert!(value.warnings.missing_metadata);
     assert_eq!(value.queue.workers, 2);
 }
+
+#[test]
+fn a_file_of_0_0_54_writes_the_shareable_log_and_replaces_every_kind() {
+    let s: Settings = toml::from_str("version = 4\n[advanced]\nlog_level = \"debug\"\n").unwrap();
+    assert_eq!(s.advanced.log_level, "debug");
+    assert!(s.advanced.shareable_log, "on by default (user decision Q-P9)");
+    assert_eq!(s.advanced.redact, crate::redact::RedactKinds::default());
+    let partial: Settings = toml::from_str("version = 4\n[advanced.redact]\nmd5 = false\n").unwrap();
+    assert!(!partial.advanced.redact.md5 && partial.advanced.redact.paths);
+}

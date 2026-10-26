@@ -252,6 +252,50 @@ pub static ADVANCED: &[Card] = &[
         ],
     },
     Card {
+        title: "Shareable log",
+        description: "A copy of the log that is safe to send: what is switched on below is replaced by placeholders \
+                      that stay the same within a run (<file-3>.mkv, <dir-2>, <tag-4>, <user>, <md5-1>, <meta-1>). The \
+                      Logs panel shows it with its spy button, and copies it from there.",
+        fields: &[
+            switch!(
+                "advanced.shareable_log",
+                "Write the shareable file",
+                "rustcut-shareable.DATE.log beside the log, kept as long as the log (recommended: on).",
+                advanced.shareable_log
+            ),
+            switch!(
+                "advanced.redact.paths",
+                "File names, folders and paths",
+                "Videos, targets and every other path (the extension stays).",
+                advanced.redact.paths
+            ),
+            switch!(
+                "advanced.redact.tags",
+                "Tag names",
+                "RustView's tags (whole words).",
+                advanced.redact.tags
+            ),
+            switch!(
+                "advanced.redact.user",
+                "User and host names",
+                "Your login name and this computer's name, also inside URLs.",
+                advanced.redact.user
+            ),
+            switch!(
+                "advanced.redact.md5",
+                "MD5 sums",
+                "The checksums RustCut and RustView keep of the videos.",
+                advanced.redact.md5
+            ),
+            switch!(
+                "advanced.redact.metadata",
+                "Titles and metadata",
+                "The titles stored in the videos and their streams.",
+                advanced.redact.metadata
+            ),
+        ],
+    },
+    Card {
         title: "Folders",
         description: "Where RustCut keeps its files (the --home option moves all of them).",
         fields: &[

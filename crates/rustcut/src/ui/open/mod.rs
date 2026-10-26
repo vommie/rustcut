@@ -165,6 +165,8 @@ impl FileOpener {
         if let Some(probe) = self.probe.upgrade() {
             probe.file_opening();
         }
+        // The shareable log hides the file's name and folder (P9.17).
+        crate::app::redaction::learn_path(path);
         // Before the player loads the file: the previous file's filters must not show on the new one.
         if let Some(filters) = self.filters.upgrade() {
             filters.file_opening(path);

@@ -104,6 +104,7 @@ impl LogsBridge {
         l.set_lines(ModelRc::from(Rc::clone(&bridge.model)));
         l.set_search(saved.search.as_str().into());
         l.set_errors_only(saved.errors_only);
+        l.set_shareable(saved.shareable);
         connect(&bridge, window);
         bridge.source_changed();
         bridge
@@ -278,8 +279,19 @@ impl LogsBridge {
         });
     }
 
-    /// The lines of the chosen log that pass the filter, and how many it has.
+    /// The lines of the chosen log that pass the filter (as the shareable copy shows them while it is chosen), and how
+    /// many it has.
     fn current(&self) -> (Vec<ShownLine>, usize) {
+        let (mut lines, total) = self.filtered();
+        if self.state.borrow().shareable {
+            for line in &mut lines {
+                line.text = crate::app::redaction::redact(&line.text);
+            }
+        }
+        (lines, total)
+    }
+
+    fn filtered(&self) -> (Vec<ShownLine>, usize) {
         let st = self.state.borrow();
         if st.source == LogSource::Job {
             let lines = self.lines.borrow();
@@ -345,6 +357,17 @@ fn connect(bridge: &Rc<LogsBridge>, window: &MainWindow) {
             b.state.borrow_mut().errors_only = on;
             if let Some(window) = b.window.upgrade() {
                 window.global::<Logs<'_>>().set_errors_only(on);
+            }
+            b.publish();
+        }
+    });
+    let weak = Rc::downgrade(bridge);
+    l.on_toggle_shareable(move || {
+        if let Some(b) = weak.upgrade() {
+            let on = !b.state.borrow().shareable;
+            b.state.borrow_mut().shareable = on;
+            if let Some(window) = b.window.upgrade() {
+                window.global::<Logs<'_>>().set_shareable(on);
             }
             b.publish();
         }

@@ -309,6 +309,8 @@ pub struct LogPanelState {
     /// A value this version does not know reads as the job's log.
     #[serde_as(as = "DefaultOnError")]
     pub source: LogSource,
+    /// Show the shareable copy (names and paths replaced; 0.0.55, P9.17).
+    pub shareable: bool,
 }
 
 impl Default for LogPanelState {
@@ -318,6 +320,7 @@ impl Default for LogPanelState {
             errors_only: false,
             follow: true,
             source: LogSource::Job,
+            shareable: false,
         }
     }
 }

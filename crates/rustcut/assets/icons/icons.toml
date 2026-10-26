@@ -87,6 +87,7 @@ tab_known = { tabler = "versions", doc = "The known-source dialog's Made from it
 tab_look = { tabler = "palette", doc = "Settings > Messages: Look & behavior" }
 tab_kinds = { tabler = "list-check", doc = "Settings > Messages: Message kinds" }
 tab_muted = { tabler = "bell-off", doc = "Settings > Messages: Muted" }
+log_shareable = { tabler = "spy", doc = "The Logs panel shows the shareable copy (names and paths replaced)" }
 tab_file = { tabler = "file-settings", doc = "A settings file's tab (the newer-file dialog)" }
 deshake_shakiness = { tabler = "wave-sine", doc = "Deshake: how shaky the video is" }
 deshake_accuracy = { tabler = "target", doc = "Deshake: detection accuracy" }

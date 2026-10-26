@@ -340,7 +340,14 @@ async fn follow(service: QueueService, shared: Arc<Mutex<Shared>>, ui: UiDispatc
     loop {
         if resync {
             match service.handle.request(|reply| QueueCommand::Snapshot { reply }).await {
-                Ok(snapshot) => shared.lock().view.replace(snapshot, now()),
+                Ok(snapshot) => {
+                    // The shareable log hides the jobs' files (P9.17).
+                    for job in &snapshot.jobs {
+                        crate::app::redaction::learn_path(&job.source);
+                        crate::app::redaction::learn_path(&job.target);
+                    }
+                    shared.lock().view.replace(snapshot, now());
+                }
                 Err(_gone) => return,
             }
             refresh(&ui);
@@ -348,6 +355,10 @@ async fn follow(service: QueueService, shared: Arc<Mutex<Shared>>, ui: UiDispatc
         } else {
             match events.recv().await {
                 Ok(event) => {
+                    if let QueueEvent::Added(row) = &event {
+                        crate::app::redaction::learn_path(&row.source);
+                        crate::app::redaction::learn_path(&row.target);
+                    }
                     let mut s = shared.lock();
                     if let QueueEvent::Done { finished, failed } = &event {
                         s.done = Some((*finished, *failed));
