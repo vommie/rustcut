@@ -36,7 +36,7 @@ pub fn size_advice(size: Size, source: Size, family: CodecFamily) -> Option<Size
         });
     }
     let n = family.block_multiple();
-    if size.width % n == 0 && size.height % n == 0 {
+    if size.width.is_multiple_of(n) && size.height.is_multiple_of(n) {
         return None;
     }
     let (w, h) = (floor_to(size.width, n), floor_to(size.height, n));

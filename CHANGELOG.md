@@ -147,6 +147,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The crop's size can stay divisible by 2, 4, 8 or 16 (0.0.51, your UI review note 13): the Crop filter's menu and
+  Settings > Filters > Crop have "Divisible by" (2 by default, what every encoder needs). Dragging the crop, the ratio
+  button and auto-crop keep its width and height multiples of it; typed edges stay exact. Choosing a number fits the
+  current crop at once (it only gets smaller). While a Resize after the crop sets the output size, the crop is free.
+- One bubble on the Filters card's header says when the output size after every filter does not suit the profile's
+  codec (0.0.51, your filter questionnaire): an odd size (the render makes it even), or a size that is no multiple of
+  the codec's blocks (H.264 16, HEVC and AV1 8; checked in the encoders' headers), with the nearest size that fits. It
+  never shows for the video's own size, only when the filters change it. `config.toml` gets `[filters] crop_multiple`
+  (2 for older files) and `ui-state.toml` keeps it with the filters.
+
 - The crop has a ratio button like RustView's crop tool (0.0.50, your UI review note 13): while the crop is edited on
   the video, the pill at its top right shows the ratio; a left click goes through the landscape ratios, a right click
   through the portrait ones (square ones are in both; O is the video's own). Each ratio keeps the area of the crop you
