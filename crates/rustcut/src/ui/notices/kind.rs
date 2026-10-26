@@ -174,6 +174,9 @@ kinds! {
         critical false, ("The video is interlaced", "Switch Deinterlace on in the Filters card.");
     FiltersReset = "filters_reset", "Filters reset", Filters, Info, Status, QUIET, desktop false, critical false,
         ("Filters reset", "");
+    /// A filter menu's "save as default" (P9.13): Settings > Filters took its options.
+    FilterDefaultsSaved = "filter_defaults_saved", "Filter defaults saved", Filters, Success, Status, QUIET,
+        desktop false, critical false, ("Deshake options saved as the defaults", "");
     AutoCrop = "auto_crop", "Black borders cropped", Filters, Success, Toast, EVENT, desktop false, critical false,
         ("Black borders cropped", "140 pixels at the top and bottom");
     AutoCropFailed = "auto_crop_failed", "Black border detection failed", Filters, Error, Toast, EVENT,

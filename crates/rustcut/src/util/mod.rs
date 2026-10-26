@@ -1,5 +1,6 @@
 //! Small helpers shared by the bridges (one file per topic).
 
+pub mod amount;
 pub mod choice;
 pub mod clipboard;
 pub mod hex_color;

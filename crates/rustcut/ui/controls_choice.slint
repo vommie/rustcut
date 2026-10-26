@@ -23,14 +23,16 @@ export component ChoiceButton inherits Rectangle {
     in property <string> bubble;
     // Stretches over all the room it gets (the target folder, P9.7).
     in property <bool> stretch-fully;
+    // Only the icon and the arrow (the crop's aspect lock in the Filters card, P9.13): the tooltip names the choice.
+    in property <bool> compact;
     callback selected(int);
 
     height: 24px;
     // Stretches up to the common width; a narrow sidebar cuts the chosen text.
-    min-width: 48px;
-    preferred-width: ControlMetrics.field-max-width;
-    max-width: root.stretch-fully ? 100000px : ControlMetrics.field-max-width;
-    horizontal-stretch: 1;
+    min-width: root.compact ? 38px : 48px;
+    preferred-width: root.compact ? 38px : ControlMetrics.field-max-width;
+    max-width: root.compact ? 38px : root.stretch-fully ? 100000px : ControlMetrics.field-max-width;
+    horizontal-stretch: root.compact ? 0 : 1;
     border-radius: 4px;
     background: !root.enabled ? transparent : touch.pressed ? Theme.surface-selected
         : touch.has-hover ? Theme.surface-hover : Theme.surface;
@@ -77,7 +79,7 @@ export component ChoiceButton inherits Rectangle {
             }
         }
 
-        Text {
+        if !root.compact: Text {
             text: root.items[root.current];
             color: root.enabled ? Theme.text : Theme.status-deleted;
             font-size: 12px;

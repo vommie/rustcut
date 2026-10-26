@@ -4,7 +4,9 @@
 // (window coordinates minus the content's start below the menu bar). The content gives its size (`panel-width`,
 // `panel-height`) and goes inside as children (an instance's children: `Flyout { ... }`, with explicit sizes, since
 // their `parent` is the flyout, not the panel). The filter menu of the queue uses it; the context menu draws the same
-// arrow when it belongs to a button (the "when done" menu).
+// arrow when it belongs to a button (the "when done" menu). `beside` puts it to the right of the anchor (to the left when
+// there is no room: a card in the right sidebar), the arrow at the anchor's middle (the filters' options menus, P9.13);
+// a flyout that is not `modal` (a pinned menu) leaves the rest of the window usable: no press outside closes it.
 
 import { Theme } from "styles.slint";
 import { TipSide } from "tooltip.slint";
@@ -25,6 +27,20 @@ export global FlyoutLogic {
     public pure function top(below: bool, anchor-y: length, anchor-height: length, height: length) -> length {
         return Math.round((below ? anchor-y + anchor-height + 8px : anchor-y - 8px - height) / 1px) * 1px;
     }
+
+    // Beside the anchor: on its right unless it does not fit there and fits better on the left.
+    public pure function right(anchor-x: length, anchor-width: length, width: length, area-width: length) -> bool {
+        return anchor-x + anchor-width + 8px + width <= area-width - 4px || anchor-x - 8px - width < 4px;
+    }
+
+    public pure function beside-left(right: bool, anchor-x: length, anchor-width: length, width: length) -> length {
+        return Math.round((right ? anchor-x + anchor-width + 8px : anchor-x - 8px - width) / 1px) * 1px;
+    }
+
+    // The top of a flyout beside the anchor: the arrow near its top, the panel kept inside the area.
+    public pure function beside-top(anchor-y: length, anchor-height: length, height: length, area-height: length) -> length {
+        return Math.round(Math.max(4px, Math.min(area-height - height - 4px, anchor-y + anchor-height / 2 - 20px)) / 1px) * 1px;
+    }
 }
 
 /// The panel with its arrow; the layer around it closes the flyout on a press outside.
@@ -35,12 +51,15 @@ export component Flyout inherits Rectangle {
     in property <length> anchor-height;
     in property <length> panel-width: 260px;
     in property <length> panel-height: 120px;
+    in property <bool> beside;
+    in property <bool> modal: true;
     callback closed();
 
     property <bool> below: FlyoutLogic.below(root.anchor-y, root.anchor-height, root.panel-height, root.height);
+    property <bool> right: FlyoutLogic.right(root.anchor-x, root.anchor-width, root.panel-width, root.width);
 
     // A press outside the panel closes it (the press does nothing else).
-    TouchArea {
+    if root.modal: TouchArea {
         pointer-event(event) => {
             if event.kind == PointerEventKind.down {
                 root.closed();
@@ -52,8 +71,10 @@ export component Flyout inherits Rectangle {
     }
 
     panel := Rectangle {
-        x: FlyoutLogic.left(root.anchor-x, root.anchor-width, root.panel-width, root.width);
-        y: FlyoutLogic.top(root.below, root.anchor-y, root.anchor-height, root.panel-height);
+        x: root.beside ? FlyoutLogic.beside-left(root.right, root.anchor-x, root.anchor-width, root.panel-width)
+            : FlyoutLogic.left(root.anchor-x, root.anchor-width, root.panel-width, root.width);
+        y: root.beside ? FlyoutLogic.beside-top(root.anchor-y, root.anchor-height, root.panel-height, root.height)
+            : FlyoutLogic.top(root.below, root.anchor-y, root.anchor-height, root.panel-height);
         width: root.panel-width;
         height: root.panel-height;
         border-radius: 6px;
@@ -72,8 +93,8 @@ export component Flyout inherits Rectangle {
         @children
 
         TipArrow {
-            side: root.below ? TipSide.below : TipSide.above;
-            arrow: root.anchor-x + root.anchor-width / 2 - panel.x;
+            side: root.beside ? (root.right ? TipSide.right : TipSide.left) : root.below ? TipSide.below : TipSide.above;
+            arrow: root.beside ? root.anchor-y + root.anchor-height / 2 - panel.y : root.anchor-x + root.anchor-width / 2 - panel.x;
             fill: Theme.surface-variant;
             stroke: Theme.surface-selected;
             bubble-width: panel.width;

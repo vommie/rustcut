@@ -68,7 +68,26 @@ filter_preview = { tabler = "eye", doc = "The player shows the filters" }
 filter_preview_off = { tabler = "eye-off", doc = "The player shows the video without filters" }
 filter_keep = { tabler = "pin", doc = "Keep the filters for the next video" }
 filter_kept = { tabler = "pinned", doc = "The filters are kept for the next video" }
-filter_reset = { tabler = "restore", doc = "Reset every filter" }
+filter_reset = { tabler = "backspace", doc = "Reset every filter, or a menu's options (not a reload, Q-P9.13)" }
+filter_options = { tabler = "adjustments-horizontal", doc = "A filter's options menu" }
+filter_save_default = { tabler = "device-floppy", doc = "Save a filter's options as the defaults of Settings > Filters" }
+menu_pin = { tabler = "pin", doc = "Pin an options menu: it stays open while the pointer works elsewhere" }
+menu_pinned = { tabler = "pinned", doc = "The options menu is pinned" }
+analyze_again = { tabler = "analyze", doc = "Run the interlace check again" }
+render_only = { tabler = "info-circle", doc = "A filter that only the render applies (not the preview)" }
+ratio_presets = { tabler = "aspect-ratio", doc = "Resize: the height for a ratio from the width" }
+deshake_shakiness = { tabler = "wave-sine", doc = "Deshake: how shaky the video is" }
+deshake_accuracy = { tabler = "target", doc = "Deshake: detection accuracy" }
+deshake_stepsize = { tabler = "grid-dots", doc = "Deshake: search step" }
+deshake_smoothing = { tabler = "vector-spline", doc = "Deshake: smoothing of the camera path" }
+deshake_tripod = { tabler = "anchor", doc = "Deshake: virtual tripod" }
+deshake_max_shift = { tabler = "arrows-move", doc = "Deshake: the largest shift" }
+deshake_max_angle = { tabler = "angle", doc = "Deshake: the largest turn" }
+deshake_zoom = { tabler = "zoom-in", doc = "Deshake: extra zoom" }
+deshake_optzoom = { tabler = "zoom-scan", doc = "Deshake: automatic zoom" }
+deshake_zoom_speed = { tabler = "gauge", doc = "Deshake: how fast the adaptive zoom changes" }
+deshake_borders = { tabler = "border-outer", doc = "Deshake: what fills the borders" }
+deshake_interpolation = { tabler = "blur", doc = "Deshake: interpolation of moved pixels" }
 move_up = { tabler = "arrow-up", doc = "Move one place up" }
 move_down = { tabler = "arrow-down", doc = "Move one place down" }
 crop_edit = { tabler = "crop", doc = "Edit the crop on the video" }

@@ -9,6 +9,7 @@ use rustcut_core::settings::Settings;
 
 use super::Card;
 use crate::ui::settings::field::{Field, Kind, Value, WRONG_VALUE, always, choice, number, switch};
+use crate::util::amount::{hundredths, limit, parse_hundredths};
 
 /// A deshake parameter: kept in vid.stab's ranges (accuracy is never below shakiness).
 macro_rules! deshake {
@@ -37,20 +38,6 @@ macro_rules! deshake {
     };
 }
 
-/// A limit typed as text: empty = no limit, else a whole number up to `max` (with or without its `unit`).
-fn limit(text: &str, max: u16, unit: &str) -> Result<Option<u16>, String> {
-    let text = text.trim();
-    let text = text.strip_suffix(unit).unwrap_or(text).trim_end();
-    if text.is_empty() {
-        return Ok(None);
-    }
-    text.parse::<u16>()
-        .ok()
-        .filter(|v| *v <= max)
-        .map(Some)
-        .ok_or_else(|| format!("Type a whole number from 0 to {max}, or leave it empty for no limit."))
-}
-
 fn get_max_shift(s: &Settings) -> Value {
     Value::Text(s.filters.deshake.max_shift.map(|v| v.to_string()).unwrap_or_default())
 }
@@ -68,24 +55,6 @@ fn set_max_angle(s: &mut Settings, v: Value) -> Result<(), String> {
     let value = limit(v.as_text()?, u16::from(DeshakeParams::MAX_ANGLE), "°")?;
     s.filters.deshake.max_angle = value.and_then(|v| u8::try_from(v).ok());
     Ok(())
-}
-
-/// Hundredths as a decimal ("0.25").
-pub fn hundredths(value: u16) -> String {
-    format!("{}.{:02}", value / 100, value % 100)
-}
-
-/// A decimal with at most two places in `0..=max` hundredths ("0.5" = 50).
-pub fn parse_hundredths(text: &str, max: u16) -> Option<u16> {
-    let text = text.trim();
-    let text = text.strip_suffix('%').unwrap_or(text).trim_end().replace(',', ".");
-    let (whole, fraction) = text.split_once('.').unwrap_or((&text, ""));
-    if fraction.len() > 2 || !fraction.chars().all(|c| c.is_ascii_digit()) {
-        return None;
-    }
-    let whole: u16 = if whole.is_empty() { 0 } else { whole.parse().ok()? };
-    let fraction: u16 = format!("{fraction:0<2}").parse().ok()?;
-    whole.checked_mul(100)?.checked_add(fraction).filter(|v| *v <= max)
 }
 
 fn get_zoom_speed(s: &Settings) -> Value {
@@ -131,8 +100,8 @@ pub static FILTERS: &[Card] = &[
             choice!(
                 "filters.deinterlace_rate",
                 "Output",
-                "Frames: 25i becomes 25p. Fields: 25i becomes 50p, smoother motion but twice the frames to encode. \
-                 kerndeint makes frames only.",
+                "Frames: 25i becomes 25p (recommended). Fields: 25i becomes 50p, smoother motion but twice the frames to \
+                 encode. kerndeint makes frames only.",
                 filters.deinterlace_rate,
                 [
                     (DeinterlaceRate::Frame, "Frames"),
@@ -178,7 +147,8 @@ pub static FILTERS: &[Card] = &[
             choice!(
                 "filters.crop_search.sides",
                 "Search",
-                "Which edges auto-crop may cut. Top + bottom keeps the sides of a dark scene.",
+                "Which edges auto-crop may cut: all (recommended), or only top + bottom, which keeps the sides of a dark \
+                 scene.",
                 filters.crop_search.sides,
                 [
                     (CropSides::All, "All"),
@@ -190,7 +160,7 @@ pub static FILTERS: &[Card] = &[
                 key: "filters.crop_search.samples",
                 label: "Sample points",
                 help: "At how many points of the video auto-crop looks (at most one per two seconds). More is \
-                       surer and slower.",
+                       surer and slower; 8 suits most videos.",
                 kind: Kind::Number {
                     min: 1,
                     max: 32,
@@ -206,8 +176,8 @@ pub static FILTERS: &[Card] = &[
             switch!(
                 "filters.crop_search.sections_only",
                 "Only inside the sections",
-                "Looks only at the parts you keep (an intro outside them does not count). The whole video while \
-                 there are no sections.",
+                "Looks only at the parts you keep, so an intro outside them does not count (recommended). The whole \
+                 video while there are no sections.",
                 filters.crop_search.sections_only
             ),
         ],
@@ -220,7 +190,7 @@ pub static FILTERS: &[Card] = &[
             deshake!(
                 "filters.deshake.shakiness",
                 "Shakiness",
-                "How shaky the video is, 1 (little) to 10 (very). Higher is slower.",
+                "How shaky and quick the camera is, 1 (little) to 10 (very). Start with 5; higher is slower.",
                 shakiness: u8,
                 1..=10,
                 1,
@@ -229,7 +199,7 @@ pub static FILTERS: &[Card] = &[
             deshake!(
                 "filters.deshake.accuracy",
                 "Accuracy",
-                "Detection accuracy, at least the shakiness. Higher is slower.",
+                "Detection accuracy, from the shakiness up to 15. Higher is surer and slower; 15 is ffmpeg's default.",
                 accuracy: u8,
                 1..=15,
                 1,
@@ -238,7 +208,7 @@ pub static FILTERS: &[Card] = &[
             deshake!(
                 "filters.deshake.stepsize",
                 "Search step",
-                "In pixels. Smaller is more accurate and slower.",
+                "In pixels. Smaller is more accurate and slower; 6 is ffmpeg's default.",
                 stepsize: u8,
                 1..=32,
                 1,
@@ -247,7 +217,8 @@ pub static FILTERS: &[Card] = &[
             deshake!(
                 "filters.deshake.smoothing",
                 "Smoothing",
-                "Frames used to smooth the camera path. Higher is steadier but follows pans later.",
+                "Frames used to smooth the camera path. 10 suits most videos; higher is steadier but follows pans \
+                 later.",
                 smoothing: u16,
                 0..=1000,
                 5,
@@ -286,7 +257,8 @@ pub static FILTERS: &[Card] = &[
             deshake!(
                 "filters.deshake.zoom",
                 "Zoom",
-                "Extra zoom against the moving borders.",
+                "Extra zoom against the moving borders. Start with 0; a few percent hide what the automatic zoom \
+                 leaves.",
                 zoom: i8,
                 -100..=100,
                 1,
@@ -295,7 +267,8 @@ pub static FILTERS: &[Card] = &[
             choice!(
                 "filters.deshake.optzoom",
                 "Automatic zoom",
-                "None, one zoom for the whole video, or a zoom that follows the motion.",
+                "None, one zoom for the whole video (recommended: borders only on very strong moves), or a zoom that \
+                 follows the motion (no borders).",
                 filters.deshake.optzoom,
                 [(0, "None"), (1, "Static"), (2, "Adaptive")]
             ),
@@ -317,14 +290,15 @@ pub static FILTERS: &[Card] = &[
             choice!(
                 "filters.deshake.crop",
                 "Borders",
-                "What shows where the stabilized picture left the frame.",
+                "What shows where the stabilized picture left the frame. The previous frame hides it better; black \
+                 shows it.",
                 filters.deshake.crop,
                 [(DeshakeCrop::Black, "Black"), (DeshakeCrop::Keep, "Previous frame")]
             ),
             choice!(
                 "filters.deshake.interpolation",
                 "Interpolation",
-                "How moved pixels are computed. Bicubic is the sharpest and the slowest.",
+                "How moved pixels are computed. Bicubic is the sharpest (recommended) and the slowest.",
                 filters.deshake.interpolation,
                 [
                     (DeshakeInterpolation::No, "None"),
@@ -336,7 +310,8 @@ pub static FILTERS: &[Card] = &[
             switch!(
                 "filters.deshake.tripod",
                 "Virtual tripod",
-                "Keeps the camera fixed on the first frame instead of smoothing its path.",
+                "Keeps the camera fixed on the first frame instead of smoothing its path. Only for shots that should \
+                 not move at all.",
                 filters.deshake.tripod
             ),
         ],
@@ -365,19 +340,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn limits_and_hundredths_are_read_and_refused() {
-        assert_eq!(limit("", 500, "px"), Ok(None));
-        assert_eq!(limit(" 40 ", 500, "px"), Ok(Some(40)));
-        assert_eq!(limit("40 px", 500, "px"), Ok(Some(40)));
-        assert!(limit("501", 500, "px").is_err() && limit("-1", 500, "px").is_err());
-        assert_eq!(parse_hundredths("0.5 %", 500), Some(50));
-        assert_eq!(parse_hundredths("0.25", 500), Some(25));
-        assert_eq!(parse_hundredths("1,5", 500), Some(150));
-        assert_eq!(parse_hundredths(".5", 500), Some(50));
-        assert_eq!(parse_hundredths("5", 500), Some(500));
-        assert_eq!(parse_hundredths("5.01", 500), None);
-        assert_eq!(parse_hundredths("0.125", 500), None);
-        assert_eq!(hundredths(25), "0.25");
+    fn limits_are_read_and_refused() {
         let mut s = Settings::default();
         set_max_angle(&mut s, Value::Text("3".into())).unwrap();
         assert_eq!(s.filters.deshake.max_angle, Some(3));

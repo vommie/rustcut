@@ -12,6 +12,8 @@ import { BubbleLayer } from "bubble.slint";
 import { MediaInfoPanelView } from "media_info_panel.slint";
 import { Sections, SectionsCardBody } from "sections_card.slint";
 import { FiltersCardBody } from "filters_card.slint";
+import { Filters } from "filters_types.slint";
+import { TooltipArea } from "tooltip.slint";
 import { FinalizeCardBody } from "export_card.slint";
 import { QueuePanel } from "queue_panel.slint";
 import { JobPanel } from "job_panel.slint";
@@ -85,6 +87,64 @@ component DockCard inherits Rectangle {
                         tooltip: Export.clear-sections ? "The section list is cleared after each save"
                             : "The sections stay after a save";
                         clicked => { Export.toggle-clear-sections(); }
+                    }
+                }
+
+                // The output size, the preview, keep and reset of the filters (Q-P9.13 A).
+                if root.card.id == "filters": TooltipArea {
+                    text: Filters.output-tooltip;
+                    horizontal-stretch: 0;
+                    min-width: 0;
+                    preferred-width: output.preferred-width;
+
+                    output := CardHeaderText {
+                        width: parent.width;
+                        height: parent.height;
+                        text: Filters.output;
+                        color: Filters.output-warning ? Theme.status-corrupt : Theme.text-muted;
+                        overflow: elide;
+                    }
+                }
+
+                if root.card.id == "filters": HorizontalLayout {
+                    spacing: 2px;
+
+                    VerticalLayout {
+                        alignment: center;
+
+                        IconButton {
+                            icon: Filters.preview ? IconId.filter-preview : IconId.filter-preview-off;
+                            checked: Filters.preview;
+                            tooltip: Filters.preview ? "The player shows the filters (click: show the video without them)"
+                                : "The player shows the video without filters (click: show them)";
+                            shortcut: Filters.key-preview;
+                            clicked => { Filters.set-preview(!Filters.preview); }
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+
+                        IconButton {
+                            icon: Filters.keep ? IconId.filter-kept : IconId.filter-keep;
+                            checked: Filters.keep;
+                            tooltip: Filters.keep ? "The filters stay for the next video and the next start (click: start each video without filters)"
+                                : "Keep these filters for the next video and the next start";
+                            shortcut: Filters.key-keep;
+                            clicked => { Filters.set-keep(!Filters.keep); }
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+
+                        IconButton {
+                            icon: IconId.filter-reset;
+                            hold: true;
+                            tooltip: "Reset every filter: off, default values, default order (the key resets at once)";
+                            shortcut: Filters.key-reset;
+                            clicked => { Filters.reset(); }
+                        }
                     }
                 }
             }

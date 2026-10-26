@@ -242,7 +242,7 @@ fn editing_a_filter_that_is_off_keeps_it_off() {
     assert_eq!(s.shown_crop().bottom, 90);
     assert_eq!(s.resize().0, Some(1280));
     s.toggle(FilterKind::Crop);
-    assert_eq!(view::card(&s).output, "Output 1920×990");
+    assert_eq!(view::card(&s).output, "1920×990");
     s.switch_on(FilterKind::Deinterlace);
     assert_eq!(
         s.chain().get(FilterKind::Deinterlace).map(|slot| slot.filter),
@@ -359,10 +359,16 @@ fn keep_carries_the_chain_to_the_next_video_and_start() {
 #[test]
 fn the_card_tells_the_output_size_and_the_interlace_check() {
     let mut s = state();
-    assert_eq!(view::card(&s).output, "Output 1920×1080");
+    assert_eq!(view::card(&s).output, "1920×1080");
     s.set_crop(Crop::new(1, 0, 0, 3));
     s.switch_on(FilterKind::Crop);
-    assert_eq!(view::card(&s).output, "Output 1917×1079 (rendered 1916×1078)");
+    let card = view::card(&s);
+    assert_eq!(card.output, "1917×1079");
+    assert!(
+        card.output_tooltip
+            .ends_with("the render makes it 1916×1078 (even sizes)")
+    );
+    assert_eq!(card.crop_size, "1917×1079");
     s.interlace = InterlaceHint::Known(
         Interlacing::Interlaced { top_field_first: true },
         IdetCounts {
@@ -371,7 +377,8 @@ fn the_card_tells_the_output_size_and_the_interlace_check() {
         },
     );
     let card = view::card(&s);
-    assert_eq!(card.interlace_hint, "Interlaced (TFF)");
+    assert_eq!(card.interlace_hint, "interlaced");
+    assert_eq!(card.interlace_counts, "250 interlaced · 0 progressive");
     assert_eq!(card.interlace_level, HintLevel::Attention);
     assert!(card.interlace_detail.contains("top field first"));
     assert_eq!(
@@ -380,5 +387,16 @@ fn the_card_tells_the_output_size_and_the_interlace_check() {
     );
     assert_eq!(card.rows.len(), 5);
     assert!(!card.rows[0].can_up && card.rows[0].can_down);
-    assert_eq!(view::card(&s).resize_auto_height, "auto (1079)");
+    assert_eq!(
+        card.rows.iter().map(view::RowView::lines).sum::<i32>(),
+        6,
+        "Crop has two lines"
+    );
+    assert!(
+        card.rows
+            .iter()
+            .all(|r| r.has_menu() == (r.kind != FilterKind::Orientation))
+    );
+    // No "auto": the dim placeholder is the number an empty side comes to (13#3).
+    assert_eq!(view::card(&s).resize_auto_height, "1079");
 }

@@ -138,6 +138,7 @@ fn kept_filters_round_trip_and_bad_values_read_as_missing() {
     state.export.keep_filters = true;
     state.export.filters = Some(chain);
     state.export.crop_aspect = CropAspect::Wide;
+    state.export.filter_menu_pinned = true;
     save(dir.path(), &state).unwrap();
     let text = std::fs::read_to_string(dir.path().join("ui-state.toml")).unwrap();
     assert!(text.contains("crop_aspect = \"16:9\""), "{text}");
@@ -181,6 +182,8 @@ fn kept_filters_round_trip_and_bad_values_read_as_missing() {
     assert!(value.export.keep_filters);
     assert_eq!(value.export.filters, None);
     assert_eq!(value.export.crop_aspect, CropAspect::Free);
+    // The menu's pin is new in 0.0.49: an older file has it off.
+    assert!(!value.export.filter_menu_pinned);
 }
 
 #[test]
