@@ -254,6 +254,27 @@ component CropMenu inherits VerticalLayout {
             }
         }
     }
+
+    Heading {
+        text: "SIZE";
+    }
+
+    MenuRow {
+        label: "Divisible by";
+        tooltip: Filters.tips.multiple;
+        enabled: !Filters.crop-multiple-free;
+
+        SegmentedChoice {
+            width: 160px;
+            items: ["2", "4", "8", "16"];
+            current: Filters.crop-multiple;
+            enabled: !Filters.crop-multiple-free;
+            tooltip: Filters.crop-multiple-free
+                ? "Resize after the crop sets the output size: the crop stays free (even pixels)."
+                : Filters.tips.multiple;
+            selected(index) => { Filters.set-crop-multiple(index); }
+        }
+    }
 }
 
 /// One Deshake number labeled by a symbol.

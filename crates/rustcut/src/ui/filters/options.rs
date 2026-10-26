@@ -3,7 +3,7 @@
 //! while they match) and written into them (save as default); the auto-crop search of the Crop menu; a drop of drag &
 //! drop. A menu's options are the values its card row does not show: the crop's edges and the resize's size stay.
 
-use rustcut_core::edit::{Filter, FilterKind};
+use rustcut_core::edit::{Crop, Filter, FilterKind};
 use rustcut_core::media::CropSearch;
 use rustcut_core::settings::FilterDefaults;
 
@@ -17,6 +17,23 @@ impl FiltersState {
         self.search = search.sanitized();
     }
 
+    /// `crop` (in the crop filter's orientation) with a kept size that is a multiple of the effective multiple (an
+    /// auto-crop result, a new multiple; it only shrinks, so a found border never shows again).
+    pub fn fitted_crop(&self, crop: Crop) -> Crop {
+        match self.crop_frame() {
+            Some(frame) => crop.fitted_to_multiple(frame, u32::from(self.effective_multiple())),
+            None => crop,
+        }
+    }
+
+    /// The Crop menu's "Divisible by": the crop's size keeps multiples of `n` from now on, the current crop fitted at
+    /// once; the filter stays on or off.
+    pub fn set_multiple(&mut self, n: u8) {
+        self.multiple = rustcut_core::settings::crop_multiple(n);
+        let fitted = self.fitted_crop(self.crop());
+        self.chain.set(Filter::Crop(fitted));
+    }
+
     /// A drop of drag & drop: `kind` before the filter at `before` (an index of the order before the move); `false`
     /// when the order stays.
     pub fn drop_filter(&mut self, kind: FilterKind, before: usize) -> bool {
@@ -28,7 +45,7 @@ impl FiltersState {
         let defaults = self.defaults().sanitized();
         match kind {
             FilterKind::Deinterlace => self.deinterlace() == defaults.deinterlace(),
-            FilterKind::Crop => self.search == defaults.crop_search,
+            FilterKind::Crop => self.search == defaults.crop_search && self.multiple == defaults.crop_multiple,
             FilterKind::Deshake => self.deshake() == defaults.deshake,
             FilterKind::Resize => self.resize().2 == defaults.resize_algorithm,
             FilterKind::Orientation => true,
@@ -41,7 +58,10 @@ impl FiltersState {
         let defaults = self.defaults().sanitized();
         match kind {
             FilterKind::Deinterlace => self.chain.set(defaults.deinterlace()),
-            FilterKind::Crop => self.search = defaults.crop_search,
+            FilterKind::Crop => {
+                self.search = defaults.crop_search;
+                self.multiple = defaults.crop_multiple;
+            }
             FilterKind::Deshake => self.chain.set(Filter::Deshake(defaults.deshake)),
             FilterKind::Resize => self.set_resize_algorithm(defaults.resize_algorithm),
             FilterKind::Orientation => {}
@@ -66,7 +86,10 @@ impl FiltersState {
                     defaults.only_interlaced = only_interlaced;
                 }
             }
-            FilterKind::Crop => defaults.crop_search = self.search,
+            FilterKind::Crop => {
+                defaults.crop_search = self.search;
+                defaults.crop_multiple = self.multiple;
+            }
             FilterKind::Deshake => defaults.deshake = self.deshake(),
             FilterKind::Resize => defaults.resize_algorithm = self.resize().2,
             FilterKind::Orientation => {}

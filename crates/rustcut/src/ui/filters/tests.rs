@@ -13,7 +13,7 @@ use rustcut_core::media::{IdetCounts, Interlacing};
 use rustcut_core::settings::FilterDefaults;
 
 use super::geometry::{CropView, Handle, MIN_KEPT};
-use super::state::{CropMode, Edge, FiltersState, InterlaceHint, Source};
+use super::state::{CropMode, Edge, FiltersState, InterlaceHint, Kept, Source};
 use super::view::{self, HintLevel};
 
 const HD: Size = Size::new(1920, 1080);
@@ -190,7 +190,7 @@ fn source(size: Size, rotation: u16) -> Source {
 }
 
 fn state() -> FiltersState {
-    let mut s = FiltersState::new(FilterDefaults::default(), true, false, (None, None), None);
+    let mut s = FiltersState::new(FilterDefaults::default(), true, false, Kept::default(), None);
     s.file_opened();
     s.source_known(source(HD, 0));
     s.set_view(960.0, 540.0);
@@ -287,7 +287,7 @@ fn resize_helpers_take_the_height_from_the_width() {
 
 #[test]
 fn the_preview_follows_the_toggle_the_source_rotation_and_crop_editing() {
-    let mut s = FiltersState::new(FilterDefaults::default(), true, false, (None, None), None);
+    let mut s = FiltersState::new(FilterDefaults::default(), true, false, Kept::default(), None);
     s.set_crop(Crop::new(0, 0, 0, 100));
     s.switch_on(FilterKind::Crop);
     assert_eq!(s.preview_filter().lavfi, "", "nothing before the probe");
@@ -349,7 +349,7 @@ fn keep_carries_the_chain_to_the_next_video_and_start() {
     s.search.limit = 60;
     s.file_opened();
     assert_eq!(s.orientation().turns, 3);
-    let kept = (s.kept_chain(), s.kept_search());
+    let kept = s.kept();
     let restarted = FiltersState::new(FilterDefaults::default(), true, true, kept.clone(), None);
     assert_eq!((restarted.orientation().turns, restarted.search.limit), (3, 60));
     let off = FiltersState::new(FilterDefaults::default(), true, false, kept, None);

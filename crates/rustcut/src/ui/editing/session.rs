@@ -48,7 +48,7 @@ mod tests {
 
     use super::*;
     use crate::ui::export::{ExportState, JobFacts};
-    use crate::ui::filters::state::FiltersState;
+    use crate::ui::filters::state::{FiltersState, Kept};
     use crate::ui::sections::SectionsState;
     use crate::ui::tags::{Choice, TagPanel};
 
@@ -99,7 +99,7 @@ mod tests {
         sections.load(job.sections.clone());
         sections.set_duration(Some(Timestamp::from_secs(600)));
 
-        let mut filters = FiltersState::new(FilterDefaults::default(), true, false, (None, None), None);
+        let mut filters = FiltersState::new(FilterDefaults::default(), true, false, Kept::default(), None);
         filters.file_opened();
         filters.load_chain(job.filters.clone());
 

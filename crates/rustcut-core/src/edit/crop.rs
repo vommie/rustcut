@@ -91,6 +91,32 @@ pub struct Crop {
 }
 
 impl Crop {
+    /// The crop with a kept size that is a multiple of `n` (2, 4, 8, 16) in a `frame`-sized picture: each side gives up
+    /// the extra pixels evenly and the left and top edges stay even, so a found border is never shown again. `n`
+    /// below 2 counts as 2; a side shorter than `n` keeps its size.
+    pub fn fitted_to_multiple(self, frame: Size, n: u32) -> Self {
+        let n = n.max(2);
+        let fit = |lo: u32, hi: u32, side: u32| -> (u32, u32) {
+            let kept = side.saturating_sub(lo).saturating_sub(hi);
+            if kept < n {
+                return (lo, hi);
+            }
+            let extra = kept % n;
+            let mut first = extra / 2;
+            if (lo + first) % 2 == 1 {
+                if first > 0 {
+                    first -= 1;
+                } else if extra > 0 {
+                    first += 1;
+                }
+            }
+            (lo + first, hi + (extra - first))
+        };
+        let (left, right) = fit(self.left, self.right, frame.width);
+        let (top, bottom) = fit(self.top, self.bottom, frame.height);
+        Self::new(top, right, bottom, left)
+    }
+
     pub const fn new(top: u32, right: u32, bottom: u32, left: u32) -> Self {
         Self {
             top,
@@ -211,6 +237,24 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
+
+    #[test]
+    fn a_crop_is_fitted_to_a_multiple_without_showing_a_border_again() {
+        let frame = Size::new(1920, 1080);
+        // 1920x804 kept: divisible by 4; by 8 or 16 it gives up 4 pixels, 2 at the top and 2 at the bottom (800).
+        let c = Crop::new(138, 0, 138, 0);
+        assert_eq!(c.fitted_to_multiple(frame, 2), c);
+        assert_eq!(c.fitted_to_multiple(frame, 4), c);
+        assert_eq!(c.fitted_to_multiple(frame, 8), Crop::new(140, 0, 140, 0));
+        assert_eq!(c.fitted_to_multiple(frame, 16), Crop::new(140, 0, 140, 0));
+        let odd = Crop::new(0, 3, 0, 1).fitted_to_multiple(frame, 16);
+        assert_eq!((1920 - odd.left - odd.right, odd.left % 2), (1904, 0));
+        // A side shorter than the multiple keeps its size.
+        assert_eq!(
+            Crop::default().fitted_to_multiple(Size::new(10, 10), 16),
+            Crop::default()
+        );
+    }
 
     #[test]
     fn an_old_aspect_lock_becomes_a_ratio_choice_and_back() {

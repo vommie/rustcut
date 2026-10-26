@@ -15,12 +15,12 @@ use rustcut_core::settings::FilterDefaults;
 
 use super::input::typed_deshake;
 use super::menu::row_items;
-use super::state::{FiltersState, Source};
+use super::state::{FiltersState, Kept, Source};
 use super::view;
 use crate::ui::menu::MenuItem;
 
 fn state_with(defaults: FilterDefaults) -> FiltersState {
-    let mut s = FiltersState::new(defaults, true, false, (None, None), None);
+    let mut s = FiltersState::new(defaults, true, false, Kept::default(), None);
     s.file_opened();
     s.source_known(Source {
         size: Size::new(1920, 1080),

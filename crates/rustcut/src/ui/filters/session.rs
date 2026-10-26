@@ -54,9 +54,10 @@ impl CropSession {
     }
 }
 
-/// How far a crop may be from a ratio's shape and still have it: two pixels (the crop is on even pixels).
+/// How far a crop may be from a ratio's shape and still have it: the multiple its size keeps (at least two pixels: the
+/// crop is on even pixels).
 fn slack(view: &CropView) -> f64 {
-    2.0 * view.pixel_width().max(1.0)
+    f64::from(view.multiple().max(2)) * view.pixel_width().max(1.0)
 }
 
 impl FiltersState {
