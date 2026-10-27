@@ -363,6 +363,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     editor.set_tags(&tags);
     editor.set_queue(&queue);
     editor.set_menu(&menu);
+    tags.set_menu(&menu);
     let export = ExportBridge::install(
         &main,
         &ExportParts {

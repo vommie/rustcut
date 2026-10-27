@@ -294,7 +294,7 @@ where
                 }
                 self.want_tree = self.settings.enabled;
             }
-            SyncCommand::Test { reply } => {
+            SyncCommand::Test { reply } | SyncCommand::RefreshTree { reply } => {
                 if !self.settings.enabled {
                     let _ = reply.send(Err(RustViewError::Unavailable(SWITCHED_OFF.into())));
                     return;

@@ -8,6 +8,7 @@
 //! changed through the settings writer); when either is still off as RustView answers for the first time in a run, a
 //! message says so once. Nothing here waits on the UI thread.
 
+mod connect;
 mod filter_window;
 mod hidden;
 mod history;
@@ -15,6 +16,7 @@ mod state;
 mod switches;
 mod sync_notice;
 mod tree;
+mod tree_menu;
 mod view;
 
 use std::cell::{Cell, RefCell};
@@ -25,7 +27,6 @@ use rustcut_core::queue::{QueueCommand, QueueError, QueueHandle};
 use rustcut_core::rustview::{ConnectionState, RustViewError, SyncCommand, SyncEvent, SyncService, TagTree};
 use rustcut_core::settings::TagPanelState;
 use slint::{ComponentHandle as _, Model as _, ModelRc, VecModel};
-use tokio::sync::broadcast::error::RecvError;
 
 pub use hidden::{Check, FilterRow};
 pub use history::{TagHistoryItem, TagHistoryLayoutEngine, TagHistoryManager, TagHistoryRow};
@@ -100,6 +101,10 @@ pub struct TagsBridge {
     /// The tag filter window (made when it is opened first) and its rows.
     filter_window: RefCell<Option<TagFilterWindow>>,
     filter_rows: Rc<VecModel<TagFilterRowView>>,
+    /// The context menus (the tree's free space).
+    menu: RefCell<Weak<crate::ui::menu::ContextMenuBridge>>,
+    /// Compact Mode (`rustview.compact_tree`).
+    compact: Cell<bool>,
 }
 
 impl TagsBridge {
@@ -128,6 +133,7 @@ impl TagsBridge {
     ) -> Rc<Self> {
         let (ui, runtime, sync, queue) = services;
         let warn = writer.current().warnings.missing_metadata;
+        let compact = writer.current().rustview.compact_tree;
         let bridge = Rc::new(Self {
             window: window.as_weak(),
             ui: ui.clone(),
@@ -155,13 +161,15 @@ impl TagsBridge {
             start_checked: Cell::new(false),
             filter_window: RefCell::new(None),
             filter_rows: Rc::new(VecModel::default()),
+            menu: RefCell::new(Weak::new()),
+            compact: Cell::new(compact),
         });
         BRIDGE.with(|b| *b.borrow_mut() = Rc::downgrade(&bridge));
         let t = window.global::<TagRate<'_>>();
         t.set_columns(ModelRc::from(Rc::clone(&bridge.columns)));
         t.set_history_rows(ModelRc::from(Rc::clone(&bridge.history_rows)));
-        connect(&bridge, window);
-        bridge.runtime.spawn(follow(bridge.sync.clone(), ui.clone()));
+        connect::connect(&bridge, window);
+        bridge.runtime.spawn(connect::follow(bridge.sync.clone(), ui.clone()));
         if enabled {
             bridge.load_tree();
         }
@@ -349,6 +357,9 @@ impl TagsBridge {
     }
 
     fn tree_changed(&self, tree: std::sync::Arc<TagTree>) {
+        if self.state.borrow().same_tree(&tree) {
+            return;
+        }
         // The shareable log hides the tag names (P9.17).
         for tag in &tree.tags {
             crate::app::redaction::learn_tag(&tag.name);
@@ -441,6 +452,7 @@ impl TagsBridge {
         t.set_active(state.active);
         t.set_warn(self.warn.get());
         t.set_has_tree(state.tag_count() > 0);
+        t.set_compact(self.compact());
         t.set_empty_text(view::empty_text(&state, &connection).into());
         t.set_show_hidden(state.show_hidden);
         t.set_eye_tooltip(view::eye_tooltip(&state).into());
@@ -463,7 +475,11 @@ impl TagsBridge {
     /// The rows in columns, synced in place.
     fn publish_tree(&self) {
         let rows = self.state.borrow().rows();
-        let (chunks, per) = TagTreeBuilder::chunk_into_columns(&rows, self.tree_height.get());
+        let (chunks, per) = if self.compact() {
+            TagTreeBuilder::chunk_into_compact_columns(&rows, self.tree_height.get())
+        } else {
+            TagTreeBuilder::chunk_into_columns(&rows, self.tree_height.get())
+        };
         self.rows_per_column.set(per);
         let mut models = self.column_rows.borrow_mut();
         let count = chunks.len();
@@ -502,7 +518,7 @@ impl TagsBridge {
     fn tree_height_changed(&self, height: f32) {
         tracing::debug!(height, "[Tags] Tag tree height");
         self.tree_height.set(height);
-        if TagTreeBuilder::rows_per_column(height) != self.rows_per_column.get() {
+        if TagTreeBuilder::rows_per_column_in(height, self.compact()) != self.rows_per_column.get() {
             self.publish_tree();
         }
     }
@@ -533,83 +549,6 @@ fn history_item_view(item: TagHistoryItem) -> TagHistoryItemModel {
 /// A tag id from Slint (negative = none).
 fn tag_id(id: i32) -> Option<u32> {
     u32::try_from(id).ok()
-}
-
-fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
-    let t = window.global::<TagRate<'_>>();
-    macro_rules! on {
-        ($setter:ident, |$b:ident $(, $arg:ident)*| $body:expr) => {{
-            let weak = Rc::downgrade(bridge);
-            t.$setter(move |$($arg),*| {
-                if let Some($b) = weak.upgrade() {
-                    $body;
-                }
-            });
-        }};
-    }
-    on!(on_retry, |b| b.retry());
-    on!(on_connection_jump_clicked, |b| crate::ui::jump::go(
-        b.connection_jump.get().unwrap_or(JumpTarget::Settings {
-            page: crate::ui::settings::page::Page::RustView,
-            key: "rustview.enabled",
-        })
-    ));
-    on!(on_apply_edit, |b| b.apply_edit());
-    on!(on_cancel_edit, |b| b.cancel_edit());
-    on!(on_rating_clicked, |b, rating| b.change(|s| s.click_rating(rating)));
-    on!(on_tag_clicked, |b, id| if let Some(id) = tag_id(id) {
-        b.change(|s| s.click_tag(id));
-    });
-    on!(on_tag_right_clicked, |b, id| if let Some(id) = tag_id(id) {
-        let locked = b.state.borrow_mut().toggle_lock(id);
-        if locked {
-            b.publish();
-        }
-    });
-    on!(on_tag_toggle_expand, |b, id| if let Some(id) = tag_id(id) {
-        b.change(|s| s.toggle_expanded(id));
-    });
-    on!(on_filter_changed, |b, text| b.change(|s| s.filter = text.to_string()));
-    on!(on_filter_regex_toggled, |b, on| b.change(|s| s.regex = on));
-    on!(on_filter_done, |b| b.publish());
-    on!(on_tree_height_changed, |b, height| b.tree_height_changed(height));
-    on!(on_history_tag_clicked, |b, id| if let Some(id) = tag_id(id) {
-        b.change(|s| s.click_tag(id));
-    });
-    on!(on_history_width_changed, |b, width| b.history_width_changed(width));
-    on!(on_history_collapsed_changed, |b, collapsed| b
-        .state
-        .borrow_mut()
-        .history_collapsed =
-        collapsed);
-    on!(on_history_resized, |b, height| {
-        let range = TagPanelState::HISTORY_HEIGHT;
-        let height = az::checked_cast::<f32, u32>(height.round()).unwrap_or(*range.start());
-        b.state.borrow_mut().history_height = height.clamp(*range.start(), *range.end());
-    });
-    on!(on_apply_last_tags, |b| b.change(TagPanel::apply_last_tags));
-    on!(on_apply_last_rating, |b| b.change(TagPanel::apply_last_rating));
-    on!(on_clear, |b| b.change(TagPanel::clear));
-    on!(on_toggle_show_hidden, |b| b.change(TagPanel::toggle_show_hidden));
-    on!(on_toggle_active, |b| b.toggle_active());
-    on!(on_open_filter, |b| b.open_filter());
-    on!(on_toggle_warn, |b| b.toggle_warn());
-}
-
-/// Follows the sync actor's events; a subscriber that fell behind asks for the tree again.
-async fn follow(sync: SyncService, ui: UiDispatcher) {
-    let mut events = sync.events.subscribe();
-    loop {
-        match events.recv().await {
-            Ok(SyncEvent::JobSynced { .. }) => {}
-            Ok(event) => with_bridge(&ui, move |b| b.event(event)),
-            Err(RecvError::Lagged(missed)) => {
-                tracing::debug!(missed, "[Tags] Fell behind the RustView sync; loading the tree again");
-                with_bridge(&ui, |b| b.load_tree());
-            }
-            Err(RecvError::Closed) => return,
-        }
-    }
 }
 
 #[cfg(test)]

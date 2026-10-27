@@ -275,6 +275,9 @@ pub struct RustViewSettings {
     pub timeout_secs: u8,
     /// Tags the Tag & Rate panel's history keeps (RustView's default: 20).
     pub tag_history_size: u8,
+    /// The tag tree's Compact Mode (dense rows sharing one line; RustView's setting of the same name). Changed in
+    /// Settings and by the tree's context menu.
+    pub compact_tree: bool,
 }
 
 impl RustViewSettings {
@@ -290,6 +293,7 @@ impl Default for RustViewSettings {
             write_timing: WriteTiming::AtEnqueue,
             timeout_secs: 10,
             tag_history_size: 20,
+            compact_tree: false,
         }
     }
 }

@@ -67,6 +67,8 @@ export global TagRate {
     in property <bool> warn: true;
     /// The tree was loaded at least once (tags can be chosen).
     in property <bool> has-tree;
+    // The tree's Compact Mode (`rustview.compact_tree`): dense rows sharing one line.
+    in property <bool> compact;
     in property <string> empty-text;
     /// The eye (P9.8): the tree shows the hidden tags too, dimmed.
     in property <bool> show-hidden;
@@ -97,6 +99,9 @@ export global TagRate {
     callback filter-regex-toggled(bool);
     callback filter-done();
     callback tree-height-changed(length);
+    // A right click on the tree's free space, in window coordinates: Expand All, Collapse All, Refresh Tag Tree and
+    // the switch between Normal Mode and Compact Mode.
+    callback tree-menu(length /* x */, length /* y */);
     callback history-tag-clicked(int);
     callback history-width-changed(length);
     callback history-collapsed-changed(bool);

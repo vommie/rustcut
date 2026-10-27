@@ -1,0 +1,324 @@
+// The tag tree's Compact Mode (questionnaire 2026-10-27-rustcut-compact-tree): written in RustCut for RustView's ui/
+// folder as well (ADR-10, amendment D-CT1). RustView gets this file in the same form (phase 5); from then on this file is
+// a copy like `tag_tree.slint` and tests/rustview_parity.rs compares it. RustCut's lock look stays between the
+// "RustCut begin/end" lines. Same API as `TagTreeItem`/`TagTreeList`, so the panel swaps one list for the other.
+//
+// Sharpness (checked zoomed in the femtovg renderer): rows, lines, the expand button and the marks sit on whole pixels;
+// plus, minus, the check and the half circle are whole-pixel bars (small SVGs lost single pixels in femtovg); a Text is
+// taller than its row because a Text clips its glyphs to its box (the descenders of g, y and p).
+
+import { Theme } from "styles.slint";
+import { TagNodeView, TagColumnView } from "tag_types.slint";
+import { SmoothScrollArea } from "smooth_scroll_view.slint";
+
+/// The sizes of Compact Mode. Rust splits the columns with the same numbers (`tree::COMPACT_*`).
+export global CompactTreeMetrics {
+    // A row without its line; neighbors share one 1px line (rows, columns and the frame of a state). 40 rows on the
+    // area of the user's PyCutRv screenshot (answer "rows" = C).
+    out property <length> row-height: 14px;
+    // PyCutRv's font: Noto Sans 8 pt at 96 dpi.
+    out property <length> font-size: 32px / 3;
+    // Moves the text's line box so that ascenders and descenders fit the row (measured, whole pixels only).
+    out property <length> text-offset: -1px;
+    out property <length> indent-per-level: 7px;
+    out property <length> padding-left: 2px;
+    // The expand button's slot; it shows a 5px plus or minus without a box (answer "btn" = C).
+    out property <length> button-size: 7px;
+    out property <length> glyph-size: 5px;
+    out property <length> spacing: 3px;
+    // 0 = neighboring columns share their line.
+    out property <length> column-gap: 0px;
+    out property <length> list-padding: 4px;
+    out property <length> min-column-width: 60px;
+    out property <length> max-column-width: 180px;
+}
+
+/// Plus (collapsed) or minus (expanded) without a box, as whole-pixel bars (never an SVG); the whole slot of the row
+/// takes the click. Unlike `NodeButton` it never assigns `expanded` itself, so the binding to the row stays.
+component CompactExpandButton {
+    in property <bool> expanded;
+    in property <bool> enabled: true;
+    callback toggled();
+
+    width: CompactTreeMetrics.button-size;
+
+    property <color> ink: touch.has-hover ? Theme.primary : Theme.text-muted;
+    property <length> glyph: CompactTreeMetrics.glyph-size;
+    property <length> left: Math.floor((root.width - root.glyph) / 2 / 1px) * 1px;
+    property <length> top: Math.floor((root.height - root.glyph) / 2 / 1px) * 1px;
+    property <length> middle: Math.floor(root.glyph / 2 / 1px) * 1px;
+
+    Rectangle {
+        x: root.left;
+        y: root.top + root.middle;
+        width: root.glyph;
+        height: 1px;
+        background: root.ink;
+    }
+
+    if !root.expanded: Rectangle {
+        x: root.left + root.middle;
+        y: root.top;
+        width: 1px;
+        height: root.glyph;
+        background: root.ink;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => {
+            if root.enabled {
+                root.toggled();
+            }
+        }
+    }
+}
+
+/// The check (assigned) or the half circle (partial) as whole-pixel bars: (x, y, width), one pixel high each.
+component CompactMark {
+    in property <bool> assigned;
+    in property <color> color;
+    width: root.assigned ? 9px : 7px;
+
+    property <length> top: Math.floor((root.height - (root.assigned ? 6px : 7px)) / 2 / 1px) * 1px;
+
+    for bar in (root.assigned
+        ? [{ x: 7, y: 0, w: 2 }, { x: 6, y: 1, w: 2 }, { x: 5, y: 2, w: 2 }, { x: 0, y: 3, w: 2 }, { x: 4, y: 3, w: 2 },
+           { x: 1, y: 4, w: 4 }, { x: 2, y: 5, w: 2 }]
+        : [{ x: 2, y: 0, w: 3 }, { x: 1, y: 1, w: 1 }, { x: 3, y: 1, w: 3 }, { x: 0, y: 2, w: 1 }, { x: 3, y: 2, w: 4 },
+           { x: 0, y: 3, w: 1 }, { x: 3, y: 3, w: 4 }, { x: 0, y: 4, w: 1 }, { x: 3, y: 4, w: 4 }, { x: 1, y: 5, w: 1 },
+           { x: 3, y: 5, w: 3 }, { x: 2, y: 6, w: 3 }]): Rectangle {
+        x: bar.x * 1px;
+        y: root.top + bar.y * 1px;
+        width: bar.w * 1px;
+        height: 1px;
+        background: root.color;
+    }
+}
+
+export component CompactTagTreeItem {
+    in property <TagNodeView> tag;
+    in property <bool> is-assign-mode: false;
+    in property <bool> has-selection: true;
+    callback clicked();
+    callback toggle-expanded();
+    callback scroll-requested(length /* dx */, length /* dy */);
+    callback context-menu-requested(length /* x */, length /* y */);
+
+    height: CompactTreeMetrics.row-height;
+
+    property <bool> is-item-enabled: !root.is-assign-mode || root.has-selection;
+
+    // The colors of `TagTreeItem`.
+    property <color> fill: root.tag.is-selected ? Theme.surface-selected : (
+        root.tag.is-assigned ? (root.tag.is-dimmed ? #a6e3a118 : #a6e3a128) : (
+            root.tag.is-partial ? (root.tag.is-dimmed ? #f9e2af15 : #f9e2af22) : (
+                tag-touch.has-hover ? Theme.surface-hover : (root.tag.is-dimmed ? #1e1e2e66 : Theme.surface-variant)
+            )
+        )
+    );
+    property <color> frame: root.tag.is-selected ? Theme.primary : (
+        root.tag.is-assigned ? (root.tag.is-dimmed ? #a6e3a188 : #a6e3a1) : (
+            root.tag.is-partial ? (root.tag.is-dimmed ? #f9e2af88 : #f9e2af) : transparent
+        )
+    );
+    property <color> ink: root.tag.is-selected ? Theme.primary : (
+        root.tag.is-assigned ? #a6e3a1 : (root.tag.is-partial ? #f9e2af : Theme.text)
+    );
+    property <int> weight: (root.tag.is-selected || root.tag.is-assigned || root.tag.depth == 0) ? 700 : 400;
+    property <bool> marked: root.tag.is-assigned || root.tag.is-partial;
+
+    // RustCut begin: a locked tag (user decision Q-G2) is red like in `TagTreeItem`'s RustCut block, with the check.
+    states [
+        locked when root.tag.is-locked: {
+            fill: root.tag.is-dimmed ? #f38ba818 : #f38ba828;
+            frame: root.tag.is-dimmed ? #f38ba888 : #f38ba8;
+            ink: #f38ba8;
+            weight: 700;
+            marked: true;
+        }
+    ]
+    // RustCut end
+
+    opacity: root.is-item-enabled ? 1.0 : 0.45;
+
+    // The fills carry alpha like `TagTreeItem`'s, over the list's background (the line color must not shine through).
+    Rectangle {
+        background: Theme.background;
+    }
+
+    Rectangle {
+        background: root.fill;
+    }
+
+    // A state's frame lies on the shared lines around the row.
+    if root.frame != transparent: Rectangle {
+        x: -1px;
+        y: -1px;
+        width: parent.width + 2px;
+        height: parent.height + 2px;
+        border-width: 1px;
+        border-color: root.frame;
+    }
+
+    tag-touch := TouchArea {
+        enabled: root.is-item-enabled;
+        mouse-cursor: root.is-item-enabled ? pointer : default;
+
+        scroll-event(event) => {
+            root.scroll-requested(event.delta-x, event.delta-y);
+            return accept;
+        }
+
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                if event.button == PointerEventButton.right {
+                    root.context-menu-requested(tag-touch.mouse-x, tag-touch.mouse-y);
+                } else if event.button == PointerEventButton.left {
+                    root.clicked();
+                }
+            }
+        }
+    }
+
+    HorizontalLayout {
+        opacity: root.tag.is-dimmed ? 0.8 : 1.0;
+        padding-left: root.tag.depth * CompactTreeMetrics.indent-per-level + CompactTreeMetrics.padding-left;
+        padding-right: 4px;
+        spacing: CompactTreeMetrics.spacing;
+        alignment: start;
+
+        Rectangle {
+            width: CompactTreeMetrics.button-size;
+            if root.tag.has-children: CompactExpandButton {
+                height: parent.height;
+                expanded: root.tag.is-expanded;
+                enabled: root.is-item-enabled;
+                toggled => {
+                    root.toggle-expanded();
+                }
+            }
+        }
+
+        if root.marked: CompactMark {
+            assigned: root.tag.is-assigned;
+            color: root.ink;
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+            min-width: 0px;
+            preferred-width: label.preferred-width;
+            label := Text {
+                y: CompactTreeMetrics.text-offset - 4px;
+                width: parent.width;
+                height: parent.height + 8px;
+                text: root.tag.name;
+                color: root.ink;
+                font-weight: root.weight;
+                font-italic: root.tag.is-partial;
+                font-size: CompactTreeMetrics.font-size;
+                vertical-alignment: center;
+                horizontal-alignment: left;
+                overflow: elide;
+            }
+        }
+    }
+}
+
+export component CompactTagTreeList inherits Rectangle {
+    vertical-stretch: 1;
+    background: Theme.background;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: Theme.border;
+    clip: true;
+
+    in property <[TagColumnView]> columns: [];
+    in property <bool> is-assign-mode: false;
+    in property <bool> has-selection: true;
+
+    callback tag-clicked(int);
+    callback tag-toggle-expand(int);
+    callback tag-context-menu(int, length, length);
+    callback root-context-menu(length, length);
+    callback tree-geometry-changed(length /* available_height */);
+
+    changed height => {
+        if self.height > 10px {
+            root.tree-geometry-changed(self.height);
+        }
+    }
+
+    scroll-area := SmoothScrollArea {
+        width: 100%;
+        height: 100%;
+        enable-horizontal: true;
+        enable-vertical: false;
+        content-width: columns-layout.preferred-width;
+        content-height: self.height;
+
+        bg-touch := TouchArea {
+            width: 100%;
+            height: 100%;
+
+            scroll-event(event) => {
+                scroll-area.handle-scroll(event.delta-x, event.delta-y);
+                return accept;
+            }
+
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down && event.button == PointerEventButton.right {
+                    root.root-context-menu(
+                        bg-touch.mouse-x + scroll-area.clamped-x,
+                        bg-touch.mouse-y
+                    );
+                }
+            }
+        }
+
+        columns-layout := HorizontalLayout {
+            padding: CompactTreeMetrics.list-padding;
+            spacing: CompactTreeMetrics.column-gap;
+            alignment: start;
+
+            // Each column is as tall as its rows; its background shows as the lines between them.
+            for column[col-idx] in root.columns: Rectangle {
+                property <bool> shares-left: CompactTreeMetrics.column-gap == 0 && col-idx > 0;
+                width: Math.max(CompactTreeMetrics.min-column-width,
+                    Math.min(CompactTreeMetrics.max-column-width, Math.ceil(rows.preferred-width / 1px) * 1px));
+                height: column.tags.length * (CompactTreeMetrics.row-height + 1px) + 1px;
+                y: CompactTreeMetrics.list-padding;
+                background: Theme.border;
+
+                rows := VerticalLayout {
+                    padding-top: 1px;
+                    padding-bottom: 1px;
+                    padding-right: 1px;
+                    padding-left: parent.shares-left ? 0px : 1px;
+                    spacing: 1px;
+                    alignment: start;
+
+                    for tag in column.tags: CompactTagTreeItem {
+                        tag: tag;
+                        is-assign-mode: root.is-assign-mode;
+                        has-selection: root.has-selection;
+
+                        clicked => { root.tag-clicked(tag.id); }
+                        toggle-expanded => { root.tag-toggle-expand(tag.id); }
+                        scroll-requested(dx, dy) => {
+                            scroll-area.handle-scroll(dx, dy);
+                        }
+                        context-menu-requested(mx, my) => {
+                            root.tag-context-menu(
+                                tag.id,
+                                parent.x + self.x + mx + scroll-area.clamped-x,
+                                parent.y + self.y + my
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
