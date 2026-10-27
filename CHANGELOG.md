@@ -7,7 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-Your UI review "RustCut Feedback" and the requests that came with it.
+## [0.0.75] - 2026-10-28
+
+Your UI review "RustCut Feedback" and the requests that came with it: the transport bar, the symbols over the video,
+the rating keys, the quick crop on F4, framed dialogs, the tag history's glide and many small fixes.
 
 ### Added
 
@@ -1104,7 +1107,8 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.71...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.75...HEAD
+[0.0.75]: https://github.com/vommie/rustcut/compare/v0.0.71...v0.0.75
 [0.0.71]: https://github.com/vommie/rustcut/compare/v0.0.69...v0.0.71
 [0.0.69]: https://github.com/vommie/rustcut/compare/v0.0.68...v0.0.69
 [0.0.68]: https://github.com/vommie/rustcut/compare/v0.0.66...v0.0.68
