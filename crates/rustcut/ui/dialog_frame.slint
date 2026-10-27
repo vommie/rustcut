@@ -5,7 +5,7 @@
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
-import { IconButton } from "controls.slint";
+import { CloseButton } from "controls.slint";
 
 /// What the user changed in the dialogs (0 = the dialog's default size); the app restores it at start and saves it at
 /// quit.
@@ -230,10 +230,8 @@ export component DialogHeader inherits VerticalLayout {
         if root.closable: VerticalLayout {
             alignment: center;
 
-            IconButton {
-                icon: IconId.close;
+            CloseButton {
                 tooltip: root.close-tooltip;
-                shortcut: "Esc";
                 clicked => { root.close(); }
             }
         }

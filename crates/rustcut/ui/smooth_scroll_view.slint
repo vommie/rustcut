@@ -5,7 +5,7 @@ import { Theme } from "styles.slint";
 
 /// Generic, modular, high-performance scroll container with permanent full-width, custom-styled scrollbars.
 /// Provides real-time 1:1 cursor synchronization during scrollbar dragging with zero lag or drift,
-/// and instant frame-synchronized viewport positioning for embedded native subwindows.
+/// and an instant viewport position on every scroll step (the tab grid's videos are Slint images that scroll with it).
 export component SmoothScrollArea inherits Rectangle {
     in-out property <length> viewport-x: 0px;
     in-out property <length> viewport-y: 0px;

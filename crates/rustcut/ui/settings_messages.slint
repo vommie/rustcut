@@ -229,9 +229,8 @@ component KindRow inherits VerticalLayout {
 }
 
 export component SettingsMessages inherits VerticalLayout {
-    spacing: 16px;
-
-    // The page's tabs (P9.15, Q-P9.15 scope A: the panels' browser-like tabs, counts as badges).
+    // The page's tabs (P9.15, Q-P9.15 scope A: the panels' browser-like tabs, counts as badges) over their own surface:
+    // the selected tab merges into it like the main window's tab groups (Q-P9n "msgtabs" B).
     TabStrip {
         tabs: [
             { title: "Look & behavior", icon: IconId.tab-look, count: "", enabled: true },
@@ -239,64 +238,74 @@ export component SettingsMessages inherits VerticalLayout {
             { title: "Muted", icon: IconId.tab-muted, count: SettingsUi.muted-count, enabled: true },
         ];
         current: SettingsUi.messages-tab;
-        bar: Theme.surface;
-        panel: Theme.background;
+        bar: transparent;
+        panel: Theme.surface-variant;
         picked(index) => { SettingsUi.messages-tab-selected(index); }
     }
 
-    if SettingsUi.messages-tab == 0: VerticalLayout {
-        spacing: 16px;
+    Rectangle {
+        background: Theme.surface-variant;
+        border-bottom-left-radius: 6px;
+        border-bottom-right-radius: 6px;
 
-        for card in SettingsUi.cards: SettingsCard {
-            title: card.title;
-            description: card.description;
+        VerticalLayout {
+            padding: 12px;
 
-            for option in card.rows: SettingsRow {
-                option: option;
+            if SettingsUi.messages-tab == 0: VerticalLayout {
+                spacing: 16px;
+
+                for card in SettingsUi.cards: SettingsCard {
+                    title: card.title;
+                    description: card.description;
+
+                    for option in card.rows: SettingsRow {
+                        option: option;
+                    }
+                }
             }
-        }
-    }
 
-    if SettingsUi.messages-tab == 1: SettingsCard {
-        title: "Where each message appears";
-        description: "Choose a place per kind of message; \"Desktop\" adds a desktop notification. The test button shows the real message where it appears now (you can move this window aside). Critical messages (lock) always appear.";
+            if SettingsUi.messages-tab == 1: SettingsCard {
+                title: "Where each message appears";
+                description: "Choose a place per kind of message; \"Desktop\" adds a desktop notification. The test button shows the real message where it appears now (you can move this window aside). Critical messages (lock) always appear.";
 
-        SettingsSearch {
-            initial: SettingsUi.messages-search;
-            placeholder: "Search messages";
-            edited(text) => { SettingsUi.messages-search-edited(text); }
-        }
+                SettingsSearch {
+                    initial: SettingsUi.messages-search;
+                    placeholder: "Search messages";
+                    edited(text) => { SettingsUi.messages-search-edited(text); }
+                }
 
-        for kind in SettingsUi.kinds: KindRow {
-            kind: kind;
-        }
+                for kind in SettingsUi.kinds: KindRow {
+                    kind: kind;
+                }
 
-        if SettingsUi.kinds.length == 0: Text {
-            text: "No kind of message matches the search.";
-            color: Theme.text-muted;
-            font-size: 12px;
-        }
-    }
+                if SettingsUi.kinds.length == 0: Text {
+                    text: "No kind of message matches the search.";
+                    color: Theme.text-muted;
+                    font-size: 12px;
+                }
+            }
 
-    if SettingsUi.messages-tab == 2: SettingsCard {
-        title: "Muted";
-        description: "Hints and confirmations you chose not to see again (\"Don't show again\" on a toast or above). The bell's history still lists them.";
+            if SettingsUi.messages-tab == 2: SettingsCard {
+                title: "Muted";
+                description: "Hints and confirmations you chose not to see again (\"Don't show again\" on a toast or above). The bell's history still lists them.";
 
-        SettingsSearch {
-            initial: SettingsUi.messages-search;
-            placeholder: "Search muted messages";
-            edited(text) => { SettingsUi.messages-search-edited(text); }
-        }
+                SettingsSearch {
+                    initial: SettingsUi.messages-search;
+                    placeholder: "Search muted messages";
+                    edited(text) => { SettingsUi.messages-search-edited(text); }
+                }
 
-        for kind in SettingsUi.muted: KindRow {
-            kind: kind;
-            muted-list: true;
-        }
+                for kind in SettingsUi.muted: KindRow {
+                    kind: kind;
+                    muted-list: true;
+                }
 
-        if SettingsUi.muted.length == 0: Text {
-            text: SettingsUi.muted-count == 0 ? "Nothing is muted." : "No muted message matches the search.";
-            color: Theme.text-muted;
-            font-size: 12px;
+                if SettingsUi.muted.length == 0: Text {
+                    text: SettingsUi.muted-count == 0 ? "Nothing is muted." : "No muted message matches the search.";
+                    color: Theme.text-muted;
+                    font-size: 12px;
+                }
+            }
         }
     }
 }

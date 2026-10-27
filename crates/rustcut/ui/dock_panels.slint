@@ -224,6 +224,17 @@ component CardStack inherits Rectangle {
         content-height: stack.preferred-height;
         // While rows of a card are dragged the stack does not take the gesture for scrolling (its edges scroll it).
         interactive: !DragState.active;
+        // An options menu of the Filters card hangs from a button in this stack: it follows the button (Q-P9n).
+        changed content-y => {
+            if Filters.menu-kind != "" && Filters.menu-anchor-x >= self.absolute-position.x
+                && Filters.menu-anchor-x < self.absolute-position.x + self.width
+                && Filters.menu-anchor-y + Filters.menu-anchor-height > self.absolute-position.y
+                && Filters.menu-anchor-y < self.absolute-position.y + self.height {
+                Filters.stack-top = self.absolute-position.y;
+                Filters.stack-bottom = self.absolute-position.y + self.height;
+                Filters.stack-scrolls += 1;
+            }
+        }
 
         stack := VerticalLayout {
             padding: 6px;

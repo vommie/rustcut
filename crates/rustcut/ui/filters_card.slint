@@ -74,6 +74,14 @@ component OptionsButton inherits IconButton {
     icon: IconId.filter-options;
     checked: Filters.menu-kind == root.kind;
     tooltip: Filters.menu-kind == root.kind ? "Close the options" : "Options";
+    // The stack scrolled: the open menu follows this button, kept at the stack's edge while the row is out of view.
+    property <int> scrolls: Filters.stack-scrolls;
+    changed scrolls => {
+        if Filters.menu-kind == root.kind {
+            Filters.menu-anchor-y = Math.max(Filters.stack-top,
+                Math.min(Filters.stack-bottom - self.height, self.absolute-position.y));
+        }
+    }
     clicked => {
         Filters.menu-anchor-x = self.absolute-position.x;
         Filters.menu-anchor-y = self.absolute-position.y;
@@ -411,78 +419,85 @@ component FilterRow inherits Rectangle {
         height: parent.height;
         opacity: root.lifted ? 0 : 1;
         border-radius: 4px;
-        background: area.has-hover && !Filters.dragging ? Theme.surface-hover.with-alpha(0.5) : transparent;
+        // A light tint while the pointer is anywhere on the row, its buttons and fields too (Q-P9n): the hover area
+        // wraps the content, the drag area and the controls take the presses.
+        background: hover.has-hover && !Filters.dragging ? Theme.surface-hover.with-alpha(0.55) : transparent;
 
-        area := DragArea {
-            mouse-cursor: MouseCursor.move;
-            menu(x, y) => {
-                Filters.row-menu(root.item.kind, x, y, body.absolute-position.x + body.width - FilterMetrics.options-width,
-                    body.absolute-position.y + 2px);
+        hover := TouchArea {
+            width: 100%;
+            height: 100%;
+
+            area := DragArea {
+                mouse-cursor: MouseCursor.move;
+                menu(x, y) => {
+                    Filters.row-menu(root.item.kind, x, y,
+                        body.absolute-position.x + body.width - FilterMetrics.options-width, body.absolute-position.y + 2px);
+                }
+                drag-started(y) => { root.drag-started(y); }
+                drag-moved(y) => { root.drag-moved(y); }
+                drag-ended => { root.drag-ended(); }
             }
-            drag-started(y) => { root.drag-started(y); }
-            drag-moved(y) => { root.drag-moved(y); }
-            drag-ended => { root.drag-ended(); }
-        }
 
-        VerticalLayout {
-            padding-top: 2px;
-            padding-bottom: 2px;
-            spacing: 4px;
+            VerticalLayout {
+                padding-top: 2px;
+                padding-bottom: 2px;
+                spacing: 4px;
 
-            HorizontalLayout {
-                height: 24px;
-                spacing: FilterMetrics.spacing;
+                HorizontalLayout {
+                    height: 24px;
+                    spacing: FilterMetrics.spacing;
 
-                // The handle (the row's free space drags too).
-                Rectangle {
-                    width: FilterMetrics.grip-width;
+                    // The handle (the row's free space drags too).
+                    Rectangle {
+                        width: FilterMetrics.grip-width;
 
-                    AppIcon {
-                        y: (parent.height - self.height) / 2;
-                        icon: IconId.drag-grip;
-                        size: IconSize.sm;
-                        color: Theme.status-deleted;
-                    }
-                }
-
-                NameButton {
-                    item: root.item;
-                }
-
-                // The values stay usable while the filter is off; they are dimmed (Q-P9.13).
-                values := Rectangle {
-                    horizontal-stretch: 1;
-                    min-width: 0;
-                    opacity: root.item.enabled ? 1 : 0.5;
-
-                    HorizontalLayout {
-                        if root.item.kind == "deinterlace": DeinterlaceValues { }
-                        if root.item.kind == "crop": CropTools { }
-                        if root.item.kind == "deshake": DeshakeValues { }
-                        if root.item.kind == "orientation": OrientationValues {
-                            active: root.item.enabled;
+                        AppIcon {
+                            y: (parent.height - self.height) / 2;
+                            icon: IconId.drag-grip;
+                            size: IconSize.sm;
+                            color: Theme.status-deleted;
                         }
-                        if root.item.kind == "resize": ResizeValues { }
+                    }
+
+                    NameButton {
+                        item: root.item;
+                    }
+
+                    // The values stay usable while the filter is off; they are dimmed (Q-P9.13).
+                    values := Rectangle {
+                        horizontal-stretch: 1;
+                        min-width: 0;
+                        opacity: root.item.enabled ? 1 : 0.5;
+
+                        HorizontalLayout {
+                            if root.item.kind == "deinterlace": DeinterlaceValues { }
+                            if root.item.kind == "crop": CropTools { }
+                            if root.item.kind == "deshake": DeshakeValues { }
+                            if root.item.kind == "orientation": OrientationValues {
+                                active: root.item.enabled;
+                            }
+                            if root.item.kind == "resize": ResizeValues { }
+                        }
+                    }
+
+                    if root.item.has-menu: OptionsButton {
+                        kind: root.item.kind;
+                    }
+
+                    if !root.item.has-menu: Rectangle {
+                        width: FilterMetrics.options-width;
                     }
                 }
 
-                if root.item.has-menu: OptionsButton {
-                    kind: root.item.kind;
-                }
+                if root.item.kind == "crop": HorizontalLayout {
+                    height: 24px;
+                    padding-left: FilterMetrics.grip-width + FilterMetrics.spacing;
 
-                if !root.item.has-menu: Rectangle {
-                    width: FilterMetrics.options-width;
-                }
-            }
+                    Rectangle {
+                        opacity: root.item.enabled ? 1 : 0.5;
 
-            if root.item.kind == "crop": HorizontalLayout {
-                height: 24px;
-                padding-left: FilterMetrics.grip-width + FilterMetrics.spacing;
-
-                Rectangle {
-                    opacity: root.item.enabled ? 1 : 0.5;
-
-                    CropEdges { }
+                        CropEdges { }
+                    }
                 }
             }
         }
