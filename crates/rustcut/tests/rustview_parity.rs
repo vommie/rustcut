@@ -23,6 +23,8 @@ const WHOLE_FILES: &[&str] = &[
     "tag_history_item.slint",
     "tag_history_panel.slint",
     "resizer_bar.slint",
+    // Compact Mode (D-CT1): made in RustCut 0.0.70, in RustView since 0.6.6.
+    "tag_tree_compact.slint",
 ];
 
 /// Components copied out of a RustView file: (RustCut file, RustView file, components).
@@ -44,7 +46,7 @@ const PINNED_FUNCTIONS: &[(&str, &str, u64)] = &[
 
 /// RustView's constants the ports copy: (file below `crates/rustview/src/ui/tags/`, pinned hash of its `pub const` lines).
 const PINNED_CONSTANTS: &[(&str, u64)] = &[
-    ("mod.rs", 0xd647_caa6_eeae_9e79),
+    ("mod.rs", 0x6924_8a59_65a6_39ce),
     ("history/layout.rs", 0x518e_6a3b_c506_f6f0),
 ];
 
