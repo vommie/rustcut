@@ -29,6 +29,13 @@ export struct QueueRowView {
     cells: [string],
 }
 
+// One symbol of the totals line (review 2): a state's symbol with its count ("3 waiting" in the tooltip).
+export struct QueueTotalView {
+    kind: int,
+    count: int,
+    tooltip: string,
+}
+
 // One column of the table form (src/ui/queue/columns.rs computes where it sits).
 export struct QueueColumnView {
     id: string,
@@ -66,6 +73,8 @@ export global Queue {
     in property <string> filter-profiles-text: "Any profile";
     in property <bool> filter-any;
     in property <int> filter-count;
+    // The totals line: a symbol per state that occurs; `summary` is the text without jobs ("No jobs").
+    in property <[QueueTotalView]> totals;
     in property <string> summary;
     in property <string> empty-text;
     // The overall progress of the current run.
@@ -74,6 +83,8 @@ export global Queue {
     in property <string> overall-text;
     in property <bool> paused;
     in property <bool> pause-after;
+    // Something renders and processing is not paused: "pause after the running jobs" can act.
+    in property <bool> can-pause-after;
     // What happens when the queue is done (0 nothing, 1 notify, 2 quit, 3 suspend, 4 power off) and its tooltip.
     in property <int> when-done;
     in property <string> when-done-tip;

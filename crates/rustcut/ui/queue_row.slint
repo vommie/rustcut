@@ -16,6 +16,17 @@ import { DragMotion } from "drag.slint";
 
 // waiting, held, rendering, paused, finished, failed, canceled
 export global QueueColors {
+    // The fixed symbol of a state (review 2), in the same order.
+    pure public function icon(kind: int) -> IconId {
+        if kind == 1 { return IconId.state-held; }
+        if kind == 2 { return IconId.state-rendering; }
+        if kind == 3 { return IconId.state-paused; }
+        if kind == 4 { return IconId.state-finished; }
+        if kind == 5 { return IconId.state-failed; }
+        if kind == 6 { return IconId.state-canceled; }
+        return IconId.state-waiting;
+    }
+
     pure public function of(kind: int) -> color {
         if kind == 2 { return Theme.primary; }
         if kind == 3 { return Theme.accent; }

@@ -8,11 +8,51 @@ import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { IconButton, UpDownButton } from "controls.slint";
 import { Export } from "export_types.slint";
-import { Queue } from "queue_types.slint";
+import { Queue, QueueTotalView } from "queue_types.slint";
+import { TooltipArea } from "tooltip.slint";
 import { MenuTints } from "context_menu.slint";
 import { QueueColors, QueueHeader, QueueRow } from "queue_row.slint";
 import { Jump } from "jump.slint";
 import { DragGhost, DragLogic, DropGap } from "drag.slint";
+
+/// A state's symbol in its color with the count in a small badge at its upper right; the tooltip says it in words.
+component TotalSymbol inherits Rectangle {
+    in property <QueueTotalView> total;
+
+    width: IconSize.sm + badge.width - 4px;
+
+    TooltipArea {
+        text: root.total.tooltip;
+
+        AppIcon {
+            x: 0;
+            y: (parent.height - self.height) / 2;
+            icon: QueueColors.icon(root.total.kind);
+            size: IconSize.sm;
+            color: QueueColors.of(root.total.kind);
+        }
+
+        badge := Rectangle {
+            x: IconSize.sm - 4px;
+            y: -2px;
+            width: Math.max(13px, count.preferred-width + 6px);
+            height: 13px;
+            border-radius: 6.5px;
+            background: QueueColors.of(root.total.kind);
+            border-width: 1px;
+            border-color: Theme.surface;
+
+            count := Text {
+                text: root.total.count;
+                color: Theme.background;
+                font-size: 9px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
 
 export component QueuePanel inherits Rectangle {
     property <length> row-step: Queue.row-height + 2px;
@@ -81,6 +121,8 @@ export component QueuePanel inherits Rectangle {
             IconButton {
                 icon: IconId.queue-pause-after;
                 checked: Queue.pause-after;
+                // Only while a job renders and processing runs (review 2); switched on, it can always be switched off.
+                enabled: Queue.pause-after || Queue.can-pause-after;
                 tooltip: Queue.pause-after ? "Pausing after the running jobs: keep going instead"
                     : "Pause after the running jobs (they finish, nothing new starts)";
                 clicked => { Queue.toggle-pause-after(); }
@@ -257,11 +299,24 @@ export component QueuePanel inherits Rectangle {
             vertical-stretch: 0;
             spacing: 2px;
 
-            Text {
-                text: Queue.has-overall ? Queue.overall-text : Queue.summary;
-                color: Theme.text-muted;
-                font-size: 11px;
-                overflow: elide;
+            // A colored symbol per state that occurs with its count in a small raised badge, then the run's progress
+            // (review 2). Symbols and text share one centered line; the badges sit above it.
+            HorizontalLayout {
+                height: 18px;
+                spacing: 6px;
+
+                for total in Queue.totals: TotalSymbol {
+                    total: total;
+                }
+
+                Text {
+                    horizontal-stretch: 1;
+                    text: Queue.has-overall ? Queue.overall-text : Queue.summary;
+                    color: Theme.text-muted;
+                    font-size: 11px;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
             }
 
             if Queue.has-overall: Rectangle {

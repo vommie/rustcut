@@ -7,7 +7,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Every job state has its own colored symbol (0.0.62): waiting (hourglass), running (play), paused, held (hand),
+  finished (check), failed (alert) and canceled (ban). The queue's filter shows them before the states.
+- A finished job's line in the compact queue shows the size of its output (0.0.62).
+
 ### Changed
+
+- The queue's totals line shows a colored symbol per state with its count in a small badge (only states that occur)
+  instead of words, and "~0:22 left" instead of "about 0:22 left" (0.0.62).
+- File sizes in the queue and the Job panel are in binary units with at most one decimal ("324 KiB", "2.1 MiB",
+  "2.3 GiB") (0.0.62).
+- "Pause after the running jobs" is off while nothing renders or processing is paused (0.0.62).
 
 - The filters' options menus line up on two equal columns (0.0.61): every choice, number field and slider ends on one
   line; Deshake's values sit in a grid of two halves, its segmented choices span the whole row, and "Field order"

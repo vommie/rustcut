@@ -238,11 +238,13 @@ export component SegmentedChoice inherits Rectangle {
     }
 }
 
-/// One entry of a `MultiChoiceButton`: its text, a muted detail on the right (a count) and whether it is picked.
+/// One entry of a `MultiChoiceButton`: its text, a muted detail on the right (a count), whether it is picked, and a
+/// tone (-1 = none) whose symbol and color the owner gives (`tone-icon`, `tone-color`; the queue's job states).
 export struct MultiChoiceItem {
     label: string,
     detail: string,
     on: bool,
+    tone: int,
 }
 
 /// A choice of several values (the queue's filter menu, P9.6): the first entry (`everything`) picks none, a click on an
@@ -257,6 +259,9 @@ export component MultiChoiceButton inherits Rectangle {
     in property <IconId> icon: IconId.none;
     // An entry was clicked (-1 = `everything`), with Ctrl or without.
     callback picked(/* entry */ int, /* control */ bool);
+    // The symbol and color of an entry's tone (shown in a column before the labels when an entry has one).
+    pure callback tone-icon(int) -> IconId;
+    pure callback tone-color(int) -> color;
 
     property <bool> any-on: root.text != root.everything;
 
@@ -375,6 +380,16 @@ export component MultiChoiceButton inherits Rectangle {
                                 icon: IconId.check;
                                 size: IconSize.sm;
                                 color: Theme.primary;
+                            }
+                        }
+
+                        if index > 0 && root.items[index - 1].tone >= 0: VerticalLayout {
+                            alignment: center;
+
+                            AppIcon {
+                                icon: root.tone-icon(root.items[index - 1].tone);
+                                size: IconSize.sm;
+                                color: root.tone-color(root.items[index - 1].tone);
                             }
                         }
 

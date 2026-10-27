@@ -33,7 +33,7 @@ pub use self::actions::open_file;
 pub use self::columns::{Column, Layout, layout};
 pub use self::filter::{CHIPS, Chip, Filter, FilterChoice, FilterKind};
 pub use self::menu::{MenuKeys, QueueAction, queue_menu, targets};
-pub use self::text::{RowText, clock, file_label, kind_number, row_text, short_clock, title};
+pub use self::text::{RowText, clock, file_label, kind_number, row_text, short_clock, size_text, title};
 pub use self::totals::Overall;
 pub use self::view::QueueView;
 
@@ -43,7 +43,7 @@ use crate::ui::menu::ContextMenuBridge;
 
 /// The queue panel's selection of jobs.
 pub type Selection = crate::util::selection::Selection<JobId>;
-use crate::{MainWindow, MultiChoiceItem, Queue, QueueColumnView, QueueRowView};
+use crate::{MainWindow, MultiChoiceItem, Queue, QueueColumnView, QueueRowView, QueueTotalView};
 
 const REFRESH: CoalesceKey = CoalesceKey::new("queue", 0);
 /// Row heights of the two forms.
@@ -138,6 +138,7 @@ pub struct QueueBridge {
     ui: RefCell<PanelUi>,
     rows: Rc<VecModel<QueueRowView>>,
     columns: Rc<VecModel<QueueColumnView>>,
+    totals: Rc<VecModel<QueueTotalView>>,
     /// The filter menu's state, folder and profile choices, and the values of their entries as shown.
     filter_models: [Rc<VecModel<MultiChoiceItem>>; 3],
     filter_values: RefCell<[Vec<String>; 3]>,
@@ -190,6 +191,7 @@ impl QueueBridge {
             }),
             rows: Rc::new(VecModel::default()),
             columns: Rc::new(VecModel::default()),
+            totals: Rc::new(VecModel::default()),
             filter_models: std::array::from_fn(|_| Rc::new(VecModel::default())),
             filter_values: RefCell::default(),
             menu: Rc::downgrade(menu),
@@ -210,6 +212,7 @@ impl QueueBridge {
         let q = window.global::<Queue<'_>>();
         q.set_rows(ModelRc::from(Rc::clone(&bridge.rows)));
         q.set_columns(ModelRc::from(Rc::clone(&bridge.columns)));
+        q.set_totals(ModelRc::from(Rc::clone(&bridge.totals)));
         let [states, folders, profiles] = &bridge.filter_models;
         q.set_filter_states(ModelRc::from(Rc::clone(states)));
         q.set_filter_folders(ModelRc::from(Rc::clone(folders)));
