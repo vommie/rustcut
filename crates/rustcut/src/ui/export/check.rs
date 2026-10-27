@@ -72,17 +72,32 @@ pub struct CardInput<'a> {
     pub quiet: &'a [String],
 }
 
-/// The files of `names` in the name's numbered series (`stem_for(n)`) with a number below `current`.
+/// The files of `names` that are no hint while the counter auto-iterates: the name's numbered series (`stem_for(n)`)
+/// below `current`, and the name itself without a number (`base` with any extension), the files before the series
+/// (user review 2026-10-28: "hd_h264_1080p.mkv" next to "hd_h264_1080p - 07" kept the bubble).
 pub fn earlier_in_series<'a>(
-    names: impl IntoIterator<Item = &'a String>,
+    names: impl IntoIterator<Item = &'a String> + Clone,
     current: u32,
+    base: &str,
     stem_for: impl Fn(u32) -> Option<String>,
 ) -> Vec<String> {
-    rustcut_core::naming::series(names, stem_for)
+    let base = base.trim();
+    let mut quiet: Vec<String> = rustcut_core::naming::series(names.clone(), stem_for)
         .into_iter()
         .filter(|f| f.counter < current)
         .map(|f| f.name)
-        .collect()
+        .collect();
+    quiet.extend(
+        names
+            .into_iter()
+            .filter(|n| {
+                !base.is_empty()
+                    && n.rsplit_once('.')
+                        .is_some_and(|(stem, _)| stem.eq_ignore_ascii_case(base))
+            })
+            .cloned(),
+    );
+    quiet
 }
 
 pub fn card_check(input: &CardInput<'_>) -> CardCheck {
@@ -272,7 +287,7 @@ mod tests {
         let warnings = WarningSettings::default();
         let folder_scan = scan(&["Clip - 01.mkv", "Clip - 02.mp4", "Clip - 05.mkv", "Clip extra.mkv"]);
         let stem = |n: u32| Some(format!("Clip - {n:02}"));
-        let quiet = earlier_in_series(&folder_scan.names, 3, stem);
+        let quiet = earlier_in_series(&folder_scan.names, 3, "Clip", stem);
         assert_eq!(quiet, vec!["Clip - 01.mkv".to_owned(), "Clip - 02.mp4".to_owned()]);
         let line = |quiet: &[String]| {
             card_check(&CardInput {
@@ -292,8 +307,25 @@ mod tests {
             "2 similar filenames in target folder",
             "a higher number and another name still count"
         );
-        let mut all = earlier_in_series(&folder_scan.names, 9, stem);
+        let mut all = earlier_in_series(&folder_scan.names, 9, "Clip", stem);
         all.push("Clip extra.mkv".to_owned());
         assert_eq!(line(&all).level, Level::Free, "nothing else is similar: free");
+    }
+
+    #[test]
+    fn the_name_without_a_number_is_no_hint_either() {
+        let names: Vec<String> = [
+            "hd - 01.mkv",
+            "hd - 06.mkv",
+            "hd.mkv",
+            "HD.mp4",
+            "hd extra.mkv",
+            "hd - 07.mkv",
+        ]
+        .iter()
+        .map(|n| (*n).to_owned())
+        .collect();
+        let quiet = earlier_in_series(&names, 7, "hd", |n| Some(format!("hd - {n:02}")));
+        assert_eq!(quiet, ["hd - 01.mkv", "hd - 06.mkv", "hd.mkv", "HD.mp4"]);
     }
 }

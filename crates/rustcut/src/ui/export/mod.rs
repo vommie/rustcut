@@ -299,7 +299,7 @@ impl ExportBridge {
         // Auto-iterate saves each job with the next number: the earlier ones of the series are the jobs just saved.
         let quiet = match (&facts, &scan, st.active_counter()) {
             (Some(facts), Some(scan), Some(current)) if st.auto_increment && st.template_uses_counter() => {
-                earlier_in_series(&scan.names, current, |n| st.stem_with(facts, Some(n)).ok())
+                earlier_in_series(&scan.names, current, &st.name, |n| st.stem_with(facts, Some(n)).ok())
             }
             _ => Vec::new(),
         };
