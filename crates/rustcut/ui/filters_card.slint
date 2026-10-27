@@ -401,7 +401,8 @@ component ResizeValues inherits HorizontalLayout {
         placeholder: Filters.resize-auto-width;
         unit: "px";
         spin: false;
-        tooltip: "Width in pixels; empty keeps the aspect ratio of the height (the dim number is what it comes to)";
+        pixel-steps: true;
+        tooltip: "Width in pixels; empty keeps the aspect ratio of the height (the dim number is what it comes to; click, then the wheel: 1, Ctrl 10, Shift 100)";
         committed(text) => { return Filters.edit-resize(0, text); }
         stepped(steps) => { Filters.step-resize(0, steps); }
     }
@@ -419,7 +420,8 @@ component ResizeValues inherits HorizontalLayout {
         placeholder: Filters.resize-auto-height;
         unit: "px";
         spin: false;
-        tooltip: "Height in pixels; empty keeps the aspect ratio of the width (the dim number is what it comes to)";
+        pixel-steps: true;
+        tooltip: "Height in pixels; empty keeps the aspect ratio of the width (the dim number is what it comes to; click, then the wheel: 1, Ctrl 10, Shift 100)";
         committed(text) => { return Filters.edit-resize(1, text); }
         stepped(steps) => { Filters.step-resize(1, steps); }
     }

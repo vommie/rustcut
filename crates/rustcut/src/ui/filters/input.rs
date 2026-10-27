@@ -19,8 +19,6 @@ const INTERPOLATIONS: [DeshakeInterpolation; 4] = [
     DeshakeInterpolation::Linear,
     DeshakeInterpolation::No,
 ];
-/// Pixels per step of a resize field (a common multiple of the codecs' block sizes).
-const RESIZE_STEP: i32 = 16;
 /// One step of each deshake number (shakiness, accuracy, search step, smoothing, zoom, max shift, max angle, zoom
 /// speed in hundredths), as in Settings > Filters.
 const DESHAKE_STEPS: [i64; 8] = [1, 1, 1, 5, 1, 10, 1, 5];
@@ -239,7 +237,7 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
             height.or(input.map(|i| i.height))
         };
         if let Some(current) = current {
-            let value = current.saturating_add_signed(steps.saturating_mul(RESIZE_STEP));
+            let value = current.saturating_add_signed(steps);
             s.set_resize_side(u8::from(which != 0), Some(value));
         }
     });

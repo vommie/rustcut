@@ -9,6 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The resize's width and height fields step with the mouse wheel once clicked into, like the crop's edges: 1 pixel,
+  10 with Ctrl, 100 with Shift (also the Up/Down keys; before, a step was 16 pixels) (0.0.66).
+
 - The taskbar entry's progress bar follows the current job by default (0.0.65): Settings > Desktop Integration >
   "The bar shows" chooses between the current job (the render that started first when several run) and all jobs
   (the whole run, as before). Older settings files load with "Current job".

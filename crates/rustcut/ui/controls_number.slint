@@ -30,7 +30,7 @@ export component NumberField inherits Rectangle {
     // A sign at the right inside the field (a target folder that does not exist yet, P9.7); its color.
     in property <IconId> mark: IconId.none;
     in property <color> mark-color: Theme.accent;
-    // Pixel fields (the crop's edges, review 2): the wheel and the arrow keys of the open field step 1, with Ctrl 10 and
+    // Pixel fields (the crop's edges and the resize, review 2): the wheel and the arrow keys of the open field step 1, with Ctrl 10 and
     // with Shift 100, also without spin arrows.
     in property <bool> pixel-steps;
     callback committed(string) -> bool;
