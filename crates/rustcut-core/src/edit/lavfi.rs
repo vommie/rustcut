@@ -326,6 +326,27 @@ mod tests {
     }
 
     #[test]
+    fn the_render_runs_the_filters_in_the_cards_order() {
+        // Q-P9n: the order of the Filters card (the chain's slots) is the order ffmpeg applies them, after any move.
+        let mut chain = chain_with(&[
+            Filter::Crop(Crop::new(10, 0, 10, 0)),
+            Filter::Resize {
+                width: Some(960),
+                height: None,
+                algorithm: ResizeAlgorithm::Bicubic,
+            },
+        ]);
+        let crop = "crop=w=iw-0:h=ih-20:x=0:y=10";
+        let scale = "scale=w=960:h=-2:flags=bicubic,setsar=1";
+        assert_eq!(render(&chain, HD, DeshakePass::None), format!("{crop},{scale}"));
+        assert!(chain.move_to(FilterKind::Resize, 0));
+        assert_eq!(chain.order().next(), Some(FilterKind::Resize));
+        assert_eq!(render(&chain, HD, DeshakePass::None), format!("{scale},{crop}"));
+        // The size follows the same order: 1920x1080 -> 960x540 -> 960x520.
+        assert_eq!(chain.output_size(HD).unwrap(), Size::new(960, 520));
+    }
+
+    #[test]
     fn odd_output_gets_an_even_crop() {
         let chain = chain_with(&[Filter::Crop(Crop::new(1, 0, 0, 3))]);
         assert_eq!(
