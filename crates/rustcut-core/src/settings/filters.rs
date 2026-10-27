@@ -107,6 +107,28 @@ impl FilterDefaults {
     }
 }
 
+/// Settings version 4 -> 5 (0.0.59, night questionnaire Q-P9n "sharpen" A): Deshake sharpens after the transform, on
+/// by default. A `[filters.deshake]` table written before has no `sharpen` key, which reads as off (so old jobs render
+/// as they did); the saved defaults get it switched on, like every fresh default.
+pub(super) fn migrate_deshake_sharpen(table: &mut toml::Table) -> Result<(), String> {
+    let Some(filters) = table.get_mut("filters") else {
+        return Ok(());
+    };
+    let filters = filters
+        .as_table_mut()
+        .ok_or_else(|| "filters is not a table".to_owned())?;
+    let Some(deshake) = filters.get_mut("deshake") else {
+        return Ok(());
+    };
+    let deshake = deshake
+        .as_table_mut()
+        .ok_or_else(|| "filters.deshake is not a table".to_owned())?;
+    deshake
+        .entry("sharpen")
+        .or_insert(toml::Value::Boolean(DeshakeParams::default().sharpen));
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

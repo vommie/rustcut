@@ -37,6 +37,7 @@ pub(super) fn tips() -> FilterTips {
         zoom_speed: t("filters.deshake.zoom_speed"),
         borders: t("filters.deshake.crop"),
         interpolation: t("filters.deshake.interpolation"),
+        sharpen: t("filters.deshake.sharpen"),
         scaler: t("filters.resize_algorithm"),
     }
 }
@@ -125,6 +126,7 @@ impl FiltersBridge {
         f.set_deshake_borders(i32::from(d.crop == rustcut_core::edit::DeshakeCrop::Keep));
         f.set_deshake_interpolation(input::interpolation_index(d.interpolation));
         f.set_deshake_tripod(d.tripod);
+        f.set_deshake_sharpen(d.sharpen);
         f.set_deshake_summary(card.deshake_summary.as_str().into());
         self.publish_menu(&f);
     }

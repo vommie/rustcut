@@ -39,6 +39,7 @@ export struct FilterTips {
     zoom-speed: string,
     borders: string,
     interpolation: string,
+    sharpen: string,
     scaler: string,
 }
 
@@ -124,6 +125,7 @@ export global Filters {
     in property <[string]> interpolations;
     in property <int> deshake-interpolation;
     in property <bool> deshake-tripod;
+    in property <bool> deshake-sharpen;
     // The Deshake row's dim line ("shakiness 5 · smoothing 10").
     in property <string> deshake-summary;
 
@@ -213,6 +215,7 @@ export global Filters {
     // 0 automatic zoom, 1 borders, 2 interpolation.
     callback set-deshake-choice(int, int);
     callback set-tripod(bool);
+    callback set-sharpen(bool);
     // A right click on a row (window coordinates): its menu (switch, options, move up and down); "Options..." hangs the
     // options menu from the row's adjustments button (its top left corner).
     callback row-menu(/* kind */ string, /* x */ length, /* y */ length, /* button x */ length, /* button y */ length);

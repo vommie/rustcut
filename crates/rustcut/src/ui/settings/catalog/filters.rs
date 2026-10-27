@@ -374,6 +374,13 @@ pub static FILTERS: &[Card] = &[
                  not move at all.",
                 filters.deshake.tripod
             ),
+            switch!(
+                "filters.deshake.sharpen",
+                "Sharpen",
+                "A light sharpening after the stabilization: every moved frame is computed anew and a little softer. \
+                 The ffmpeg manual recommends it; switch it off for footage that is sharp enough or noisy.",
+                filters.deshake.sharpen
+            ),
         ],
     },
     Card {

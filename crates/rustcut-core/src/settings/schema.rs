@@ -460,7 +460,7 @@ fn migrate_metadata_warning(table: &mut toml::Table) -> Result<(), String> {
 
 impl VersionedFile for Settings {
     const FILE_NAME: &'static str = "config.toml";
-    const VERSION: u32 = 4;
+    const VERSION: u32 = 5;
 
     fn steps() -> &'static [MigrationStep] {
         &[
@@ -478,6 +478,11 @@ impl VersionedFile for Settings {
                 from: 3,
                 reason: "one-metadata-warning",
                 apply: migrate_metadata_warning,
+            },
+            MigrationStep {
+                from: 4,
+                reason: "deshake-sharpen-on",
+                apply: super::filters::migrate_deshake_sharpen,
             },
         ]
     }

@@ -199,6 +199,14 @@ pub(crate) mod tests {
             render, "bwdif=mode=send_field,hflip,vflip,scale=w=640:h=-2:flags=bicubic,setsar=1",
             "the same filters as 0.0.47 rendered"
         );
+        let deshake = read
+            .filters
+            .get(crate::edit::FilterKind::Deshake)
+            .map(|slot| slot.filter);
+        assert!(
+            matches!(deshake, Some(crate::edit::Filter::Deshake(d)) if !d.sharpen),
+            "a spec written before 0.0.59 does not sharpen (it renders as it did)"
+        );
     }
 
     #[test]

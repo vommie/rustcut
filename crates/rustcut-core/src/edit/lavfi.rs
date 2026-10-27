@@ -158,6 +158,10 @@ fn deshake(p: DeshakeParams, pass: DeshakePass<'_>) -> Result<String, ChainError
             if p.tripod {
                 s.push_str(":tripod=1");
             }
+            if p.sharpen {
+                s.push(',');
+                s.push_str(DeshakeParams::SHARPEN);
+            }
             Ok(s)
         }
     }
@@ -316,6 +320,7 @@ mod tests {
             zoom_speed: 50,
             max_shift: Some(40),
             max_angle: Some(2),
+            sharpen: false,
             ..DeshakeParams::default()
         })]);
         assert_eq!(
@@ -399,6 +404,39 @@ mod tests {
             }),
             Err(ChainError::DeshakeNeedsPass)
         );
+    }
+
+    #[test]
+    fn deshake_sharpens_after_the_transform_unless_switched_off() {
+        let trf = PathBuf::from("/t/job.trf");
+        let with = |sharpen| {
+            let chain = chain_with(&[
+                Filter::Deshake(DeshakeParams {
+                    sharpen,
+                    ..DeshakeParams::default()
+                }),
+                Filter::Resize {
+                    width: Some(1280),
+                    height: None,
+                    algorithm: ResizeAlgorithm::Bicubic,
+                },
+            ]);
+            (
+                render(&chain, HD, DeshakePass::Detect { result: &trf }),
+                render(&chain, HD, DeshakePass::Transform { input: &trf }),
+            )
+        };
+        let (detect, transform) = with(true);
+        assert!(
+            !detect.contains("unsharp"),
+            "the detection pass never sharpens: {detect}"
+        );
+        assert!(
+            transform.contains("interpol=bicubic,unsharp=5:5:0.8:3:3:0.4,scale="),
+            "right after the transform, before the next filter: {transform}"
+        );
+        assert!(!with(false).1.contains("unsharp"));
+        assert!(DeshakeParams::default().sharpen, "on for a fresh chain (Q-P9n)");
     }
 
     #[test]
