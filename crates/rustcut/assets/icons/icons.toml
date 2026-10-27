@@ -103,6 +103,7 @@ deshake_optzoom = { tabler = "zoom-scan", doc = "Deshake: automatic zoom" }
 deshake_zoom_speed = { tabler = "gauge", doc = "Deshake: how fast the adaptive zoom changes" }
 deshake_borders = { tabler = "border-outer", doc = "Deshake: what fills the borders" }
 deshake_interpolation = { tabler = "blur", doc = "Deshake: interpolation of moved pixels" }
+deshake_sharpen = { tabler = "sparkles", doc = "Deshake: sharpen after the transform" }
 move_up = { tabler = "arrow-up", doc = "Move one place up" }
 move_down = { tabler = "arrow-down", doc = "Move one place down" }
 crop_edit = { tabler = "crop", doc = "Edit the crop on the video" }

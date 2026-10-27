@@ -543,6 +543,26 @@ component DeshakeMenu inherits VerticalLayout {
         }
     }
 
+    IconCell {
+        icon: IconId.deshake-sharpen;
+        title: "Sharpen";
+        tooltip: Filters.tips.sharpen;
+
+        VerticalLayout {
+            alignment: center;
+
+            Switch {
+                checked: Filters.deshake-sharpen;
+                tooltip: "Sharpen";
+                toggled => { Filters.set-sharpen(!Filters.deshake-sharpen); }
+            }
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+        }
+    }
+
     Rectangle {
         height: 1px;
         background: Theme.border;

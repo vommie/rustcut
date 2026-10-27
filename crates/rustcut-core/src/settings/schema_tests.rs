@@ -342,7 +342,7 @@ fn a_file_of_0_0_24_moves_its_notice_options_with_a_backup() {
     );
     save(dir.path(), &value).unwrap();
     let text = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
-    assert!(text.starts_with("version = 4"), "{text}");
+    assert!(text.starts_with(&format!("version = {}", Settings::VERSION)), "{text}");
     assert!(
         !text.contains("[desktop.notifications]") && !text.contains("known_source = false"),
         "{text}"
@@ -384,7 +384,10 @@ fn a_file_of_0_0_28_loads_its_job_without_a_draft() {
         );
         save(dir.path(), &value).unwrap();
         let text = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
-        assert!(text.starts_with("version = 4") && !text.contains("draft"), "{text}");
+        assert!(
+            text.starts_with(&format!("version = {}", Settings::VERSION)) && !text.contains("draft"),
+            "{text}"
+        );
     }
     // Without the key nothing changes but the version.
     std::fs::write(dir.path().join("config.toml"), "version = 2\n[queue]\nworkers = 2\n").unwrap();
@@ -431,7 +434,9 @@ fn a_file_of_0_0_32_gets_one_metadata_warning() {
         save(dir.path(), &value).unwrap();
         let text = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
         assert!(
-            text.starts_with("version = 4") && !text.contains("no_tags") && !text.contains("no_rating"),
+            text.starts_with(&format!("version = {}", Settings::VERSION))
+                && !text.contains("no_tags")
+                && !text.contains("no_rating"),
             "{text}"
         );
     }
@@ -452,4 +457,35 @@ fn a_file_of_0_0_54_writes_the_shareable_log_and_replaces_every_kind() {
     assert_eq!(s.advanced.redact, crate::redact::RedactKinds::default());
     let partial: Settings = toml::from_str("version = 4\n[advanced.redact]\nmd5 = false\n").unwrap();
     assert!(!partial.advanced.redact.md5 && partial.advanced.redact.paths);
+}
+
+#[test]
+fn a_file_of_0_0_58_gets_deshake_sharpening_with_a_backup() {
+    // Settings version 4 -> 5 (Q-P9n): saved Deshake defaults get `sharpen = true`; the old file is backed up first.
+    let dir = tempfile::tempdir().unwrap();
+    let old = "version = 4\n[filters.deshake]\nshakiness = 7\ntripod = true\n";
+    std::fs::write(dir.path().join("config.toml"), old).unwrap();
+    let outcome = load::<Settings>(dir.path(), &dir.path().join("b")).unwrap();
+    let LoadOutcome::Migrated {
+        value,
+        from: 4,
+        backup,
+        notes,
+    } = outcome
+    else {
+        panic!("{outcome:?}")
+    };
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(std::fs::read_to_string(&backup).unwrap(), old, "backed up first");
+    let d = value.filters.deshake;
+    assert!(d.sharpen, "switched on by the migration");
+    assert_eq!((d.shakiness, d.tripod), (7, true), "the other values stay");
+    // A file without saved Deshake values takes the default (on); an explicit "off" of version 5 stays off.
+    std::fs::write(dir.path().join("config.toml"), "version = 4\n[queue]\nworkers = 2\n").unwrap();
+    let value = load::<Settings>(dir.path(), &dir.path().join("b"))
+        .unwrap()
+        .into_value();
+    assert!(value.filters.deshake.sharpen);
+    let off: Settings = toml::from_str("version = 5\n[filters.deshake]\nsharpen = false\n").unwrap();
+    assert!(!off.filters.deshake.sharpen);
 }

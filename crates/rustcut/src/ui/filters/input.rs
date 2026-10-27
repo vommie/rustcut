@@ -302,6 +302,11 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
         p.tripod = on;
         s.set_deshake(p);
     }));
+    f.on_set_sharpen(change(&this, |s, on| {
+        let mut p = s.deshake();
+        p.sharpen = on;
+        s.set_deshake(p);
+    }));
 
     let o = window.global::<CropOverlay<'_>>();
     let pointer = with(&this, |b, (kind, x, y, control, shift): (i32, f32, f32, bool, bool)| {

@@ -147,6 +147,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Deshake sharpens lightly after stabilizing (0.0.59, your night questionnaire): every moved frame is computed anew and
+  comes out a little softer, so the render adds the sharpening the ffmpeg manual recommends right after the
+  stabilization. "Sharpen" in the Deshake menu and in Settings > Filters switches it, on by default. Migration:
+  `config.toml` goes to version 5 ("deshake-sharpen-on", backed up first) and switches it on in your saved Deshake
+  defaults; jobs saved before still render without it, as they did.
 - A shareable log (0.0.55, your UI review's note on the whole review): beside the log, RustCut writes
   `rustcut-shareable.DATE.log`, the same lines with file names, folders and paths, tag names, user and host names, MD5
   sums and the videos' titles replaced by placeholders that stay the same within a run (`<file-3>.mkv`, `<dir-2>`,

@@ -281,6 +281,11 @@ pub struct DeshakeParams {
     /// How fast the adaptive zoom (`optzoom` 2) may change, in hundredths of a percent per frame, 0 to 500
     /// (`zoomspeed` 0 to 5 %; ffmpeg's default 0.25 %; 0.0.48).
     pub zoom_speed: u16,
+    /// A light `unsharp` after the transform (the ffmpeg manual recommends it after `vidstabtransform`: every moved
+    /// frame is interpolated and a little softer; 0.0.59, Q-P9n). On for a fresh chain; a spec or a kept chain written
+    /// before 0.0.59 reads it as off, so it renders as it did (config.toml's defaults are switched on by a migration).
+    #[serde(default)]
+    pub sharpen: bool,
 }
 
 impl Default for DeshakeParams {
@@ -298,6 +303,7 @@ impl Default for DeshakeParams {
             max_shift: None,
             max_angle: None,
             zoom_speed: Self::ZOOM_SPEED_DEFAULT,
+            sharpen: true,
         }
     }
 }
@@ -307,6 +313,8 @@ impl DeshakeParams {
     pub const MAX_ANGLE: u8 = 90;
     pub const ZOOM_SPEED_MAX: u16 = 500;
     pub const ZOOM_SPEED_DEFAULT: u16 = 25;
+    /// The sharpening after the transform: the values of the ffmpeg manual's `vidstabtransform` example.
+    pub const SHARPEN: &'static str = "unsharp=5:5:0.8:3:3:0.4";
 
     /// The parameters limited to the ranges vid.stab accepts (`accuracy` raised to `shakiness`).
     pub fn sanitized(self) -> Self {
@@ -402,8 +410,10 @@ mod tests {
             deshake,
             Filter::Deshake(DeshakeParams {
                 smoothing: 30,
+                sharpen: false,
                 ..DeshakeParams::default()
-            })
+            }),
+            "a deshake written before 0.0.59 does not sharpen"
         );
     }
 

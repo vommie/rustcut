@@ -372,6 +372,9 @@ pub fn filter_text(filter: &Filter) -> String {
                 d.smoothing,
                 if d.tripod { ", tripod" } else { "" }
             );
+            if d.sharpen {
+                text.push_str(", sharpened");
+            }
             if let Some(shift) = d.max_shift {
                 let _ = write!(text, ", at most {shift} px");
             }
