@@ -7,18 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Changed
+## [0.0.71] - 2026-10-27
 
-- Compact Mode after your test: rows one pixel taller with the label centered, a darker row background and a lighter
-  hover that stands out from the lines (0.0.71).
+The tag tree's Compact Mode, RustView's context menu on the tree's free space and a real Refresh Tag Tree.
 
 ### Added
 
-- Compact Mode for the tag tree: dense rows that share one line, in PyCutRv's font size, with the same colors, marks,
-  lock look, expand buttons and indentation; text, lines and symbols sit on whole pixels and stay sharp. Right-click the
-  tree's free space and choose "Compact Mode" ("Normal Mode" switches back), or use Settings > RustView > Tags and
-  rating > Compact tag tree. The choice is kept (new setting `rustview.compact_tree`, off by default; older
-  `config.toml` files load unchanged, no migration). Normal Mode looks exactly as before (0.0.70).
+- Compact Mode for the tag tree: dense rows that share one line, in PyCutRv's font size, with the same marks, lock look,
+  expand buttons and indentation, a slightly darker row background and a lighter hover; text, lines and symbols sit on
+  whole pixels and stay sharp. Right-click the tree's free space and choose "Compact Mode" ("Normal Mode" switches
+  back), or use Settings > RustView > Tags and rating > Compact tag tree. The choice is kept (new setting
+  `rustview.compact_tree`, off by default; older `config.toml` files load unchanged, no migration). Normal Mode looks
+  exactly as before (0.0.70, tuned after your test in 0.0.71).
 - The tag tree's free space has RustView's context menu: Expand All, Collapse All, Refresh Tag Tree and the mode switch
   (RustCut never adds tags, so there is no "Add Root Tag"). Refresh Tag Tree asks RustView for its tags now and changes
   the tree only when they differ, in place: the chosen, locked and expanded tags that still exist stay (0.0.70).
@@ -1024,7 +1024,8 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.69...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.71...HEAD
+[0.0.71]: https://github.com/vommie/rustcut/compare/v0.0.69...v0.0.71
 [0.0.69]: https://github.com/vommie/rustcut/compare/v0.0.68...v0.0.69
 [0.0.68]: https://github.com/vommie/rustcut/compare/v0.0.66...v0.0.68
 [0.0.66]: https://github.com/vommie/rustcut/compare/v0.0.60...v0.0.66
