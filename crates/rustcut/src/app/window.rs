@@ -7,6 +7,7 @@ use az::CheckedAs as _;
 use rustcut_core::app_identity::{APP_ID, APP_NAME, BINARY_NAME};
 use rustcut_core::settings::WindowState;
 use slint::ComponentHandle as _;
+use slint::winit_030::WinitWindowAccessor as _;
 use slint::winit_030::winit::window::WindowAttributes;
 
 use crate::MainWindow;
@@ -58,6 +59,55 @@ pub fn restore(window: &MainWindow, state: &WindowState) {
     if state.maximized {
         w.set_maximized(true);
     }
+}
+
+/// How often and how long a restored maximized state is asked for again after the window is shown.
+const MAXIMIZE_RETRY: std::time::Duration = std::time::Duration::from_millis(40);
+const MAXIMIZE_TRIES: u32 = 35;
+
+/// A maximized state asked for before the window exists does not survive on X11 (KWin maps the window at its
+/// restored size; checked 2026-10-27, the user's question): after `show` it is asked for again until the window
+/// reports it (RustView does the same). The returned timer must be kept; it stops itself.
+pub fn keep_maximized(window: &MainWindow, state: &WindowState) -> Option<std::rc::Rc<slint::Timer>> {
+    if !state.maximized {
+        return None;
+    }
+    let timer = std::rc::Rc::new(slint::Timer::default());
+    let own = std::rc::Rc::downgrade(&timer);
+    let weak = window.as_weak();
+    let tries = std::cell::Cell::new(0_u32);
+    timer.start(slint::TimerMode::Repeated, MAXIMIZE_RETRY, move || {
+        let stop = || {
+            if let Some(t) = own.upgrade() {
+                t.stop();
+            }
+        };
+        let Some(main) = weak.upgrade() else {
+            stop();
+            return;
+        };
+        let n = tries.get().saturating_add(1);
+        tries.set(n);
+        // Slint's own `is_maximized` is the state it was asked for, and it forwards a request only once: ask winit.
+        let maximized = main
+            .window()
+            .with_winit_window(|w| {
+                let now = w.is_maximized();
+                if !now && n <= MAXIMIZE_TRIES {
+                    w.set_maximized(true);
+                }
+                now
+            })
+            .unwrap_or(false);
+        if maximized {
+            tracing::info!(tries = n, "[App] Window maximized as restored");
+            stop();
+        } else if n > MAXIMIZE_TRIES {
+            tracing::warn!("[App] The window manager did not maximize the restored window");
+            stop();
+        }
+    });
+    Some(timer)
 }
 
 /// The window's geometry while it is still shown (at quit, before the event loop ends). A maximized or minimized window
