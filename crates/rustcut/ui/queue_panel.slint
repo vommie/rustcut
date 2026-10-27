@@ -4,6 +4,7 @@
 // actions for the selected jobs. Several jobs can be selected (Ctrl, Shift), dragged to another place, and reached
 // through the context menu (the empty space has its own); removing and canceling are held (hold.slint, Q-Q4).
 
+import { ListView } from "std-widgets.slint";
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { IconButton, UpDownButton } from "controls.slint";
@@ -56,6 +57,8 @@ component TotalSymbol inherits Rectangle {
 
 export component QueuePanel inherits Rectangle {
     property <length> row-step: Queue.row-height + 2px;
+    // The list's whole height (every row has the same pitch).
+    property <length> content-height: Queue.rows.length * root.row-step;
     // The pointer of a drag, from the list's top edge (the edge scrolling asks with it).
     property <length> drag-pointer;
 
@@ -200,47 +203,52 @@ export component QueuePanel inherits Rectangle {
                 Queue.width-changed(self.width);
             }
 
-            flick := Flickable {
-                content-height: list.preferred-height;
-                // While jobs are dragged the list does not take the gesture for scrolling (the edges scroll it).
-                interactive: !Queue.dragging;
-
+            // A ListView creates only the rows in view (review 2: hundreds of jobs; measured in ~/claude/slint-lab:
+            // 0.6 ms per frame with 10 000 rows, a plain `for` needed 96 ms). It does not pan with a mouse drag, so a
+            // drag of jobs keeps the pointer.
+            flick := ListView {
                 // A jump mark reached a job of this list: it scrolls into view (`jump.slint`).
                 property <int> jump: Jump.target-serial;
                 changed jump => {
-                    if Jump.inside(self.absolute-position.x, self.width, self.absolute-position.y + self.content-y, self.content-height) {
-                        self.content-y = Jump.scroll-to(self.absolute-position.y + self.content-y, self.content-y, self.height, self.content-height);
+                    if Jump.inside(self.absolute-position.x, self.width, self.absolute-position.y + self.content-y, root.content-height) {
+                        self.content-y = Jump.scroll-to(self.absolute-position.y + self.content-y, self.content-y, self.visible-height, root.content-height);
                     }
                 }
 
-                list := VerticalLayout {
-                    alignment: start;
-                    spacing: 2px;
+                // The rows never grow wider than the list (a long name is cut, the state stays visible).
+                horizontal-scrollbar-policy: always-off;
 
-                    for job[i] in Queue.rows: QueueRow {
+                for job[i] in Queue.rows: Rectangle {
+                    width: flick.visible-width;
+                    height: root.row-step;
+
+                    QueueRow {
+                        x: 0;
+                        y: 0;
+                        width: parent.width;
                         job: job;
                         index: i;
                         drag-shift: i < Queue.drag-shifts.length ? Queue.drag-shifts[i] : 0px;
                         lifted: Queue.dragging && job.selected;
                         // Drag & drop (P9.4): window coordinates turn into the list's content coordinates.
                         drag-started(y) => {
-                            Queue.drag-start(i, y - list.absolute-position.y, root.row-step, Queue.row-height);
+                            Queue.drag-start(i, y - flick.absolute-position.y - flick.content-y, root.row-step, Queue.row-height);
                         }
                         drag-moved(y) => {
                             root.drag-pointer = y - flick.absolute-position.y;
-                            Queue.drag-move(y - list.absolute-position.y);
+                            Queue.drag-move(y - flick.absolute-position.y - flick.content-y);
                         }
                         drag-ended => { Queue.drag-end(); }
                     }
                 }
+            }
 
-                // Where the dragged jobs would land (the other rows moved aside).
-                if Queue.dragging: DropGap {
-                    x: 4px;
-                    y: Queue.drag-gap-y;
-                    width: parent.width - 8px;
-                    height: Math.max(0px, Queue.drag-gap-height - 2px);
-                }
+            // Where the dragged jobs would land (the other rows moved aside).
+            if Queue.dragging: DropGap {
+                x: 4px;
+                y: Queue.drag-gap-y + flick.content-y;
+                width: parent.width - 8px;
+                height: Math.max(0px, Queue.drag-gap-height - 2px);
             }
 
             // The dragged jobs under the pointer.
@@ -259,8 +267,8 @@ export component QueuePanel inherits Rectangle {
                 interval: 16ms;
                 running: Queue.dragging;
                 triggered => {
-                    let step = DragLogic.scroll-step(root.drag-pointer, flick.height);
-                    let to = Math.max(Math.min(0px, flick.height - flick.content-height),
+                    let step = DragLogic.scroll-step(root.drag-pointer, flick.visible-height);
+                    let to = Math.max(Math.min(0px, flick.visible-height - root.content-height),
                         Math.min(0px, flick.content-y - step));
                     // Only a real move: setting the same place again would end the row's pointer grab.
                     if to != flick.content-y {
@@ -282,7 +290,7 @@ export component QueuePanel inherits Rectangle {
 
             // Below the rows: a click clears the selection, a right click opens the menu for every job.
             TouchArea {
-                y: list.preferred-height + flick.content-y;
+                y: root.content-height + flick.content-y;
                 height: Math.max(0px, parent.height - self.y);
                 pointer-event(event) => {
                     if event.kind == PointerEventKind.down && event.button == PointerEventButton.right {
