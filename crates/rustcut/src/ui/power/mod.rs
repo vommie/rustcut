@@ -13,7 +13,7 @@ use std::rc::{Rc, Weak};
 use std::time::Duration;
 
 use rustcut_core::queue::QueueCommand;
-use rustcut_core::settings::{QueuePanelState, Settings, WhenDone};
+use rustcut_core::settings::{QueuePanelState, Settings, TaskbarShows, WhenDone};
 use slint::ComponentHandle as _;
 
 use self::state::{CHOICES, Countdown, Tick};
@@ -42,6 +42,8 @@ pub struct PowerBridge {
     /// `queue.when_done_countdown_secs`, `general.confirm_quit_while_rendering`.
     seconds: Cell<u8>,
     confirm: Cell<bool>,
+    /// `desktop.taskbar_shows`: what the taskbar entry's bar follows.
+    taskbar_shows: Cell<TaskbarShows>,
     /// "3 jobs finished." while the countdown runs.
     done_text: RefCell<String>,
     /// What the desktop actor was told last.
@@ -79,6 +81,7 @@ impl PowerBridge {
             quit_after: Cell::new(false),
             seconds: Cell::new(settings.queue.when_done_countdown_secs),
             confirm: Cell::new(settings.general.confirm_quit_while_rendering),
+            taskbar_shows: Cell::new(settings.desktop.taskbar_shows),
             done_text: RefCell::default(),
             rendering: Cell::new(false),
             badge: Cell::new(Badge::NONE),
@@ -114,6 +117,7 @@ impl PowerBridge {
     pub fn apply_settings(&self, settings: &Settings) {
         self.seconds.set(settings.queue.when_done_countdown_secs);
         self.confirm.set(settings.general.confirm_quit_while_rendering);
+        self.taskbar_shows.set(settings.desktop.taskbar_shows);
         let _ = self.desktop.send(DesktopCommand::Settings {
             inhibit: settings.desktop.inhibit_sleep,
             taskbar: settings.desktop.taskbar_progress,
@@ -174,7 +178,7 @@ impl PowerBridge {
         if rendering != self.rendering.replace(rendering) {
             let _ = self.desktop.send(DesktopCommand::Rendering(rendering));
         }
-        let badge = state::badge(&status);
+        let badge = state::badge(&status, self.taskbar_shows.get());
         if badge != self.badge.replace(badge) {
             let _ = self.desktop.send(DesktopCommand::Badge(badge));
         }

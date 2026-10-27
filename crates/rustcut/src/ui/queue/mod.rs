@@ -82,6 +82,8 @@ pub struct QueueStatus {
     /// Jobs put on hold.
     pub held: usize,
     pub overall: Option<Overall>,
+    /// The progress of the render that started first among those that run or are paused (0 to 1; the taskbar).
+    pub current: Option<f64>,
 }
 
 /// What the panel arranged (UI thread).
@@ -420,5 +422,11 @@ fn status_of(view: &QueueView) -> QueueStatus {
             .count(),
         held: kinds().filter(|k| *k == JobStateKind::Held).count(),
         overall: view.overall(),
+        current: view
+            .rows
+            .iter()
+            .filter(|r| r.state.kind().is_active())
+            .min_by_key(|r| (r.started_at.unwrap_or(i64::MAX), r.id.0))
+            .map(|r| view.progress.get(&r.id).map_or(0.0, JobProgress::fraction)),
     }
 }
