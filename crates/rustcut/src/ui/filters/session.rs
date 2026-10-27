@@ -1,5 +1,5 @@
-//! The crop being edited on the video (pure, tested with the state): the edit mode with handles, or the quick mode while
-//! Ctrl is held; hovering, grabbing and dragging go through the [`CropView`](super::geometry::CropView) geometry. The
+//! The crop being edited on the video (pure, tested with the state): the edit mode with handles, or the quick mode of the
+//! Quick crop key (F4); hovering, grabbing and dragging go through the [`CropView`](super::geometry::CropView) geometry. The
 //! ratio button on the crop (P9.14, RustView's crop tool) goes through the presets of Settings > Filters and places
 //! each like the crop the user made (`placement.rs`); a drag is free, with Shift it keeps the proportions.
 
@@ -14,7 +14,7 @@ use super::state::FiltersState;
 pub enum CropMode {
     /// Started with the button or the key: precise handles, the kept area moves; Enter keeps, Escape restores.
     Edit,
-    /// While Ctrl is held over the video: the nearest edge or corner follows the pointer, no aiming needed.
+    /// Started by the Quick crop key (F4): the nearest edge or corner follows the pointer, no aiming needed.
     Quick,
     /// The Crop menu's "pick the border color": the whole frame shows, a click picks the color under the pointer
     /// (P9.14, D-P9l); Escape cancels.
@@ -109,7 +109,7 @@ impl FiltersState {
     }
 
     /// Ends the session: `keep` = the edited crop stays, else the crop from the start comes back.
-    /// A session that changed nothing leaves the filter as it was (holding Ctrl alone does not switch the crop on).
+    /// A session that changed nothing leaves the filter as it was (a quick crop without a drag does not switch the crop on).
     pub fn end_crop(&mut self, keep: bool) {
         if let Some(session) = self.crop.take() {
             let (crop, enabled) = session.original;

@@ -10,7 +10,7 @@ use tokio::sync::broadcast::error::RecvError;
 use super::{TagPanel, TagsBridge, tag_id, with_bridge};
 use crate::ui::dispatcher::UiDispatcher;
 use crate::ui::jump::JumpTarget;
-use crate::{MainWindow, TagRate};
+use crate::{MainWindow, Playback, TagRate};
 
 pub(super) fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
     let t = window.global::<TagRate<'_>>();
@@ -34,6 +34,18 @@ pub(super) fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
     on!(on_apply_edit, |b| b.apply_edit());
     on!(on_cancel_edit, |b| b.cancel_edit());
     on!(on_rating_clicked, |b, rating| b.change(|s| s.click_rating(rating)));
+    // Ctrl+0..5 (RustView's keys): the rating, and its digit in the middle of the video (the buttons show it themselves).
+    on!(on_rate_key, |b, rating| {
+        let Some(window) = b.window.upgrade() else { return };
+        let playback = window.global::<Playback<'_>>();
+        let Ok(rating) = u8::try_from(rating) else { return };
+        let mut rated = false;
+        b.change(|s| rated = s.rate_key(rating, playback.get_has_video()));
+        if rated {
+            tracing::info!(rating, "[Tags] Rating set by key");
+            crate::ui::player::flash(&playback, crate::ui::player::FlashKind::Rating(rating));
+        }
+    });
     on!(on_tag_clicked, |b, id| if let Some(id) = tag_id(id) {
         b.change(|s| s.click_tag(id));
     });
@@ -69,6 +81,10 @@ pub(super) fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
     on!(on_apply_last_rating, |b| b.change(TagPanel::apply_last_rating));
     on!(on_clear, |b| b.change(TagPanel::clear));
     on!(on_toggle_show_hidden, |b| b.change(TagPanel::toggle_show_hidden));
+    on!(on_toggle_search, |b| b.change(|s| {
+        s.search_shown = !s.search_shown;
+        tracing::info!(shown = s.search_shown, "[Tags] Tag filter field toggled");
+    }));
     on!(on_toggle_active, |b| b.toggle_active());
     on!(on_open_filter, |b| b.open_filter());
     on!(on_toggle_warn, |b| b.toggle_warn());

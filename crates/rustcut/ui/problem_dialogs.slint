@@ -11,8 +11,8 @@ import { IconButton } from "controls.slint";
 import { SmoothScrollArea } from "smooth_scroll_view.slint";
 import { GlobalTooltip } from "tooltip.slint";
 import { ConflictOptionView } from "export_types.slint";
-import { DialogButton, DialogTabs, OptionRow } from "export_dialog_parts.slint";
-import { DialogFrame, DialogHeader, DialogState } from "dialog_frame.slint";
+import { DialogButton, OptionRow } from "export_dialog_parts.slint";
+import { DialogFrame, DialogHeader, DialogPanel, DialogState } from "dialog_frame.slint";
 
 export global Problems {
     // ---- A file from a newer RustCut.
@@ -135,102 +135,105 @@ export component NewerFileDialog inherits Rectangle {
                     text: Problems.newer-text;
                 }
 
-                if Problems.newer-tabs.length > 1: DialogTabs {
-                    tabs: Problems.newer-tabs;
+                // The tabs (when there are several) on the frame of their content (user decision 2026-10-27, A/B).
+                DialogPanel {
+                    vertical-stretch: 1;
+                    tabs: Problems.newer-tabs.length > 1 ? Problems.newer-tabs : [];
                     current: Problems.newer-tab;
+                    pad: 8px;
                     picked(index) => {
                         Problems.newer-set-tab(index);
                         keys.focus();
                     }
-                }
 
-                SmoothScrollArea {
-                    vertical-stretch: 1;
-                    content-width: self.width;
-                    content-height: body.preferred-height;
-                    scrollbar-size: 7px;
+                    SmoothScrollArea {
+                        vertical-stretch: 1;
+                        content-width: self.width;
+                        content-height: body.preferred-height;
+                        scrollbar-size: 7px;
 
-                    body := VerticalLayout {
-                        alignment: start;
-                        spacing: 4px;
-                        padding-right: 12px;
+                        body := VerticalLayout {
+                            alignment: start;
+                            spacing: 4px;
+                            padding-right: 12px;
 
-                        if Problems.newer-unknown-title != "": Rectangle {
-                            height: 26px;
-                            border-radius: 4px;
-                            background: unknown-touch.has-hover ? Theme.surface-hover : Theme.surface;
+                            if Problems.newer-unknown-title != "": Rectangle {
+                                height: 26px;
+                                border-radius: 4px;
+                                background: unknown-touch.has-hover ? Theme.surface-hover : Theme.surface-variant;
 
-                            unknown-touch := TouchArea {
-                                mouse-cursor: MouseCursor.pointer;
-                                clicked => {
-                                    Problems.newer-unknown-open = !Problems.newer-unknown-open;
+                                unknown-touch := TouchArea {
+                                    mouse-cursor: MouseCursor.pointer;
+                                    clicked => {
+                                        Problems.newer-unknown-open = !Problems.newer-unknown-open;
+                                        keys.focus();
+                                    }
+                                }
+
+                                HorizontalLayout {
+                                    padding-left: 8px;
+                                    spacing: 6px;
+
+                                    AppIcon {
+                                        y: (parent.height - self.height) / 2;
+                                        icon: Problems.newer-unknown-open ? IconId.chevron-down : IconId.chevron-right;
+                                        size: IconSize.sm;
+                                        color: Theme.primary;
+                                    }
+
+                                    Text {
+                                        text: Problems.newer-unknown-title;
+                                        color: Theme.primary;
+                                        font-size: 12px;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                            }
+
+                            // The unknown settings as a list (review 57, P9.3): one key per row with a bullet.
+                            if Problems.newer-unknown-open: Rectangle {
+                                border-radius: 4px;
+                                background: Theme.background;
+                                border-width: 1px;
+                                border-color: Theme.border;
+
+                                VerticalLayout {
+                                    padding: 6px;
+                                    padding-left: 10px;
+                                    spacing: 2px;
+
+                                    for key in Problems.newer-unknown: HorizontalLayout {
+                                        spacing: 8px;
+
+                                        Text {
+                                            text: "•";
+                                            color: Theme.text-muted;
+                                            font-size: 11px;
+                                            vertical-alignment: center;
+                                        }
+
+                                        Text {
+                                            horizontal-stretch: 1;
+                                            text: key;
+                                            color: Theme.text;
+                                            font-family: "monospace";
+                                            font-size: 11px;
+                                            vertical-alignment: center;
+                                            overflow: elide;
+                                        }
+                                    }
+                                }
+                            }
+
+                            for option in Problems.newer-options: OptionRow {
+                                option: option;
+                                selected: option.key == Problems.newer-selected;
+                                picked => {
+                                    Problems.newer-select(option.key);
                                     keys.focus();
                                 }
+                                confirmed => { Problems.newer-confirm(); }
                             }
-
-                            HorizontalLayout {
-                                padding-left: 8px;
-                                spacing: 6px;
-
-                                AppIcon {
-                                    y: (parent.height - self.height) / 2;
-                                    icon: Problems.newer-unknown-open ? IconId.chevron-down : IconId.chevron-right;
-                                    size: IconSize.sm;
-                                    color: Theme.primary;
-                                }
-
-                                Text {
-                                    text: Problems.newer-unknown-title;
-                                    color: Theme.primary;
-                                    font-size: 12px;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-
-                        // The unknown settings as a list (review 57, P9.3): one key per row with a bullet.
-                        if Problems.newer-unknown-open: Rectangle {
-                            border-radius: 4px;
-                            background: Theme.background;
-                            border-width: 1px;
-                            border-color: Theme.border;
-
-                            VerticalLayout {
-                                padding: 6px;
-                                padding-left: 10px;
-                                spacing: 2px;
-
-                                for key in Problems.newer-unknown: HorizontalLayout {
-                                    spacing: 8px;
-
-                                    Text {
-                                        text: "•";
-                                        color: Theme.text-muted;
-                                        font-size: 11px;
-                                        vertical-alignment: center;
-                                    }
-
-                                    Text {
-                                        horizontal-stretch: 1;
-                                        text: key;
-                                        color: Theme.text;
-                                        font-family: "monospace";
-                                        font-size: 11px;
-                                        vertical-alignment: center;
-                                        overflow: elide;
-                                    }
-                                }
-                            }
-                        }
-
-                        for option in Problems.newer-options: OptionRow {
-                            option: option;
-                            selected: option.key == Problems.newer-selected;
-                            picked => {
-                                Problems.newer-select(option.key);
-                                keys.focus();
-                            }
-                            confirmed => { Problems.newer-confirm(); }
                         }
                     }
                 }
@@ -306,27 +309,33 @@ export component QueueDatabaseDialog inherits Rectangle {
                     wrap: word-wrap;
                 }
 
-                SmoothScrollArea {
+                // The ways out in the dialogs' frame (user decision 2026-10-27, B).
+                DialogPanel {
                     vertical-stretch: 1;
-                    content-width: self.width;
-                    content-height: body.preferred-height;
-                    scrollbar-size: 7px;
+                    pad: 8px;
 
-                    body := VerticalLayout {
-                        alignment: start;
-                        spacing: 4px;
-                        padding-right: 12px;
+                    SmoothScrollArea {
+                        vertical-stretch: 1;
+                        content-width: self.width;
+                        content-height: body.preferred-height;
+                        scrollbar-size: 7px;
 
-                        for option in Problems.db-options: OptionRow {
-                            option: option;
-                            selected: option.key == Problems.db-selected;
-                            picked => {
-                                Problems.db-select(option.key);
-                                keys.focus();
-                            }
-                            confirmed => {
-                                if !Problems.db-busy {
-                                    Problems.db-confirm();
+                        body := VerticalLayout {
+                            alignment: start;
+                            spacing: 4px;
+                            padding-right: 12px;
+
+                            for option in Problems.db-options: OptionRow {
+                                option: option;
+                                selected: option.key == Problems.db-selected;
+                                picked => {
+                                    Problems.db-select(option.key);
+                                    keys.focus();
+                                }
+                                confirmed => {
+                                    if !Problems.db-busy {
+                                        Problems.db-confirm();
+                                    }
                                 }
                             }
                         }

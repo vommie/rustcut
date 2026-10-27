@@ -3,7 +3,7 @@
 // stops and the job starts again at the next start; review 55, P9.3). When the queue gets done while it is open, it says so and RustCut quits by
 // itself after a short countdown (Q-P3); "Stay" (Escape) keeps RustCut open.
 
-import { DialogFrame, DialogHeader, DialogState } from "dialog_frame.slint";
+import { DialogFrame, DialogHeader, DialogPanel, DialogState } from "dialog_frame.slint";
 import { Theme } from "styles.slint";
 import { IconId } from "icons.slint";
 import { DialogButton } from "export_dialog.slint";
@@ -93,10 +93,19 @@ export component QuitDialog inherits Rectangle {
                     icon: IconId.when-done;
                     title: Power.ask-loss ? "Jobs would be lost"
                         : Power.ask-done ? "Nothing to wait for anymore" : "Quit while rendering?";
-                    text: Power.ask-text;
                     closable: true;
                     close-tooltip: Power.ask-loss || Power.ask-done ? "Stay" : "Cancel";
                     close => { Power.keep(); }
+                }
+
+                // The words in the dialogs' frame (user decision 2026-10-27, B).
+                DialogPanel {
+                    Text {
+                        text: Power.ask-text;
+                        color: Theme.text-muted;
+                        font-size: 12px;
+                        wrap: word-wrap;
+                    }
                 }
 
                 HorizontalLayout {

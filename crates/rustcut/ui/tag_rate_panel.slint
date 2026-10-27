@@ -192,6 +192,17 @@ component LastRatingButton inherits Rectangle {
     }
 }
 
+/// A thin upright line between buttons of the toolbar.
+component ToolbarSeparator inherits VerticalLayout {
+    alignment: center;
+
+    Rectangle {
+        width: 1px;
+        height: 16px;
+        background: Theme.border;
+    }
+}
+
 /// The row under the history (PyCutRv's place, user decision Q-P8b): the last rating, the last tags and clearing on
 /// the left, the switches, the eye and the tag filter on the right; no text between them (P9.8).
 component TagToolbar inherits HorizontalLayout {
@@ -247,6 +258,19 @@ component TagToolbar inherits HorizontalLayout {
             : "No warning: jobs without tags or rating are saved without asking. A click switches it on.";
         clicked => { TagRate.toggle-warn(); }
     }
+
+    // The filter field above the tree: shown or hidden (its room goes to the tree), between two separators (user
+    // request 2026-10-27).
+    ToolbarSeparator { }
+
+    IconButton {
+        icon: TagRate.search-shown ? IconId.tags-search-shown : IconId.tags-search-hidden;
+        tooltip: TagRate.search-shown ? "Hide the tag filter field (the tree gets its room; the filter is off)"
+            : "Show the tag filter field above the tree";
+        clicked => { TagRate.toggle-search(); }
+    }
+
+    ToolbarSeparator { }
 
     // The eye only shows or hides the hidden tags; they are chosen in the tag filter (P9.8).
     IconButton {
@@ -321,8 +345,9 @@ export component TagRatePanel inherits Rectangle {
             rating-selected(r) => { TagRate.rating-clicked(r); }
         }
 
-        // The copied filter fills its parent; it is off while there is no tree to filter (P9.8).
-        Rectangle {
+        // The copied filter fills its parent; it is off while there is no tree to filter (P9.8). The toggle under the
+        // history hides it.
+        if TagRate.search-shown: Rectangle {
             height: 26px;
             opacity: root.closed ? 0.4 : 1;
 
@@ -338,7 +363,7 @@ export component TagRatePanel inherits Rectangle {
             }
         }
 
-        if TagRate.filter-invalid: Text {
+        if TagRate.search-shown && TagRate.filter-invalid: Text {
             text: "Not a valid regular expression: the filter matches it as plain text.";
             font-size: 10px;
             color: Theme.accent;

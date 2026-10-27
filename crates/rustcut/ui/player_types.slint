@@ -7,13 +7,15 @@ export global Playback {
     // A video frame is shown.
     in property <bool> has-video;
     in property <bool> paused: true;
+    // The faint pause symbol may show: paused by the user (not by a frame step, not at the end; PlaybackView).
+    in property <bool> pause-symbol;
     in property <bool> muted;
     // The keys of the transport buttons for their tooltips (the keymap's labels, src/ui/editor/).
     in property <string> key-toggle-pause;
     in property <string> key-frame-back;
     in property <string> key-frame-forward;
     in property <string> key-toggle-mute;
-    // Volume in percent (0-150).
+    // Volume in percent (0-100).
     in property <int> volume: 100;
     // Current and total time as H:MM:SS.mmm.
     in property <string> position-text: "0:00:00.000";
@@ -30,6 +32,17 @@ export global Playback {
     // setting "Flash a play or pause symbol" decides in Rust whether it is counted up), `flash-play` = the play symbol.
     in property <int> flash-serial;
     in property <bool> flash-play;
+    // What the flash shows (one look for every key's feedback, user request 2026-10-27): 0 play/pause (`flash-play`),
+    // 1 sound on, 2 sound off (the mute key), 3 a rating (`flash-rating`, Ctrl+0..5).
+    in property <int> flash-kind;
+    in property <int> flash-rating;
+    // Like RustView (user request 2026-10-27): the wheel over the video shows the volume bar near the bottom of the
+    // video; each new serial starts it again (hold 0.75 s, fade 0.25 s).
+    in property <int> volume-flash-serial;
+    // The settings of the other symbols over the video (Rust checks them before it counts a serial up).
+    in property <bool> show-mute-symbol: true;
+    in property <bool> show-rating-symbol: true;
+    in property <bool> show-volume-bar: true;
     // The setting "Keep the pause symbol while paused".
     in property <bool> keep-pause-symbol: true;
 

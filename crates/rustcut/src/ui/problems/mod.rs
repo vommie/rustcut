@@ -538,6 +538,7 @@ fn option(index: usize, title: &str, detail: &str, enabled: bool, recommended: b
         enabled,
         recommended,
         typed: false,
+        key_tint: 0,
     }
 }
 

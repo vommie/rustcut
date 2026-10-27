@@ -1,0 +1,88 @@
+// The volume bar over the video after the mouse wheel changed the volume, like RustView (user request 2026-10-27; not
+// after the transport bar's slider, which shows the level itself). A new serial starts it again: full strength for
+// 0.75 s, then it fades over 0.25 s (RustView's `media_feedback` pulse). The keys' symbols in the middle of the video
+// (play/pause, mute, rating) are `PlaySymbol` in player_view.slint.
+
+import { AppIcon, IconId } from "icons.slint";
+import { Playback } from "player_types.slint";
+
+/// Runs one pulse per new `serial`: `strength` is 1 while it holds and fades to 0.
+component Pulse {
+    in property <int> serial;
+    out property <float> strength: self.phase == 1 ? 1 : 0;
+    // 0 = over, 1 = holding, 2 = fading.
+    property <int> phase;
+
+    animate strength {
+        duration: self.phase == 2 ? 250ms : 0ms;
+        easing: linear;
+    }
+
+    changed serial => {
+        self.phase = 1;
+        // `restart()` alone does nothing on a stopped timer: start it, then time it from now.
+        hold.running = true;
+        hold.restart();
+    }
+
+    hold := Timer {
+        interval: 750ms;
+        running: false;
+        triggered => {
+            self.running = false;
+            root.phase = 2;
+        }
+    }
+}
+
+/// The volume bar over the lower part of the video: the speaker on a dark square, a gap and the flat bar with the
+/// level, semi-transparent; the fill is dimmed while muted. RustView's sizes: 24 px high, the bar 240 px, never wider
+/// than half the video, 12 % of the height above the bottom.
+export component VolumeFeedback inherits Rectangle {
+    // The video area it lies in.
+    in property <length> area-width;
+    in property <length> area-height;
+
+    property <length> bar-height: 24px;
+    property <length> gap: 4px;
+    property <length> total: Math.min(self.bar-height + self.gap + 240px, Math.floor(root.area-width / 2 / 1px) * 1px);
+    property <length> bar-width: self.total - self.bar-height - self.gap;
+
+    pulse := Pulse {
+        serial: Playback.volume-flash-serial;
+    }
+
+    x: Math.round((root.area-width - self.total) / 2 / 1px) * 1px;
+    y: Math.round((root.area-height - Math.max(root.area-height * 0.12, 24px) - self.bar-height) / 1px) * 1px;
+    width: self.total;
+    height: self.bar-height;
+    visible: pulse.strength > 0 && self.bar-width >= 2 * self.bar-height;
+    opacity: pulse.strength;
+
+    Rectangle {
+        x: 0;
+        width: root.bar-height;
+        background: #00000060;
+
+        AppIcon {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            icon: Playback.muted || Playback.volume == 0 ? IconId.volume-off
+                : Playback.volume < 50 ? IconId.volume-low : IconId.volume;
+            size: 19px;
+            color: #ffffffa0;
+        }
+    }
+
+    Rectangle {
+        x: root.bar-height + root.gap;
+        width: root.bar-width;
+        background: #00000060;
+
+        Rectangle {
+            x: 0;
+            width: Math.round(root.bar-width * Math.clamp(Playback.volume / 100, 0, 1) / 1px) * 1px;
+            background: Playback.muted ? #ffffff50 : #ffffffa0;
+        }
+    }
+}

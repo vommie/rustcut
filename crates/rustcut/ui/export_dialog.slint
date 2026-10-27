@@ -12,8 +12,8 @@ import { IconButton, MiddleText } from "controls.slint";
 import { SmoothScrollArea } from "smooth_scroll_view.slint";
 import { GlobalTooltip, TooltipArea } from "tooltip.slint";
 import { Export } from "export_types.slint";
-import { DialogButton, DialogTabs, OptionRow, PreviewPicture, PreviewRow, SimilarGroup } from "export_dialog_parts.slint";
-import { DialogFrame, DialogHeader, DialogState } from "dialog_frame.slint";
+import { DialogButton, OptionRow, PreviewPicture, PreviewRow, SimilarGroup } from "export_dialog_parts.slint";
+import { DialogFrame, DialogHeader, DialogPanel, DialogState } from "dialog_frame.slint";
 
 export { DialogButton }
 
@@ -23,7 +23,7 @@ component FactBlock inherits Rectangle {
     in property <color> tint: Theme.text-muted;
 
     border-radius: 5px;
-    background: Theme.surface;
+    background: Theme.surface-variant;
     border-width: 1px;
     border-color: Theme.border;
 
@@ -85,7 +85,7 @@ component QueuedJobs inherits FactBlock {
 /// The existing file: its picture and what it is, the buttons on the right (review 50 #5, P9.3).
 component ExistingFile inherits Rectangle {
     border-radius: 5px;
-    background: Theme.surface;
+    background: Theme.surface-variant;
     border-width: 1px;
     border-color: Theme.border;
 
@@ -212,7 +212,8 @@ export component ConflictDialog inherits Rectangle {
             area-width: root.width;
             area-height: root.height;
             default-width: 680px;
-            default-height: 560px;
+            // The Decision tab with four choices fits without a scroll bar (user review 2026-10-27; it was 560 px).
+            default-height: 512px;
             least-width: 520px;
             least-height: 360px;
             stored-width <=> DialogState.conflict-width;
@@ -263,85 +264,98 @@ export component ConflictDialog inherits Rectangle {
                     }
                 }
 
-                DialogTabs {
+                // The tabs on the frame of their content (user decision 2026-10-27, A). The tab: laid out from the
+                // top, free space below; it scrolls (with a visible bar) when the dialog is smaller than what it shows.
+                // Its size never changes the dialog's.
+                DialogPanel {
+                    vertical-stretch: 1;
                     tabs: Export.dialog-tabs;
                     current: Export.dialog-tab;
+                    pad: 8px;
                     picked(index) => {
                         GlobalTooltip.hide-cold();
                         Export.dialog-set-tab(index);
                         keys.focus();
                     }
-                }
 
-                // The tab: laid out from the top, free space below; it scrolls (with a visible bar) when the dialog is
-                // smaller than what it shows. Its size never changes the dialog's.
-                tab-area := SmoothScrollArea {
-                    vertical-stretch: 1;
-                    content-width: self.width;
-                    content-height: tab-content.preferred-height;
-                    scrollbar-size: 7px;
+                    tab-area := SmoothScrollArea {
+                        vertical-stretch: 1;
+                        content-width: self.width;
+                        content-height: tab-content.preferred-height;
+                        scrollbar-size: 7px;
 
-                    tab-content := VerticalLayout {
-                        alignment: start;
-                        spacing: 8px;
-                        // Room for the scroll bar (a padding that followed it would loop through the height).
-                        padding-right: 12px;
+                        tab-content := VerticalLayout {
+                            alignment: start;
+                            spacing: 8px;
+                            // Room for the scroll bar (a padding that followed it would loop through the height).
+                            padding-right: 12px;
 
-                        if Export.dialog-tab-kind == 0 && Export.dialog-has-existing: ExistingFile { }
+                            if Export.dialog-tab-kind == 0 && Export.dialog-has-existing: ExistingFile { }
 
-                        if Export.dialog-tab-kind == 0 && !Export.dialog-has-existing && Export.dialog-jobs.length > 0:
-                            QueuedJobs { }
+                            if Export.dialog-tab-kind == 0 && !Export.dialog-has-existing && Export.dialog-jobs.length > 0:
+                                QueuedJobs { }
 
-                        if Export.dialog-tab-kind == 0 && Export.dialog-browse && !Export.dialog-has-existing
-                            && Export.dialog-jobs.length == 0: Text {
-                            text: "No file has this name yet.";
-                            color: Theme.text-muted;
-                            font-size: 12px;
-                        }
-
-                        if Export.dialog-tab-kind == 0 && !Export.dialog-browse: VerticalLayout {
-                            spacing: 2px;
-
-                            Text {
-                                text: "Save the job as";
+                            if Export.dialog-tab-kind == 0 && Export.dialog-browse && !Export.dialog-has-existing
+                                && Export.dialog-jobs.length == 0: Text {
+                                text: "No file has this name yet.";
                                 color: Theme.text-muted;
-                                font-size: 11px;
-                                font-weight: 600;
+                                font-size: 12px;
                             }
 
-                            for option in Export.dialog-tab-options: OptionRow {
-                                option: option;
-                                selected: option.key == Export.dialog-selected;
-                                typed: Export.dialog-typed;
-                                picked => { Export.dialog-select(option.key); }
-                                confirmed => { Export.dialog-confirm(); }
-                                typed-changed(text) => { Export.dialog-type(text); }
+                            if Export.dialog-tab-kind == 0 && !Export.dialog-browse: VerticalLayout {
+                                spacing: 2px;
+
+                                Text {
+                                    text: "Save the job as";
+                                    color: Theme.text-muted;
+                                    font-size: 11px;
+                                    font-weight: 600;
+                                }
+
+                                // A subtle line between the choices (user review 2026-10-27).
+                                for option[index] in Export.dialog-tab-options: VerticalLayout {
+                                    spacing: 2px;
+
+                                    if index > 0: Rectangle {
+                                        height: 1px;
+                                        background: Theme.border.with-alpha(0.6);
+                                    }
+
+                                    OptionRow {
+                                        option: option;
+                                        selected: option.key == Export.dialog-selected;
+                                        typed: Export.dialog-typed;
+                                        picked => { Export.dialog-select(option.key); }
+                                        confirmed => { Export.dialog-confirm(); }
+                                        typed-changed(text) => { Export.dialog-type(text); }
+                                    }
+                                }
                             }
-                        }
 
-                        if Export.dialog-tab-kind == 2 && Export.dialog-series.length > 0: SimilarGroup {
-                            title: "Numbered like this name";
-                            count-badge: Export.dialog-series.length;
-                            files: Export.dialog-series;
-                            picture-width: Export.dialog-tile-width * 1px;
-                            is-collapsed <=> DialogState.conflict-series-folded;
-                        }
-
-                        if Export.dialog-tab-kind == 2 && Export.dialog-others.length > 0: SimilarGroup {
-                            title: Export.dialog-others-title;
-                            count-badge: Export.dialog-others.length;
-                            files: Export.dialog-others;
-                            picture-width: Export.dialog-tile-width * 1px;
-                            is-collapsed <=> DialogState.conflict-others-folded;
-                        }
-
-                        if Export.dialog-tab-kind == 3: QueuedJobs { }
-
-                        if Export.dialog-tab-kind == 4: VerticalLayout {
-                            for file[index] in Export.dialog-known: PreviewRow {
-                                preview: file;
+                            if Export.dialog-tab-kind == 2 && Export.dialog-series.length > 0: SimilarGroup {
+                                title: "Numbered like this name";
+                                count-badge: Export.dialog-series.length;
+                                files: Export.dialog-series;
                                 picture-width: Export.dialog-tile-width * 1px;
-                                separated: index > 0;
+                                is-collapsed <=> DialogState.conflict-series-folded;
+                            }
+
+                            if Export.dialog-tab-kind == 2 && Export.dialog-others.length > 0: SimilarGroup {
+                                title: Export.dialog-others-title;
+                                count-badge: Export.dialog-others.length;
+                                files: Export.dialog-others;
+                                picture-width: Export.dialog-tile-width * 1px;
+                                is-collapsed <=> DialogState.conflict-others-folded;
+                            }
+
+                            if Export.dialog-tab-kind == 3: QueuedJobs { }
+
+                            if Export.dialog-tab-kind == 4: VerticalLayout {
+                                for file[index] in Export.dialog-known: PreviewRow {
+                                    preview: file;
+                                    picture-width: Export.dialog-tile-width * 1px;
+                                    separated: index > 0;
+                                }
                             }
                         }
                     }

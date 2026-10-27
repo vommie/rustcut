@@ -11,7 +11,7 @@ use super::model::{DockLayout, GroupRef, PanelId, Side};
 use super::plan::{DockFrame, Hit, Rect, Resize, hit_test, metrics};
 use super::view::{self, DraggedTab};
 use crate::util::model::sync;
-use crate::{Dock, DockCardView, DockGroupView, DockMetrics, DockRailItem, DockTabView, MainWindow};
+use crate::{Dock, DockCardView, DockGroupView, DockMetrics, DockRailItem, DockTabView, MainWindow, RailPeek};
 
 /// The center keeps at least this width when a sidebar is widened (logical pixels, matches `min-width` in main.slint).
 const CENTER_MIN_WIDTH: f32 = 240.0;
@@ -144,6 +144,10 @@ impl DockBridge {
         dock.set_right_shown(layout.right.is_shown());
         dock.set_left_collapsed(layout.left.collapsed);
         dock.set_right_collapsed(layout.right.collapsed);
+        let pin = |s: &super::model::Sidebar| s.pinned_group().and_then(|g| i32::try_from(g).ok()).unwrap_or(-1);
+        let peek = window.global::<RailPeek<'_>>();
+        peek.set_pin_left(pin(&layout.left));
+        peek.set_pin_right(pin(&layout.right));
 
         dock.set_dragging(state.drag.is_some());
         let highlight = state.drag.and_then(|d| d.hit).map(|h| h.highlight);
@@ -310,6 +314,14 @@ fn connect(dock: &Dock<'_>, bridge: &Rc<DockBridge>) {
         let collapsed = l.sidebar(side).collapsed;
         l.set_sidebar_collapsed(side, !collapsed);
     }));
+    // A rail icon held: its group stays over the video (or nothing, -1), remembered per side.
+    on!(on_pin_changed, |b, side, group| {
+        tracing::info!(side, group, "[Dock] Rail group held");
+        b.update(|l| {
+            l.sidebar_mut(to_side(side))
+                .set_pinned_group(usize::try_from(group).ok())
+        });
+    });
     // A rail icon shows its panel in the sidebar over the video (P9.9: the rail's own expand button expands it).
     on!(on_rail_clicked, |b, side, key| {
         match PanelId::from_key(&key) {

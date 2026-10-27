@@ -306,10 +306,12 @@ impl ConflictDialog {
             None => (variant, None),
         };
         self.primary_free = primary.choice;
+        // The free names first, then the typed one, the ways that keep the taken name last (user review 2026-10-27:
+        // Next free number, Add "(n)", Own name, Overwrite).
         let mut options = vec![primary];
-        options.extend(self.decision_options(stem));
         options.extend(secondary);
         options.push(rename);
+        options.extend(self.decision_options(stem));
         options
     }
 

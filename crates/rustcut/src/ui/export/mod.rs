@@ -30,7 +30,7 @@ use rustcut_core::settings::{AutoSection, ConflictDialogSettings, ExportPanelSta
 use rustcut_core::time::Timestamp;
 use slint::ComponentHandle as _;
 
-pub use check::{At, CardCheck, CardInput, Level as CheckLevel, card_check};
+pub use check::{At, CardCheck, CardInput, Level as CheckLevel, card_check, earlier_in_series};
 pub use dialog::{
     Choice, ConflictDialog, DialogInput, DialogOption, KnownFile, KnownFiles, Outcome, Tab, silent_outcome,
 };
@@ -296,6 +296,13 @@ impl ExportBridge {
         let warnings = self.warnings.borrow();
         let fallback = rustcut_core::naming::NameError::Empty;
         let job = self.job_problem(facts.as_ref().map_or(0, |f| f.sections));
+        // Auto-iterate saves each job with the next number: the earlier ones of the series are the jobs just saved.
+        let quiet = match (&facts, &scan, st.active_counter()) {
+            (Some(facts), Some(scan), Some(current)) if st.auto_increment && st.template_uses_counter() => {
+                earlier_in_series(&scan.names, current, |n| st.stem_with(facts, Some(n)).ok())
+            }
+            _ => Vec::new(),
+        };
         let line = card_check(&CardInput {
             source: st.source.as_deref(),
             folder: folder.as_deref(),
@@ -308,6 +315,7 @@ impl ExportBridge {
             scan: scan.as_ref(),
             queue: &queue,
             warnings: &warnings,
+            quiet: &quiet,
         });
         let e = window.global::<Export<'_>>();
         e.set_has_source(st.source.is_some());

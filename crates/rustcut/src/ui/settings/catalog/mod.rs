@@ -147,8 +147,13 @@ mod tests {
         let hold = field("general.hold_to_confirm_ms").unwrap();
         assert_eq!(hold.apply(&mut s, Edit::Type("1500 ms".into())), Ok(true));
         assert_eq!(s.general.hold_to_confirm_ms, 1_500);
+        assert_eq!(
+            hold.apply(&mut s, Edit::Type("100".into())),
+            Ok(true),
+            "the shortest hold"
+        );
         assert!(
-            hold.apply(&mut s, Edit::Type("100".into())).is_err(),
+            hold.apply(&mut s, Edit::Type("50".into())).is_err(),
             "between 0 and the shortest hold"
         );
         assert_eq!(hold.apply(&mut s, Edit::Type("0".into())), Ok(true));

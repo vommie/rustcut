@@ -1,5 +1,5 @@
 //! The filters of the open video (pure, tested): the chain with every operation of the Filters card, what mpv's preview
-//! gets, and the crop session on the video (the edit mode with handles, or the quick mode while Ctrl is held).
+//! gets, and the crop session on the video (the edit mode with handles, or the quick mode of the Quick crop key).
 
 use rustcut_core::edit::{
     Crop, DeinterlaceRate, Deinterlacer, DeshakeParams, FieldParity, Filter, FilterChain, FilterKind,

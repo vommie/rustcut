@@ -12,6 +12,7 @@ mod connect;
 mod filter_window;
 mod hidden;
 mod history;
+mod history_view;
 mod state;
 mod switches;
 mod sync_notice;
@@ -30,6 +31,7 @@ use slint::{ComponentHandle as _, Model as _, ModelRc, VecModel};
 
 pub use hidden::{Check, FilterRow};
 pub use history::{TagHistoryItem, TagHistoryLayoutEngine, TagHistoryManager, TagHistoryRow};
+use history_view::{LastTags, history_item_view};
 pub use state::{Choice, Editing, TagPanel};
 pub use tree::{
     MAX_TAG_ITEM_WIDTH, MIN_TAG_ITEM_WIDTH, TAG_COLUMN_SPACING, TAG_ITEM_HEIGHT, TAG_PADDING_H, TAG_PADDING_V,
@@ -41,10 +43,7 @@ use crate::ui::dispatcher::UiDispatcher;
 use crate::ui::jump::JumpTarget;
 use crate::ui::notices::{self, Kind, Notice};
 use crate::util::model::sync_keyed;
-use crate::{
-    MainWindow, TagColumnView, TagFilterRowView, TagFilterWindow, TagHistoryItemModel, TagHistoryRowModel, TagNodeView,
-    TagRate,
-};
+use crate::{MainWindow, TagColumnView, TagFilterRowView, TagFilterWindow, TagHistoryRowModel, TagNodeView, TagRate};
 
 /// The tree area's height until the panel reports it, in logical pixels: RustView's start value
 /// (`AppState::tag_tree_available_height`), so the first columns are laid out like RustView's.
@@ -455,6 +454,7 @@ impl TagsBridge {
         t.set_compact(self.compact());
         t.set_empty_text(view::empty_text(&state, &connection).into());
         t.set_show_hidden(state.show_hidden);
+        t.set_search_shown(state.search_shown);
         t.set_eye_tooltip(view::eye_tooltip(&state).into());
         t.set_hidden_count(i32::try_from(state.hidden_count()).unwrap_or(i32::MAX));
         if t.get_filter_text() != state.filter.as_str() {
@@ -502,13 +502,19 @@ impl TagsBridge {
     }
 
     fn publish_history(&self) {
-        let items = self.state.borrow().history_items();
+        let (items, last) = {
+            let state = self.state.borrow();
+            (state.history_items(), LastTags::new(&state.last_tags))
+        };
         let (rows, _) = TagHistoryLayoutEngine::pack_into_rows(items, self.history_width.get());
         let rows: Vec<TagHistoryRowModel> = rows
             .into_iter()
             .map(|row| TagHistoryRowModel {
                 items: ModelRc::new(VecModel::from(
-                    row.items.into_iter().map(history_item_view).collect::<Vec<_>>(),
+                    row.items
+                        .into_iter()
+                        .map(|item| history_item_view(item, &last))
+                        .collect::<Vec<_>>(),
                 )),
             })
             .collect();
@@ -529,20 +535,6 @@ impl TagsBridge {
             self.history_width.set(width);
             self.publish_history();
         }
-    }
-}
-
-fn history_item_view(item: TagHistoryItem) -> TagHistoryItemModel {
-    TagHistoryItemModel {
-        id: i32::try_from(item.id).unwrap_or(i32::MAX),
-        name: item.name.into(),
-        display_text: item.display_text.into(),
-        is_assigned: item.is_assigned,
-        is_partial: item.is_partial,
-        is_bold: item.is_bold,
-        is_italic: item.is_italic,
-        width: item.width,
-        tooltip: item.tooltip.into(),
     }
 }
 

@@ -1,7 +1,6 @@
 // The parts of the conflict dialog (export_dialog.slint): footer buttons, a choice row, the tab bar, the picture of a
 // file with its placeholders and details, and the rows of the "Similar files" list (user decision Q-X6).
 
-import { TabStrip, TabView } from "tabs.slint";
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { TooltipArea } from "tooltip.slint";
@@ -106,14 +105,18 @@ export component OptionRow inherits Rectangle {
             alignment: center;
 
             Rectangle {
+                property <color> tint: root.option.key-tint == 1 ? Theme.status-ok
+                    : root.option.key-tint == 2 ? Theme.status-corrupt : transparent;
                 width: 16px;
                 height: 17px;
                 border-radius: 3px;
-                background: Theme.surface-selected.with-alpha(0.6);
+                background: root.option.key-tint == 0 ? Theme.surface-selected.with-alpha(0.6) : self.tint.with-alpha(0.22);
+                border-width: root.option.key-tint == 0 ? 0px : 1px;
+                border-color: self.tint.with-alpha(0.7);
 
                 Text {
                     text: root.option.key + 1;
-                    color: Theme.text-muted;
+                    color: root.option.key-tint == 0 ? Theme.text-muted : parent.tint;
                     font-size: 10px;
                     font-weight: 600;
                     horizontal-alignment: center;
@@ -231,23 +234,6 @@ export component OptionRow inherits Rectangle {
     }
 }
 
-/// The dialog's tabs (P9.15, Q-P9.15 scope A: the panels' browser-like tabs): a click shows one; counts are badges.
-export component DialogTabs inherits Rectangle {
-    in property <[TabView]> tabs;
-    in property <int> current;
-    callback picked(int);
-
-    height: strip.height;
-
-    strip := TabStrip {
-        width: parent.width;
-        tabs: root.tabs;
-        current: root.current;
-        bar: Theme.surface;
-        panel: Theme.surface-variant;
-        picked(index) => { root.picked(index); }
-    }
-}
 
 /// The picture of a file (16:9) with its placeholder while it is made, an icon and a short reason when there is none,
 /// and an "i" in the top right corner whose tooltip has the details (no number badge, review 49, P9.3). A click plays
@@ -361,8 +347,9 @@ export component PreviewRow inherits Rectangle {
     in property <bool> separated;
 
     height: Math.max(root.picture-width * 9 / 16 + 8px, row-layout.preferred-height);
+    // No highlight and no double click on the row itself: only the picture and the buttons act and light up (user
+    // review 2026-10-27).
     border-radius: 5px;
-    background: row-touch.has-hover ? Theme.surface-hover : transparent;
 
     if root.separated: Rectangle {
         x: 4px;
@@ -370,11 +357,6 @@ export component PreviewRow inherits Rectangle {
         width: parent.width - 8px;
         height: 1px;
         background: Theme.border.with-alpha(0.6);
-    }
-
-    // Hover shows the row; a double click plays the file (the picture and the buttons act on one click).
-    row-touch := TouchArea {
-        double-clicked => { Export.dialog-open-file(root.preview.group, root.preview.index, false); }
     }
 
     row-layout := HorizontalLayout {

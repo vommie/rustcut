@@ -1,11 +1,13 @@
-// The transport bar under the timeline: play/pause, frame steps, the current and the total time with the shuttle speed,
-// mute and volume (the timeline above it is the seek bar). Everything reads and calls the `Playback` global.
+// The transport bar under the timeline: play/pause, frame steps, the section buttons (start, end, add), then on the
+// right mute and volume and the current and the total time with the shuttle speed (the timeline above it is the seek
+// bar). Everything reads and calls the `Playback` and `Sections` globals.
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Playback } from "player_types.slint";
 import { PlayerSeekBar } from "player_seek_bar.slint";
 import { TooltipHost } from "tooltip.slint";
+import { Sections } from "sections_card.slint";
 
 component TransportButton inherits Rectangle {
     in property <IconId> icon;
@@ -116,21 +118,88 @@ export component PlayerTransport inherits Rectangle {
             }
         }
 
-        Rectangle { width: 6px; }
-
-        TimeLabel {
-            text: Playback.position-text;
+        // The sections without keys or the Sections card (user review 2026-10-27): start, end, add. Off without a
+        // video; Add only while the marks make a section of at least one frame (`Sections.can-add`).
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 1px;
+                height: 20px;
+                background: Theme.border;
+            }
         }
 
-        TimeLabel {
-            text: "/";
-            color: Theme.status-deleted;
+        VerticalLayout {
+            alignment: center;
+            TransportButton {
+                icon: IconId.section-mark-start;
+                enabled: Sections.has-media;
+                tooltip: "Set the section start here";
+                shortcut: Sections.key-set-start;
+                clicked => { Sections.set-mark(0); }
+            }
         }
 
-        TimeLabel {
-            text: Playback.duration-text;
-            color: Theme.text-muted;
+        VerticalLayout {
+            alignment: center;
+            TransportButton {
+                icon: IconId.section-mark-end;
+                enabled: Sections.has-media;
+                tooltip: "Set the section end here";
+                shortcut: Sections.key-set-end;
+                clicked => { Sections.set-mark(1); }
+            }
         }
+
+        VerticalLayout {
+            alignment: center;
+            TransportButton {
+                icon: IconId.section-add;
+                enabled: Sections.can-add;
+                tooltip: Sections.current-length == "" ? "Add the section" : "Add the section (" + Sections.current-length + ")";
+                shortcut: Sections.key-add;
+                clicked => { Sections.add(); }
+            }
+        }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        // On the right: the volume, then the times (user review 2026-10-27).
+        VerticalLayout {
+            alignment: center;
+            TransportButton {
+                icon: Playback.muted ? IconId.volume-muted : IconId.volume;
+                tooltip: Playback.muted ? "Sound on" : "Mute";
+                shortcut: Playback.key-toggle-mute;
+                clicked => { Playback.toggle-mute(); }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 0;
+            PlayerSeekBar {
+                width: 90px;
+                track-height: 3px;
+                knob-size: 10px;
+                value: Playback.volume / 100;
+                // It clings to 25, 50, 75 and 100 % (Ctrl drags freely; user review 2026-10-27).
+                snap-step: 0.25;
+                snap-range: 0.03;
+                changed(value, final) => { Playback.set-volume(Math.round(value * 100)); }
+            }
+        }
+
+        Text {
+            text: Playback.volume + "%";
+            width: 36px;
+            color: Playback.muted ? Theme.status-deleted : Theme.text-muted;
+            font-size: 11px;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+        }
+
+        Rectangle { width: 14px; }
 
         if Playback.speed-text != "": VerticalLayout {
             alignment: center;
@@ -151,39 +220,18 @@ export component PlayerTransport inherits Rectangle {
             }
         }
 
-        Rectangle { horizontal-stretch: 1; }
-
-        Rectangle { width: 10px; }
-
-        VerticalLayout {
-            alignment: center;
-            TransportButton {
-                icon: Playback.muted ? IconId.volume-muted : IconId.volume;
-                tooltip: Playback.muted ? "Sound on" : "Mute";
-                shortcut: Playback.key-toggle-mute;
-                clicked => { Playback.toggle-mute(); }
-            }
+        TimeLabel {
+            text: Playback.position-text;
         }
 
-        VerticalLayout {
-            alignment: center;
-            horizontal-stretch: 0;
-            PlayerSeekBar {
-                width: 90px;
-                track-height: 3px;
-                knob-size: 10px;
-                value: Playback.volume / 150;
-                changed(value, final) => { Playback.set-volume(Math.round(value * 150)); }
-            }
+        TimeLabel {
+            text: "/";
+            color: Theme.status-deleted;
         }
 
-        Text {
-            text: Playback.volume + "%";
-            width: 36px;
-            color: Playback.muted ? Theme.status-deleted : Theme.text-muted;
-            font-size: 11px;
-            vertical-alignment: center;
-            horizontal-alignment: right;
+        TimeLabel {
+            text: Playback.duration-text;
+            color: Theme.text-muted;
         }
     }
 }

@@ -1,5 +1,6 @@
 // A slim horizontal bar for a value from 0 to 1: the seek bar under the video and the volume bar. A click jumps to the
 // clicked spot (not a page step); dragging follows the mouse and shows the dragged value until the button is released.
+// With `snap-step` the dragged value clings to its multiples (not 0) within `snap-range`; Ctrl drags freely.
 
 import { Theme } from "styles.slint";
 
@@ -8,10 +9,15 @@ export component PlayerSeekBar inherits Rectangle {
     in property <bool> enabled: true;
     in property <length> track-height: 4px;
     in property <length> knob-size: 12px;
+    // Magnets: multiples of `snap-step` (0 = none) catch a value at most `snap-range` away (the volume: 25 % steps).
+    in property <float> snap-step: 0;
+    in property <float> snap-range: 0;
     // `final` is false while dragging, true when the button is released.
     callback changed(/* value */ float, /* final */ bool);
 
     property <bool> dragging;
+    // Ctrl was held at the pointer's last event (no magnets).
+    property <bool> free;
     property <float> drag-value;
     property <float> shown: Math.clamp(root.dragging ? root.drag-value : root.value, 0, 1);
     property <length> usable: Math.max(1px, root.width - root.knob-size);
@@ -19,8 +25,19 @@ export component PlayerSeekBar inherits Rectangle {
     min-width: 40px;
     height: 24px;
 
-    pure function at(x: length) -> float {
-        return Math.clamp((x - root.knob-size / 2) / root.usable, 0, 1);
+    pure function at(x: length, free: bool) -> float {
+        return root.snapped(Math.clamp((x - root.knob-size / 2) / root.usable, 0, 1), free);
+    }
+
+    pure function snapped(v: float, free: bool) -> float {
+        if free || root.snap-step <= 0 {
+            return v;
+        }
+        let magnet = Math.round(v / root.snap-step) * root.snap-step;
+        if magnet > 0 && Math.abs(v - magnet) <= root.snap-range {
+            return Math.min(magnet, 1);
+        }
+        return v;
     }
 
     track := Rectangle {
@@ -54,13 +71,14 @@ export component PlayerSeekBar inherits Rectangle {
         mouse-cursor: pointer;
 
         pointer-event(event) => {
+            root.free = event.modifiers.control;
             if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
                 root.dragging = true;
-                root.drag-value = root.at(self.mouse-x);
+                root.drag-value = root.at(self.mouse-x, event.modifiers.control);
                 root.changed(root.drag-value, false);
             }
             if event.button == PointerEventButton.left && event.kind == PointerEventKind.up && root.dragging {
-                root.drag-value = root.at(self.mouse-x);
+                root.drag-value = root.at(self.mouse-x, event.modifiers.control);
                 root.dragging = false;
                 root.changed(root.drag-value, true);
             }
@@ -68,7 +86,7 @@ export component PlayerSeekBar inherits Rectangle {
 
         moved => {
             if root.dragging && self.pressed {
-                root.drag-value = root.at(self.mouse-x);
+                root.drag-value = root.at(self.mouse-x, root.free);
                 root.changed(root.drag-value, false);
             }
         }

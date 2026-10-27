@@ -7,15 +7,15 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use regex::{Regex, RegexBuilder};
 use rustcut_core::job::{JobId, JobMetadata};
 use rustcut_core::rustview::{TagItem, TagTree};
 use rustcut_core::settings::TagPanelState;
 
 use super::hidden::Marks;
 use super::history::{TagHistoryItem, TagHistoryManager};
-use super::tree::{TagFlattenContext, TagTreeBuilder, TagTreeNode, descendants};
-use crate::TagNodeView;
+use super::tree::{TagTreeBuilder, TagTreeNode, descendants};
+
+mod filtering;
 
 /// Tags and rating of one job.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -88,6 +88,8 @@ pub struct TagPanel {
     pub editing: Option<Editing>,
     /// The eye (P9.8): the tree shows the hidden tags too, dimmed.
     pub show_hidden: bool,
+    /// The filter field shows; hidden, its text is kept but does not filter.
+    pub search_shown: bool,
     /// The "Active" switch (user decision Q-P8b): off = the next jobs are saved without RustView.
     pub active: bool,
     /// The tag filter window: its folded branches and its size.
@@ -119,6 +121,7 @@ impl TagPanel {
             },
             active: saved.active,
             show_hidden: saved.show_hidden,
+            search_shown: saved.search_shown,
             filter_collapsed: saved.filter_collapsed.iter().copied().collect(),
             filter_size: (saved.filter_width, saved.filter_height),
             history_size: TagPanelState::HISTORY_DEFAULT,
@@ -156,6 +159,7 @@ impl TagPanel {
             filter_width: self.filter_size.0,
             filter_height: self.filter_size.1,
             show_hidden: self.show_hidden,
+            search_shown: self.search_shown,
         };
     }
 
@@ -252,6 +256,16 @@ impl TagPanel {
         true
     }
 
+    /// Ctrl+0..5: chooses `rating` (a key never clears it, unlike a second click); `false` when nothing can be tagged now
+    /// (no video and no job edited, or "Active" off for the draft).
+    pub fn rate_key(&mut self, rating: u8, has_video: bool) -> bool {
+        let taggable = self.editing.is_some() || (has_video && self.active);
+        if taggable && rating <= 5 {
+            self.choice_mut().rating = Some(rating);
+        }
+        taggable && rating <= 5
+    }
+
     /// A click on a rating button: chooses it, or clears it when it was the chosen one.
     pub fn click_rating(&mut self, rating: i32) {
         let rating = u8::try_from(rating).ok().filter(|r| *r <= 5);
@@ -293,53 +307,6 @@ impl TagPanel {
         if !self.expanded.remove(&id) {
             self.expanded.insert(id);
         }
-    }
-
-    /// The eye: the hidden tags show in the tree (dimmed) or not.
-    pub fn toggle_show_hidden(&mut self) {
-        self.show_hidden = !self.show_hidden;
-    }
-
-    /// The filter as a regular expression (case-insensitive) when the regex switch is on; `Err` = it does not compile
-    /// and the text is matched as a substring (RustView's fallback).
-    pub fn filter_regex(&self) -> Result<Option<Regex>, regex::Error> {
-        let text = self.filter.trim();
-        if !self.regex || text.is_empty() {
-            return Ok(None);
-        }
-        RegexBuilder::new(text)
-            .case_insensitive(true)
-            .size_limit(1 << 20)
-            .build()
-            .map(Some)
-            .inspect_err(|e| {
-                tracing::debug!(error = %e, "[Tags] The tag filter is not a valid regular expression; matching as text");
-            })
-    }
-
-    /// The visible rows of the tree.
-    pub fn rows(&self) -> Vec<TagNodeView> {
-        let regex = self.filter_regex().ok().flatten();
-        let filter = self.filter.trim().to_lowercase();
-        let assigned: HashSet<u32> = self.choice().tags.iter().copied().collect();
-        let locked: HashSet<u32> = if self.editing.is_some() {
-            HashSet::new()
-        } else {
-            self.locked.iter().copied().collect()
-        };
-        let ctx = TagFlattenContext {
-            expanded_set: &self.expanded,
-            filter_text: &filter,
-            filter_regex: regex.as_ref(),
-            assigned: &assigned,
-            locked: &locked,
-            hidden: &self.marks.hidden,
-            shown: &self.marks.shown,
-            show_hidden: self.show_hidden,
-        };
-        let mut rows = Vec::new();
-        TagTreeBuilder::flatten(&self.forest, 0, &ctx, &mut rows);
-        rows
     }
 
     pub fn history_items(&self) -> Vec<TagHistoryItem> {
@@ -580,6 +547,11 @@ mod tests {
         p.filter = "(".into();
         assert!(p.filter_regex().is_err());
         assert!(p.rows().is_empty(), "matched as text: no tag holds a bracket");
+        p.search_shown = false;
+        assert!(
+            !p.rows().is_empty() && p.filter_regex().unwrap().is_none(),
+            "a hidden field does not filter"
+        );
 
         p.toggle_lock(2);
         p.history_height = 120;

@@ -13,7 +13,7 @@ use super::placement::DisplayRect;
 pub const GRAB: f32 = 8.0;
 /// Fewer shown pixels than this never stay in a direction (unless the frame itself is smaller).
 pub const MIN_KEPT: u32 = 16;
-/// With Ctrl held, the corner wins when the pointer is this close to the nearest edge of the other direction.
+/// In the quick crop, the corner wins when the pointer is this close to the nearest edge of the other direction.
 pub const CORNER_ZONE: f32 = 32.0;
 
 /// A rectangle in logical pixels of the video area.
@@ -91,7 +91,8 @@ pub struct CropView {
     sar: f64,
     /// Where the shown frame is in the video area (letterboxed like mpv).
     picture: Rect,
-    /// Dragged and placed crops keep an even width and height (the final size rule acts after every filter, Q-P9s).
+    /// The multiple a dragged or placed crop's size keeps: 1, whole pixels (user review 2026-10-27: "Divisible by" is
+    /// only the final size's rule, which acts after every filter, Q-P9s; drags were on even pixels before).
     multiple: u32,
 }
 
@@ -120,7 +121,7 @@ impl CropView {
                 width: w,
                 height: h,
             },
-            multiple: 2,
+            multiple: 1,
         })
     }
 
@@ -205,10 +206,10 @@ impl CropView {
         }
     }
 
-    /// The crop that keeps `rect` (display units of the shown frame), on even pixels like a drag.
+    /// The crop that keeps `rect` (display units of the shown frame), on whole pixels like a drag.
     pub fn crop_of_display(&self, rect: DisplayRect) -> Crop {
-        let (l, r) = even_span(rect.x / self.sar, rect.right() / self.sar, self.shown.width);
-        let (t, b) = even_span(rect.y, rect.bottom(), self.shown.height);
+        let (l, r) = whole_span(rect.x / self.sar, rect.right() / self.sar, self.shown.width);
+        let (t, b) = whole_span(rect.y, rect.bottom(), self.shown.height);
         let (l, r) = fit_span(l, r, self.shown.width, self.multiple, true, true);
         let (t, b) = fit_span(t, b, self.shown.height, self.multiple, true, true);
         let shown = Crop::new(
@@ -216,8 +217,7 @@ impl CropView {
             self.shown.width.saturating_sub(r),
             self.shown.height.saturating_sub(b),
             l,
-        )
-        .with_even_size(self.shown);
+        );
         self.frame_crop(shown)
     }
 
@@ -279,7 +279,7 @@ impl CropView {
         })
     }
 
-    /// With Ctrl held the pointer needs no aim: the edge of the kept area nearest to it anywhere over the picture, or a
+    /// In the quick crop the pointer needs no aim: the edge of the kept area nearest to it anywhere over the picture, or a
     /// corner when the nearest edge of the other direction is within [`CORNER_ZONE`]. `None` off the picture.
     pub fn nearest(&self, crop: Crop, x: f32, y: f32) -> Option<Handle> {
         let p = self.picture;
@@ -315,7 +315,7 @@ impl CropView {
         })
     }
 
-    /// The crop after dragging `handle` by `(dx, dy)` logical pixels from where it was at `start`. Edges land on even
+    /// The crop after dragging `handle` by `(dx, dy)` logical pixels from where it was at `start`. Edges land on whole
     /// shown pixels, at least [`MIN_KEPT`] pixels stay, and `aspect` (display width / height) is kept when given.
     pub fn drag(&self, start: Crop, handle: Handle, dx: f32, dy: f32, aspect: Option<f64>) -> Crop {
         let (sx, sy) = self.scale();
@@ -351,8 +351,8 @@ impl CropView {
                 (l, t, r, b) = self.keep_aspect(handle, (l, t, r, b), ratio);
             }
         }
-        let (l, r) = even_span(l, r, self.shown.width);
-        let (t, b) = even_span(t, b, self.shown.height);
+        let (l, r) = whole_span(l, r, self.shown.width);
+        let (t, b) = whole_span(t, b, self.shown.height);
         // The edges that moved (Shift moves the other axis too) take up the difference to the multiple; a moved area
         // keeps its size.
         let (l, r, t, b) = if handle == Handle::Inside {
@@ -369,8 +369,7 @@ impl CropView {
             self.shown.width.saturating_sub(r),
             self.shown.height.saturating_sub(b),
             l,
-        )
-        .with_even_size(self.shown);
+        );
         self.frame_crop(shown)
     }
 
@@ -439,15 +438,14 @@ impl CropView {
             (kh * ratio / px, kh)
         };
         let (cx, cy) = (f64::midpoint(l, r), f64::midpoint(t, b));
-        let (left, right) = even_span(cx - nw / 2.0, cx + nw / 2.0, self.shown.width);
-        let (top, bottom) = even_span(cy - nh / 2.0, cy + nh / 2.0, self.shown.height);
+        let (left, right) = whole_span(cx - nw / 2.0, cx + nw / 2.0, self.shown.width);
+        let (top, bottom) = whole_span(cy - nh / 2.0, cy + nh / 2.0, self.shown.height);
         let shown = Crop::new(
             top,
             self.shown.width.saturating_sub(right),
             self.shown.height.saturating_sub(bottom),
             left,
-        )
-        .with_even_size(self.shown);
+        );
         self.frame_crop(shown)
     }
 }
@@ -504,24 +502,24 @@ fn fit_span(lo: u32, hi: u32, size: u32, n: u32, moves_lo: bool, moves_hi: bool)
     (lo + first, hi - (d - first))
 }
 
-/// The span `lo..hi` of a `size`-pixel side on even pixels, at least [`MIN_KEPT`] (an even number) long or the whole
-/// side when it is shorter. The start stays even; the end may be `size` itself.
-fn even_span(lo: f64, hi: f64, size: u32) -> (u32, u32) {
+/// The span `lo..hi` of a `size`-pixel side on whole pixels, at least [`MIN_KEPT`] long or the whole side when it is
+/// shorter; the end may be `size` itself.
+fn whole_span(lo: f64, hi: f64, size: u32) -> (u32, u32) {
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         reason = "clamped to 0..=u32::MAX first"
     )]
-    let even = |v: f64| ((v / 2.0).round() * 2.0).clamp(0.0, f64::from(u32::MAX)) as u32;
-    let min = MIN_KEPT.min(size & !1);
-    let lo = even(lo).min(size & !1);
-    let hi = even(hi).min(size).max(lo);
+    let whole = |v: f64| v.round().clamp(0.0, f64::from(u32::MAX)) as u32;
+    let min = MIN_KEPT.min(size);
+    let lo = whole(lo).min(size);
+    let hi = whole(hi).min(size).max(lo);
     if hi - lo >= min {
         (lo, hi)
     } else if lo + min <= size {
         (lo, lo + min)
     } else {
-        let lo = (size - min) & !1;
+        let lo = size - min;
         (lo, lo + min)
     }
 }

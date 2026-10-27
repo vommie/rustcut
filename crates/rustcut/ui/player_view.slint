@@ -1,29 +1,51 @@
 // The video area: mpv's frame as an image (rustcut-player renders it at exactly this element's size), the crop being
-// edited (handles, or the nearest edge while Ctrl is held; the pointer goes to src/ui/filters/), the play and pause
+// edited (handles, or the nearest edge in the quick crop, F4; the pointer goes to src/ui/filters/), the play and pause
 // symbols (P9.9), the empty state, the non-modal error overlay with Reload (click or F5), and the hint while a file is
-// dragged over the window. The mouse wheel changes the volume.
+// dragged over the window. The mouse wheel changes the volume (its bar shows near the bottom, player_feedback.slint).
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Playback } from "player_types.slint";
 import { Shortcuts } from "shortcuts.slint";
 import { CropCursor, CropOverlay, CropOverlayView, CropPills } from "crop_overlay.slint";
+import { VolumeFeedback } from "player_feedback.slint";
 
-/// The play or pause symbol over the video (user decision Q-P9.9): a dark translucent disc with the white symbol.
+/// The symbol of a key over the video (user decision Q-P9.9): a dark translucent disc with the white symbol. One look
+/// for every key's feedback (user request 2026-10-27): play or pause, the speaker of the mute key (crossed out when
+/// muted), a rating's digit in its color (`Playback.flash-kind` codes).
 component PlaySymbol inherits Rectangle {
     in property <bool> play;
+    in property <int> kind;
+    in property <int> rating;
 
     width: 72px;
     height: 72px;
     border-radius: 36px;
     background: #11111b99;
 
-    AppIcon {
-        x: (parent.width - self.width) / 2 + (root.play ? 2px : 0px);
+    if root.kind <= 2: AppIcon {
+        x: (parent.width - self.width) / 2 + (root.kind == 0 && root.play ? 2px : 0px);
         y: (parent.height - self.height) / 2;
-        icon: root.play ? IconId.play : IconId.pause;
+        icon: root.kind == 1 ? IconId.volume : root.kind == 2 ? IconId.volume-off : root.play ? IconId.play : IconId.pause;
         size: 36px;
         color: #ffffff;
+    }
+
+    if root.kind == 3: Rectangle {
+        width: 46px;
+        height: 46px;
+        border-radius: 23px;
+        border-width: 3px;
+        border-color: Theme.rating-color(root.rating);
+
+        Text {
+            text: root.rating;
+            color: Theme.rating-color(root.rating);
+            font-size: 26px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
     }
 }
 
@@ -102,16 +124,20 @@ export component PlayerView inherits Rectangle {
         height: parent.height;
     }
 
-    // While paused a faint pause symbol stays in the middle (setting, Q-P9.9: 40 %).
-    if Playback.has-video && Playback.paused && Playback.keep-pause-symbol: PlaySymbol {
+    // While paused a faint pause symbol stays in the middle (setting, Q-P9.9: 40 %); not after a frame step and not at
+    // the end (user review 2026-10-27).
+    // A key's symbol (play/pause, mute, rating) takes its place while it shows; afterwards it is back while the video is
+    // still paused (user request 2026-10-27).
+    if Playback.has-video && Playback.pause-symbol && Playback.keep-pause-symbol
+        && !(flash.phase == 1 || flash.opacity > 0): PlaySymbol {
         x: (parent.width - self.width) / 2;
         y: (parent.height - self.height) / 2;
         play: false;
         opacity: 0.4;
     }
 
-    // A key played or paused the video: the symbol fades in (0.1 s), stands (0.2 s) and fades out (0.3 s); a new one
-    // replaces it at once (Q-P9.9).
+    // A key played or paused the video, muted it or gave a rating: the symbol fades in (0.1 s), stands (0.2 s) and
+    // fades out (0.3 s); a new one replaces it at once (Q-P9.9).
     flash := PlaySymbol {
         // 0 = hidden, 1 = fading in and standing, 2 = fading out.
         property <int> phase;
@@ -119,6 +145,8 @@ export component PlayerView inherits Rectangle {
         x: (parent.width - self.width) / 2;
         y: (parent.height - self.height) / 2;
         play: Playback.flash-play;
+        kind: Playback.flash-kind;
+        rating: Playback.flash-rating;
         visible: self.phase != 0 || self.opacity > 0;
         opacity: self.phase == 1 ? 1 : 0;
 
@@ -135,6 +163,12 @@ export component PlayerView inherits Rectangle {
                 flash.phase = 2;
             }
         }
+    }
+
+    // The wheel's volume bar (RustView's feedback, user request 2026-10-27).
+    if Playback.has-video: VolumeFeedback {
+        area-width: parent.width;
+        area-height: parent.height;
     }
 
     property <int> flash-serial: Playback.flash-serial;

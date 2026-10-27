@@ -39,16 +39,36 @@ export component TabFace inherits Rectangle {
     in property <bool> separator;
     in property <brush> panel: Theme.surface;
     in property <length> font-size: 11px;
+    // A framed panel below (the dialogs, user decision 2026-10-27, A): the selected tab has the frame's line on top and
+    // at its sides and opens into the panel, like a file card's tab; no curves.
+    in property <bool> outlined;
+
+    if root.active && root.outlined: Rectangle {
+        border-top-left-radius: TabMetrics.radius;
+        border-top-right-radius: TabMetrics.radius;
+        border-width: 1px;
+        border-color: Theme.border;
+        background: root.panel;
+    }
+
+    // Its bottom line and the frame's line under it give way: the tab opens into the panel.
+    if root.active && root.outlined: Rectangle {
+        x: 1px;
+        y: parent.height - 1px;
+        width: parent.width - 2px;
+        height: 1px;
+        background: root.panel;
+    }
 
     // The selected tab: the panel's color, rounded on top, square at the bottom.
-    if root.active: Rectangle {
+    if root.active && !root.outlined: Rectangle {
         border-top-left-radius: TabMetrics.radius;
         border-top-right-radius: TabMetrics.radius;
         background: root.panel;
     }
 
     // Its curves into the panel at both bottom corners (the bar's color cut out by a quarter circle).
-    if root.active: Path {
+    if root.active && !root.outlined: Path {
         x: -TabMetrics.curve;
         y: root.height - TabMetrics.curve;
         width: TabMetrics.curve;
@@ -59,7 +79,7 @@ export component TabFace inherits Rectangle {
         fill: root.panel;
     }
 
-    if root.active: Path {
+    if root.active && !root.outlined: Path {
         x: root.width;
         y: root.height - TabMetrics.curve;
         width: TabMetrics.curve;
@@ -143,6 +163,8 @@ export component TabStrip inherits Rectangle {
     in property <int> current;
     in property <brush> panel: Theme.surface;
     in property <brush> bar: Theme.background;
+    // The panel below has its own frame (`DialogPanel`): no line of the bar's own, the tabs are outlined.
+    in property <bool> outlined;
     callback picked(int);
 
     height: 34px;
@@ -151,7 +173,7 @@ export component TabStrip inherits Rectangle {
     border-top-right-radius: 6px;
 
     // The panel's top edge; the selected tab covers it.
-    Rectangle {
+    if !root.outlined: Rectangle {
         y: parent.height - 1px;
         height: 1px;
         background: Theme.border;
@@ -184,6 +206,7 @@ export component TabStrip inherits Rectangle {
                 enabled: tab.enabled;
                 separator: i != root.current && i + 1 != root.current && i + 1 < root.tabs.length;
                 panel: root.panel;
+                outlined: root.outlined;
                 font-size: 12px;
             }
 

@@ -1,7 +1,7 @@
 //! The tag history, ported from RustView (`crates/rustview/src/ui/tags/history/manager.rs`: `TagHistoryManager::
 //! {record_tag_used, prune_invalid, build_hierarchy_tooltip}`, `layout.rs`: `TagHistoryLayoutEngine`, `models.rs`; the
 //! item flags follow `history_bridge.rs::sync_ui` for one selected file, ADR-10). RustCut's tags are the API's
-//! `TagItem`s; `tests/rustview_parity.rs` pins RustView's functions.
+//! `TagItem`s; RustCut's own since 0.0.72 (no parity check any more).
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;

@@ -18,6 +18,9 @@ export struct ConflictOptionView {
     recommended: bool,
     // The choice whose file name is typed in the dialog.
     typed: bool,
+    // The key's color (user review 2026-10-27): 0 neutral, 1 green (the next free number while the counter
+    // auto-iterates), 2 red (overwrites or removes something).
+    key-tint: int,
 }
 
 // A file of the conflict dialog with its preview (src/ui/export/previews.rs). `state`: 0 loading, 1 picture,

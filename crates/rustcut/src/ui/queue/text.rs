@@ -54,10 +54,12 @@ pub fn row_text(row: &JobSummary, progress: Option<&JobProgress>, size: Option<u
             parts.join(" · ")
         }
     };
+    // The state leads: a narrow queue shows only its symbol (user review 2026-10-27).
     let mut tooltip = format!(
-        "Job {} (attempt {})\n{}\nfrom {}",
+        "Job {} (attempt {}): {}\n{}\nfrom {}",
         row.id,
         row.attempt,
+        state_text(&row.state, fraction),
         row.target.display(),
         row.source.display()
     );

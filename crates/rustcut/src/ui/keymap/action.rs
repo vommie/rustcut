@@ -33,6 +33,7 @@ pub enum Action {
     ZoomOut,
     ZoomFit,
     CropEdit,
+    QuickCrop,
     AutoCrop,
     ToggleFilterPreview,
     ToggleKeepFilters,
@@ -42,6 +43,12 @@ pub enum Action {
     MirrorVertical,
     ResetFilters,
     ProbeRender,
+    Rate0,
+    Rate1,
+    Rate2,
+    Rate3,
+    Rate4,
+    Rate5,
     QueueMoveUp,
     QueueMoveDown,
     QueueMoveTop,
@@ -50,7 +57,7 @@ pub enum Action {
 }
 
 impl Action {
-    pub const ALL: [Self; 42] = [
+    pub const ALL: [Self; 49] = [
         Self::Open,
         Self::Save,
         Self::Quit,
@@ -79,6 +86,7 @@ impl Action {
         Self::ZoomOut,
         Self::ZoomFit,
         Self::CropEdit,
+        Self::QuickCrop,
         Self::AutoCrop,
         Self::ToggleFilterPreview,
         Self::ToggleKeepFilters,
@@ -88,6 +96,12 @@ impl Action {
         Self::MirrorVertical,
         Self::ResetFilters,
         Self::ProbeRender,
+        Self::Rate0,
+        Self::Rate1,
+        Self::Rate2,
+        Self::Rate3,
+        Self::Rate4,
+        Self::Rate5,
         Self::QueueMoveUp,
         Self::QueueMoveDown,
         Self::QueueMoveTop,
@@ -126,6 +140,7 @@ impl Action {
             Self::ZoomOut => "zoom_out",
             Self::ZoomFit => "zoom_fit",
             Self::CropEdit => "crop_edit",
+            Self::QuickCrop => "quick_crop",
             Self::AutoCrop => "auto_crop",
             Self::ToggleFilterPreview => "toggle_filter_preview",
             Self::ToggleKeepFilters => "toggle_keep_filters",
@@ -135,6 +150,12 @@ impl Action {
             Self::MirrorVertical => "mirror_vertical",
             Self::ResetFilters => "reset_filters",
             Self::ProbeRender => "probe_render",
+            Self::Rate0 => "rate_0",
+            Self::Rate1 => "rate_1",
+            Self::Rate2 => "rate_2",
+            Self::Rate3 => "rate_3",
+            Self::Rate4 => "rate_4",
+            Self::Rate5 => "rate_5",
             Self::QueueMoveUp => "queue_move_up",
             Self::QueueMoveDown => "queue_move_down",
             Self::QueueMoveTop => "queue_move_top",
@@ -178,6 +199,7 @@ impl Action {
             Self::ZoomOut => "Zoom timeline out",
             Self::ZoomFit => "Fit timeline",
             Self::CropEdit => "Edit the crop on the video",
+            Self::QuickCrop => "Quick crop: drag the nearest edge (again: keep it)",
             Self::AutoCrop => "Detect black borders (auto-crop)",
             Self::ToggleFilterPreview => "Show / hide the filters in the player",
             Self::ToggleKeepFilters => "Keep the filters for the next video",
@@ -187,6 +209,12 @@ impl Action {
             Self::MirrorVertical => "Mirror top and bottom",
             Self::ResetFilters => "Reset all filters",
             Self::ProbeRender => "Probe render around the playhead",
+            Self::Rate0 => "Rate 0",
+            Self::Rate1 => "Rate 1",
+            Self::Rate2 => "Rate 2",
+            Self::Rate3 => "Rate 3",
+            Self::Rate4 => "Rate 4",
+            Self::Rate5 => "Rate 5",
             Self::QueueMoveUp => "Move the selected jobs up",
             Self::QueueMoveDown => "Move the selected jobs down",
             Self::QueueMoveTop => "Move the selected jobs to the top",
@@ -224,15 +252,26 @@ impl Action {
             Self::DeleteSection => &["Delete"],
             Self::ZoomIn => &["Control+Plus"],
             Self::ZoomOut => &["Control+HyphenMinus"],
-            Self::ZoomFit => &["Control+Digit0"],
+            // Ctrl+0 is "Rate 0" since 0.0.72 (RustView's rating keys, user request 2026-10-27); RustView's zoom reset
+            // keys instead.
+            Self::ZoomFit => &["Control+Backspace", "Backspace"],
             // Filter keys (user decision 2026-10-23; PyCutRv had none).
             Self::CropEdit => &["C"],
+            // It was Ctrl held over the video; Ctrl alone is only a modifier now (user decision 2026-10-27).
+            Self::QuickCrop => &["F4"],
             Self::AutoCrop => &["Shift+C"],
             Self::ToggleFilterPreview => &["P"],
             Self::RotateLeft => &["Shift+R"],
             Self::RotateRight => &["R"],
             // A test render (M2.5); T is free in PyCutRv's and the NLE keys.
             Self::ProbeRender => &["T"],
+            // The rating like RustView (user request 2026-10-27).
+            Self::Rate0 => &["Control+Digit0"],
+            Self::Rate1 => &["Control+Digit1"],
+            Self::Rate2 => &["Control+Digit2"],
+            Self::Rate3 => &["Control+Digit3"],
+            Self::Rate4 => &["Control+Digit4"],
+            Self::Rate5 => &["Control+Digit5"],
             // The queue (M4.1, HANDOFF 8.Q): Ctrl with the keys that move elsewhere.
             Self::QueueMoveUp => &["Control+UpArrow"],
             Self::QueueMoveDown => &["Control+DownArrow"],
@@ -259,6 +298,7 @@ impl Action {
                 | Self::ZoomOut
                 | Self::ZoomFit
                 | Self::CropEdit
+                | Self::QuickCrop
                 | Self::AutoCrop
         )
     }

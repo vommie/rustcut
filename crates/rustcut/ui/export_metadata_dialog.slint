@@ -1,11 +1,11 @@
 // The question before a job without tags or rating is saved (src/ui/export/metadata.rs; user decisions Q-G1, D-P9g,
 // review 52): the title says what is missing; the rating bar (a click saves the job with that rating) while the rating
-// is missing, "Save without" and "Back to editing" (the primary button). Keys: the focus starts on "Back to editing"
-// (Enter goes back and saves nothing); Left and Right move a visible focus through the ratings and the buttons, Enter
+// is missing, "Save without" and "Back to editing" (the primary button). Keys: the focus starts on the rating 5 while
+// the rating is missing (user review 2026-10-27; Enter saves with 5), else on "Back to editing" (Enter goes back); Left and Right move a visible focus through the ratings and the buttons, Enter
 // acts on the focused one; 0-5 save with that rating; Escape and × go back. "Don't ask again" is the setting
 // `warnings.missing_metadata` (the panel's "Warn"), no longer a switch in the dialog.
 
-import { DialogFrame, DialogHeader, DialogState } from "dialog_frame.slint";
+import { DialogFrame, DialogHeader, DialogPanel, DialogState } from "dialog_frame.slint";
 import { Theme } from "styles.slint";
 import { IconId } from "icons.slint";
 import { RatingBar } from "rating_bar.slint";
@@ -17,7 +17,7 @@ export component MetadataDialog inherits Rectangle {
     background: #000000a0;
 
     // The focus: 0-5 a rating (only while the rating is missing), 6 "Save without", 7 "Back to editing".
-    property <int> focused: 7;
+    property <int> focused: Export.meta-ask-rating ? 5 : 7;
     property <int> first: Export.meta-ask-rating ? 0 : 6;
 
     function act() {
@@ -90,11 +90,14 @@ export component MetadataDialog inherits Rectangle {
                     close => { Export.meta-back(); }
                 }
 
-                if Export.meta-ask-rating: RatingBar {
-                    selected-rating: root.focused <= 5 ? root.focused : -1;
-                    is-assign-mode: true;
-                    has-selection: true;
-                    rating-selected(r) => { Export.meta-rate(r); }
+                // The question's content in the dialogs' frame (user decision 2026-10-27, B).
+                if Export.meta-ask-rating: DialogPanel {
+                    RatingBar {
+                        selected-rating: root.focused <= 5 ? root.focused : -1;
+                        is-assign-mode: true;
+                        has-selection: true;
+                        rating-selected(r) => { Export.meta-rate(r); }
+                    }
                 }
 
                 HorizontalLayout {

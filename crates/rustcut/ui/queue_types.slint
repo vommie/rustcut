@@ -50,6 +50,8 @@ export struct QueueColumnView {
 
 export global Queue {
     in property <[QueueRowView]> rows;
+    // Setting `queue.follow_new_jobs`: the list follows new jobs while it stands at the bottom.
+    in property <bool> follow-new: true;
     // Two-line rows without a header (a narrow sidebar).
     in property <bool> compact: true;
     in property <[QueueColumnView]> columns;

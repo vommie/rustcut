@@ -197,7 +197,7 @@ fn hold_time_and_job_load_have_defaults_and_are_tolerant() {
         .into_value();
     assert_eq!(read, settings, "0 (a click is enough) is kept");
 
-    for (stored, kept) in [(50, 300), (65_000, 10_000), (1_500, 1_500)] {
+    for (stored, kept) in [(50, 100), (100, 100), (65_000, 10_000), (1_500, 1_500)] {
         let mut s = Settings::default();
         s.general.hold_to_confirm_ms = stored;
         s.sanitize();
@@ -604,4 +604,23 @@ fn hidden_profiles_keep_known_ids_and_never_the_default() {
     ];
     assert_eq!(s.sanitize().len(), 1);
     assert_eq!(s.render.hidden_profiles, ["x265-quality"]);
+}
+
+#[test]
+fn a_file_without_the_new_switches_of_0_0_72_has_them_on() {
+    // 0.0.71 had no `queue.follow_new_jobs` and no switches for the mute, rating and volume symbols: on, nothing
+    // migrated.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("config.toml"),
+        "version = 1\n[queue]\nworkers = 2\n[player]\nkeep_pause_symbol = false\n",
+    )
+    .unwrap();
+    let read = load::<Settings>(dir.path(), &dir.path().join("b"))
+        .unwrap()
+        .into_value();
+    assert_eq!(read.queue.workers, 2);
+    assert!(read.queue.follow_new_jobs);
+    assert!(!read.player.keep_pause_symbol);
+    assert!(read.player.flash_mute && read.player.flash_rating && read.player.volume_bar);
 }

@@ -381,6 +381,9 @@ pub struct TagPanelState {
     /// The eye under the tag history (P9.8): the tree shows the hidden tags too, dimmed (they are chosen in the tag
     /// filter window only).
     pub show_hidden: bool,
+    /// The "Filter tags..." field above the tree is shown (0.0.72, user request 2026-10-27: a toggle under the history
+    /// hides it and gives its room to the tree; hidden, the typed filter does not apply).
+    pub search_shown: bool,
 }
 
 impl TagPanelState {
@@ -452,6 +455,7 @@ impl Default for TagPanelState {
             filter_width: 380,
             filter_height: 560,
             show_hidden: false,
+            search_shown: true,
         }
     }
 }
@@ -480,9 +484,10 @@ impl VersionedFile for UiState {
             notes.push("window position reset".into());
             (self.window.x, self.window.y) = (None, None);
         }
-        if self.export.volume > 150 {
-            notes.push("volume limited to 150".into());
-            self.export.volume = 150;
+        // 0.0.72 dropped the amplification above 100 % (user review 2026-10-27): an older file's 150 becomes 100.
+        if self.export.volume > 100 {
+            notes.push("volume limited to 100".into());
+            self.export.volume = 100;
         }
         self.queue.sanitize(&mut notes);
         let seconds = self.export.probe.seconds;

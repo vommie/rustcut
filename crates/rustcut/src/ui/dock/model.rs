@@ -152,6 +152,9 @@ pub struct Sidebar {
     pub collapsed: bool,
     /// The group that fills the sidebar while the others show only their tab bars.
     pub maximized: Option<usize>,
+    /// While collapsed: the group of this panel stays over the video (held on the rail; kept while expanded and across
+    /// restarts, user review 2026-10-27). A panel that left the sidebar pins nothing.
+    pub pinned: Option<PanelId>,
 }
 
 impl Sidebar {
@@ -161,7 +164,19 @@ impl Sidebar {
             width,
             collapsed: false,
             maximized: None,
+            pinned: None,
         }
+    }
+
+    /// The index of the pinned group (`None` = nothing held, or its panel is no longer here).
+    pub fn pinned_group(&self) -> Option<usize> {
+        let panel = self.pinned?;
+        self.groups.iter().position(|g| g.tabs.contains(&panel))
+    }
+
+    /// Holds group `index` over the video (its active panel names it) or nothing (`None`, or an index out of range).
+    pub fn set_pinned_group(&mut self, index: Option<usize>) {
+        self.pinned = index.and_then(|i| self.groups.get(i)).map(|g| g.active);
     }
 
     /// Whether the sidebar takes space (a sidebar without groups is hidden, also as a rail).

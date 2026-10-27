@@ -69,8 +69,8 @@ impl PlayerOptions {
         init.set_option("hwdec", self.hwdec.as_str())?;
         init.set_option("keep-open", if self.keep_open { "yes" } else { "no" })?;
         init.set_option("pause", !self.autoplay)?;
-        init.set_option("volume", self.volume.clamp(0.0, 150.0))?;
-        init.set_option("volume-max", 150.0)?;
+        init.set_option("volume", self.volume.clamp(0.0, super::MAX_VOLUME))?;
+        init.set_option("volume-max", super::MAX_VOLUME)?;
         init.set_option("mute", self.muted)?;
         if is_color(&self.background) {
             init.set_option("background-color", self.background.as_str())?;

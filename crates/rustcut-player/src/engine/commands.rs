@@ -192,7 +192,7 @@ impl Session {
                 )]
             }
             Command::SetMuted(muted) => vec![Op::Flag("mute", muted)],
-            Command::SetVolume(volume) => vec![Op::Double("volume", volume.clamp(0.0, 150.0))],
+            Command::SetVolume(volume) => vec![Op::Double("volume", volume.clamp(0.0, super::MAX_VOLUME))],
             Command::SetSpeed(speed) => vec![Op::Double("speed", speed.clamp(MIN_SPEED, MAX_SPEED))],
             Command::SetLoop(on) => vec![Op::Text("loop-file", if on { "inf" } else { "no" }.to_owned())],
             Command::Quit => vec![Op::Command("quit", Vec::new())],
@@ -410,7 +410,7 @@ mod tests {
             s.handle(Command::FrameStep { back: true }),
             vec![Op::Command("frame-back-step", vec![])]
         );
-        assert_eq!(s.handle(Command::SetVolume(400.0)), vec![Op::Double("volume", 150.0)]);
+        assert_eq!(s.handle(Command::SetVolume(400.0)), vec![Op::Double("volume", 100.0)]);
         assert_eq!(s.handle(Command::SetSpeed(4.0)), vec![Op::Double("speed", 4.0)]);
         assert_eq!(s.handle(Command::SetSpeed(0.0)), vec![Op::Double("speed", 0.01)]);
         assert_eq!(

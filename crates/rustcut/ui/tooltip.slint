@@ -115,7 +115,12 @@ export global GlobalTooltip {
     /// A shown tip changed (another text under the pointer, the element moved).
     public function update(serial: int, tip: Tip, anchor: TipRect) {
         if serial == root.serial && root.is-visible {
-            root.glide = true;
+            // Only a moved element glides. The host's first update right after `show()` carries the same rectangle;
+            // it used to switch the glide on before the bubble was placed, and a fresh tooltip flew in from the last
+            // one's place (user review 2026-10-27).
+            if anchor != root.anchor {
+                root.glide = true;
+            }
             root.tip = tip;
             root.anchor = anchor;
         }

@@ -59,7 +59,7 @@ pub struct GeneralSettings {
 
 impl GeneralSettings {
     /// Shortest and longest hold besides 0.
-    pub const HOLD_TO_CONFIRM_MS: std::ops::RangeInclusive<u16> = 300..=10_000;
+    pub const HOLD_TO_CONFIRM_MS: std::ops::RangeInclusive<u16> = 100..=10_000;
 }
 
 impl Default for GeneralSettings {
@@ -91,6 +91,12 @@ pub struct PlayerSettings {
     pub flash_play_pause: bool,
     /// The pause symbol stays (faint) over the video while it is paused (P9.9).
     pub keep_pause_symbol: bool,
+    /// The mute key shows a speaker in the middle of the video (0.0.72; older files have none: on).
+    pub flash_mute: bool,
+    /// Ctrl+0..5 show the rating's digit in the middle of the video (0.0.72; on).
+    pub flash_rating: bool,
+    /// The mouse wheel shows the volume bar near the bottom of the video (0.0.72; on).
+    pub volume_bar: bool,
 }
 
 impl Default for PlayerSettings {
@@ -104,6 +110,9 @@ impl Default for PlayerSettings {
             loudnorm_preview: false,
             flash_play_pause: true,
             keep_pause_symbol: true,
+            flash_mute: true,
+            flash_rating: true,
+            volume_bar: true,
         }
     }
 }
@@ -240,6 +249,9 @@ pub struct QueueSettings {
     pub when_done: WhenDone,
     /// Countdown before quit, suspend or power off, in seconds (can be aborted).
     pub when_done_countdown_secs: u8,
+    /// The queue list follows new jobs while it stands at the bottom (0.0.72, user request 2026-10-27; older files
+    /// have none: on).
+    pub follow_new_jobs: bool,
 }
 
 impl Default for QueueSettings {
@@ -249,6 +261,7 @@ impl Default for QueueSettings {
             pause_on_start: true,
             when_done: WhenDone::Nothing,
             when_done_countdown_secs: 5,
+            follow_new_jobs: true,
         }
     }
 }

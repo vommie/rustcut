@@ -91,6 +91,15 @@ fn presses_find_their_actions() {
             control: true,
             ..press("0")
         }),
+        Some(Action::Rate0),
+        "Ctrl+0 rates since 0.0.72"
+    );
+    assert_eq!(lookup(press(&special(Key::Backspace))), Some(Action::ZoomFit));
+    assert_eq!(
+        lookup(KeyPress {
+            control: true,
+            ..press(&special(Key::Backspace))
+        }),
         Some(Action::ZoomFit)
     );
     assert_eq!(lookup(press("s")), None);

@@ -56,11 +56,24 @@ component TotalSymbol inherits Rectangle {
 }
 
 export component QueuePanel inherits Rectangle {
+    // A narrow sidebar shows a job's state as its colored symbol only, from 350 px with its word (user review
+    // 2026-10-27).
+    property <bool> state-words: root.width >= 350px;
     property <length> row-step: Queue.row-height + 2px;
     // The list's whole height (every row has the same pitch).
     property <length> content-height: Queue.rows.length * root.row-step;
     // The pointer of a drag, from the list's top edge (the edge scrolling asks with it).
     property <length> drag-pointer;
+    // The list follows new jobs while it stands at the bottom (user request 2026-10-27): scrolled up it stays where
+    // it is until it is scrolled to the bottom again. It starts at the bottom. Setting `queue.follow_new_jobs`.
+    property <length> bottom-y: Math.min(0px, flick.visible-height - root.content-height);
+    property <bool> follow: true;
+
+    changed content-height => {
+        if root.follow && Queue.follow-new {
+            flick.content-y = root.bottom-y;
+        }
+    }
 
     // The width reaches Rust once more after the panel was created: a `changed width` during the dock's first layout
     // can come before the handler is connected (M3.2).
@@ -218,6 +231,15 @@ export component QueuePanel inherits Rectangle {
                 // The rows never grow wider than the list (a long name is cut, the state stays visible).
                 horizontal-scrollbar-policy: always-off;
 
+                changed content-y => {
+                    root.follow = self.content-y <= root.bottom-y + 1px;
+                }
+                changed visible-height => {
+                    if root.follow && Queue.follow-new {
+                        self.content-y = root.bottom-y;
+                    }
+                }
+
                 for job[i] in Queue.rows: Rectangle {
                     width: flick.visible-width;
                     height: root.row-step;
@@ -228,6 +250,7 @@ export component QueuePanel inherits Rectangle {
                         width: parent.width;
                         job: job;
                         index: i;
+                        state-words: root.state-words;
                         drag-shift: i < Queue.drag-shifts.length ? Queue.drag-shifts[i] : 0px;
                         lifted: Queue.dragging && job.selected;
                         // Drag & drop (P9.4): window coordinates turn into the list's content coordinates.

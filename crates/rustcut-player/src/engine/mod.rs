@@ -29,6 +29,9 @@ pub use events::{EndReason, PlayerEvent, Property};
 pub use options::{PlayerOptions, PreviewQuality};
 pub use video::VideoFilter;
 
+/// The loudest volume in percent: no amplification above the source (user review 2026-10-27; it was 150).
+pub const MAX_VOLUME: f64 = 100.0;
+
 /// Errors of the mpv core.
 #[derive(Debug, thiserror::Error)]
 pub enum PlayerError {
@@ -180,7 +183,7 @@ impl Player {
         self.command(Command::SetMuted(muted))
     }
 
-    /// Volume in percent (0-150).
+    /// Volume in percent (0 to `MAX_VOLUME`).
     pub fn set_volume(&self, percent: f64) -> Result<(), PlayerError> {
         self.command(Command::SetVolume(percent))
     }

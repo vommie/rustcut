@@ -451,6 +451,7 @@ impl Editor {
                 keep: label(Action::ToggleKeepFilters),
                 reset: label(Action::ResetFilters),
                 crop_edit: label(Action::CropEdit),
+                quick_crop: label(Action::QuickCrop),
                 auto_crop: label(Action::AutoCrop),
                 rotate_left: label(Action::RotateLeft),
                 rotate_right: label(Action::RotateRight),

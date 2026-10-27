@@ -1,4 +1,4 @@
-//! The callbacks of the Filters card and of the crop overlay, and the Ctrl key over the video.
+//! The callbacks of the Filters card and of the crop overlay, and the Quick crop key (F4).
 
 use std::rc::{Rc, Weak};
 
@@ -8,7 +8,7 @@ use slint::ComponentHandle as _;
 
 use super::geometry::Handle;
 use super::state::{CropMode, CropSession, Edge, FiltersState};
-use super::{FiltersBridge, QUICK_DELAY, kind_from_id, view};
+use super::{FiltersBridge, kind_from_id, view};
 use crate::util::amount::{limit, parse_hundredths};
 use crate::{CropOverlay, Filters, MainWindow};
 
@@ -106,6 +106,12 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
     f.on_toggle(change(&this, |s, id: slint::SharedString| {
         if let Some(kind) = kind_from_id(&id) {
             s.toggle(kind);
+        }
+    }));
+    f.on_switch_on(change(&this, |s, id: slint::SharedString| {
+        if let Some(kind) = kind_from_id(&id) {
+            tracing::info!(kind = %id, "[Filters] A field was clicked: the filter switches on");
+            s.switch_on(kind);
         }
     }));
     let reset = with(&this, |b, ()| b.reset());
@@ -300,9 +306,13 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
     }));
 
     let o = window.global::<CropOverlay<'_>>();
-    let pointer = with(&this, |b, (kind, x, y, control, shift): (i32, f32, f32, bool, bool)| {
-        b.pointer(kind, x, y, control, shift);
-    });
+    // Ctrl's state is not used any more: F4 starts the quick crop (user decision 2026-10-27).
+    let pointer = with(
+        &this,
+        |b, (kind, x, y, _control, shift): (i32, f32, f32, bool, bool)| {
+            b.pointer(kind, x, y, shift);
+        },
+    );
     o.on_pointer(move |kind, x, y, control, shift| pointer((kind, x, y, control, shift)));
     let cycle = with(&this, |b, landscape: bool| {
         if b.state.borrow_mut().cycle_ratio(landscape) {
@@ -387,8 +397,8 @@ pub(super) fn typed_deshake(current: DeshakeParams, param: i32, text: &str) -> O
 }
 
 impl FiltersBridge {
-    /// The pointer over the video (`kind`: 0 down, 1 up, 2 move), with Ctrl's and Shift's state.
-    fn pointer(&self, kind: i32, x: f32, y: f32, control: bool, shift: bool) {
+    /// The pointer over the video (`kind`: 0 down, 1 up, 2 move), with Shift's state.
+    fn pointer(&self, kind: i32, x: f32, y: f32, shift: bool) {
         self.hover.set(Some((x, y)));
         if self
             .state
@@ -403,38 +413,18 @@ impl FiltersBridge {
         }
         match kind {
             0 => {
-                if control && self.state.borrow().crop_session().is_none() {
-                    self.begin_quick();
-                }
                 if self.state.borrow_mut().crop_pointer_down(x, y) {
                     self.publish_overlay();
                 }
             }
             1 => {
+                // The quick crop stays after a drag until F4 again, Enter or Escape (user decision 2026-10-27).
                 if self.state.borrow_mut().crop_pointer_up() {
-                    if self.quick() && !control {
-                        self.end_crop(true);
-                    } else {
-                        self.publish();
-                    }
+                    self.publish();
                 }
             }
             _ => {
-                let (session, dragging) = {
-                    let st = self.state.borrow();
-                    (
-                        st.crop_session().map(|s| s.mode),
-                        st.crop_session().is_some_and(CropSession::dragging),
-                    )
-                };
-                match session {
-                    None if control => self.begin_quick(),
-                    Some(CropMode::Quick) if !control && !dragging => {
-                        self.end_crop(true);
-                        return;
-                    }
-                    _ => {}
-                }
+                let dragging = self.state.borrow().crop_session().is_some_and(CropSession::dragging);
                 if self.state.borrow_mut().crop_pointer_moved(x, y, shift) {
                     if dragging {
                         self.publish_card();
@@ -447,67 +437,35 @@ impl FiltersBridge {
 
     fn pointer_left(&self) {
         self.hover.set(None);
-        self.quick_timer.stop();
-        let dragging = self.state.borrow().crop_session().is_some_and(CropSession::dragging);
-        if self.quick() && !dragging {
-            self.end_crop(true);
-        } else if self.state.borrow_mut().crop_pointer_left() {
+        if self.state.borrow_mut().crop_pointer_left() {
             self.publish_overlay();
         }
     }
 
-    fn quick(&self) -> bool {
-        self.state
-            .borrow()
-            .crop_session()
-            .is_some_and(|s| s.mode == CropMode::Quick)
-    }
-
-    /// Starts the quick crop (Ctrl held over the video) unless a session runs or the picture is not known.
-    fn begin_quick(&self) {
+    /// F4 (the keymap's "Quick crop", user decision 2026-10-27; it was Ctrl held over the video): starts the quick
+    /// crop, where the edge or corner nearest to the pointer follows a drag, or keeps it when it runs. Escape restores
+    /// the crop from before, Enter keeps it too.
+    pub fn toggle_quick_crop(&self) {
         if self.suspended.get() {
             return;
         }
-        let started = {
-            let mut st = self.state.borrow_mut();
-            st.crop_session().is_none() && st.begin_crop(CropMode::Quick)
-        };
-        if started {
-            if let Some((x, y)) = self.hover.get() {
-                self.state.borrow_mut().crop_pointer_moved(x, y, false);
+        let session = self.state.borrow().crop_session().map(|s| s.mode);
+        match session {
+            Some(CropMode::Quick) => {
+                tracing::info!("[Filters] Quick crop kept");
+                self.end_crop(true);
             }
-            self.publish();
-        }
-    }
-
-    /// Ctrl went down or up (from the key scope). Held over the video for a moment it starts the quick crop; released,
-    /// it ends the quick crop (after a drag in progress).
-    pub fn control_changed(&self, down: bool) {
-        self.ctrl.set(down);
-        if down {
-            if self.hover.get().is_some() && self.state.borrow().crop_session().is_none() {
-                let this = Weak::clone(&self.me);
-                self.quick_timer
-                    .start(slint::TimerMode::SingleShot, QUICK_DELAY, move || {
-                        if let Some(bridge) = this.upgrade()
-                            && bridge.ctrl.get()
-                            && bridge.hover.get().is_some()
-                        {
-                            bridge.begin_quick();
-                        }
-                    });
+            Some(CropMode::Edit | CropMode::Pick) => {}
+            None => {
+                let started = self.state.borrow_mut().begin_crop(CropMode::Quick);
+                if started {
+                    tracing::info!("[Filters] Quick crop started");
+                    if let Some((x, y)) = self.hover.get() {
+                        self.state.borrow_mut().crop_pointer_moved(x, y, false);
+                    }
+                    self.publish();
+                }
             }
-            return;
         }
-        self.quick_timer.stop();
-        let dragging = self.state.borrow().crop_session().is_some_and(CropSession::dragging);
-        if self.quick() && !dragging {
-            self.end_crop(true);
-        }
-    }
-
-    /// Another key was pressed: a Ctrl held for a shortcut (Ctrl+O) does not start the quick crop.
-    pub fn other_key(&self) {
-        self.quick_timer.stop();
     }
 }

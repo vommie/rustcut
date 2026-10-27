@@ -2,13 +2,14 @@
 //! choices (each with the key that picks it), the queued jobs and the footer. The previews have their own models
 //! (`previews.rs`), filled in place as the files are read; closing the dialog stops them.
 
-use slint::{ComponentHandle as _, ModelRc, VecModel};
+use slint::{ComponentHandle as _, Model as _, ModelRc, VecModel};
 
 use super::ExportBridge;
 use super::dialog::{Choice, ConflictDialog, Tab};
 use super::save::Pending;
 use crate::icons::Icon;
 use crate::ui::queue::title as state_title;
+use crate::util::model::sync;
 use crate::{ConflictJobView, ConflictOptionView, Export, GlobalTooltip, TabView};
 
 /// The tabs with what they hold: title, the count for its badge ("" = none) and symbol (P9.15, Q-P9.15 counts A).
@@ -134,6 +135,7 @@ impl ExportBridge {
             })
             .collect();
         e.set_dialog_jobs(ModelRc::new(VecModel::from(jobs)));
+        let iterating = self.state.borrow().auto_increment;
         let options: Vec<ConflictOptionView> = dialog
             .options_of(dialog.tab)
             .into_iter()
@@ -146,9 +148,17 @@ impl ExportBridge {
                 enabled: o.enabled,
                 recommended: false,
                 typed: o.choice == Choice::Rename,
+                key_tint: key_tint(o.choice, o.destructive, iterating),
             })
             .collect();
-        e.set_dialog_tab_options(ModelRc::new(VecModel::from(options)));
+        // In place: a new model made every row again, and the "Own name" field lost the focus the moment a click put
+        // it there (picking the row republishes; user review 2026-10-27: one could not type into it).
+        let current = e.get_dialog_tab_options();
+        if let Some(model) = current.as_any().downcast_ref::<VecModel<ConflictOptionView>>() {
+            sync(model, options);
+        } else {
+            e.set_dialog_tab_options(ModelRc::new(VecModel::from(options)));
+        }
         e.set_dialog_others_title(format!("Other names starting with \"{}\"", self.state.borrow().name).into());
         e.set_dialog_tile_width(i32::try_from(self.dialog_settings.borrow().tile_size.width()).unwrap_or(112));
         e.set_dialog_selected(i32::try_from(dialog.selected).unwrap_or_default());
@@ -157,5 +167,15 @@ impl ExportBridge {
         e.set_dialog_can_confirm(dialog.browse || dialog.outcome().is_some());
         e.set_dialog_confirm_text(dialog.confirm_text().into());
         e.set_dialog_open(true);
+    }
+}
+
+/// The color of a choice's key: green for the next free number while the counter auto-iterates (what saving does
+/// anyway), red for a choice that replaces or removes something, else neutral.
+pub(super) fn key_tint(choice: Choice, destructive: bool, iterating: bool) -> i32 {
+    match (destructive, choice == Choice::NextNumber && iterating) {
+        (true, _) => 2,
+        (false, true) => 1,
+        (false, false) => 0,
     }
 }
