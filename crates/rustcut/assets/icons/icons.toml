@@ -70,6 +70,8 @@ filter_keep = { tabler = "pin", doc = "Keep the filters for the next video" }
 filter_kept = { tabler = "pinned", doc = "The filters are kept for the next video" }
 filter_reset = { tabler = "backspace", doc = "Reset every filter, or a menu's options (not a reload, Q-P9.13)" }
 filter_options = { tabler = "adjustments-horizontal", doc = "A filter's options menu" }
+filter_switch_on = { tabler = "toggle-right", doc = "A filter row's menu: switch the filter on" }
+filter_switch_off = { tabler = "toggle-left", doc = "A filter row's menu: switch the filter off" }
 filter_save_default = { tabler = "device-floppy", doc = "Save a filter's options as the defaults of Settings > Filters" }
 menu_pin = { tabler = "pin", doc = "Pin an options menu: it stays open while the pointer works elsewhere" }
 menu_pinned = { tabler = "pinned", doc = "The options menu is pinned" }

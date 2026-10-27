@@ -164,6 +164,12 @@ export global Filters {
     in-out property <length> menu-anchor-y;
     in-out property <length> menu-anchor-width;
     in-out property <length> menu-anchor-height;
+    // The card stack that holds the open menu's button scrolled (Q-P9n "scroll" A): its visible top and bottom (window
+    // coordinates) and a count; the button measures itself again and the menu follows its row, held at the edge while
+    // the row is out of view.
+    in-out property <int> stack-scrolls;
+    in-out property <length> stack-top;
+    in-out property <length> stack-bottom;
 
     callback toggle(/* kind */ string);
     callback reset();

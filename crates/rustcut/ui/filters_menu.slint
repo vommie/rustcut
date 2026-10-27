@@ -8,7 +8,7 @@
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
-import { ChoiceButton, IconButton, NumberField, SegmentedChoice, Switch } from "controls.slint";
+import { ChoiceButton, CloseButton, IconButton, NumberField, SegmentedChoice, Switch } from "controls.slint";
 import { TooltipArea } from "tooltip.slint";
 import { PlayerSeekBar } from "player_seek_bar.slint";
 import { Playback } from "player_types.slint";
@@ -682,9 +682,7 @@ export component FilterMenuFlyout inherits Rectangle {
                     VerticalLayout {
                         alignment: center;
 
-                        IconButton {
-                            icon: IconId.close;
-                            tooltip: "Close";
+                        CloseButton {
                             clicked => { Filters.close-menu(); }
                         }
                     }

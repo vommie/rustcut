@@ -33,7 +33,12 @@ const fn settings_key(kind: FilterKind) -> &'static str {
 
 /// The entries of a row's context menu.
 pub fn row_items(row: &RowView) -> Vec<MenuItem> {
-    let mut items = vec![MenuAction::new("toggle", if row.enabled { "Switch Off" } else { "Switch On" }, None).into()];
+    let toggle = if row.enabled {
+        MenuAction::new("toggle", "Switch Off", Some(Icon::FilterSwitchOff))
+    } else {
+        MenuAction::new("toggle", "Switch On", Some(Icon::FilterSwitchOn))
+    };
+    let mut items = vec![toggle.into()];
     if row.has_menu() {
         items.push(MenuAction::new("options", "Options...", Some(Icon::FilterOptions)).into());
     }

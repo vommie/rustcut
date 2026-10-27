@@ -220,6 +220,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The × that closes a filter's options menu, and the × of every dialog, is flat (0.0.57, your night questionnaire): no
+  frame like the buttons beside it, only a light tint under the pointer.
+- A filter row is lightly tinted while the pointer is anywhere on it, its buttons and fields too (0.0.57); "Switch On"
+  and "Switch Off" in its right-click menu have a symbol like the other entries.
+- A pinned options menu follows its filter when the card stack scrolls (0.0.57); while the filter is out of view the
+  menu waits at the stack's edge.
+- Settings > Messages: the three tabs stand over a surface of their own, and the selected tab merges into it like the
+  tabs of the main window (0.0.57).
 - The button of the Tag & Rate panel's RustView card leads to the RustView check of Settings > Diagnostics while
   RustView cannot be reached (0.0.54, your note 28#1); its tooltip still says the error.
 

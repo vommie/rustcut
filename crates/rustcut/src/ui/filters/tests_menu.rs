@@ -17,6 +17,7 @@ use super::input::typed_deshake;
 use super::menu::row_items;
 use super::state::{FiltersState, Kept, Source};
 use super::view;
+use crate::icons::Icon;
 use crate::ui::menu::MenuItem;
 
 fn state_with(defaults: FilterDefaults) -> FiltersState {
@@ -130,6 +131,27 @@ fn a_rows_menu_offers_what_the_row_can_do() {
     assert!(
         entries.iter().all(|(id, ..)| id != "options" && id != "reset"),
         "Orientation has no menu"
+    );
+}
+
+#[test]
+fn every_entry_of_a_rows_menu_has_an_icon() {
+    let mut s = state_with(FilterDefaults::default());
+    let off = view::card(&s).rows;
+    s.switch_on(FilterKind::Crop);
+    let on = view::card(&s).rows;
+    for row in off.iter().chain(on.iter()) {
+        for item in row_items(row) {
+            if let MenuItem::Action(a) = item {
+                assert!(a.icon.is_some(), "{:?}: {} has no icon (Q-P9n)", row.kind, a.title);
+            }
+        }
+    }
+    let crop = on.iter().find(|r| r.kind == FilterKind::Crop).unwrap();
+    let first = row_items(crop).into_iter().next();
+    assert!(
+        matches!(first, Some(MenuItem::Action(a)) if a.icon == Some(Icon::FilterSwitchOff)),
+        "a filter that is on offers Switch Off"
     );
 }
 

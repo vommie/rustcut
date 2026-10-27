@@ -121,6 +121,51 @@ export component IconButton inherits Rectangle {
     @children
 }
 
+/// The × that closes a dialog or a menu (night questionnaire Q-P9n): flat, without the frame of the icon buttons
+/// beside it, so it never reads as one of their actions; a tint only under the pointer.
+export component CloseButton inherits Rectangle {
+    in property <string> tooltip: "Close";
+    in property <string> shortcut: "Esc";
+    callback clicked();
+
+    width: 24px;
+    height: 24px;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    border-radius: 4px;
+    background: touch.pressed ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover : transparent;
+
+    host := TooltipHost {
+        text: root.tooltip;
+        shortcut: root.shortcut;
+    }
+
+    AppIcon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        icon: IconId.close;
+        size: IconSize.md;
+        color: touch.has-hover ? Theme.text : Theme.text-muted;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                host.press();
+            }
+        }
+        clicked => { root.clicked(); }
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+    }
+}
+
 /// An icon that labels a field, with a tooltip.
 export component FieldIcon inherits Rectangle {
     in property <IconId> icon;
