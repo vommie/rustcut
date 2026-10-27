@@ -11,6 +11,9 @@ Your UI review "RustCut Feedback" and the requests that came with it.
 
 ### Added
 
+- A tag used again glides to the front of the tag history, also from the last row, and the other tags slide to their
+  new places, so the eye can follow what changed (0.0.73).
+
 - Buttons for the sections under the timeline, after the frame steps: set the start, set the end, add the section. They
   are off without a video, and Add is off until start and end make a section of at least one frame.
 - The volume bar over the lower part of the video when the mouse wheel changes the volume, and a speaker in the

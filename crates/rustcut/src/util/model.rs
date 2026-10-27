@@ -76,11 +76,45 @@ pub fn sync_keyed<T: Clone + PartialEq + 'static, K: PartialEq>(
     }
 }
 
+/// Makes `model` hold `rows` by identity without ever moving a row: rows of ids that are gone are removed, changed rows
+/// are set in place, new ids are appended. Every element keeps its place in the model, so Slint keeps it and animates
+/// its changed properties (the tag history's pills glide to their new places; the order on screen is the rows' `x`/`y`).
+pub fn sync_stable<T: Clone + PartialEq + 'static, K: PartialEq>(
+    model: &VecModel<T>,
+    rows: Vec<T>,
+    id: impl Fn(&T) -> K,
+) {
+    let ids: Vec<K> = rows.iter().map(&id).collect();
+    for index in (0..model.row_count()).rev() {
+        if model.row_data(index).is_some_and(|row| !ids.contains(&id(&row))) {
+            model.remove(index);
+        }
+    }
+    for row in rows {
+        let key = id(&row);
+        match (0..model.row_count()).find(|&i| model.row_data(i).is_some_and(|r| id(&r) == key)) {
+            Some(index) => {
+                if model.row_data(index).is_some_and(|current| current != row) {
+                    model.set_row_data(index, row);
+                }
+            }
+            None => model.push(row),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use slint::{Model as _, VecModel};
 
-    use super::sync_keyed;
+    use super::{sync_keyed, sync_stable};
+
+    #[test]
+    fn stable_rows_never_move_new_ones_are_appended() {
+        let model = VecModel::from(vec![(1, "a"), (2, "b"), (3, "c")]);
+        sync_stable(&model, vec![(3, "C"), (4, "d"), (1, "a")], |r| r.0);
+        assert_eq!(model.iter().collect::<Vec<_>>(), [(1, "a"), (3, "C"), (4, "d")]);
+    }
 
     #[test]
     fn keyed_rows_keep_their_place_and_new_ones_are_inserted() {

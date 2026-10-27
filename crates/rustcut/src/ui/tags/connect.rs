@@ -67,6 +67,12 @@ pub(super) fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
         b.change(|s| s.click_tag(id));
     });
     on!(on_history_width_changed, |b, width| b.history_width_changed(width));
+    on!(
+        on_history_pill_measured,
+        |b, id, check, width| if let Some(id) = tag_id(id) {
+            b.history_pill_measured(id, check, width);
+        }
+    );
     on!(on_history_collapsed_changed, |b, collapsed| b
         .state
         .borrow_mut()

@@ -31,7 +31,7 @@ use slint::{ComponentHandle as _, Model as _, ModelRc, VecModel};
 
 pub use hidden::{Check, FilterRow};
 pub use history::{TagHistoryItem, TagHistoryLayoutEngine, TagHistoryManager, TagHistoryRow};
-use history_view::{LastTags, history_item_view};
+use history_view::LastTags;
 pub use state::{Choice, Editing, TagPanel};
 pub use tree::{
     MAX_TAG_ITEM_WIDTH, MIN_TAG_ITEM_WIDTH, TAG_COLUMN_SPACING, TAG_ITEM_HEIGHT, TAG_PADDING_H, TAG_PADDING_V,
@@ -43,7 +43,7 @@ use crate::ui::dispatcher::UiDispatcher;
 use crate::ui::jump::JumpTarget;
 use crate::ui::notices::{self, Kind, Notice};
 use crate::util::model::sync_keyed;
-use crate::{MainWindow, TagColumnView, TagFilterRowView, TagFilterWindow, TagHistoryRowModel, TagNodeView, TagRate};
+use crate::{MainWindow, TagColumnView, TagFilterRowView, TagFilterWindow, TagNodeView, TagRate};
 
 /// The tree area's height until the panel reports it, in logical pixels: RustView's start value
 /// (`AppState::tag_tree_available_height`), so the first columns are laid out like RustView's.
@@ -85,7 +85,8 @@ pub struct TagsBridge {
     columns: Rc<VecModel<TagColumnView>>,
     /// One row model per column, kept so Slint keeps the items of rows that did not change.
     column_rows: RefCell<Vec<Rc<VecModel<TagNodeView>>>>,
-    history_rows: Rc<VecModel<TagHistoryRowModel>>,
+    /// The history's pills at their places (stable rows, so moves glide).
+    history: history_view::HistoryPills,
     /// An Apply waits for the queue.
     applying: Cell<bool>,
     /// Shows the panel in the dock (it may sit in a collapsed sidebar or behind another tab).
@@ -151,7 +152,7 @@ impl TagsBridge {
             history_width: Cell::new(0.0),
             columns: Rc::new(VecModel::default()),
             column_rows: RefCell::new(Vec::new()),
-            history_rows: Rc::new(VecModel::default()),
+            history: history_view::HistoryPills::default(),
             applying: Cell::new(false),
             on_reveal: RefCell::new(None),
             on_active: RefCell::new(None),
@@ -166,7 +167,7 @@ impl TagsBridge {
         BRIDGE.with(|b| *b.borrow_mut() = Rc::downgrade(&bridge));
         let t = window.global::<TagRate<'_>>();
         t.set_columns(ModelRc::from(Rc::clone(&bridge.columns)));
-        t.set_history_rows(ModelRc::from(Rc::clone(&bridge.history_rows)));
+        t.set_history_pills(ModelRc::from(Rc::clone(&bridge.history.model)));
         connect::connect(&bridge, window);
         bridge.runtime.spawn(connect::follow(bridge.sync.clone(), ui.clone()));
         if enabled {
@@ -506,19 +507,17 @@ impl TagsBridge {
             let state = self.state.borrow();
             (state.history_items(), LastTags::new(&state.last_tags))
         };
-        let (rows, _) = TagHistoryLayoutEngine::pack_into_rows(items, self.history_width.get());
-        let rows: Vec<TagHistoryRowModel> = rows
-            .into_iter()
-            .map(|row| TagHistoryRowModel {
-                items: ModelRc::new(VecModel::from(
-                    row.items
-                        .into_iter()
-                        .map(|item| history_item_view(item, &last))
-                        .collect::<Vec<_>>(),
-                )),
-            })
-            .collect();
-        self.history_rows.set_vec(rows);
+        let height = self.history.show(items, &last, self.history_width.get());
+        if let Some(window) = self.window.upgrade() {
+            window.global::<TagRate<'_>>().set_history_pills_height(height);
+        }
+    }
+
+    /// Slint measured a pill: the pills are placed again when its width changed.
+    fn history_pill_measured(&self, id: u32, check: bool, width: f32) {
+        if self.history.measured(id, check, width) {
+            self.publish_history();
+        }
     }
 
     fn tree_height_changed(&self, height: f32) {

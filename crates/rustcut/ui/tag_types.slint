@@ -33,6 +33,11 @@ export struct TagHistoryItemModel {
     // RustCut: a tag the last saved job did not have (and not assigned now): the pill is faint (user request
     // 2026-10-27).
     older: bool,
+    // Its place in the history's flow (from the rows' top left, src/ui/tags/history_view.rs) and whether it is the
+    // newest (it lies on top while it glides to the front).
+    x: length,
+    y: length,
+    front: bool,
 }
 
 export struct TagHistoryRowModel {
@@ -86,7 +91,9 @@ export global TagRate {
     in property <bool> filter-invalid;
     in property <[TagColumnView]> columns;
 
-    in property <[TagHistoryRowModel]> history-rows;
+    // The pills, each at its place (stable rows: a pill that moves glides there) and the height they take.
+    in property <[TagHistoryItemModel]> history-pills;
+    in property <length> history-pills-height;
     in property <int> history-count;
     in-out property <bool> history-collapsed;
     in-out property <length> history-height: 96px;
@@ -111,6 +118,8 @@ export global TagRate {
     callback tree-menu(length /* x */, length /* y */);
     callback history-tag-clicked(int);
     callback history-width-changed(length);
+    // A pill's natural width (`check` = it shows its check mark): the flow uses the measured widths.
+    callback history-pill-measured(/* tag id */ int, /* check */ bool, length);
     callback history-collapsed-changed(bool);
     callback history-resized(length);
     callback apply-last-tags();
