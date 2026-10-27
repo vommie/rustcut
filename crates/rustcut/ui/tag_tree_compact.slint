@@ -1,20 +1,16 @@
-// The tag tree's Compact Mode (questionnaire 2026-10-27-rustcut-compact-tree): written in RustCut for RustView's ui/
-// folder as well (ADR-10, amendment D-CT1). RustView gets this file in the same form (phase 5); from then on this file is
-// a copy like `tag_tree.slint` and tests/rustview_parity.rs compares it. RustCut's lock look stays between the
-// "RustCut begin/end" lines. Same API as `TagTreeItem`/`TagTreeList`, so the panel swaps one list for the other.
-//
-// Sharpness (checked zoomed in the femtovg renderer): rows, lines, the expand button and the marks sit on whole pixels;
-// plus, minus, the check and the half circle are whole-pixel bars (small SVGs lost single pixels in femtovg); a Text is
-// taller than its row because a Text clips its glyphs to its box (the descenders of g, y and p).
+// Copied from RustView (crates/rustview/ui/tag_tree_compact.slint, the tag tree's Compact Mode; made first in RustCut 0.0.70,
+// ADR-10 amendment D-CT1). Only the imports differ, plus RustCut's red lock look between the "RustCut begin/end" lines.
+// tests/rustview_parity.rs compares it with the original: change RustView's file and copy it again, never this one.
 
 import { Theme } from "styles.slint";
 import { TagNodeView, TagColumnView } from "tag_types.slint";
 import { SmoothScrollArea } from "smooth_scroll_view.slint";
 
-/// The sizes and the two own colors of Compact Mode. Rust splits the columns with the same numbers (`tree::COMPACT_*`).
+/// The sizes and the two own colors of Compact Mode. Rust splits the columns with the same numbers (the `COMPACT_*`
+/// constants beside `TAG_ITEM_HEIGHT`).
 export global CompactTreeMetrics {
     // A row without its line; neighbors share one 1px line (rows, columns and the frame of a state). Answer "rows" = C
-    // (14 px), then one more pixel after the user's test of 0.0.70: 37 rows on the area of the PyCutRv screenshot.
+    // (14 px), then one more pixel after the user's test of RustCut 0.0.70: 37 rows on the area of the PyCutRv screenshot.
     out property <length> row-height: 15px;
     // PyCutRv's font: Noto Sans 8 pt at 96 dpi.
     out property <length> font-size: 32px / 3;
@@ -32,8 +28,8 @@ export global CompactTreeMetrics {
     out property <length> list-padding: 4px;
     out property <length> min-column-width: 60px;
     out property <length> max-column-width: 180px;
-    // A row a little darker than `Theme.surface-variant` and its hover a little lighter than `Theme.surface-hover`
-    // (the user, 2026-10-27, after testing 0.0.70; the hover also stands out from the lines, which are
+    // A row about 20 % darker than `Theme.surface-variant` and its hover a little lighter than `Theme.surface-hover`
+    // (the user, 2026-10-27, after testing RustCut 0.0.70; the hover also stands out from the lines, which are
     // `Theme.border` = the old hover color).
     out property <color> row-background: #1b1b2a;
     out property <color> row-hover: #383a4f;
