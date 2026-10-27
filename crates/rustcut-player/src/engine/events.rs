@@ -147,9 +147,28 @@ pub(super) fn run(client: &Mpv, on_event: &dyn Fn(PlayerEvent), commands: &Sende
                 let Some(property) = property(name, &change) else {
                     continue;
                 };
-                if let Property::Duration(seconds) = property {
-                    // Fails only when the command thread is gone (shutdown).
-                    commands.send(Command::Duration(seconds)).ok();
+                // Fails only when the command thread is gone (shutdown).
+                match property {
+                    Property::Duration(seconds) => {
+                        commands.send(Command::Duration(seconds)).ok();
+                    }
+                    Property::Paused(paused) => {
+                        commands
+                            .send(Command::Observed {
+                                paused: Some(paused),
+                                at_end: None,
+                            })
+                            .ok();
+                    }
+                    Property::EndReached(at_end) => {
+                        commands
+                            .send(Command::Observed {
+                                paused: None,
+                                at_end: Some(at_end),
+                            })
+                            .ok();
+                    }
+                    _ => {}
                 }
                 PlayerEvent::Property(property)
             }

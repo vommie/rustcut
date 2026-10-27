@@ -172,8 +172,8 @@ kinds! {
         critical true, ("Cannot open clip.mp4", "Invalid data found when processing input");
     PlaybackFailed = "playback_failed", "File does not play", Source, Error, Banner, FIXED_BANNER, desktop true,
         critical true, ("The file cannot be played", "The video could not be decoded.");
-    KnownSource = "known_source", "Source cut before", Source, Warning, Banner, LOUD, desktop false, critical false,
-        ("This video was cut before", "First cut on 2026-10-12. 3 files in the library were made from it.");
+    KnownSource = "known_source", "Source known to RustView", Source, Warning, Banner, LOUD, desktop false,
+        critical false, ("RustView knows this video", "Known since 2026-10-12. 3 files in the library were made from it.");
     SectionAdded = "section_added", "Section added", Sections, Info, Status, QUIET, desktop false, critical false,
         ("Section 2 added", "");
     /// A typed time that is no time, or puts the end before the start (M6.5c).

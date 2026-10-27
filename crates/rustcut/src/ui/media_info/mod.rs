@@ -2,10 +2,10 @@
 //! aborted, which kills its ffprobe; the frame-timing sample follows as a second call), and when the known-source warning
 //! needs the hash it is taken from RustView's record of the file (ADR-6, no disk read), else from the hash service
 //! (sidecar first, else MD5 in the background); otherwise the panel offers "Compute". Once the hash is known, RustView
-//! is asked whether the file was cut before (the banner). Results land in the shared
-//! [`MediaPanelState`] under a short lock; the UI thread is only told to refresh, through the [`UiDispatcher`] at
-//! `rate::PROGRESS`, and reads the current views when the refresh runs, so a late result can never show for the wrong file.
-//! No file system call happens on the UI thread.
+//! is asked whether it knows the file (the banner; an unknown file is registered, PyCutRv's rule). Results land in the
+//! shared [`MediaPanelState`] under a short lock; the UI thread is only told to refresh, through the [`UiDispatcher`]
+//! at `rate::PROGRESS`, and reads the current views when the refresh runs, so a late result can never show for the
+//! wrong file. No file system call happens on the UI thread.
 
 pub mod known_source;
 mod state;
@@ -73,6 +73,8 @@ pub struct MediaInfoBridge {
     probe_options: RefCell<ProbeOptions>,
     /// Hash every opened file and look it up in RustView (the known-source warning).
     auto_hash: Arc<AtomicBool>,
+    /// The Tag & Rate panel's "Active": an opened video RustView does not know yet is registered (PyCutRv's rule).
+    rustview_active: Arc<AtomicBool>,
     probe_task: RefCell<Option<tokio::task::AbortHandle>>,
     events_task: tokio::task::AbortHandle,
 }
@@ -82,6 +84,11 @@ impl MediaInfoBridge {
     /// "nothing", changed in the Settings window).
     pub fn set_known_source(&self, on: bool) {
         self.auto_hash.store(on, Ordering::Relaxed);
+    }
+
+    /// The Tag & Rate panel's "Active" switch (off: opened videos are not registered in RustView).
+    pub fn set_rustview_active(&self, on: bool) {
+        self.rustview_active.store(on, Ordering::Relaxed);
     }
 
     /// The ffprobe that reads the next opened video (changed in the Settings window).
@@ -107,12 +114,14 @@ impl MediaInfoBridge {
     ) -> Rc<Self> {
         let state = Arc::new(Mutex::new(MediaPanelState::default()));
         let known_source = Arc::new(AtomicBool::new(known_source::wanted(settings)));
+        let rustview_active = Arc::new(AtomicBool::new(true));
         let events_task = runtime
             .spawn(forward_hash_events(
                 hashing.clone(),
                 Lookup {
                     sync: sync.clone(),
                     known_source: Arc::clone(&known_source),
+                    rustview_active: Arc::clone(&rustview_active),
                     state: Arc::clone(&state),
                     ui: ui.clone(),
                     window: window.as_weak(),
@@ -131,6 +140,7 @@ impl MediaInfoBridge {
                 ..ProbeOptions::default()
             }),
             auto_hash: known_source,
+            rustview_active,
             probe_task: RefCell::new(None),
             events_task,
         });
@@ -238,7 +248,7 @@ impl MediaInfoBridge {
     }
 
     /// A job of `source` was queued. When it went without the hash (not known yet at saving), the hash is registered
-    /// in RustView as soon as it is known (only sources of jobs are registered, bug 3).
+    /// in RustView as soon as it is known (with the known-source check on, an opened video is registered anyway).
     pub fn job_saved(&self, source: &Path, with_hash: bool) {
         if with_hash {
             return;
@@ -266,6 +276,7 @@ impl MediaInfoBridge {
         let lookup = Lookup {
             sync: Some(sync.clone()),
             known_source: Arc::clone(&self.auto_hash),
+            rustview_active: Arc::clone(&self.rustview_active),
             state: Arc::clone(&self.state),
             ui: self.ui.clone(),
             window: self.window.clone(),
@@ -392,14 +403,16 @@ fn register_hash(sync: Option<&SyncHandle>, md5: String) {
 struct Lookup {
     sync: Option<SyncHandle>,
     known_source: Arc<AtomicBool>,
+    rustview_active: Arc<AtomicBool>,
     state: Arc<Mutex<MediaPanelState>>,
     ui: UiDispatcher,
     window: slint::Weak<MainWindow>,
 }
 
 impl Lookup {
-    /// The open file's MD5 is known: register it if a job was saved without it, and ask RustView whether the file was
-    /// cut before (the banner shows only while that file is still open).
+    /// The open file's MD5 is known: register it if a job was saved without it, and ask RustView whether it knows the
+    /// file (the banner shows only while that file is still open). A file RustView does not know is registered now, as
+    /// PyCutRv does on every open: the next open in RustCut or PyCutRv warns (no banner for this first open).
     async fn hash_known(&self, path: &Path, md5: &str) {
         let register = std::mem::take(&mut self.state.lock().register_hash);
         if register {
@@ -415,7 +428,11 @@ impl Lookup {
             }
             state.generation
         };
-        let view = known_source::lookup(sync, path, md5).await;
+        let (view, known) = known_source::lookup(sync, path, md5).await;
+        if known == Some(false) && self.rustview_active.load(Ordering::Relaxed) {
+            tracing::info!(path = %path.display(), "[Media] Unknown to RustView; hash registered");
+            register_hash(Some(sync), md5.to_owned());
+        }
         let state = Arc::clone(&self.state);
         self.ui.post(move || {
             let (current, quiet) = {

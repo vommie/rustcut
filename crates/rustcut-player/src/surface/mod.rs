@@ -215,6 +215,8 @@ impl<C: ComponentHandle + 'static> Surface<C> {
 struct FrameTiming {
     started: Option<Instant>,
     video_render: Option<Duration>,
+    /// Every Slint frame of the period, also those without a new video frame (the UI's own animations, the playhead).
+    ui_frames: u32,
     period: Option<FrameStats>,
     total: Option<FrameStats>,
     period_start: Instant,
@@ -229,6 +231,7 @@ impl FrameTiming {
         Self {
             started: None,
             video_render: None,
+            ui_frames: 0,
             period,
             total: FrameStats::new(),
             period_start: Instant::now(),
@@ -245,6 +248,7 @@ impl FrameTiming {
     }
 
     fn end(&mut self) {
+        self.ui_frames = self.ui_frames.saturating_add(1);
         let (Some(started), Some(render)) = (self.started.take(), self.video_render.take()) else {
             return;
         };
@@ -260,9 +264,11 @@ impl FrameTiming {
             && let Some(period) = self.period.as_mut()
         {
             if let Some(r) = period.report() {
+                let secs = self.period_start.elapsed().as_secs_f64();
                 tracing::debug!(
                     frames = r.frames,
                     fps = format_args!("{:.1}", r.fps),
+                    ui_fps = format_args!("{:.1}", f64::from(self.ui_frames) / secs.max(1e-3)),
                     render = %r.render_ms,
                     frame = %r.frame_ms,
                     interval = %r.interval_ms,
@@ -270,6 +276,7 @@ impl FrameTiming {
                 );
             }
             period.reset();
+            self.ui_frames = 0;
             self.period_start = Instant::now();
         }
     }

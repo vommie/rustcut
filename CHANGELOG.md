@@ -7,9 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-The user's review of the Settings window (0.0.67).
+The user's review of the Settings window (0.0.67) and the editor issues of 2026-10-27 (0.0.68).
 
 ### Added
+
+- The start mark is at 0 in every newly opened video (as in RustView); a loaded job with sections makes its first
+  section the current one (its marks) and the player goes to its start.
 
 - Settings > Render Profiles: "+" makes a new profile with the standard settings (no copy of the selected one), and
   the eye hides a profile from the Codecs panel's choice and "Render again with" (it stays in Settings; the profile new
@@ -31,6 +34,19 @@ The user's review of the Settings window (0.0.67).
 
 ### Changed
 
+- Job Finalization: an empty counter field counts as 01 while "The counter goes up after each save" is on (the saved
+  file gets " - 01", the field then shows 02); only with auto-increment off does an empty field mean no counter.
+- Section marks follow RustView's rules: an end without a start puts the start at 0, an end before the start moves the
+  start onto it, and start and end may share a time (a mark on the other is no longer dropped).
+- Opening a video RustView does not know registers its MD5 in RustView at once, as PyCutRv does (while Tag & Rate is
+  "Active" and the known-source message is shown): opening it again, in RustCut or PyCutRv, warns that it is known.
+  A video is known as soon as RustView knows its hash, also when the video itself is in the library; the banner says
+  "RustView knows this video" and when it became known (Settings > Messages: "Source known to RustView").
+- The playhead glides while the video plays: it moves on between mpv's position reports (every 8 ms, at most 200 ms
+  ahead), so it no longer jumps a few pixels per frame on short videos.
+- Play/pause uses mpv's own toggle with the observed pause and end state (the command thread no longer reads
+  properties).
+
 - "Hold for" (Settings > General) is 1000 ms by default (was 2000 ms). A value saved in `config.toml` stays.
 - The queue panel's "When the queue finishes" button and Settings > Queue > "Then" are one choice: a change in either
   place shows in the other and is kept for the next start (before, the panel's choice was kept apart in
@@ -51,6 +67,13 @@ The user's review of the Settings window (0.0.67).
 - The Settings window comes back where it was (its position is kept in `ui-state.toml`, like its size).
 
 ### Fixed
+
+- A click on the timeline made the video jump twice (to a keyframe, then to the exact frame), and a drag ended with an
+  extra jump: every timeline seek goes to the exact frame now, and the release sends no second seek to the same time.
+- A parent tag in the Tag & Rate tree sometimes showed "+" while it was expanded (or "-" while collapsed): a tree row
+  is made again when its tag or expansion changes, so the button follows the tree again.
+- At the end of a video the playhead stepped back to the last frame's start and never reached the end; it stands at
+  the end now.
 
 - The last card of a Settings page (e.g. RustView's "Source hashes") could not be scrolled into view; its text had a
   gap of blanks in the middle.

@@ -26,7 +26,7 @@ use rustcut_player::{
 use slint::ComponentHandle as _;
 
 pub use shuttle::ShuttleKey;
-pub use state::{PlaybackState, PlaybackView};
+pub use state::{Motion, PlaybackState, PlaybackView};
 
 use crate::ui::dispatcher::{CoalesceKey, UiDispatcher, rate};
 use crate::ui::notices::{self, Kind, Notice};

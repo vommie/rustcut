@@ -17,6 +17,8 @@ fn export(counter_enabled: bool) -> ExportState {
         &ExportPanelState {
             counter_enabled,
             counter: 1,
+            // An empty field is a counter while auto-increment is on: "no counter" needs both off.
+            auto_increment: counter_enabled,
             ..ExportPanelState::default()
         },
     );
@@ -321,4 +323,21 @@ fn the_files_dialog_opens_on_the_similar_files_when_the_target_is_free() {
     );
     let taken = dialog(&st, exists(), Vec::new()).browsing();
     assert_eq!((taken.tab, taken.target_count()), (Tab::Decision, 1));
+}
+
+#[test]
+fn an_empty_counter_with_auto_increment_offers_the_next_number() {
+    let mut st = export(false);
+    st.auto_increment = true;
+    let d = dialog(&st, exists(), Vec::new());
+    assert_eq!(
+        d.options[0].choice,
+        Choice::NextNumber,
+        "an empty field is 01 while auto-increment is on"
+    );
+    assert_eq!(d.options[0].title, "Next free number");
+    assert_eq!(
+        silent_outcome(&d, &st).unwrap().counter,
+        d.options[0].outcome.as_ref().unwrap().counter
+    );
 }

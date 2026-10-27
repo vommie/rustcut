@@ -314,6 +314,14 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &loaded.settings,
     );
     media.set_write_sidecar(loaded.settings.hashing.write_sidecar);
+    {
+        let media = Rc::downgrade(&media);
+        tags.set_on_active(move |on| {
+            if let Some(media) = media.upgrade() {
+                media.set_rustview_active(on);
+            }
+        });
+    }
     let filters = FiltersBridge::install(
         &main,
         filters::Parts {

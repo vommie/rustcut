@@ -282,9 +282,14 @@ impl ExportState {
         }
     }
 
-    /// The counter the name uses now.
+    /// The counter the name uses now: the field's number, or 1 for an empty field while auto-increment is on (an empty
+    /// field means no counter only while the counter stays after a save; user decision 2026-10-27).
     pub fn active_counter(&self) -> Option<u32> {
-        self.counter_enabled.then_some(self.counter)
+        if self.counter_enabled {
+            Some(self.counter)
+        } else {
+            self.auto_increment.then_some(1)
+        }
     }
 
     /// The stem with counter `counter`.
@@ -307,9 +312,10 @@ impl ExportState {
         !self.verbatim && used_variables(&self.template).is_ok_and(|v| v.iter().any(|n| n == "counter"))
     }
 
-    /// After a save with counter `used`: the next job gets the next number when auto-increment is on.
+    /// After a save with counter `used` (`None` = the one the card had): the next job gets the next number when
+    /// auto-increment is on.
     pub fn saved(&mut self, used: Option<u32>) {
-        if let Some(n) = used {
+        if let Some(n) = used.or_else(|| self.active_counter()) {
             self.counter_enabled = true;
             self.counter = n;
         }
@@ -350,16 +356,35 @@ mod tests {
     fn an_empty_counter_field_means_no_counter() {
         let mut st = state();
         st.file_opened(Path::new("/videos/Holiday.mp4"));
+        st.auto_increment = false;
         assert!(st.type_counter(" "));
         assert_eq!(st.file(&facts()).unwrap().1, "Holiday.mkv", "no counter in the name");
         st.saved(None);
-        assert!(!st.counter_enabled, "auto-increment keeps an empty field empty");
+        assert!(!st.counter_enabled, "without auto-increment an empty field stays empty");
         assert!(!st.type_counter("x7"), "not a number");
         assert!(st.type_counter("07"));
         assert_eq!((st.counter_enabled, st.counter), (true, 7));
         assert_eq!(st.file(&facts()).unwrap().1, "Holiday - 07.mkv");
+        st.auto_increment = true;
         st.saved(Some(7));
         assert_eq!(st.counter, 8, "auto-increment after a save");
+    }
+
+    #[test]
+    fn an_empty_counter_field_counts_from_one_while_auto_increment_is_on() {
+        let mut st = state();
+        st.file_opened(Path::new("/videos/Holiday.mp4"));
+        assert!(st.type_counter(""));
+        st.auto_increment = true;
+        assert_eq!(st.active_counter(), Some(1));
+        assert_eq!(st.file(&facts()).unwrap().1, "Holiday - 01.mkv", "an empty field is 01");
+        st.saved(None);
+        assert_eq!((st.counter_enabled, st.counter), (true, 2), "the next job gets 02");
+        assert_eq!(st.file(&facts()).unwrap().1, "Holiday - 02.mkv");
+        st.auto_increment = false;
+        assert!(st.type_counter(""));
+        assert_eq!(st.active_counter(), None, "empty without auto-increment = no counter");
+        assert_eq!(st.file(&facts()).unwrap().1, "Holiday.mkv");
     }
 
     #[test]
@@ -428,7 +453,9 @@ mod tests {
         assert_eq!(st.file(&facts()).unwrap().1, "Beach - 03.mkv");
         assert_eq!(st.naming(st.active_counter()), saved.naming);
 
-        // A job of 0.0.12 (no naming) in the source's folder: the stem is the name.
+        // A job of 0.0.12 (no naming) in the source's folder: the stem is the name (with auto-increment off; while it
+        // is on, the empty counter is 01 as for any empty field).
+        st.auto_increment = false;
         assert!(!st.load_target(&target("/videos", "Old - 07", None), &facts()));
         assert_eq!(
             (st.folder, st.name.as_str(), st.active_counter()),
@@ -461,6 +488,7 @@ mod tests {
         assert_eq!(st.stem_with(&facts(), None).unwrap(), "Trip AV1 2 1-02-05 Src");
         assert!(!st.template_uses_counter());
         st.counter_enabled = false;
+        st.auto_increment = false;
         st.template = rustcut_core::naming::DEFAULT_TEMPLATE.into();
         assert!(st.template_uses_counter());
         assert_eq!(st.file(&facts()).unwrap().0, "Trip");

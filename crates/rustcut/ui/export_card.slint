@@ -138,8 +138,10 @@ export component FinalizeCardBody inherits VerticalLayout {
         NumberField {
             width: FinalizeMetrics.counter-width;
             text: Export.counter-enabled ? Export.counter : "";
-            placeholder: "None";
-            tooltip: "The counter of the next job (empty: no counter in the file name)";
+            placeholder: Export.auto-increment ? "01" : "None";
+            tooltip: Export.auto-increment
+                ? "The counter of the next job (empty: 01)"
+                : "The counter of the next job (empty: no counter in the file name)";
             committed(text) => { return Export.counter-committed(text); }
             stepped(steps) => { Export.counter-stepped(steps); }
         }
