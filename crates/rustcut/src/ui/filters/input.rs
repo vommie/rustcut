@@ -19,8 +19,6 @@ const INTERPOLATIONS: [DeshakeInterpolation; 4] = [
     DeshakeInterpolation::Linear,
     DeshakeInterpolation::No,
 ];
-/// Pixels per step of a crop field (even sizes stay even).
-const PIXEL_STEP: i32 = 2;
 /// Pixels per step of a resize field (a common multiple of the codecs' block sizes).
 const RESIZE_STEP: i32 = 16;
 /// One step of each deshake number (shakiness, accuracy, search step, smoothing, zoom, max shift, max angle, zoom
@@ -206,7 +204,7 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
     });
     let step_crop = change(&this, |s, (edge, steps): (i32, i32)| {
         if let Some(edge) = Edge::from_index(edge) {
-            s.step_shown_edge(edge, steps.saturating_mul(PIXEL_STEP));
+            s.step_shown_edge(edge, steps);
         }
     });
     f.on_step_crop(move |edge, steps| step_crop((edge, steps)));

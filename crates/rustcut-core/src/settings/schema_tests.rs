@@ -523,3 +523,36 @@ fn a_file_of_0_0_59_moves_the_crop_multiple_to_the_final_size_rule() {
     let off: Settings = toml::from_str("version = 6\n[filters]\nfinal_multiple = 0\n").unwrap();
     assert_eq!(off.filters.sanitized().final_multiple, 0);
 }
+
+#[test]
+fn a_file_of_0_0_60_trims_only_an_untouched_crop_ratio_list() {
+    // Settings version 6 -> 7 (review 2): the old built-in list becomes the new one, backed up first.
+    let dir = tempfile::tempdir().unwrap();
+    let old = "version = 6\n[filters]\ncrop_ratios = [\"1:1\", \"5:4\", \"4:3\", \"3:2\", \"16:10\", \"16:9\", \
+               \"21:9\", \"4:5\", \"3:4\", \"2:3\", \"9:16\"]\n";
+    std::fs::write(dir.path().join("config.toml"), old).unwrap();
+    let outcome = load::<Settings>(dir.path(), &dir.path().join("b")).unwrap();
+    let LoadOutcome::Migrated {
+        value,
+        from: 6,
+        backup,
+        notes,
+    } = outcome
+    else {
+        panic!("{outcome:?}")
+    };
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(std::fs::read_to_string(&backup).unwrap(), old, "backed up first");
+    assert_eq!(
+        value.filters.crop_ratios,
+        ["1:1", "5:4", "4:3", "16:9", "4:5", "3:4", "9:16"]
+    );
+    // A list the user changed stays as it is.
+    let dir = tempfile::tempdir().unwrap();
+    let own = "version = 6\n[filters]\ncrop_ratios = [\"21:9\", \"16:10\"]\n";
+    std::fs::write(dir.path().join("config.toml"), own).unwrap();
+    let value = load::<Settings>(dir.path(), &dir.path().join("b"))
+        .unwrap()
+        .into_value();
+    assert_eq!(value.filters.crop_ratios, ["21:9", "16:10"]);
+}

@@ -148,7 +148,7 @@ export component ChoiceButton inherits Rectangle {
 }
 
 /// At most three short choices side by side, the chosen one pressed in (D-P9j). Every part is equally wide, so the
-/// bold chosen text never moves the others.
+/// bold chosen text never moves the others; a faint line separates two parts that are not chosen (review 2).
 export component SegmentedChoice inherits Rectangle {
     in property <[string]> items;
     in property <int> current;
@@ -156,12 +156,14 @@ export component SegmentedChoice inherits Rectangle {
     in property <bool> enabled: true;
     // The key of the bubble about this choice (`bubble.slint`; empty = none).
     in property <string> bubble;
+    // Stretches over all the room it gets (a row of its own in a filter's options menu, review 2).
+    in property <bool> stretch-fully;
     callback selected(int);
 
     height: 24px;
     min-width: root.items.length * 34px;
     preferred-width: ControlMetrics.field-max-width;
-    max-width: ControlMetrics.field-max-width;
+    max-width: root.stretch-fully ? 100000px : ControlMetrics.field-max-width;
     horizontal-stretch: 1;
     border-radius: 4px;
     background: Theme.surface;
@@ -197,6 +199,14 @@ export component SegmentedChoice inherits Rectangle {
                     : part.has-hover && root.enabled ? Theme.surface-hover : transparent;
                 border-width: index == root.current ? 1px : 0px;
                 border-color: root.enabled ? Theme.primary : Theme.border;
+
+                if index > 0 && index != root.current && index - 1 != root.current: Rectangle {
+                    x: -1.5px;
+                    y: 5px;
+                    width: 1px;
+                    height: parent.height - 10px;
+                    background: Theme.border;
+                }
 
                 part := TouchArea {
                     mouse-cursor: root.enabled && index != root.current ? MouseCursor.pointer : MouseCursor.default;

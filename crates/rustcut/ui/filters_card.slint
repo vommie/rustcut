@@ -194,14 +194,15 @@ component CropField inherits HorizontalLayout {
 
     FieldIcon {
         icon: root.icon;
-        tooltip: root.name + " edge as seen in the output (pixels; the wheel changes it by 2)";
+        tooltip: root.name + " edge as seen in the output (pixels)";
     }
 
     NumberField {
         min-width: 30px;
         text: Filters.crop-edges[root.edge];
-        tooltip: root.name + " edge in pixels";
+        tooltip: root.name + " edge in pixels (click, then the wheel: 1, Ctrl 10, Shift 100)";
         spin: false;
+        pixel-steps: true;
         committed(text) => { return Filters.edit-crop(root.edge, text); }
         stepped(steps) => { Filters.step-crop(root.edge, steps); }
     }
@@ -236,9 +237,54 @@ component CropEdges inherits HorizontalLayout {
     }
 }
 
-/// Deshake shows only what is set (Q-P9.13: everything else is in its menu).
+/// A Deshake number labeled by a small symbol (its tooltip names and explains it; review 2).
+component DeshakeValue inherits TooltipArea {
+    in property <IconId> icon;
+    in property <string> value;
+
+    preferred-width: layout.preferred-width;
+    horizontal-stretch: 0;
+
+    layout := HorizontalLayout {
+        spacing: 2px;
+
+        VerticalLayout {
+            alignment: center;
+
+            AppIcon {
+                icon: root.icon;
+                size: IconSize.sm;
+                color: Theme.text-muted;
+            }
+        }
+
+        Text {
+            text: root.value;
+            color: Theme.text-muted;
+            font-size: 11px;
+            vertical-alignment: center;
+        }
+    }
+}
+
+/// Deshake shows only what is set (Q-P9.13: everything else is in its menu): shakiness and smoothing with symbols, the
+/// rest in dim words. That it renders only is in the name button's tooltip (review 2).
 component DeshakeValues inherits HorizontalLayout {
-    spacing: FilterMetrics.spacing;
+    spacing: 8px;
+
+    DeshakeValue {
+        icon: IconId.deshake-shakiness;
+        value: Filters.deshake-values[0];
+        title: "Shakiness";
+        text: Filters.tips.shakiness;
+    }
+
+    DeshakeValue {
+        icon: IconId.deshake-smoothing;
+        value: Filters.deshake-values[3];
+        title: "Smoothing";
+        text: Filters.tips.smoothing;
+    }
 
     TooltipArea {
         text: "Open the options to change them.";
@@ -248,24 +294,12 @@ component DeshakeValues inherits HorizontalLayout {
         Text {
             width: parent.width;
             height: parent.height;
-            text: Filters.deshake-summary;
+            text: Filters.deshake-extra;
             color: Theme.text-muted;
             font-size: 11px;
             font-italic: true;
             vertical-alignment: center;
             overflow: elide;
-        }
-    }
-
-    TooltipArea {
-        width: 16px;
-        text: "Render only (two passes): the preview does not show it.";
-
-        AppIcon {
-            y: (parent.height - self.height) / 2;
-            icon: IconId.render-only;
-            size: IconSize.sm;
-            color: Theme.text-muted;
         }
     }
 }

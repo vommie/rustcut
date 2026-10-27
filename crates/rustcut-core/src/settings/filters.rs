@@ -137,6 +137,38 @@ pub(super) fn migrate_final_size_rule(table: &mut toml::Table) -> Result<(), Str
     Ok(())
 }
 
+/// The built-in crop ratios up to 0.0.60 (settings version 6).
+const RATIOS_UP_TO_0_0_60: [&str; 11] = [
+    "1:1", "5:4", "4:3", "3:2", "16:10", "16:9", "21:9", "4:5", "3:4", "2:3", "9:16",
+];
+
+/// Settings version 6 -> 7 (0.0.61, the user's review 2): the built-in crop ratios lost 3:2, 16:10, 21:9 and 2:3. A
+/// list that still is the old built-in one becomes the new one; a list the user changed stays as it is.
+pub(super) fn migrate_crop_ratios(table: &mut toml::Table) -> Result<(), String> {
+    let Some(filters) = table.get_mut("filters") else {
+        return Ok(());
+    };
+    let filters = filters
+        .as_table_mut()
+        .ok_or_else(|| "filters is not a table".to_owned())?;
+    let untouched = filters
+        .get("crop_ratios")
+        .and_then(toml::Value::as_array)
+        .is_some_and(|list| {
+            list.iter()
+                .map(toml::Value::as_str)
+                .eq(RATIOS_UP_TO_0_0_60.iter().map(|r| Some(*r)))
+        });
+    if untouched {
+        let fresh = DEFAULT_RATIOS
+            .iter()
+            .map(|r| toml::Value::String((*r).to_owned()))
+            .collect();
+        filters.insert("crop_ratios".to_owned(), toml::Value::Array(fresh));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

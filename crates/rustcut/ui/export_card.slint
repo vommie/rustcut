@@ -25,10 +25,11 @@ component NameField inherits Rectangle {
     property <bool> editing;
     property <length> suffix-width: root.suffix == "" ? 0px : suffix-label.preferred-width + 6px;
 
+    // As high as the row's counter and button (the layout stretches it; review 2).
     min-width: 40px;
-    height: 22px;
+    min-height: 22px;
     horizontal-stretch: 1;
-    border-radius: 3px;
+    border-radius: 4px;
     background: root.editing ? Theme.background : touch.has-hover && root.enabled ? Theme.surface-hover : Theme.surface;
     border-width: 1px;
     border-color: root.editing ? Theme.primary : Theme.border;

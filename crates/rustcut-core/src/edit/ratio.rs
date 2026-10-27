@@ -21,10 +21,9 @@ const MAX_RATIO: u64 = 100;
 /// Each side of a preset may have at most this many decimals ("2.39:1").
 const MAX_DECIMALS: usize = 3;
 
-/// The ratios a fresh Settings > Filters offers (RustView's list).
-pub const DEFAULT_RATIOS: &[&str] = &[
-    "1:1", "5:4", "4:3", "3:2", "16:10", "16:9", "21:9", "4:5", "3:4", "2:3", "9:16",
-];
+/// The ratios a fresh Settings > Filters offers (RustView's list without 3:2, 16:10, 21:9 and 2:3: the user's review 2;
+/// the migration `crop-ratios-trimmed` updates an untouched list).
+pub const DEFAULT_RATIOS: &[&str] = &["1:1", "5:4", "4:3", "16:9", "4:5", "3:4", "9:16"];
 
 /// At most this many presets are kept.
 pub const MAX_RATIOS: usize = 32;

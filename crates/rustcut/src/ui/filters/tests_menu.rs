@@ -173,7 +173,9 @@ fn typed_deshake_values_take_limits_and_hundredths() {
 fn the_row_texts_follow_the_values() {
     let mut s = state_with(FilterDefaults::default());
     let card = view::card(&s);
-    assert_eq!(card.deshake_summary, "shakiness 5 · smoothing 10");
+    assert_eq!(card.deshake_values[0], "5");
+    assert_eq!(card.deshake_values[3], "10");
+    assert_eq!(card.deshake_extra, "");
     assert_eq!(card.deshake_values[5], "", "no limit");
     assert_eq!(card.deshake_values[7], "0.25");
     let mut d = s.deshake();
@@ -181,10 +183,7 @@ fn the_row_texts_follow_the_values() {
     d.optzoom = 2;
     d.zoom = -5;
     s.set_deshake(d);
-    assert_eq!(
-        view::card(&s).deshake_summary,
-        "shakiness 5 · smoothing 10 · tripod · adaptive zoom · zoom -5%"
-    );
+    assert_eq!(view::card(&s).deshake_extra, "tripod · adaptive zoom · zoom -5%");
     s.set_deinterlacer(Deinterlacer::Kerndeint);
     let card = view::card(&s);
     assert!(!card.field_options, "kerndeint has no field options");

@@ -1,6 +1,6 @@
 // The timeline strip under the video (src/ui/timeline/ computes every position; src/ui/editor/ handles the pointer): a time
 // ruler, the listed sections as numbered blocks (selected ones outlined, the hovered one brighter; a block's body can be
-// dragged, P9.5), the current section's marks as flags with its range, the playhead, the time under the pointer or the
+// dragged, P9.5), the current section's marks as lines with its range, the playhead, the time under the pointer or the
 // readout of a dragged range, and while zoomed an overview strip with the visible window. Positions are in track pixels
 // (0 = the track's left edge); the pointer is reported in the same coordinates.
 
@@ -151,22 +151,13 @@ export component TimelineStrip inherits Rectangle {
             }
         }
 
-        // The marks are flags: a pole over the track with a pennant at its top pointing into the current section.
+        // The marks are thick lines over the track (no flags: the user's review 2).
         if Timeline.mark-start-shown: Rectangle {
             x: Timeline.mark-start-x - 1px;
             y: root.track-y;
             width: 2px;
             height: TimelineMetrics.track-height;
             background: Theme.accent;
-
-            Path {
-                x: 0;
-                y: 0;
-                width: 9px;
-                height: 8px;
-                commands: "M 0 0 L 9 4 L 0 8 Z";
-                fill: Theme.accent;
-            }
         }
 
         if Timeline.mark-end-shown: Rectangle {
@@ -175,15 +166,6 @@ export component TimelineStrip inherits Rectangle {
             width: 2px;
             height: TimelineMetrics.track-height;
             background: Theme.accent;
-
-            Path {
-                x: -7px;
-                y: 0;
-                width: 9px;
-                height: 8px;
-                commands: "M 9 0 L 0 4 L 9 8 Z";
-                fill: Theme.accent;
-            }
         }
 
         if Timeline.hover-shown: Rectangle {

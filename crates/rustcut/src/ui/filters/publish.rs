@@ -119,7 +119,7 @@ impl FiltersBridge {
         f.set_deshake_interpolation(input::interpolation_index(d.interpolation));
         f.set_deshake_tripod(d.tripod);
         f.set_deshake_sharpen(d.sharpen);
-        f.set_deshake_summary(card.deshake_summary.as_str().into());
+        f.set_deshake_extra(card.deshake_extra.as_str().into());
         self.publish_menu(&f);
     }
 

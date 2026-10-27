@@ -108,8 +108,8 @@ pub struct CardView {
     pub deshake: DeshakeParams,
     /// The menu's texts: shakiness, accuracy, search step, smoothing, zoom, max shift, max angle, zoom speed.
     pub deshake_values: [String; 8],
-    /// The Deshake row's dim line.
-    pub deshake_summary: String,
+    /// The Deshake row's dim words after its two numbers (shakiness and smoothing show with symbols).
+    pub deshake_extra: String,
     pub preview: bool,
     pub keep: bool,
 }
@@ -182,7 +182,7 @@ pub fn card(state: &FiltersState) -> CardView {
         resize_auto_height: auto_h,
         resize_algorithm: ALGORITHMS.iter().position(|a| *a == algorithm).unwrap_or(0),
         deshake_values: deshake_values(deshake),
-        deshake_summary: deshake_summary(deshake),
+        deshake_extra: deshake_extra(deshake),
         deshake,
         preview: state.preview,
         keep: state.keep,
@@ -362,11 +362,8 @@ fn deshake_values(d: DeshakeParams) -> [String; 8] {
 }
 
 /// The Deshake row's line: the two values that matter most, and the switches that change the result's look.
-fn deshake_summary(d: DeshakeParams) -> String {
-    let mut parts = vec![
-        format!("shakiness {}", d.shakiness),
-        format!("smoothing {}", d.smoothing),
-    ];
+fn deshake_extra(d: DeshakeParams) -> String {
+    let mut parts: Vec<String> = Vec::new();
     if d.tripod {
         parts.push("tripod".into());
     }
