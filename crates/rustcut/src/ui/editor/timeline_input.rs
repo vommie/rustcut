@@ -173,6 +173,7 @@ impl Editor {
             if !st.has_video || st.viewport.is_empty() {
                 return;
             }
+            st.sent = None;
             let anchor = st.playhead;
             match hit::hit(&st.viewport, &st.sections, area, x) {
                 Hit::Edge(edge) => {
@@ -213,9 +214,19 @@ impl Editor {
             }
         };
         if let Some(t) = target {
-            self.with_player(|p| p.seek_to(t, false));
+            self.pointer_seek(t);
         }
         self.publish();
+    }
+
+    /// A seek of the timeline's pointer: always to the exact frame (as PyCutRv and mpv's `hr-seek=yes` do; a keyframe
+    /// first made a press or a drag's end jump twice), and never twice to the same time in one press. A drag sends
+    /// many; the player's command thread runs only the newest of a burst.
+    fn pointer_seek(&self, t: Timestamp) {
+        if self.state.borrow_mut().sent.replace(t) == Some(t) {
+            return;
+        }
+        self.with_player(|p| p.seek_to(t, true));
     }
 
     fn pointer_moved(&self, x: f32, area: Area, pressed: bool, shift: bool, control: bool) {
@@ -292,7 +303,7 @@ impl Editor {
             result
         };
         if let Some(t) = seek {
-            self.with_player(|p| p.seek_to(t, false));
+            self.pointer_seek(t);
         }
         if layout_changed {
             self.publish();
@@ -317,10 +328,11 @@ impl Editor {
                 None => None,
             }
         };
-        // The exact frame where the drag ended.
+        // Where the drag ended, unless the player is already there.
         if let Some(t) = target {
-            self.with_player(|p| p.seek_to(t, true));
+            self.pointer_seek(t);
         }
+        self.state.borrow_mut().sent = None;
         self.publish();
     }
 

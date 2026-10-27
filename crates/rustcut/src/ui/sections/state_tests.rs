@@ -19,20 +19,58 @@ fn starts(s: &SectionsState) -> Vec<i64> {
 }
 
 #[test]
-fn a_mark_on_the_wrong_side_clears_the_other() {
+fn marks_follow_rustviews_rules() {
     let mut s = with_marks(10, 20);
     assert_eq!(s.current(), Ok(Section::new(t(10), t(20)).unwrap()));
     // A new start after the end begins a new section: the end is cleared.
     s.set_mark(Bound::Start, t(30));
     assert_eq!(s.marks(), (Some(t(30)), None));
     assert_eq!(s.current(), Err(EditError::NoRange));
-    // An end before the start clears the start.
+    // An end before the start moves the start onto it: both share the time.
     s.set_mark(Bound::End, t(5));
-    assert_eq!(s.marks(), (None, Some(t(5))));
-    // Equal marks are not a range.
-    s.set_mark(Bound::Start, t(2));
-    s.set_mark(Bound::End, t(2));
-    assert_eq!(s.marks(), (None, Some(t(2))));
+    assert_eq!(s.marks(), (Some(t(5)), Some(t(5))));
+    // An end on the start keeps both (they share a place in the sections bar); not a range yet.
+    s.set_mark(Bound::End, t(5));
+    assert_eq!(s.marks(), (Some(t(5)), Some(t(5))));
+    assert_eq!(s.current(), Err(EditError::Empty));
+    // A start on the end keeps the end too.
+    s.set_mark(Bound::End, t(8));
+    s.set_mark(Bound::Start, t(8));
+    assert_eq!(s.marks(), (Some(t(8)), Some(t(8))));
+    // An end without a start puts the start at 0.
+    assert_eq!(s.set_mark_text(Bound::Start, ""), Ok(()));
+    s.set_mark(Bound::End, t(7));
+    assert_eq!(s.marks(), (Some(Timestamp::ZERO), Some(t(7))));
+}
+
+#[test]
+fn every_video_starts_with_the_start_mark_at_zero() {
+    let mut s = with_marks(10, 20);
+    s.add_current().unwrap();
+    s.clear();
+    assert_eq!(s.marks(), (Some(Timestamp::ZERO), None));
+    assert!(!s.has_work(), "the start at 0 alone is no work to lose");
+    s.set_mark(Bound::Start, t(3));
+    assert!(s.has_work());
+}
+
+#[test]
+fn a_loaded_job_makes_its_first_section_the_current_one() {
+    let mut list = SectionList::default();
+    let first = list.push(Section::new(t(12), t(18)).unwrap());
+    list.push(Section::new(t(2), t(5)).unwrap());
+    let mut s = SectionsState::default();
+    s.clear();
+    assert_eq!(s.load(list), Some(t(12)), "the editor seeks to its start");
+    assert_eq!(s.marks(), (Some(t(12)), Some(t(18))));
+    assert_eq!(s.selected(), Some(first));
+    s.clear();
+    assert_eq!(s.load(SectionList::default()), None);
+    assert_eq!(
+        s.marks(),
+        (Some(Timestamp::ZERO), None),
+        "a job without sections: the start at 0"
+    );
 }
 
 #[test]
@@ -173,7 +211,7 @@ fn a_shorter_duration_cuts_the_list() {
     assert_eq!(s.marks(), (Some(t(5)), Some(t(5))));
     assert!(s.list().get(id).is_none());
     s.clear();
-    assert!(s.list().is_empty() && s.marks() == (None, None) && s.duration().is_none());
+    assert!(s.list().is_empty() && s.marks() == (Some(Timestamp::ZERO), None) && s.duration().is_none());
 }
 
 #[derive(Debug, Clone)]
@@ -245,11 +283,19 @@ fn the_automatic_section_of_a_save_without_sections() {
     unmarked.set_duration(Some(t(100)));
     let mut one = unmarked.clone();
     one.set_mark(Bound::Start, t(4));
+    let mut at_zero = unmarked.clone();
+    at_zero.clear();
+    at_zero.set_duration(Some(t(100)));
 
     // PyCutRv's rule, the default since 0.0.31 (Q-P8): the marked range, without marks the whole video.
     assert_eq!(AutoSection::default(), AutoSection::RangeOrWhole);
     assert_eq!(marked.auto_section(AutoSection::RangeOrWhole), Ok(range));
     assert_eq!(unmarked.auto_section(AutoSection::RangeOrWhole), Ok(whole));
+    assert_eq!(
+        at_zero.auto_section(AutoSection::RangeOrWhole),
+        Ok(whole),
+        "the start at 0 that every video gets is no range"
+    );
     assert!(
         one.auto_section(AutoSection::RangeOrWhole).is_err(),
         "one mark alone is refused"

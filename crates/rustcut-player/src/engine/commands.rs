@@ -50,6 +50,12 @@ pub(crate) enum Command {
     SetVideoFilter(VideoFilter),
     /// The loaded file's duration in seconds (from the event thread; the end mute needs it).
     Duration(f64),
+    /// mpv's observed `pause` and `eof-reached` (from the event thread; Play at the end starts over). The command
+    /// thread never reads a property itself.
+    Observed {
+        paused: Option<bool>,
+        at_end: Option<bool>,
+    },
     /// A render context exists now; `software` = the OpenGL renderer is a software rasterizer.
     SurfaceReady {
         software: bool,
@@ -66,8 +72,6 @@ pub(crate) enum Op {
     Flag(&'static str, bool),
     Double(&'static str, f64),
     Text(&'static str, String),
-    /// Toggle pause; reads `eof-reached` and `pause` first (only possible while executing).
-    TogglePause,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -90,6 +94,9 @@ pub(crate) struct Session {
     af: String,
     /// The video filters last set (a change reinitializes mpv's filters and redraws the frame).
     vf: VideoFilter,
+    /// mpv's observed `pause` and `eof-reached`.
+    paused: bool,
+    at_end: bool,
 }
 
 impl Session {
@@ -104,6 +111,8 @@ impl Session {
             // The core starts with this chain (`PlayerOptions::apply`).
             af: audio::filter_chain(audio, None),
             vf: VideoFilter::default(),
+            paused: true,
+            at_end: false,
         }
     }
 
@@ -154,7 +163,21 @@ impl Session {
             }
             Command::SetVideoFilter(filter) => self.video_ops(filter),
             Command::SetPaused(paused) => vec![Op::Flag("pause", paused)],
-            Command::TogglePause => vec![Op::TogglePause],
+            Command::Observed { paused, at_end } => {
+                self.paused = paused.unwrap_or(self.paused);
+                self.at_end = at_end.unwrap_or(self.at_end);
+                Vec::new()
+            }
+            // mpv toggles itself (`cycle`), so a pause change still on its way cannot be undone by a stale value; at
+            // the end (keep-open holds the last frame) playing starts over.
+            Command::TogglePause => {
+                let mut ops = Vec::new();
+                if self.paused && self.at_end {
+                    ops.push(Op::Command("seek", vec!["0".into(), "absolute+exact".into()]));
+                }
+                ops.push(Op::Command("cycle", vec!["pause".into()]));
+                ops
+            }
             Command::Seek { seconds, exact } => {
                 let mode = if exact { "absolute+exact" } else { "absolute+keyframes" };
                 vec![Op::Command(
@@ -275,21 +298,10 @@ pub(crate) fn execute(mpv: &Mpv, op: &Op) {
         Op::Flag(name, value) => mpv.set_property(name, *value),
         Op::Double(name, value) => mpv.set_property(name, *value),
         Op::Text(name, value) => mpv.set_property(name, value.as_str()),
-        Op::TogglePause => toggle_pause(mpv),
     };
     if let Err(e) = result {
         tracing::warn!(op = ?op, error = %e, "[Player] mpv refused a command");
     }
-}
-
-fn toggle_pause(mpv: &Mpv) -> libmpv2::Result<()> {
-    let paused = mpv.get_property::<bool>("pause").unwrap_or(false);
-    let at_end = mpv.get_property::<bool>("eof-reached").unwrap_or(false);
-    if paused && at_end {
-        // keep-open holds the last frame at the end; playing again starts over.
-        mpv.command("seek", &["0", "absolute+exact"])?;
-    }
-    mpv.set_property("pause", !paused)
 }
 
 #[cfg(test)]
@@ -409,6 +421,27 @@ mod tests {
             s.handle(Command::SetLoop(false)),
             vec![Op::Text("loop-file", "no".to_owned())]
         );
+    }
+
+    #[test]
+    fn play_pause_follows_the_observed_state_and_starts_over_at_the_end() {
+        let mut s = Session::new(PreviewQuality::High, AudioOptions::default());
+        let cycle = Op::Command("cycle", vec!["pause".into()]);
+        let restart = Op::Command("seek", vec!["0".into(), "absolute+exact".into()]);
+        let observed = |paused, at_end| Command::Observed { paused, at_end };
+        assert!(
+            s.handle(observed(Some(false), None)).is_empty(),
+            "an observation is no mpv call"
+        );
+        assert_eq!(s.handle(Command::TogglePause), vec![cycle.clone()]);
+        assert!(s.handle(observed(Some(true), Some(true))).is_empty());
+        assert_eq!(
+            s.handle(Command::TogglePause),
+            vec![restart, cycle.clone()],
+            "paused at the end"
+        );
+        assert!(s.handle(observed(None, Some(false))).is_empty());
+        assert_eq!(s.handle(Command::TogglePause), vec![cycle]);
     }
 
     #[test]

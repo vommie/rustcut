@@ -30,6 +30,9 @@ impl TagsBridge {
             state.active
         };
         tracing::info!(active = on, "[Tags] Active switched");
+        if let Some(hook) = self.on_active.borrow().as_ref() {
+            hook(on);
+        }
         if on && self.warn.get() {
             notices::clear_kind(Kind::TaggingOff);
         }

@@ -78,10 +78,11 @@ pub struct SectionsState {
 }
 
 impl SectionsState {
-    /// Another video was opened: its sections start empty.
+    /// Another video was opened: its sections start empty, the start mark at 0 (as in RustView, user decision
+    /// 2026-10-27).
     pub fn clear(&mut self) {
         self.list.clear();
-        self.start = None;
+        self.start = Some(Timestamp::ZERO);
         self.end = None;
         self.selection = Selection::default();
         self.duration = None;
@@ -109,17 +110,26 @@ impl SectionsState {
         }
     }
 
-    /// The sections of a job loaded into the editor: no marks, nothing selected.
-    pub fn load(&mut self, list: SectionList) {
+    /// The sections of a job loaded into the editor: the first one is the current section (the marks on its bounds,
+    /// selected; the editor seeks to its start), a job without sections gets the start mark at 0. Returns where the
+    /// first section starts.
+    pub fn load(&mut self, list: SectionList) -> Option<Timestamp> {
+        let first = list.iter().next().map(|(id, s)| (id, s.start(), s.end()));
         self.put_draft(SectionsDraft {
             list,
-            ..SectionsDraft::default()
+            start: Some(first.map_or(Timestamp::ZERO, |(_, start, _)| start)),
+            end: first.map(|(_, _, end)| end),
+            selection: Selection::default(),
         });
+        let (id, start, _) = first?;
+        self.select(Some(id));
+        Some(start)
     }
 
-    /// Whether the draft holds work that a replacement would lose (sections or marks).
+    /// Whether the draft holds work that a replacement would lose (sections or marks; the start mark at 0 that every
+    /// video gets is none).
     pub fn has_work(&self) -> bool {
-        !self.list.is_empty() || self.start.is_some() || self.end.is_some()
+        !self.list.is_empty() || self.start.is_some_and(|s| s != Timestamp::ZERO) || self.end.is_some()
     }
 
     /// After a save with "clear sections": the list goes, the marks stay (PyCutRv).
@@ -159,22 +169,21 @@ impl SectionsState {
         }
     }
 
-    /// Sets a mark (from the playhead or a typed time). A mark that would end up on the wrong side of the other one clears
-    /// the other ("end before start is corrected": a new start after the old end begins a new section).
+    /// Sets a mark (from the playhead or a typed time), as RustView does (user decision 2026-10-27): both marks may
+    /// share a time; an end without a start puts the start at 0; an end before the start moves the start onto it. A
+    /// start after the end clears the end (a new section begins).
     pub fn set_mark(&mut self, bound: Bound, t: Timestamp) {
         let t = self.limit(t);
         match bound {
             Bound::Start => {
                 self.start = Some(t);
-                if self.end.is_some_and(|e| e <= t) {
+                if self.end.is_some_and(|e| e < t) {
                     self.end = None;
                 }
             }
             Bound::End => {
                 self.end = Some(t);
-                if self.start.is_some_and(|s| s >= t) {
-                    self.start = None;
-                }
+                self.start = Some(self.start.map_or(Timestamp::ZERO, |s| s.min(t)));
             }
         }
     }
@@ -218,7 +227,8 @@ impl SectionsState {
                 .current()
                 .map_err(|_none| "Add a section first, or set both marks for the automatic section."),
             AutoSection::RangeOrWhole => match (self.start, self.end) {
-                (None, None) => whole(),
+                // The start mark at 0 alone is where every video begins: the whole video.
+                (None | Some(Timestamp::ZERO), None) => whole(),
                 (Some(_), Some(_)) => self
                     .current()
                     .map_err(|_empty| "Add a section first, or set both marks for the automatic section."),

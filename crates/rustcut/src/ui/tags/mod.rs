@@ -39,7 +39,7 @@ use crate::app::SettingsWriter;
 use crate::ui::dispatcher::UiDispatcher;
 use crate::ui::jump::JumpTarget;
 use crate::ui::notices::{self, Kind, Notice};
-use crate::util::model::sync;
+use crate::util::model::sync_keyed;
 use crate::{
     MainWindow, TagColumnView, TagFilterRowView, TagFilterWindow, TagHistoryItemModel, TagHistoryRowModel, TagNodeView,
     TagRate,
@@ -65,6 +65,9 @@ fn with_bridge(ui: &UiDispatcher, job: impl FnOnce(&Rc<TagsBridge>) + Send + 'st
     });
 }
 
+/// Hears the "Active" switch.
+type ActiveHook = Box<dyn Fn(bool)>;
+
 pub struct TagsBridge {
     window: slint::Weak<MainWindow>,
     ui: UiDispatcher,
@@ -87,6 +90,8 @@ pub struct TagsBridge {
     applying: Cell<bool>,
     /// Shows the panel in the dock (it may sit in a collapsed sidebar or behind another tab).
     on_reveal: RefCell<Option<Box<dyn Fn()>>>,
+    /// Told whenever "Active" changes (the media panel registers opened videos in RustView only while it is on).
+    on_active: RefCell<Option<ActiveHook>>,
     /// The "Warn" switch is a setting (`warnings.missing_metadata`).
     writer: SettingsWriter,
     warn: Cell<bool>,
@@ -144,6 +149,7 @@ impl TagsBridge {
             history_rows: Rc::new(VecModel::default()),
             applying: Cell::new(false),
             on_reveal: RefCell::new(None),
+            on_active: RefCell::new(None),
             writer,
             warn: Cell::new(warn),
             start_checked: Cell::new(false),
@@ -171,6 +177,12 @@ impl TagsBridge {
 
     pub fn set_on_reveal(&self, hook: impl Fn() + 'static) {
         *self.on_reveal.borrow_mut() = Some(Box::new(hook));
+    }
+
+    /// `hook` hears the "Active" switch now and after every change.
+    pub fn set_on_active(&self, hook: impl Fn(bool) + 'static) {
+        hook(self.active());
+        *self.on_active.borrow_mut() = Some(Box::new(hook));
     }
 
     /// What `ui-state.toml` keeps of the panel.
@@ -457,7 +469,10 @@ impl TagsBridge {
         let count = chunks.len();
         for (index, chunk) in chunks.into_iter().enumerate() {
             if let Some(model) = models.get(index) {
-                sync(model, chunk);
+                // Keyed by tag and expansion: RustView's `NodeButton` (a copy, ADR-10) assigns its own `is-expanded`
+                // on a click, which ends its binding to the row; a row reused for another tag or state then showed a
+                // stale "+" or "-". A row whose tag or expansion changes gets a new element (bound again).
+                sync_keyed(model, chunk, |row| (row.id, row.is_expanded));
             } else {
                 let model = Rc::new(VecModel::from(chunk));
                 self.columns.push(tree::column_view(&model));

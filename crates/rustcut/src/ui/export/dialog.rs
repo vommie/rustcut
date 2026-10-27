@@ -237,7 +237,7 @@ impl ConflictDialog {
     ) -> Vec<DialogOption> {
         let taken = self.taken();
         let next = export.template_uses_counter().then(|| {
-            let start = if export.counter_enabled { export.counter } else { 0 };
+            let start = export.active_counter().unwrap_or(0);
             let found = next_free_counter_except(start, self.container, &taken, used, |n| {
                 export.stem_with(facts, Some(n))
             });
@@ -249,7 +249,7 @@ impl ConflictDialog {
             };
             DialogOption {
                 choice: Choice::NextNumber,
-                title: if export.counter_enabled {
+                title: if export.active_counter().is_some() {
                     "Next free number"
                 } else {
                     "Add a number"
@@ -567,7 +567,7 @@ fn similar_names(
 /// The way out without asking (the warning is switched off): the next free number when the counter is on, else
 /// `Name (n)`. Never overwrites.
 pub fn silent_outcome(dialog: &ConflictDialog, export: &ExportState) -> Option<Outcome> {
-    let preferred = if export.counter_enabled {
+    let preferred = if export.active_counter().is_some() {
         Choice::NextNumber
     } else {
         Choice::Variant

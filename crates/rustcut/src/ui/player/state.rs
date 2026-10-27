@@ -2,6 +2,7 @@
 //! UI thread reads a [`PlaybackView`] snapshot and sends commands that need the state (seek target, reload position).
 
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use az::CheckedAs as _;
 use rustcut_core::time::Timestamp;
@@ -36,6 +37,10 @@ pub struct PlaybackState {
     pub seek_target: Option<Timestamp>,
     /// Speed of the emulated backward playback (0 = none); its moving target stays the playhead until it stops.
     pub reverse_rate: i8,
+    /// When mpv reported `position` (the timeline moves the playhead on from there between two reports).
+    pub measured: Instant,
+    /// The end is reached (`eof-reached` with keep-open): the playhead stands at the end, not at the last frame's start.
+    pub at_end: bool,
 }
 
 impl Default for PlaybackState {
@@ -53,6 +58,8 @@ impl Default for PlaybackState {
             speed: 1.0,
             seek_target: None,
             reverse_rate: 0,
+            measured: Instant::now(),
+            at_end: false,
         }
     }
 }
@@ -67,6 +74,9 @@ pub struct PlaybackView {
     pub volume: i32,
     /// The playhead (a seek in flight counts as done).
     pub position: Timestamp,
+    /// How fast the playhead moves on from `position` (media seconds per second; 0 while paused, seeking or in the
+    /// emulated backward playback) and since when: the timeline draws it smoothly between mpv's reports.
+    pub motion: Motion,
     pub duration: Option<Timestamp>,
     pub position_text: String,
     pub duration_text: String,
@@ -88,16 +98,24 @@ impl PlaybackState {
         self.decoder = None;
         self.seek_target = None;
         self.reverse_rate = 0;
+        self.at_end = false;
     }
 
     /// A seek to `t` was sent.
     pub fn seeking(&mut self, t: Timestamp) {
         self.seek_target = Some(t);
+        // A seek leaves the end (mpv reports it again when the seek lands there).
+        self.at_end = false;
     }
 
-    /// The playhead: where a seek in flight goes, else mpv's position.
+    /// The playhead: where a seek in flight goes, else mpv's position (at the end: the end itself, as far as the playhead
+    /// glided; mpv's last position is the last frame's start, a step back from there was the jump at the end).
     pub fn playhead(&self) -> Timestamp {
-        self.seek_target.unwrap_or(self.position)
+        let here = match self.duration.filter(|_| self.at_end) {
+            Some(end) => end.max(self.position),
+            None => self.position,
+        };
+        self.seek_target.unwrap_or(here)
     }
 
     /// The file is loaded and playing forward.
@@ -143,6 +161,7 @@ impl PlaybackState {
             Property::Position(seconds) => {
                 if let Some(t) = Timestamp::from_secs_f64(*seconds) {
                     self.position = t;
+                    self.measured = Instant::now();
                 }
             }
             Property::Duration(seconds) => self.duration = Timestamp::from_secs_f64(*seconds),
@@ -151,7 +170,7 @@ impl PlaybackState {
             Property::Volume(volume) => self.volume = percent(*volume),
             Property::HwDecoder(name) => self.decoder = Some(name.clone()),
             Property::Speed(speed) => self.speed = *speed,
-            Property::EndReached(_) => {}
+            Property::EndReached(at_end) => self.at_end = *at_end,
         }
     }
 
@@ -169,6 +188,14 @@ impl PlaybackState {
             muted: self.muted,
             volume: i32::from(self.volume),
             position,
+            motion: Motion {
+                rate: if self.playing() && self.seek_target.is_none() && self.reverse_rate == 0 {
+                    self.speed.max(0.0)
+                } else {
+                    0.0
+                },
+                since: self.measured,
+            },
             duration: self.duration,
             position_text: position.to_string(),
             duration_text: self.duration.unwrap_or(Timestamp::ZERO).to_string(),
@@ -177,6 +204,31 @@ impl PlaybackState {
             error_detail: failure.map(|f| f.detail.clone()).unwrap_or_default(),
             decoder_text: decoder_text(self.loaded, self.decoder.as_deref()),
         }
+    }
+}
+
+/// How the playhead moves on from a reported position.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Motion {
+    /// Media seconds per second (0 = it stands).
+    pub rate: f64,
+    /// When the position was reported.
+    pub since: Instant,
+}
+
+impl Motion {
+    /// The longest time the playhead is moved on without a new report (a stalled decoder stops it soon).
+    pub const MAX_AHEAD: Duration = Duration::from_millis(200);
+
+    /// Where the playhead is `now`, from `position` (never more than [`Self::MAX_AHEAD`] ahead, never past `end`).
+    pub fn at(&self, position: Timestamp, now: Instant, end: Option<Timestamp>) -> Timestamp {
+        if self.rate <= 0.0 {
+            return position;
+        }
+        let ahead = now.saturating_duration_since(self.since).min(Self::MAX_AHEAD);
+        let moved = Timestamp::from_secs_f64(ahead.as_secs_f64() * self.rate).unwrap_or(Timestamp::ZERO);
+        let t = position + moved;
+        end.map_or(t, |end| t.min(end))
     }
 }
 
@@ -200,6 +252,68 @@ fn decoder_text(loaded: bool, decoder: Option<&str>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn at_the_end_the_playhead_stands_at_the_end_not_at_the_last_frame() {
+        let mut s = playing();
+        s.apply(&PlayerEvent::Property(Property::Duration(8.008)));
+        s.apply(&PlayerEvent::Property(Property::Position(7.96)));
+        assert_eq!(s.view().position, Timestamp::from_millis(7_960));
+        s.apply(&PlayerEvent::Property(Property::EndReached(true)));
+        s.apply(&PlayerEvent::Property(Property::Paused(true)));
+        let end = s.view();
+        assert_eq!(
+            end.position,
+            Timestamp::from_millis(8_008),
+            "the whole way to the end, no step back"
+        );
+        assert_eq!(end.motion.rate, 0.0);
+        s.seeking(Timestamp::from_secs(2));
+        assert_eq!(s.view().position, Timestamp::from_secs(2), "a seek leaves the end");
+        s.apply(&PlayerEvent::PlaybackRestarted);
+        s.apply(&PlayerEvent::Property(Property::Position(2.0)));
+        assert_eq!(s.view().position, Timestamp::from_secs(2));
+    }
+
+    #[test]
+    fn the_playhead_moves_on_between_reports_only_while_it_plays() {
+        let mut s = playing();
+        let view = s.view();
+        assert!((view.motion.rate - 1.0).abs() < 1e-9, "plays at normal speed");
+        let at = |ms: u64| {
+            view.motion.at(
+                view.position,
+                view.motion.since + Duration::from_millis(ms),
+                view.duration,
+            )
+        };
+        assert_eq!(at(0), view.position);
+        assert_eq!(at(100) - view.position, Timestamp::from_millis(100));
+        assert_eq!(
+            at(5_000) - view.position,
+            Timestamp::from_millis(200),
+            "never more than 200 ms ahead"
+        );
+        let end = view.position + Timestamp::from_millis(50);
+        assert_eq!(
+            view.motion
+                .at(view.position, view.motion.since + Duration::from_millis(100), Some(end)),
+            end,
+            "never past the end"
+        );
+        s.seeking(Timestamp::from_secs(10));
+        assert_eq!(s.view().motion.rate, 0.0, "a seek in flight stands");
+        s.seek_target = None;
+        s.apply(&PlayerEvent::Property(Property::Paused(true)));
+        let paused = s.view();
+        assert_eq!(paused.motion.rate, 0.0);
+        assert_eq!(
+            paused
+                .motion
+                .at(paused.position, paused.motion.since + Duration::from_secs(1), None),
+            paused.position
+        );
+    }
 
     fn playing() -> PlaybackState {
         let mut s = PlaybackState::default();

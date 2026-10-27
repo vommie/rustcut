@@ -15,6 +15,7 @@ mod timeline_input;
 
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
+use std::time::Instant;
 
 use az::CheckedAs as _;
 use rustcut_core::edit::{SectionId, SectionList};
@@ -29,7 +30,7 @@ use crate::ui::keymap::{Action, Keymap};
 use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::menu::ContextMenuBridge;
 use crate::ui::notices::{self, Kind, Notice};
-use crate::ui::player::{self, PlaybackView, PlayerBridge};
+use crate::ui::player::{self, Motion, PlaybackView, PlayerBridge};
 use crate::ui::probe::ProbeBridge;
 use crate::ui::queue::QueueBridge;
 use crate::ui::sections::{Bound, SectionsState};
@@ -41,11 +42,17 @@ use crate::{Export, MainWindow, Playback, SectionRowView, Sections, Shortcuts, T
 /// Frame rates outside this range are not a frame grid (Matroska's 1000/1 time base, broken headers).
 const PLAUSIBLE_FPS: std::ops::RangeInclusive<f64> = 1.0..=300.0;
 
+/// How often the playhead moves on while the video plays: every 8 ms, so each frame Slint draws (up to its refresh
+/// rate) shows where the playhead is at that moment.
+const GLIDE_INTERVAL: std::time::Duration = std::time::Duration::from_millis(8);
+
 #[derive(Debug)]
 struct State {
     sections: SectionsState,
     viewport: Viewport,
     playhead: Timestamp,
+    /// How the playhead moves on between the player's reports (the timeline draws it smoothly).
+    motion: Option<Motion>,
     has_video: bool,
     drag: Option<Drag>,
     /// Where the pointer hovers over the timeline.
@@ -54,6 +61,8 @@ struct State {
     hovered: Option<SectionId>,
     /// The pointer's shape over the timeline.
     cursor: Cursor,
+    /// Where the timeline's pointer sent the player last since it was pressed (the release sends no second seek).
+    sent: Option<Timestamp>,
 }
 
 pub struct Editor {
@@ -73,6 +82,8 @@ pub struct Editor {
     escape: RefCell<Option<Box<dyn Fn() -> bool>>>,
     /// The player shows the probe render: the timeline, the marks and the sections wait (user decision Q-E1).
     probe_playing: Cell<bool>,
+    /// Moves the playhead on while the video plays (mpv reports the position only once per video frame).
+    glide: slint::Timer,
     /// A modal dialog is open: the keymap keeps only Quit (its other keys would act behind the dialog, P8).
     menu_modal: Cell<bool>,
     /// The export panel that saves jobs (set after it is installed; it needs the editor first).
@@ -126,16 +137,19 @@ impl Editor {
                 sections: SectionsState::default(),
                 viewport: Viewport::new(Timestamp::ZERO, 0.0, timeline.zoom),
                 playhead: Timestamp::ZERO,
+                motion: None,
                 has_video: false,
                 drag: None,
                 hover: None,
                 hovered: None,
                 cursor: Cursor::Default,
+                sent: None,
             }),
             probe: RefCell::new(Weak::new()),
             tags: RefCell::new(Weak::new()),
             escape: RefCell::new(None),
             probe_playing: Cell::new(false),
+            glide: slint::Timer::default(),
             menu_modal: Cell::new(false),
             export: RefCell::new(Weak::new()),
             queue: RefCell::new(Weak::new()),
@@ -163,6 +177,7 @@ impl Editor {
         player::set_view_hook(move |view| {
             if let Some(editor) = this.upgrade() {
                 editor.playback_changed(view);
+                editor.follow_motion();
             }
         });
         editor.publish_menu_keys();
@@ -238,10 +253,14 @@ impl Editor {
         self.state.borrow().sections.list().len()
     }
 
-    /// The sections of a job loaded into the editor (after its source opened).
+    /// The sections of a job loaded into the editor (after its source opened): the first one becomes the current
+    /// section and the player goes to its start.
     pub fn load_sections(&self, list: SectionList) {
-        self.state.borrow_mut().sections.load(list);
+        let first = self.state.borrow_mut().sections.load(list);
         self.publish();
+        if let Some(start) = first {
+            self.with_player(|p| p.seek_to(start, true));
+        }
     }
 
     /// Whether the draft holds sections or marks that loading a job would replace.
@@ -328,6 +347,7 @@ impl Editor {
             st.viewport.set_duration(duration.unwrap_or(Timestamp::ZERO));
             layout_changed = true;
         }
+        st.motion = Some(view.motion);
         if view.position != st.playhead {
             st.playhead = view.position;
             if st.drag.is_none() && st.viewport.reveal(view.position) {
@@ -493,14 +513,32 @@ impl Editor {
         self.publish_hover();
     }
 
+    /// Runs the glide timer while the playhead moves and stops it when it stands.
+    fn follow_motion(self: &Rc<Self>) {
+        let moving = self.state.borrow().motion.is_some_and(|m| m.rate > 0.0);
+        if !moving {
+            self.glide.stop();
+        } else if !self.glide.running() {
+            let this = Rc::downgrade(self);
+            self.glide.start(slint::TimerMode::Repeated, GLIDE_INTERVAL, move || {
+                if let Some(editor) = this.upgrade() {
+                    editor.publish_playhead();
+                }
+            });
+        }
+    }
+
+    /// The playhead where it is now: moved on from the player's last report while the video plays (the glide timer
+    /// calls this every 8 ms, so it moves smoothly also on a short video where one frame is several pixels).
     fn publish_playhead(&self) {
         let Some(window) = self.window.upgrade() else { return };
         let st = self.state.borrow();
         let tl = window.global::<Timeline<'_>>();
-        let x = st
-            .has_video
-            .then(|| view::visible_x(&st.viewport, st.playhead))
-            .flatten();
+        let now = match st.motion.filter(|m| m.rate > 0.0 && st.drag.is_none()) {
+            Some(motion) => motion.at(st.playhead, Instant::now(), st.sections.duration()),
+            None => st.playhead,
+        };
+        let x = st.has_video.then(|| view::visible_x(&st.viewport, now)).flatten();
         tl.set_playhead_shown(x.is_some());
         tl.set_playhead_x(x.unwrap_or_default());
         tl.set_overview_playhead(st.viewport.fraction_of(st.playhead));

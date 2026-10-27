@@ -44,6 +44,7 @@ export global Timeline {
     in property <length> range-x;
     in property <length> range-width;
     in property <bool> playhead-shown;
+    // Moved on by Rust every 8 ms while the video plays (between mpv's reports), so it glides.
     in property <length> playhead-x;
     in property <bool> hover-shown;
     in property <length> hover-x;

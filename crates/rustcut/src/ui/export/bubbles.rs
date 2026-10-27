@@ -55,9 +55,9 @@ pub fn conflict_fix(
         let numbered = series(scan.names.iter().filter(|n| is_video_file(n)), |n| {
             st.stem_with(facts, Some(n)).ok()
         });
-        if st.counter_enabled || !numbered.is_empty() {
+        if st.active_counter().is_some() || !numbered.is_empty() {
             let used: Vec<u32> = numbered.iter().map(|f| f.counter).collect();
-            let start = if st.counter_enabled { st.counter } else { 0 };
+            let start = st.active_counter().unwrap_or(0);
             return next_free_counter_except(start, facts.container, &taken, &used, |n| st.stem_with(facts, Some(n)))
                 .map(|(n, _)| Fix::Number(n));
         }
@@ -179,6 +179,7 @@ mod tests {
         let panel = ExportPanelState {
             counter_enabled: counter,
             counter: 4,
+            auto_increment: counter,
             ..ExportPanelState::default()
         };
         let mut st = ExportState::new(&ExportSettings::default(), &panel);
