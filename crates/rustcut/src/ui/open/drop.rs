@@ -39,7 +39,7 @@ impl DropTracker {
         DropAction::Hint { files: self.hovered }
     }
 
-    pub fn cancelled(&mut self) -> DropAction {
+    pub fn canceled(&mut self) -> DropAction {
         self.hovered = 0;
         DropAction::Clear
     }
@@ -94,7 +94,7 @@ mod tests {
     fn a_drag_that_leaves_clears_the_hint() {
         let mut t = DropTracker::default();
         t.hovered();
-        assert_eq!(t.cancelled(), DropAction::Clear);
+        assert_eq!(t.canceled(), DropAction::Clear);
         assert_eq!(t.hovered(), DropAction::Hint { files: 1 });
     }
 }

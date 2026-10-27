@@ -243,7 +243,7 @@ impl FileOpener {
     fn winit_event(self: &Rc<Self>, event: &WindowEvent) {
         let action = match event {
             WindowEvent::HoveredFile(_) => self.drops.borrow_mut().hovered(),
-            WindowEvent::HoveredFileCancelled => self.drops.borrow_mut().cancelled(),
+            WindowEvent::HoveredFileCancelled => self.drops.borrow_mut().canceled(),
             WindowEvent::DroppedFile(path) => self.drops.borrow_mut().dropped(path, Instant::now()),
             _ => return,
         };

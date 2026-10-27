@@ -319,7 +319,7 @@ fn connect(dock: &Dock<'_>, bridge: &Rc<DockBridge>) {
         tracing::info!(side, group, "[Dock] Rail group held");
         b.update(|l| {
             l.sidebar_mut(to_side(side))
-                .set_pinned_group(usize::try_from(group).ok())
+                .set_pinned_group(usize::try_from(group).ok());
         });
     });
     // A rail icon shows its panel in the sidebar over the video (P9.9: the rail's own expand button expands it).

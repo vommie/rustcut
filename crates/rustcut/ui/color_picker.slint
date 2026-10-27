@@ -38,7 +38,7 @@ export component ColorPicker inherits Rectangle {
 
     callback edited(color);
 
-    // The picker works in HSV so that dragging never loses the hue of a grey or dark color.
+    // The picker works in HSV so that dragging never loses the hue of a gray or dark color.
     property <float> hue: 0;
     property <float> sat: 0;
     property <float> val: 0;
@@ -57,7 +57,7 @@ export component ColorPicker inherits Rectangle {
         root.edited(root.current);
     }
 
-    // Takes an RGB(A) color as the new state; the hue stays when the color is grey or black (it has none).
+    // Takes an RGB(A) color as the new state; the hue stays when the color is gray or black (it has none).
     function adopt(c: color) {
         let parts = c.to-hsv();
         if parts.saturation > 0.0 && parts.value > 0.0 {
