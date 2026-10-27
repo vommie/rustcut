@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.69] - 2026-10-27
+
+The playhead's head and line move together to the pixel.
+
 ### Fixed
 
 - The playhead's head wobbled against its line while it glided: head and line are one shape now and move together to
@@ -1004,7 +1008,8 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.68...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.69...HEAD
+[0.0.69]: https://github.com/vommie/rustcut/compare/v0.0.68...v0.0.69
 [0.0.68]: https://github.com/vommie/rustcut/compare/v0.0.66...v0.0.68
 [0.0.66]: https://github.com/vommie/rustcut/compare/v0.0.60...v0.0.66
 [0.0.60]: https://github.com/vommie/rustcut/releases/tag/v0.0.60
