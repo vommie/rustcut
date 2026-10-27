@@ -80,6 +80,8 @@ export global TagRate {
     in property <string> empty-text;
     /// The eye (P9.8): the tree shows the hidden tags too, dimmed.
     in property <bool> show-hidden;
+    // RustView's library has no tags: a refresh button over the hint.
+    in property <bool> empty-refresh;
     // The "Filter tags..." field shows (the toggle under the history, user request 2026-10-27).
     in property <bool> search-shown: true;
     in property <string> eye-tooltip;
@@ -127,6 +129,8 @@ export global TagRate {
     callback clear();
     callback toggle-show-hidden();
     callback toggle-search();
+    // The refresh button over the "no tags yet" hint (the tree menu's Refresh Tag Tree).
+    callback refresh-tree();
     callback toggle-active();
     callback toggle-warn();
     // The tag filter window (P8b).

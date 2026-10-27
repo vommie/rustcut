@@ -63,6 +63,7 @@ pub(super) fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
     on!(on_filter_done, |b| b.publish());
     on!(on_tree_height_changed, |b, height| b.tree_height_changed(height));
     on!(on_tree_menu, |b, x, y| b.show_tree_menu(x, y));
+    on!(on_refresh_tree, |b| b.refresh_tree());
     on!(on_history_tag_clicked, |b, id| if let Some(id) = tag_id(id) {
         b.change(|s| s.click_tag(id));
     });
