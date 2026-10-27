@@ -7,7 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-The user's review of the Settings window (0.0.67) and the editor issues of 2026-10-27 (0.0.68).
+## [0.0.68] - 2026-10-27
+
+The user's review of the Settings window (0.0.67) and the editor issues of 2026-10-27 (0.0.68): the counter, RustView's
+section marks, exact timeline seeks, a gliding playhead, the tag tree's expand buttons and known sources like PyCutRv.
 
 ### Added
 
@@ -996,6 +999,7 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.66...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.68...HEAD
+[0.0.68]: https://github.com/vommie/rustcut/compare/v0.0.66...v0.0.68
 [0.0.66]: https://github.com/vommie/rustcut/compare/v0.0.60...v0.0.66
 [0.0.60]: https://github.com/vommie/rustcut/releases/tag/v0.0.60
