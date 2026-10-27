@@ -1,6 +1,6 @@
 //! What happens when the queue is done and when RustCut is closed while it renders (pure; user decisions Q-P1, Q-P2).
 
-use rustcut_core::settings::WhenDone;
+use rustcut_core::settings::{TaskbarShows, WhenDone};
 
 use super::super::queue::QueueStatus;
 use crate::desktop::taskbar::Badge;
@@ -127,13 +127,18 @@ pub fn ask_text(status: &QueueStatus) -> String {
     format!("{rendering}{more}. What to do?")
 }
 
-/// The taskbar entry: the run's progress in whole percent and the open jobs, or nothing while the queue is idle.
-pub fn badge(status: &QueueStatus) -> Badge {
+/// The taskbar entry: the current job's or the run's progress (`shows`) in whole percent and the open jobs, or nothing
+/// while the queue is idle.
+pub fn badge(status: &QueueStatus, shows: TaskbarShows) -> Badge {
     if status.open == 0 {
         return Badge::NONE;
     }
+    let fraction = match shows {
+        TaskbarShows::CurrentJob => status.current,
+        TaskbarShows::AllJobs => status.overall.map(|o| o.fraction),
+    };
     Badge {
-        progress: status.overall.map(|o| (o.fraction * 100.0).round() / 100.0),
+        progress: fraction.map(|f| (f * 100.0).round() / 100.0),
         count: u32::try_from(status.open).ok(),
     }
 }
@@ -157,6 +162,7 @@ mod tests {
                 eta_secs: None,
                 partial: false,
             }),
+            current: None,
         }
     }
 
@@ -188,12 +194,24 @@ mod tests {
         );
         assert_eq!(ask_text(&busy), "A job is rendering, 2 more wait. What to do?");
         assert_eq!(
-            badge(&busy),
+            badge(&busy, TaskbarShows::AllJobs),
             Badge {
                 progress: Some(0.43),
                 count: Some(3)
             }
         );
-        assert_eq!(badge(&status(0, 0, Some(1.0))), Badge::NONE);
+        let current = QueueStatus {
+            current: Some(0.814),
+            ..busy
+        };
+        assert_eq!(
+            badge(&current, TaskbarShows::CurrentJob),
+            Badge {
+                progress: Some(0.81),
+                count: Some(3)
+            },
+            "the current job's progress"
+        );
+        assert_eq!(badge(&status(0, 0, Some(1.0)), TaskbarShows::CurrentJob), Badge::NONE);
     }
 }

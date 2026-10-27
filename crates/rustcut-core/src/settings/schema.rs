@@ -342,12 +342,27 @@ pub struct TraySettings {
     pub minimize_to_tray: bool,
 }
 
+/// What the bar on the taskbar entry shows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskbarShows {
+    /// The render that runs (the one that started first when several run).
+    #[default]
+    CurrentJob,
+    /// The whole run: every job since the queue last was idle.
+    AllJobs,
+}
+
+#[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DesktopSettings {
     pub tray: TraySettings,
     /// Queue progress on the taskbar entry (Unity LauncherEntry).
     pub taskbar_progress: bool,
+    /// What the taskbar entry's bar shows (0.0.65; a file without it shows the current job).
+    #[serde_as(as = "DefaultOnError")]
+    pub taskbar_shows: TaskbarShows,
     /// Keep the system awake while rendering (logind inhibitor).
     pub inhibit_sleep: bool,
 }
@@ -357,6 +372,7 @@ impl Default for DesktopSettings {
         Self {
             tray: TraySettings::default(),
             taskbar_progress: true,
+            taskbar_shows: TaskbarShows::default(),
             inhibit_sleep: true,
         }
     }

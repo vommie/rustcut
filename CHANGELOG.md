@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The taskbar entry's progress bar follows the current job by default (0.0.65): Settings > Desktop Integration >
+  "The bar shows" chooses between the current job (the render that started first when several run) and all jobs
+  (the whole run, as before). Older settings files load with "Current job".
+
 - The queue handles hundreds of jobs smoothly (0.0.64): it creates only the rows in view and updates only the rows
   that changed (before, every row was made and rewritten up to ten times a second while rendering).
 - The symbols of the queue's totals line say "3/4 finished" in their tooltips: of every job in the queue (0.0.64).

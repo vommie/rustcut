@@ -1,9 +1,9 @@
 //! General, Warnings & Confirmations, Desktop Integration, Appearance and Advanced & Logs.
 
-use rustcut_core::settings::{GeneralSettings, Settings};
+use rustcut_core::settings::{GeneralSettings, Settings, TaskbarShows};
 
 use super::Card;
-use crate::ui::settings::field::{Field, Kind, Value, WRONG_VALUE, always, number, path_field, switch};
+use crate::ui::settings::field::{Field, Kind, Value, WRONG_VALUE, always, choice, number, path_field, switch};
 
 pub static GENERAL: &[Card] = &[
     Card {
@@ -115,6 +115,10 @@ fn tray_on(s: &Settings) -> bool {
     s.desktop.tray.enabled
 }
 
+fn taskbar_on(s: &Settings) -> bool {
+    s.desktop.taskbar_progress
+}
+
 pub static DESKTOP: &[Card] = &[
     Card {
         title: "Notifications",
@@ -152,10 +156,23 @@ pub static DESKTOP: &[Card] = &[
         fields: &[
             switch!(
                 "desktop.taskbar_progress",
-                "Queue progress on the taskbar entry",
-                "Shows the overall progress of the queue on RustCut's taskbar entry (KDE Plasma).",
+                "Render progress on the taskbar entry",
+                "Shows a progress bar and the number of open jobs on RustCut's taskbar entry (KDE Plasma's task \
+                 manager; other desktops may ignore it).",
                 desktop.taskbar_progress
             ),
+            choice!(
+                "desktop.taskbar_shows",
+                "The bar shows",
+                "The current job: the render that runs (the one that started first when several run). All jobs: the \
+                 whole run since the queue last was idle.",
+                desktop.taskbar_shows,
+                [
+                    (TaskbarShows::CurrentJob, "Current job"),
+                    (TaskbarShows::AllJobs, "All jobs")
+                ]
+            )
+            .under(taskbar_on),
             switch!(
                 "desktop.inhibit_sleep",
                 "Keep the computer awake while rendering",

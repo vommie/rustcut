@@ -252,6 +252,7 @@ mod tests {
                 eta_secs: None,
                 partial: false,
             }),
+            current: None,
         };
         assert_eq!(tooltip(Some(&busy)), "RustCut · 1 rendering, 2 waiting · 42 %");
         let paused = QueueStatus {

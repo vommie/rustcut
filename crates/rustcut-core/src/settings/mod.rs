@@ -28,7 +28,7 @@ pub use paths::AppPaths;
 pub use schema::{
     AdvancedSettings, AppearanceSettings, AutoSection, DesktopSettings, EditorSettings, ExportSettings,
     GeneralSettings, HashingSettings, OnJobLoad, PlayerSettings, QueueSettings, RenderSettings, RustViewSettings,
-    Settings, TargetFolder, TraySettings, WarningSettings, WhenDone, WriteTiming,
+    Settings, TargetFolder, TaskbarShows, TraySettings, WarningSettings, WhenDone, WriteTiming,
 };
 pub use ui_state::{
     ExportPanelState, JobPanelState, LogPanelState, LogSource, ProbeState, QueuePanelState, SettingsWindowState,

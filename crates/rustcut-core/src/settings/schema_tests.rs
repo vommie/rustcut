@@ -556,3 +556,14 @@ fn a_file_of_0_0_60_trims_only_an_untouched_crop_ratio_list() {
         .into_value();
     assert_eq!(value.filters.crop_ratios, ["21:9", "16:10"]);
 }
+
+#[test]
+fn a_file_without_the_taskbar_choice_shows_the_current_job() {
+    // 0.0.64 wrote only the switch; an unknown value falls back too.
+    let old: Settings = toml::from_str("version = 7\n[desktop]\ntaskbar_progress = true\n").unwrap();
+    assert_eq!(old.desktop.taskbar_shows, TaskbarShows::CurrentJob);
+    let all: Settings = toml::from_str("version = 7\n[desktop]\ntaskbar_shows = \"all_jobs\"\n").unwrap();
+    assert_eq!(all.desktop.taskbar_shows, TaskbarShows::AllJobs);
+    let odd: Settings = toml::from_str("version = 7\n[desktop]\ntaskbar_shows = \"both\"\n").unwrap();
+    assert_eq!(odd.desktop.taskbar_shows, TaskbarShows::CurrentJob);
+}
