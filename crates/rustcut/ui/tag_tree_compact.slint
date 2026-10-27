@@ -11,14 +11,15 @@ import { Theme } from "styles.slint";
 import { TagNodeView, TagColumnView } from "tag_types.slint";
 import { SmoothScrollArea } from "smooth_scroll_view.slint";
 
-/// The sizes of Compact Mode. Rust splits the columns with the same numbers (`tree::COMPACT_*`).
+/// The sizes and the two own colors of Compact Mode. Rust splits the columns with the same numbers (`tree::COMPACT_*`).
 export global CompactTreeMetrics {
-    // A row without its line; neighbors share one 1px line (rows, columns and the frame of a state). 40 rows on the
-    // area of the user's PyCutRv screenshot (answer "rows" = C).
-    out property <length> row-height: 14px;
+    // A row without its line; neighbors share one 1px line (rows, columns and the frame of a state). Answer "rows" = C
+    // (14 px), then one more pixel after the user's test of 0.0.70: 37 rows on the area of the PyCutRv screenshot.
+    out property <length> row-height: 15px;
     // PyCutRv's font: Noto Sans 8 pt at 96 dpi.
     out property <length> font-size: 32px / 3;
-    // Moves the text's line box so that ascenders and descenders fit the row (measured, whole pixels only).
+    // Moves the text's line box (measured, whole pixels only): at 15 px the x-height has 5 px above and 4 below, the
+    // ascender band 3 above and 4 below (the user: "perfect"); -2 px looked too high.
     out property <length> text-offset: -1px;
     out property <length> indent-per-level: 7px;
     out property <length> padding-left: 2px;
@@ -31,6 +32,11 @@ export global CompactTreeMetrics {
     out property <length> list-padding: 4px;
     out property <length> min-column-width: 60px;
     out property <length> max-column-width: 180px;
+    // A row a little darker than `Theme.surface-variant` and its hover a little lighter than `Theme.surface-hover`
+    // (the user, 2026-10-27, after testing 0.0.70; the hover also stands out from the lines, which are
+    // `Theme.border` = the old hover color).
+    out property <color> row-background: #1b1b2a;
+    out property <color> row-hover: #383a4f;
 }
 
 /// Plus (collapsed) or minus (expanded) without a box, as whole-pixel bars (never an SVG); the whole slot of the row
@@ -113,7 +119,7 @@ export component CompactTagTreeItem {
     property <color> fill: root.tag.is-selected ? Theme.surface-selected : (
         root.tag.is-assigned ? (root.tag.is-dimmed ? #a6e3a118 : #a6e3a128) : (
             root.tag.is-partial ? (root.tag.is-dimmed ? #f9e2af15 : #f9e2af22) : (
-                tag-touch.has-hover ? Theme.surface-hover : (root.tag.is-dimmed ? #1e1e2e66 : Theme.surface-variant)
+                tag-touch.has-hover ? CompactTreeMetrics.row-hover : (root.tag.is-dimmed ? #1e1e2e66 : CompactTreeMetrics.row-background)
             )
         )
     );

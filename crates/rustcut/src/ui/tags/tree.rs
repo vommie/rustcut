@@ -23,7 +23,7 @@ pub const TAG_PADDING_V: f32 = 4.0;
 
 /// Compact Mode (`CompactTreeMetrics` in `tag_tree_compact.slint`, D-CT1): a row without its line, the one line
 /// neighbors share, and the list's padding.
-pub const COMPACT_ITEM_HEIGHT: f32 = 14.0;
+pub const COMPACT_ITEM_HEIGHT: f32 = 15.0;
 pub const COMPACT_LINE: f32 = 1.0;
 pub const COMPACT_PADDING_V: f32 = 4.0;
 
@@ -436,12 +436,12 @@ mod tests {
         let (columns, per) = TagTreeBuilder::chunk_into_columns(&out, 80.0);
         assert_eq!((per, columns.iter().map(Vec::len).collect::<Vec<_>>()), (3, vec![3, 3]));
         assert!(TagTreeBuilder::chunk_into_columns(&[], 80.0).0.is_empty());
-        // Compact Mode: n rows take n * 15 + 1 inside the padding of 4 + 4, so 80 px hold 4 rows.
+        // Compact Mode: n rows take n * 16 + 1 inside the padding of 4 + 4, so 80 px hold 4 rows.
         let (columns, per) = TagTreeBuilder::chunk_into_compact_columns(&out, 80.0);
         assert_eq!((per, columns.iter().map(Vec::len).collect::<Vec<_>>()), (4, vec![4, 2]));
         assert!(TagTreeBuilder::chunk_into_compact_columns(&[], 80.0).0.is_empty());
-        // The mockup's area (286 x 613, the user's PyCutRv screenshot): 40 rows (answer "rows" = C).
-        assert_eq!(TagTreeBuilder::rows_per_compact_column(613.0), 40);
+        // The area of the user's PyCutRv screenshot (286 x 613): 37 rows (15 px rows, the user's test of 0.0.70).
+        assert_eq!(TagTreeBuilder::rows_per_compact_column(613.0), 37);
         assert_eq!(TagTreeBuilder::rows_per_column_in(613.0, false), 25);
     }
 

@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Compact Mode after your test: rows one pixel taller with the label centered, a darker row background and a lighter
+  hover that stands out from the lines (0.0.71).
+
 ### Added
 
 - Compact Mode for the tag tree: dense rows that share one line, in PyCutRv's font size, with the same colors, marks,
