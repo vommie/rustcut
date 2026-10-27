@@ -425,14 +425,31 @@ export component TagRatePanel inherits Rectangle {
                 background: Theme.background;
             }
 
-            if !self.card && (!TagRate.has-tree || TagRate.columns.length == 0): Text {
+            if !self.card && (!TagRate.has-tree || TagRate.columns.length == 0): VerticalLayout {
                 x: 12px;
                 width: parent.width - 24px;
-                text: TagRate.empty-text;
-                font-size: 11px;
-                color: Theme.text-muted;
-                horizontal-alignment: center;
-                wrap: word-wrap;
+                alignment: center;
+                spacing: 8px;
+
+                // RustView's library has no tags yet: the tree's "Refresh Tag Tree" as a button (user request
+                // 2026-10-27; the context menu needs a tree).
+                if TagRate.empty-refresh: HorizontalLayout {
+                    alignment: center;
+
+                    IconButton {
+                        icon: IconId.reload;
+                        tooltip: "Refresh Tag Tree: ask RustView for its tags again";
+                        clicked => { TagRate.refresh-tree(); }
+                    }
+                }
+
+                Text {
+                    text: TagRate.empty-text;
+                    font-size: 11px;
+                    color: Theme.text-muted;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                }
             }
         }
 

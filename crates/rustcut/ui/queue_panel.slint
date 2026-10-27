@@ -66,14 +66,10 @@ export component QueuePanel inherits Rectangle {
     property <length> drag-pointer;
     // The list follows new jobs while it stands at the bottom (user request 2026-10-27): scrolled up it stays where
     // it is until it is scrolled to the bottom again. It starts at the bottom. Setting `queue.follow_new_jobs`.
-    property <length> bottom-y: Math.min(0px, flick.visible-height - root.content-height);
+    // The ListView's own scroll range (it learns a new row's height a moment after the model grew; measured against
+    // `content-height` a jump to the bottom was clamped and switched the following off).
+    property <length> bottom-y: Math.min(0px, flick.visible-height - flick.content-height);
     property <bool> follow: true;
-
-    changed content-height => {
-        if root.follow && Queue.follow-new {
-            flick.content-y = root.bottom-y;
-        }
-    }
 
     // The width reaches Rust once more after the panel was created: a `changed width` during the dock's first layout
     // can come before the handler is connected (M3.2).
@@ -233,6 +229,11 @@ export component QueuePanel inherits Rectangle {
 
                 changed content-y => {
                     root.follow = self.content-y <= root.bottom-y + 1px;
+                }
+                changed content-height => {
+                    if root.follow && Queue.follow-new {
+                        self.content-y = root.bottom-y;
+                    }
                 }
                 changed visible-height => {
                     if root.follow && Queue.follow-new {

@@ -11,6 +11,9 @@ Your UI review "RustCut Feedback" and the requests that came with it.
 
 ### Added
 
+- A refresh button over the tag tree's "RustView's library has no tags yet" hint (the tree's Refresh Tag Tree, which
+  needs a tree for its context menu) (0.0.74).
+
 - A tag used again glides to the front of the tag history, also from the last row, and the other tags slide to their
   new places, so the eye can follow what changed (0.0.73).
 
@@ -34,7 +37,7 @@ Your UI review "RustCut Feedback" and the requests that came with it.
 - The crop's four edges and the resize's width and height step with the mouse wheel at once while their filter is on
   (the field opens and takes the focus; other fields still step only once they are open), and a click into one of
   them while the filter is off switches the filter on.
-- The queue follows new jobs while it stands at the bottom; scrolled up it stays put until it is scrolled to the bottom
+- The queue follows new jobs while it stands at the bottom (0.0.74: it stopped following after the first new job); scrolled up it stays put until it is scrolled to the bottom
   again. It starts at the bottom. Settings > Queue > "Follow new jobs" switches it off (new setting
   `queue.follow_new_jobs`, on by default; older `config.toml` files load unchanged).
 - Ctrl+0 to Ctrl+5 set the rating, like in RustView (Settings > Hotkeys > Tag & Rate: "Rate 0" to "Rate 5"); the
@@ -57,7 +60,8 @@ Your UI review "RustCut Feedback" and the requests that came with it.
 - While the counter auto-iterates, the files of the name's series with a lower number (the jobs saved before) are no
   "similar filename" hint any more; equal and higher numbers still are.
 - Rating buttons are 20 px high, dark with their color as the border, filled with the color on hover and when chosen;
-  also in the question before saving without a rating. RustView gets the same look at the release.
+  the chosen one has no white border any more and gets a little lighter under the pointer (0.0.74); also in the
+  question before saving without a rating. RustView gets the same look at the release.
 - File rows in the dialogs light up and open only on their picture and their buttons, not on the whole row.
 - Every dialog shows its content in one framed panel between its head and its buttons; in the dialogs with tabs the
   tabs sit on that frame and the chosen tab opens into it, so the tab bar no longer floats.

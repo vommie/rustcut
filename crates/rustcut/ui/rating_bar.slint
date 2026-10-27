@@ -11,13 +11,16 @@ export component RatingButton inherits Rectangle {
     callback clicked();
 
     // Dark with the rating's color as its border; hovered or chosen it is filled with the color and the digit turns
-    // dark (RustCut 0.0.72, user review 2026-10-27). A partial rating is filled faintly.
-    property <bool> filled: root.is-selected || (touch.has-hover && root.is-enabled);
+    // dark (RustCut 0.0.72, user review 2026-10-27). The chosen one has no border of its own (it was white): all of it
+    // is its color, a little lighter under the pointer (0.0.74). A partial rating is filled faintly.
+    property <bool> hovered: touch.has-hover && root.is-enabled;
+    property <bool> filled: root.is-selected || root.hovered;
     property <color> tint: Theme.rating-color(root.rating);
+    property <color> fill: root.is-selected && root.hovered ? root.tint.brighter(0.15) : root.tint;
 
-    border-width: root.is-selected ? 2px : 1px;
-    border-color: root.is-selected ? #ffffff : root.tint;
-    background: root.filled ? root.tint : root.is-partial ? root.tint.with-alpha(0.35) : Theme.background;
+    border-width: 1px;
+    border-color: root.filled ? root.fill : root.tint;
+    background: root.filled ? root.fill : root.is-partial ? root.tint.with-alpha(0.35) : Theme.background;
     border-radius: 3px;
     opacity: root.is-enabled ? 1.0 : 0.38;
 

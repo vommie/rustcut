@@ -454,6 +454,7 @@ impl TagsBridge {
         t.set_has_tree(state.tag_count() > 0);
         t.set_compact(self.compact());
         t.set_empty_text(view::empty_text(&state, &connection).into());
+        t.set_empty_refresh(state.has_tree() && state.tag_count() == 0);
         t.set_show_hidden(state.show_hidden);
         t.set_search_shown(state.search_shown);
         t.set_eye_tooltip(view::eye_tooltip(&state).into());
