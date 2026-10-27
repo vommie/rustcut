@@ -59,7 +59,7 @@ import { TextLogic, TextSplit } from "controls_text.slint";
 import { DragLogic, DragState } from "drag.slint";
 
 export {
-    Theme, IconId, Dock, DockMetrics, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
+    Theme, IconId, Dock, DockMetrics, RailPeek, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
     MediaInfoRow, MediaInfoSection, Shortcuts, Timeline, TimelineBlock, TimelineTick, Sections,
     SectionRowView, Filters, FilterRowView, FilterTips, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe, Export,
     ConflictJobView, ConflictOptionView, PreviewView, TipRow, Tip, TipKey, TipKeys, TipPlacement, TipRect, TipSide,
@@ -409,7 +409,8 @@ export component MainWindow inherits Window {
         // It goes 0.4 s after the pointer left rail and group, unless it was held to stay.
         Timer {
             interval: 400ms;
-            running: RailPeek.side >= 0 && !RailPeek.sticky && RailPeek.hover-rail != RailPeek.side && !RailPeek.over-group;
+            running: RailPeek.side >= 0 && RailPeek.pin(RailPeek.side) < 0 && RailPeek.hover-rail != RailPeek.side
+                && !RailPeek.over-group;
             triggered => {
                 RailPeek.side = -1;
                 RailPeek.over-group = false;
@@ -425,22 +426,25 @@ export component MainWindow inherits Window {
     }
 
     // A rail icon's group over the video while its sidebar is collapsed (P9.9, Q-P9.9), above the video's banner.
-    if Dock.left-collapsed && RailPeek.side == 0: DockPeek {
+    // A held group stays (each side its own, user review 2026-10-27); hovering or clicking the rail shows another.
+    if Dock.left-collapsed && (RailPeek.side == 0 || RailPeek.pin-left >= 0): DockPeek {
         x: left-sidebar.absolute-position.x + left-sidebar.width;
         y: left-sidebar.absolute-position.y;
         width: Dock.left-width;
         height: left-sidebar.height;
         side: 0;
-        group: Dock.left-groups[RailPeek.group];
+        index: RailPeek.side == 0 ? RailPeek.group : RailPeek.pin-left;
+        group: Dock.left-groups[self.index];
     }
 
-    if Dock.right-collapsed && RailPeek.side == 1: DockPeek {
+    if Dock.right-collapsed && (RailPeek.side == 1 || RailPeek.pin-right >= 0): DockPeek {
         x: right-sidebar.absolute-position.x - Dock.right-width;
         y: right-sidebar.absolute-position.y;
         width: Dock.right-width;
         height: right-sidebar.height;
         side: 1;
-        group: Dock.right-groups[RailPeek.group];
+        index: RailPeek.side == 1 ? RailPeek.group : RailPeek.pin-right;
+        group: Dock.right-groups[self.index];
     }
 
     ToastLayer {

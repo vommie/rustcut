@@ -125,6 +125,11 @@ pub(super) fn connect(bridge: &Rc<QueueBridge>, window: &MainWindow) {
     q.on_search_edited(move |text| {
         if let Some(b) = weak.upgrade() {
             b.ui.borrow_mut().filter.search = text.to_string();
+            // The flyout is made anew at each open and starts from `Queue.search`: without this the reopened menu
+            // showed an empty field while the search still filtered (user review 2026-10-27).
+            if let Some(window) = b.window.upgrade() {
+                window.global::<Queue<'_>>().set_search(text);
+            }
             b.refresh();
         }
     });

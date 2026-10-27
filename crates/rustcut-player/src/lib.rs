@@ -15,7 +15,7 @@ mod stats;
 mod surface;
 
 pub use engine::{
-    AudioOptions, EndReason, OpenOptions, Player, PlayerError, PlayerEvent, PlayerHandle, PlayerOptions,
+    AudioOptions, EndReason, MAX_VOLUME, OpenOptions, Player, PlayerError, PlayerEvent, PlayerHandle, PlayerOptions,
     PreviewQuality, Property, VideoFilter,
 };
 pub use stats::{FrameReport, FrameSample, FrameStats, Spread};

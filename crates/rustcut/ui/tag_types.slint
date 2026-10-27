@@ -30,6 +30,9 @@ export struct TagHistoryItemModel {
     is_italic: bool,
     width: length,
     tooltip: string,
+    // RustCut: a tag the last saved job did not have (and not assigned now): the pill is faint (user request
+    // 2026-10-27).
+    older: bool,
 }
 
 export struct TagHistoryRowModel {
@@ -72,6 +75,8 @@ export global TagRate {
     in property <string> empty-text;
     /// The eye (P9.8): the tree shows the hidden tags too, dimmed.
     in property <bool> show-hidden;
+    // The "Filter tags..." field shows (the toggle under the history, user request 2026-10-27).
+    in property <bool> search-shown: true;
     in property <string> eye-tooltip;
     /// How many tags the tree does not show (the filter button's number).
     in property <int> hidden-count;
@@ -92,6 +97,8 @@ export global TagRate {
     callback apply-edit();
     callback cancel-edit();
     callback rating-clicked(int);
+    // Ctrl+0..5 (the keymap's "Rate 0".."Rate 5").
+    callback rate-key(int);
     callback tag-clicked(int);
     callback tag-right-clicked(int);
     callback tag-toggle-expand(int);
@@ -110,6 +117,7 @@ export global TagRate {
     callback apply-last-rating();
     callback clear();
     callback toggle-show-hidden();
+    callback toggle-search();
     callback toggle-active();
     callback toggle-warn();
     // The tag filter window (P8b).

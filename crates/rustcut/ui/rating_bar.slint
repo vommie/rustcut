@@ -1,5 +1,5 @@
-// Copied from RustView (crates/rustview/ui/rating_bar.slint); only the imports differ. tests/rustview_parity.rs compares it
-// with the original: change RustView's file and copy it again, never this one (ADR-10).
+// Started as a copy of RustView's crates/rustview/ui/rating_bar.slint. RustCut's own since 0.0.72 (no parity check any more, user decision 2026-10-27): change it here freely.
+// The outlined 20 px look (user review 2026-10-27) goes to RustView at the user's "finalisiere".
 
 import { Theme } from "styles.slint";
 
@@ -10,13 +10,18 @@ export component RatingButton inherits Rectangle {
     in property <bool> is-enabled: true;
     callback clicked();
 
-    border-width: root.is-selected ? 2px : (root.is-partial ? 2px : 1px);
-    border-color: root.is-selected ? #ffffff : (root.is-partial ? Theme.primary : Theme.border);
-    background: Theme.rating-color(root.rating);
+    // Dark with the rating's color as its border; hovered or chosen it is filled with the color and the digit turns
+    // dark (RustCut 0.0.72, user review 2026-10-27). A partial rating is filled faintly.
+    property <bool> filled: root.is-selected || (touch.has-hover && root.is-enabled);
+    property <color> tint: Theme.rating-color(root.rating);
+
+    border-width: root.is-selected ? 2px : 1px;
+    border-color: root.is-selected ? #ffffff : root.tint;
+    background: root.filled ? root.tint : root.is-partial ? root.tint.with-alpha(0.35) : Theme.background;
     border-radius: 3px;
     opacity: root.is-enabled ? 1.0 : 0.38;
 
-    TouchArea {
+    touch := TouchArea {
         enabled: root.is-enabled;
         mouse-cursor: root.is-enabled ? pointer : default;
         clicked => { root.clicked(); }
@@ -24,7 +29,7 @@ export component RatingButton inherits Rectangle {
 
     Text {
         text: root.rating;
-        color: #000000;
+        color: root.filled ? #000000 : Theme.text;
         font-weight: 700;
         font-size: 11px;
         horizontal-alignment: center;
@@ -34,7 +39,7 @@ export component RatingButton inherits Rectangle {
 
 export component RatingBar inherits HorizontalLayout {
     spacing: 4px;
-    height: 28px;
+    height: 20px;
 
     in-out property <int> selected-rating: 0;
     in property <bool> is-assign-mode: false;

@@ -30,7 +30,6 @@ use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
-use std::time::Duration;
 
 use rustcut_core::edit::{CropAspect, FilterKind};
 use rustcut_core::media::{DetectOptions, MediaInfo};
@@ -46,9 +45,6 @@ use crate::ui::notices::{self, Kind, Level, Notice};
 use crate::ui::player::PlayerBridge;
 use crate::{FilterRowView, Filters, MainWindow};
 
-/// How long Ctrl must be held over the video before the quick crop shows (a shortcut like Ctrl+O is faster than this).
-const QUICK_DELAY: Duration = Duration::from_millis(220);
-
 /// The keys of the filter actions, for the card's tooltips.
 #[derive(Debug, Clone, Default)]
 pub struct FilterKeys {
@@ -56,6 +52,7 @@ pub struct FilterKeys {
     pub keep: String,
     pub reset: String,
     pub crop_edit: String,
+    pub quick_crop: String,
     pub auto_crop: String,
     pub rotate_left: String,
     pub rotate_right: String,
@@ -81,10 +78,8 @@ pub struct FiltersBridge {
     rows: Rc<VecModel<FilterRowView>>,
     /// The player shows a probe render (the filters are in its pixels already): no preview filters, no crop on it.
     suspended: Cell<bool>,
-    /// Ctrl is held, and where the pointer is over the video.
-    ctrl: Cell<bool>,
+    /// Where the pointer is over the video.
     hover: Cell<Option<(f32, f32)>>,
-    quick_timer: slint::Timer,
     /// The sections' time ranges (from the editor), for auto-crop.
     sections: RefCell<Option<SectionsSource>>,
     /// "Save as default" of the menus writes `[filters]` (Settings > Filters).
@@ -150,9 +145,7 @@ impl FiltersBridge {
             sent: RefCell::new(VideoFilter::default()),
             rows: Rc::new(VecModel::default()),
             suspended: Cell::new(false),
-            ctrl: Cell::new(false),
             hover: Cell::new(None),
-            quick_timer: slint::Timer::default(),
             sections: RefCell::new(None),
             writer,
             menu: Rc::downgrade(menu),
@@ -190,7 +183,6 @@ impl FiltersBridge {
                 task.abort();
             }
         }
-        self.quick_timer.stop();
         self.state.borrow_mut().file_opened();
         self.publish();
     }
@@ -262,6 +254,7 @@ impl FiltersBridge {
         f.set_key_keep(keys.keep.as_str().into());
         f.set_key_reset(keys.reset.as_str().into());
         f.set_key_crop_edit(keys.crop_edit.as_str().into());
+        f.set_key_quick_crop(keys.quick_crop.as_str().into());
         f.set_key_auto_crop(keys.auto_crop.as_str().into());
         f.set_key_rotate_left(keys.rotate_left.as_str().into());
         f.set_key_rotate_right(keys.rotate_right.as_str().into());

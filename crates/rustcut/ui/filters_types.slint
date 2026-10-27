@@ -92,6 +92,8 @@ export global Filters {
     // A border color picked in the video (auto-crop looks for it instead of black, P9.14), its tolerance in percent,
     // and the retries; `picking` = the next click on the video picks.
     in property <bool> search-has-color;
+    // A color other than pure black: a round badge of it on the auto-crop button.
+    in property <bool> search-color-badge;
     in property <color> search-color;
     in property <string> search-color-text;
     in property <string> search-similarity: "10";
@@ -135,6 +137,8 @@ export global Filters {
     in property <string> key-keep;
     in property <string> key-reset;
     in property <string> key-crop-edit;
+    // The quick crop's key (F4 by default, user decision 2026-10-27; it was Ctrl held over the video).
+    in property <string> key-quick-crop;
     in property <string> key-auto-crop;
     in property <string> key-rotate-left;
     in property <string> key-rotate-right;
@@ -175,6 +179,8 @@ export global Filters {
     in-out property <length> stack-bottom;
 
     callback toggle(/* kind */ string);
+    // A click into a field of a filter that is off (the crop's edges, the resize): it switches on.
+    callback switch-on(/* kind */ string);
     callback reset();
     callback set-preview(bool);
     callback set-keep(bool);

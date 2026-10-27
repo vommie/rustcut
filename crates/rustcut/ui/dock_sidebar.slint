@@ -46,6 +46,8 @@ export component DockGroup inherits Rectangle {
 component RailButton inherits Rectangle {
     in property <IconId> icon;
     in property <bool> active;
+    // A group of this side is held over the video: a pin badge (user review 2026-10-27).
+    in property <bool> pinned;
     callback clicked();
 
     width: DockMetrics.rail-width - 8px;
@@ -64,6 +66,23 @@ component RailButton inherits Rectangle {
         size: IconSize.lg;
         color: root.active ? Theme.primary : (touch.has-hover ? Theme.text : Theme.text-muted);
     }
+
+    if root.pinned: Rectangle {
+        x: parent.width - self.width + 3px;
+        y: -3px;
+        width: 14px;
+        height: 14px;
+        border-radius: 7px;
+        background: Theme.primary;
+
+        AppIcon {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            icon: IconId.rail-pinned;
+            size: 10px;
+            color: Theme.background;
+        }
+    }
 }
 
 /// A panel's icon on the rail (P9.9, Q-P9.9): hovering 0.3 s or a click shows its group over the video, which goes away
@@ -72,7 +91,9 @@ component RailButton inherits Rectangle {
 component RailPanelButton inherits Rectangle {
     in property <int> side;
     in property <DockRailItem> item;
-    property <bool> shown: RailPeek.side == root.side && RailPeek.group == root.item.group && root.item.active;
+    property <bool> pinned: RailPeek.pin(root.side) >= 0;
+    property <bool> shown: root.item.active && ((RailPeek.side == root.side && RailPeek.group == root.item.group)
+        || RailPeek.pin(root.side) == root.item.group);
     // A click closed the held group: hovering does not show it again until the pointer has left the icon.
     property <bool> quiet;
 
@@ -99,21 +120,27 @@ component RailPanelButton inherits Rectangle {
         hold: true;
         // Held: the group stays; held again: it goes away like any other once the pointer leaves.
         confirmed => {
-            if RailPeek.sticky && root.shown {
-                RailPeek.sticky = false;
+            if root.pinned && root.shown {
+                RailPeek.set-pin(root.side, -1);
             } else {
                 root.show();
-                RailPeek.sticky = true;
+                RailPeek.set-pin(root.side, root.item.group);
             }
         }
         // A click shows it; a click on the shown panel of a held group closes it.
         short-click => {
-            if RailPeek.sticky && root.shown {
-                RailPeek.sticky = false;
-                RailPeek.side = -1;
+            if root.pinned && root.shown {
+                RailPeek.set-pin(root.side, -1);
+                if RailPeek.side == root.side {
+                    RailPeek.side = -1;
+                }
                 root.quiet = true;
             } else {
                 root.show();
+                // A click on another panel of a held side holds that one instead.
+                if root.pinned {
+                    RailPeek.set-pin(root.side, root.item.group);
+                }
             }
         }
     }
@@ -129,7 +156,7 @@ component RailPanelButton inherits Rectangle {
     Timer {
         interval: 300ms;
         running: touch.has-hover && !touch.pressed && !root.shown && !root.quiet
-            && !(RailPeek.sticky && RailPeek.side == root.side);
+            && !root.pinned;
         triggered => { root.show(); }
     }
 
@@ -182,6 +209,7 @@ component DockRail inherits Rectangle {
 
             RailButton {
                 icon: root.side == 0 ? IconId.sidebar-left-expand : IconId.sidebar-right-expand;
+                pinned: RailPeek.pin(root.side) >= 0;
                 clicked => { Dock.rail-clicked(root.side, ""); }
             }
 
@@ -211,6 +239,7 @@ component DockRail inherits Rectangle {
 /// (0.12 s), flat (no shadow, no border of its own).
 export component DockPeek inherits Rectangle {
     in property <int> side;
+    in property <int> index;
     in property <DockGroupView> group;
     property <float> t: 0;
 
@@ -243,7 +272,7 @@ export component DockPeek inherits Rectangle {
             width: parent.width - 2 * DockMetrics.sidebar-padding;
             height: parent.height - DockMetrics.sidebar-padding;
             side: root.side;
-            index: RailPeek.group;
+            index: root.index;
             group: root.group;
         }
     }

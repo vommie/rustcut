@@ -109,7 +109,7 @@ export component ColorPickerWindow inherits Window {
 
     callback edited(color);
     callback accepted();
-    callback cancelled();
+    callback canceled();
 
     title: root.dialog-title;
     background: Theme.background;
@@ -121,7 +121,7 @@ export component ColorPickerWindow inherits Window {
     keys := FocusScope {
         key-pressed(event) => {
             if event.text == Key.Escape {
-                root.cancelled();
+                root.canceled();
                 return accept;
             }
             if event.text == Key.Return {
@@ -168,7 +168,7 @@ export component ColorPickerWindow inherits Window {
                     cancel-touch := TouchArea {
                         mouse-cursor: MouseCursor.pointer;
                         clicked => {
-                            root.cancelled();
+                            root.canceled();
                         }
                     }
                 }

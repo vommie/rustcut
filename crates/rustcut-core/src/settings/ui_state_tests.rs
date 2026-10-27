@@ -41,6 +41,7 @@ fn the_tag_panel_round_trips_is_sanitized_and_old_files_load() {
             filter_width: 400,
             filter_height: 600,
             show_hidden: true,
+            search_shown: false,
         },
         ..UiState::default()
     };
@@ -87,6 +88,10 @@ fn the_tag_panel_round_trips_is_sanitized_and_old_files_load() {
     );
     assert_eq!((read.tags.hidden.clone(), read.tags.locked.clone()), (vec![3], vec![2]));
     assert_eq!((read.tags.filter_width, read.tags.filter_height), (380, 560));
+    assert!(
+        read.tags.search_shown,
+        "a file of 0.0.71 has no search toggle: the field shows"
+    );
 }
 
 #[test]
@@ -99,6 +104,20 @@ fn absurd_values_are_reset() {
     assert_eq!(state.sanitize().len(), 2);
     assert_eq!((state.window.width, state.window.maximized), (1280, true));
     assert!(state.queue.columns.is_empty());
+    assert_eq!(state.export.volume, 100);
+}
+
+#[test]
+fn an_amplified_volume_of_an_older_version_becomes_100() {
+    // Up to 0.0.71 the volume went to 150 %; such a file loads and plays at 100 %.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("ui-state.toml"),
+        "version = 1\n[export]\nvolume = 150\n",
+    )
+    .unwrap();
+    let value = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+    assert_eq!(value.export.volume, 100);
 }
 
 #[test]

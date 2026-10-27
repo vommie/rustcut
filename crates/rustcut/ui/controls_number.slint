@@ -33,7 +33,12 @@ export component NumberField inherits Rectangle {
     // Pixel fields (the crop's edges and the resize, review 2): the wheel and the arrow keys of the open field step 1, with Ctrl 10 and
     // with Shift 100, also without spin arrows.
     in property <bool> pixel-steps;
+    // The wheel over the closed field opens it and steps at once (the crop's edges and the resize of a filter that is
+    // on: quick adjusting, user request 2026-10-27; every other field steps only while it is open).
+    in property <bool> wheel-opens;
     callback committed(string) -> bool;
+    // The field was opened by a click or the wheel (a filter that is off switches on).
+    callback opened();
     callback stepped(/* steps */ int);
     // The text changed while the field is open (the owner checks it again after a refusal).
     callback typed(string);
@@ -67,6 +72,7 @@ export component NumberField inherits Rectangle {
         root.editing = true;
         input.focus();
         input.select-all();
+        root.opened();
     }
 
     function finish(keep: bool) {
@@ -155,6 +161,9 @@ export component NumberField inherits Rectangle {
             }
         }
         scroll-event(event) => {
+            if !root.editing && root.wheel-opens && root.pixel-steps && event.delta-y != 0 {
+                root.start-edit();
+            }
             if !root.editing || !(root.spin || root.pixel-steps) || event.delta-y == 0 {
                 return reject;
             }

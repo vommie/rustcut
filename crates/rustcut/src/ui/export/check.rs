@@ -67,6 +67,22 @@ pub struct CardInput<'a> {
     pub scan: Option<&'a FolderScan>,
     pub queue: &'a [QueuedTarget],
     pub warnings: &'a WarningSettings,
+    /// Names that are no hint: while the counter auto-iterates, the files of the name's series with a lower number are
+    /// the jobs saved before ([`earlier_in_series`]; user note 2026-10-27).
+    pub quiet: &'a [String],
+}
+
+/// The files of `names` in the name's numbered series (`stem_for(n)`) with a number below `current`.
+pub fn earlier_in_series<'a>(
+    names: impl IntoIterator<Item = &'a String>,
+    current: u32,
+    stem_for: impl Fn(u32) -> Option<String>,
+) -> Vec<String> {
+    rustcut_core::naming::series(names, stem_for)
+        .into_iter()
+        .filter(|f| f.counter < current)
+        .map(|f| f.name)
+        .collect()
 }
 
 pub fn card_check(input: &CardInput<'_>) -> CardCheck {
@@ -145,7 +161,8 @@ pub fn card_check(input: &CardInput<'_>) -> CardCheck {
             .browsing("Show the files");
         }
     }
-    let title = match found.similar.len() {
+    let similar = found.similar.iter().filter(|n| !input.quiet.contains(n)).count();
+    let title = match similar {
         0 => return CardCheck::new(Level::Free, "Free", folder.display().to_string(), None),
         1 => "1 similar filename in target folder".to_owned(),
         n => format!("{n} similar filenames in target folder"),
@@ -186,6 +203,7 @@ mod tests {
             scan: Some(&folder_scan),
             queue: &queue,
             warnings: &warnings,
+            quiet: &[],
         };
         let line = card_check(&input("Clip - 01.mkv"));
         assert_eq!(
@@ -247,5 +265,35 @@ mod tests {
             })
             .can_save()
         );
+    }
+
+    #[test]
+    fn earlier_numbers_of_the_series_are_no_hint_while_the_counter_iterates() {
+        let warnings = WarningSettings::default();
+        let folder_scan = scan(&["Clip - 01.mkv", "Clip - 02.mp4", "Clip - 05.mkv", "Clip extra.mkv"]);
+        let stem = |n: u32| Some(format!("Clip - {n:02}"));
+        let quiet = earlier_in_series(&folder_scan.names, 3, stem);
+        assert_eq!(quiet, vec!["Clip - 01.mkv".to_owned(), "Clip - 02.mp4".to_owned()]);
+        let line = |quiet: &[String]| {
+            card_check(&CardInput {
+                source: Some(Path::new("/in/Clip.mkv")),
+                folder: Some(Path::new("/out")),
+                file: Ok(("", "Clip - 03.mkv")),
+                base: "Clip",
+                scan: Some(&folder_scan),
+                queue: &[],
+                warnings: &warnings,
+                quiet,
+            })
+        };
+        assert_eq!(line(&[]).text, "4 similar filenames in target folder");
+        assert_eq!(
+            line(&quiet).text,
+            "2 similar filenames in target folder",
+            "a higher number and another name still count"
+        );
+        let mut all = earlier_in_series(&folder_scan.names, 9, stem);
+        all.push("Clip extra.mkv".to_owned());
+        assert_eq!(line(&all).level, Level::Free, "nothing else is similar: free");
     }
 }

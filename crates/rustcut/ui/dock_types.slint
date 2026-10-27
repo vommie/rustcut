@@ -59,16 +59,33 @@ export struct DockRailItem {
 
 /// A collapsed sidebar's group over the video (P9.9, D-P9d as decided in Q-P9.9): a rail icon shows its panel's group
 /// at the sidebar's width over the full height, after 0.3 s of hovering or at once on a click; it goes away 0.4 s after
-/// the pointer left the rail and the group, unless it was held to stay (`sticky`): then a click on its icon or holding
-/// it again ends that.
+/// the pointer left the rail and the group, unless it was held to stay: then a click on its icon or holding it again
+/// ends that. Each side holds its own group (`pin-left`, `pin-right`; Rust keeps them in the dock layout, so they
+/// survive expanding the sidebar and a restart; user review 2026-10-27), the rail's expand button wears a pin then.
 export global RailPeek {
-    // The side shown (-1 = none) and the index of its group.
+    // The side shown by hovering or a click (-1 = none) and the index of its group.
     in-out property <int> side: -1;
     in-out property <int> group;
-    in-out property <bool> sticky;
+    // The held group of each side (-1 = none).
+    in-out property <int> pin-left: -1;
+    in-out property <int> pin-right: -1;
     // The side whose rail the pointer is over (-1 = none), and whether it is over the shown group.
     in-out property <int> hover-rail: -1;
     in-out property <bool> over-group;
+
+    pure public function pin(side: int) -> int {
+        return side == 0 ? root.pin-left : root.pin-right;
+    }
+
+    /// Holds `group` of `side` (-1 = lets go) and tells Rust, which stores it.
+    public function set-pin(side: int, group: int) {
+        if side == 0 {
+            root.pin-left = group;
+        } else {
+            root.pin-right = group;
+        }
+        Dock.pin-changed(side, group);
+    }
 }
 
 /// A collapsible card inside a panel.
@@ -129,6 +146,8 @@ export global Dock {
     callback group-maximize-clicked(int /* side */, int /* group */);
     callback sidebar-collapse-clicked(int /* side */);
     callback rail-clicked(int /* side */, string /* key; empty = expand only */);
+    // A rail group was held over the video, or let go (-1).
+    callback pin-changed(int /* side */, int /* group */);
     callback tab-drag-started(string /* key */, length /* x */, length /* y */, length /* grab offset */, length /* width */);
     callback tab-drag-moved(length /* x */, length /* y */);
     callback tab-drag-ended();

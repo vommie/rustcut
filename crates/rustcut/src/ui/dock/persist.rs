@@ -25,6 +25,8 @@ struct StoredSidebar {
     width: Option<f32>,
     collapsed: bool,
     maximized: Option<usize>,
+    /// The panel whose group is held over the video while collapsed (0.0.72; older files have none).
+    pinned: Option<String>,
     groups: Vec<StoredGroup>,
 }
 
@@ -91,6 +93,7 @@ fn store_sidebar(sidebar: &Sidebar) -> StoredSidebar {
         width: Some(sidebar.width),
         collapsed: sidebar.collapsed,
         maximized: sidebar.maximized,
+        pinned: sidebar.pinned.map(|p| p.key().to_owned()),
         groups: sidebar
             .groups
             .iter()
@@ -130,6 +133,7 @@ fn load_sidebar(stored: StoredSidebar, side: Side) -> Sidebar {
         collapsed: stored.collapsed,
         // Follows its group when groups before it were dropped (no known panel left).
         maximized,
+        pinned: stored.pinned.as_deref().and_then(PanelId::from_key),
     }
 }
 
@@ -163,6 +167,8 @@ mod tests {
             index: 0,
         });
         layout.set_card_collapsed("filters", true);
+        layout.left.set_pinned_group(Some(1));
+        assert!(layout.left.pinned.is_some());
         let table = to_table(&layout).unwrap();
         let text = toml::to_string(&table).unwrap();
         let read: toml::Table = toml::from_str(&text).unwrap();
@@ -191,6 +197,20 @@ mod tests {
         assert_eq!(first.weight, 1.0);
         // The right sidebar was not in the file: the default one is used.
         assert_eq!(layout.right, DockLayout::default().right);
+        assert_eq!(layout.left.pinned, None, "a file of 0.0.71 holds no group");
+    }
+
+    #[test]
+    fn a_held_group_follows_its_panel_and_ends_when_the_panel_leaves() {
+        let mut layout = DockLayout::default();
+        layout.left.set_pinned_group(Some(0));
+        let panel = layout.left.pinned.unwrap();
+        assert_eq!(layout.left.pinned_group(), Some(0));
+        layout.left.set_pinned_group(Some(99));
+        assert_eq!(layout.left.pinned, None, "an index out of range holds nothing");
+        layout.left.pinned = Some(panel);
+        layout.move_panel(panel, DropTarget::Sidebar(Side::Right));
+        assert_eq!(layout.left.pinned_group(), None, "the panel went to the other side");
     }
 
     #[test]

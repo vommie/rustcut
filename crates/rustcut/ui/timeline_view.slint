@@ -179,23 +179,25 @@ export component TimelineStrip inherits Rectangle {
 
         // Head and neck are ONE shape: two elements (a Path head on a Rectangle line) were rasterized apart at
         // sub-pixel positions and the head wobbled against the line while the playhead glided. Viewbox = pixels.
+        // The neck is one pixel wide (user review 2026-10-27), so the shape stands on whole pixels: the neck covers
+        // exactly the pixel column of the playhead instead of two half-lit ones.
         if Timeline.playhead-shown: Path {
-            x: Timeline.playhead-x - 5px;
+            x: Math.floor(Timeline.playhead-x / 1px) * 1px - 5px;
             y: 0;
-            width: 10px;
+            width: 11px;
             height: root.track-y + TimelineMetrics.track-height;
             viewbox-x: 0;
             viewbox-y: 0;
-            viewbox-width: 10;
+            viewbox-width: 11;
             viewbox-height: self.height / 1px;
             fill: Theme.status-corrupt;
 
             MoveTo { x: 0; y: 0; }
-            LineTo { x: 10; y: 0; }
-            LineTo { x: 6; y: 6; }
+            LineTo { x: 11; y: 0; }
+            LineTo { x: 6; y: 5; }
             LineTo { x: 6; y: root.track-y / 1px + TimelineMetrics.track-height / 1px; }
-            LineTo { x: 4; y: root.track-y / 1px + TimelineMetrics.track-height / 1px; }
-            LineTo { x: 4; y: 6; }
+            LineTo { x: 5; y: root.track-y / 1px + TimelineMetrics.track-height / 1px; }
+            LineTo { x: 5; y: 5; }
             Close { }
         }
 

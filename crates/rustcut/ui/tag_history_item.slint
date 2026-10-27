@@ -1,5 +1,4 @@
-// Copied from RustView (crates/rustview/ui/tag_history_item.slint); only the imports differ. tests/rustview_parity.rs compares it
-// with the original: change RustView's file and copy it again, never this one (ADR-10).
+// Started as a copy of RustView's crates/rustview/ui/tag_history_item.slint. RustCut's own since 0.0.72 (no parity check any more, user decision 2026-10-27): change it here freely.
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize, IconSlot } from "icons.slint";
@@ -17,6 +16,9 @@ export component TagHistoryItemView inherits Rectangle {
     height: 22px;
     border-radius: 4px;
     clip: true;
+    // RustCut begin: the tags the last saved job did not have are faint (user request 2026-10-27)
+    opacity: root.item.older && !touch-area.has-hover ? 0.5 : 1;
+    // RustCut end
 
     background: root.item.is-assigned ? (
         touch-area.has-hover ? #a6e3a133 : #a6e3a122

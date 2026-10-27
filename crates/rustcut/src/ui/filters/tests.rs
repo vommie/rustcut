@@ -56,7 +56,7 @@ fn handles_are_found_near_corners_and_edges() {
     assert_eq!(v.hit(crop, 1714.0, 500.0), Some(Handle::Right));
     assert_eq!(v.hit(crop, 900.0, 500.0), Some(Handle::Inside));
     assert_eq!(v.hit(crop, 50.0, 500.0), None);
-    // Ctrl: no aiming needed, the nearest edge or corner anywhere over the picture.
+    // The quick crop: no aiming needed, the nearest edge or corner anywhere over the picture.
     assert_eq!(v.nearest(crop, 300.0, 500.0), Some(Handle::Left));
     assert_eq!(v.nearest(crop, 900.0, 900.0), Some(Handle::Bottom));
     assert_eq!(v.nearest(crop, 1700.0, 120.0), Some(Handle::TopRight));
@@ -64,7 +64,7 @@ fn handles_are_found_near_corners_and_edges() {
 }
 
 #[test]
-fn drags_move_edges_on_even_pixels_and_keep_a_minimum() {
+fn drags_move_edges_on_whole_pixels_and_keep_a_minimum() {
     let v = CropView::new(HD, 1.0, Orientation::IDENTITY, 960.0, 540.0).unwrap();
     // Half scale: 25 view pixels are 50 frame pixels.
     assert_eq!(
@@ -73,7 +73,8 @@ fn drags_move_edges_on_even_pixels_and_keep_a_minimum() {
     );
     assert_eq!(
         v.drag(Crop::default(), Handle::TopRight, -10.6, 20.4, None),
-        Crop::new(40, 22, 0, 0)
+        Crop::new(41, 21, 0, 0),
+        "whole pixels, no 2-pixel steps (user review 2026-10-27)"
     );
     let squeezed = v.drag(Crop::default(), Handle::Left, 5000.0, 0.0, None);
     assert_eq!(squeezed.kept(HD).unwrap().width, MIN_KEPT);
@@ -146,7 +147,7 @@ fn arb_handle() -> impl Strategy<Value = Handle> {
 
 proptest! {
     #[test]
-    fn every_drag_gives_a_valid_even_crop(
+    fn every_drag_gives_a_valid_crop(
         w in 40u32..4000, h in 40u32..4000, sar in 0.5f64..2.0, o in arb_orientation(),
         vw in 100.0f32..2000.0, vh in 100.0f32..2000.0, handle in arb_handle(),
         t in 0u32..2000, r in 0u32..2000, b in 0u32..2000, l in 0u32..2000,
@@ -158,10 +159,7 @@ proptest! {
         let start = Crop::new(t, r, b, l).clamped(frame, 2);
         let crop = view.drag(start, handle, dx, dy, aspect);
         let kept = crop.kept(frame).expect("something stays");
-        prop_assert!(kept.is_even());
         prop_assert!(kept.width >= MIN_KEPT.min(frame.width) && kept.height >= MIN_KEPT.min(frame.height));
-        let shown = view.shown_crop(crop);
-        prop_assert!(shown.top.is_multiple_of(2) && shown.left.is_multiple_of(2));
     }
 
     #[test]
@@ -172,8 +170,8 @@ proptest! {
         let start = view.frame_crop(Crop::new(0, 0, 0, (view.shown_size().width / 4) & !1));
         let before = view.kept_rect(start);
         let after = view.kept_rect(view.drag(start, Handle::Left, dx, 0.0, None));
-        // Within one even step of the frame (two shown pixels) of where the pointer went, the picture's edge at most.
-        let step = 2.0 * view.picture().width / view.shown_size().width as f32;
+        // Within one pixel of the frame of where the pointer went, the picture's edge at most.
+        let step = view.picture().width / view.shown_size().width as f32;
         let wanted = (before.x + dx).max(view.picture().x);
         prop_assume!(wanted + 16.0 * step < before.right());
         prop_assert!((after.x - wanted).abs() <= step + 0.01);

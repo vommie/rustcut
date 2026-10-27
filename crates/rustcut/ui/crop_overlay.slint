@@ -1,6 +1,6 @@
 // The crop drawn over the video while it is edited (src/ui/filters/ computes every number: where the picture is, the
 // kept area, the handle under the pointer). Outside the kept area the picture is dimmed; the edit mode shows handles at
-// the corners and edges, the quick mode (Ctrl held) highlights the edge or corner nearest to the pointer. Over the
+// the corners and edges, the quick mode (the Quick crop key, F4) highlights the edge or corner nearest to the pointer. Over the
 // video's pointer area lie the kept size and the ratio button (`CropPills`, P9.14 like RustView's crop tool: a left
 // click goes through the landscape ratios of Settings > Filters, a right click through the portrait ones).
 
@@ -9,7 +9,7 @@ import { TooltipHost } from "tooltip.slint";
 
 export global CropOverlay {
     in property <bool> active;
-    // Ctrl held: the nearest edge follows the pointer.
+    // The quick crop (F4): the nearest edge follows the pointer.
     in property <bool> quick;
     in property <length> picture-x;
     in property <length> picture-y;
@@ -121,13 +121,13 @@ export component CropOverlayView inherits Rectangle {
 
     // Thirds while dragging (composition help).
     if CropOverlay.dragging: Rectangle {
-        x: root.kx;
-        y: root.ky;
-        width: root.kw;
-        height: root.kh;
+        x: root.fx;
+        y: root.fy;
+        width: root.fr - root.fx;
+        height: root.fb - root.fy;
 
         for i in [1, 2]: Rectangle {
-            x: parent.width * i / 3;
+            x: Math.round(parent.width * i / 3 / 1px) * 1px;
             y: 0;
             width: 1px;
             height: parent.height;
@@ -136,44 +136,50 @@ export component CropOverlayView inherits Rectangle {
 
         for i in [1, 2]: Rectangle {
             x: 0;
-            y: parent.height * i / 3;
+            y: Math.round(parent.height * i / 3 / 1px) * 1px;
             width: parent.width;
             height: 1px;
             background: #ffffff40;
         }
     }
 
-    // The kept area's frame; the grabbed or nearest edges are thicker and blue.
+    // The kept area's frame: one pixel wide on whole pixels, also while it is dragged (user request 2026-10-27; the
+    // grabbed or nearest edges were thicker); the grabbed or nearest edges are blue.
+    property <length> fx: Math.round(root.kx / 1px) * 1px;
+    property <length> fy: Math.round(root.ky / 1px) * 1px;
+    property <length> fr: Math.round((root.kx + root.kw) / 1px) * 1px;
+    property <length> fb: Math.round((root.ky + root.kh) / 1px) * 1px;
+
     Rectangle {
-        x: root.kx;
-        y: root.ky;
-        width: root.kw;
+        x: root.fx;
+        y: root.fy;
+        width: Math.max(1px, root.fr - root.fx);
+        height: 1px;
         background: (root.h == 0 || root.h == 1 || root.h == 2 || root.h == 8) ? root.hot : root.line;
-        height: (root.h == 0 || root.h == 1 || root.h == 2) ? 3px : 1.5px;
     }
 
     Rectangle {
-        x: root.kx;
-        y: root.ky + root.kh - self.height;
-        width: root.kw;
+        x: root.fx;
+        y: root.fb - 1px;
+        width: Math.max(1px, root.fr - root.fx);
+        height: 1px;
         background: (root.h == 4 || root.h == 5 || root.h == 6 || root.h == 8) ? root.hot : root.line;
-        height: (root.h == 4 || root.h == 5 || root.h == 6) ? 3px : 1.5px;
     }
 
     Rectangle {
-        x: root.kx;
-        y: root.ky;
-        height: root.kh;
+        x: root.fx;
+        y: root.fy;
+        width: 1px;
+        height: Math.max(1px, root.fb - root.fy);
         background: (root.h == 0 || root.h == 7 || root.h == 6 || root.h == 8) ? root.hot : root.line;
-        width: (root.h == 0 || root.h == 7 || root.h == 6) ? 3px : 1.5px;
     }
 
     Rectangle {
-        x: root.kx + root.kw - self.width;
-        y: root.ky;
-        height: root.kh;
+        x: root.fr - 1px;
+        y: root.fy;
+        width: 1px;
+        height: Math.max(1px, root.fb - root.fy);
         background: (root.h == 2 || root.h == 3 || root.h == 4 || root.h == 8) ? root.hot : root.line;
-        width: (root.h == 2 || root.h == 3 || root.h == 4) ? 3px : 1.5px;
     }
 
     // Handles of the edit mode (the quick mode needs no aiming).

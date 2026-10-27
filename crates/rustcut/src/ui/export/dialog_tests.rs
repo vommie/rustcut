@@ -83,12 +83,13 @@ fn choices(d: &ConflictDialog) -> Vec<Choice> {
 }
 
 #[test]
-fn an_existing_file_offers_a_number_and_overwrite_first_then_other_names() {
+fn an_existing_file_offers_the_free_names_first_then_the_own_name_and_overwrite() {
     let st = export(true);
     let mut d = dialog(&st, exists(), Vec::new());
     assert_eq!(
         choices(&d),
-        vec![Choice::NextNumber, Choice::Overwrite, Choice::Variant, Choice::Rename]
+        vec![Choice::NextNumber, Choice::Variant, Choice::Rename, Choice::Overwrite],
+        "user review 2026-10-27: Overwrite last"
     );
     assert_eq!((d.selected, d.tab), (0, Tab::Decision));
     assert_eq!(
@@ -100,11 +101,11 @@ fn an_existing_file_offers_a_number_and_overwrite_first_then_other_names() {
         "what the choice does, not the counter (review 50 #9)"
     );
     assert_eq!(d.outcome().unwrap().counter, Some(3));
-    assert_eq!(d.options[2].file, "Clip - 01 (1).mkv");
+    assert_eq!(d.options[1].file, "Clip - 01 (1).mkv");
     assert_eq!(d.confirm_text(), "Save", "the chosen row shows the file name");
-    assert!(!d.options[3].enabled, "the typed name starts as the taken one");
+    assert!(!d.options[2].enabled, "the typed name starts as the taken one");
     assert_eq!(
-        (d.options[3].detail_name.as_str(), d.options[3].detail.as_str()),
+        (d.options[2].detail_name.as_str(), d.options[2].detail.as_str()),
         ("Clip - 01.mkv", "already exists."),
         "the name in italics before the words (review 50 #1)"
     );
@@ -117,19 +118,17 @@ fn an_existing_file_offers_a_number_and_overwrite_first_then_other_names() {
     assert!(d.options_of(Tab::Similar).is_empty());
     d.type_name("Clip - 02");
     assert_eq!(
-        (d.options[3].detail_name.as_str(), d.options[3].detail.as_str()),
+        (d.options[2].detail_name.as_str(), d.options[2].detail.as_str()),
         ("Clip - 02.mkv", "already exists.")
     );
     d.type_name("Holiday");
     d.set_tab(Tab::Similar);
-    d.select(3);
+    d.select(2);
     assert_eq!(
         (d.outcome().unwrap().stem, d.tab),
         ("Holiday".to_owned(), Tab::Decision),
         "a picked choice shows its tab"
     );
-    d.step(1);
-    assert_eq!(d.selected, 0, "wraps around");
     d.step(1);
     assert_eq!(
         (d.current().unwrap().choice, d.confirm_text()),
@@ -137,6 +136,8 @@ fn an_existing_file_offers_a_number_and_overwrite_first_then_other_names() {
     );
     assert!(d.outcome().unwrap().overwrite);
     assert_eq!(silent_outcome(&d, &st).unwrap().stem, "Clip - 03");
+    d.step(1);
+    assert_eq!(d.selected, 0, "wraps around");
 }
 
 #[test]
@@ -182,7 +183,7 @@ fn the_preselected_way_out_follows_the_settings() {
     let d = dialog_with(&st, exists(), Vec::new(), &with(ConflictPreselect::Variant));
     assert_eq!(
         choices(&d),
-        vec![Choice::Variant, Choice::Overwrite, Choice::NextNumber, Choice::Rename],
+        vec![Choice::Variant, Choice::NextNumber, Choice::Rename, Choice::Overwrite],
         "\"(n)\" takes the number's place on the first tab"
     );
     assert_eq!((d.current().unwrap().choice, d.tab), (Choice::Variant, Tab::Decision));
@@ -228,7 +229,7 @@ fn a_template_without_a_counter_offers_n_first() {
     let mut st = export(false);
     st.template = "{{ name }}".to_owned();
     let d = dialog(&st, exists(), Vec::new());
-    assert_eq!(choices(&d), vec![Choice::Variant, Choice::Overwrite, Choice::Rename]);
+    assert_eq!(choices(&d), vec![Choice::Variant, Choice::Rename, Choice::Overwrite]);
     assert_eq!(d.options[0].file, "Clip (2).mkv");
     assert!(d.series.is_empty(), "no counter, no series");
     assert_eq!(d.current().unwrap().choice, Choice::Variant);
@@ -252,17 +253,17 @@ fn queued_jobs_offer_save_anyway_and_removal_on_the_first_tab() {
         choices(&d),
         vec![
             Choice::NextNumber,
-            Choice::KeepName,
-            Choice::RemoveQueued,
             Choice::Variant,
-            Choice::Rename
+            Choice::Rename,
+            Choice::KeepName,
+            Choice::RemoveQueued
         ]
     );
     assert_eq!(d.options[0].title, "Add a number");
     assert_eq!(d.options[0].file, "Clip - 03.mkv", "01 and 02 are on the drive");
-    assert_eq!(d.options[3].file, "Clip (2).mkv");
-    assert_eq!(d.options[2].outcome.as_ref().unwrap().remove, vec![JobId(4)]);
-    assert!(d.options[1].outcome.as_ref().unwrap().overwrite);
+    assert_eq!(d.options[1].file, "Clip (2).mkv");
+    assert_eq!(d.options[4].outcome.as_ref().unwrap().remove, vec![JobId(4)]);
+    assert!(d.options[3].outcome.as_ref().unwrap().overwrite);
     assert_eq!(silent_outcome(&d, &st).unwrap().stem, "Clip (2)");
     assert!(!d.tabs().contains(&Tab::Queue), "the jobs are the decision itself");
     let running = vec![QueuedTarget {
@@ -277,7 +278,7 @@ fn queued_jobs_offer_save_anyway_and_removal_on_the_first_tab() {
         },
         running,
     );
-    assert!(!d.options[2].enabled && d.options[2].detail.contains("rendering"));
+    assert!(!d.options[4].enabled && d.options[4].detail.contains("rendering"));
 }
 
 #[test]
@@ -340,4 +341,14 @@ fn an_empty_counter_with_auto_increment_offers_the_next_number() {
         silent_outcome(&d, &st).unwrap().counter,
         d.options[0].outcome.as_ref().unwrap().counter
     );
+}
+
+#[test]
+fn keys_are_green_for_the_iterated_number_and_red_for_replacing() {
+    use super::dialog_view::key_tint;
+    assert_eq!(key_tint(Choice::NextNumber, false, true), 1);
+    assert_eq!(key_tint(Choice::NextNumber, false, false), 0);
+    assert_eq!(key_tint(Choice::Overwrite, true, true), 2);
+    assert_eq!(key_tint(Choice::RemoveQueued, true, false), 2);
+    assert_eq!(key_tint(Choice::Variant, false, true), 0);
 }

@@ -151,7 +151,7 @@ component CropTools inherits HorizontalLayout {
         enabled: Filters.can-edit-crop;
         tooltip: Filters.crop-editing
             ? "Done: keep the crop (Enter). Escape restores the crop from before."
-            : "Edit the crop on the video: drag the corners, the edges or the area (Shift keeps the ratio; the button on the crop picks one). Quicker: hold Ctrl over the video and drag the nearest edge.";
+            : "Edit the crop on the video: drag the corners, the edges or the area (Shift keeps the ratio; the button on the crop picks one). Quicker: the Quick crop key (" + Filters.key-quick-crop + ") lets you drag the nearest edge at once; press it again or Enter to keep it.";
         shortcut: Filters.key-crop-edit;
         clicked => { Filters.crop-edit(); }
     }
@@ -165,6 +165,18 @@ component CropTools inherits HorizontalLayout {
             : "Detect the black borders at several points of the video and crop them (the options menu says how).";
         shortcut: Filters.key-auto-crop;
         clicked => { Filters.auto-crop(); }
+
+        // The border color auto-crop looks for, when it is not black (user review 2026-10-27).
+        if Filters.search-color-badge: Rectangle {
+            x: parent.width - self.width - 1px;
+            y: 1px;
+            width: 9px;
+            height: 9px;
+            border-radius: 4.5px;
+            border-width: 1px;
+            border-color: Theme.background;
+            background: Filters.search-color;
+        }
     }
 
     TooltipArea {
@@ -186,6 +198,9 @@ component CropTools inherits HorizontalLayout {
 }
 
 component CropField inherits HorizontalLayout {
+    // The crop filter is on: the wheel over the field steps at once; a click while it is off switches it on (user
+    // request 2026-10-27).
+    in property <bool> on;
     in property <int> edge;
     in property <IconId> icon;
     in property <string> name;
@@ -203,6 +218,12 @@ component CropField inherits HorizontalLayout {
         tooltip: root.name + " edge in pixels (click, then the wheel: 1, Ctrl 10, Shift 100)";
         spin: false;
         pixel-steps: true;
+        wheel-opens: root.on;
+        opened => {
+            if !root.on {
+                Filters.switch-on("crop");
+            }
+        }
         committed(text) => { return Filters.edit-crop(root.edge, text); }
         stepped(steps) => { Filters.step-crop(root.edge, steps); }
     }
@@ -210,27 +231,32 @@ component CropField inherits HorizontalLayout {
 
 /// Line 2 of Crop: the four edges as seen in the output.
 component CropEdges inherits HorizontalLayout {
+    in property <bool> on;
     spacing: FilterMetrics.spacing;
 
     CropField {
+        on: root.on;
         edge: 0;
         icon: IconId.edge-top;
         name: "Top";
     }
 
     CropField {
+        on: root.on;
         edge: 1;
         icon: IconId.edge-right;
         name: "Right";
     }
 
     CropField {
+        on: root.on;
         edge: 2;
         icon: IconId.edge-bottom;
         name: "Bottom";
     }
 
     CropField {
+        on: root.on;
         edge: 3;
         icon: IconId.edge-left;
         name: "Left";
@@ -393,6 +419,9 @@ component OrientationValues inherits HorizontalLayout {
 }
 
 component ResizeValues inherits HorizontalLayout {
+    // The resize filter is on: the wheel over a size steps at once; a click while it is off switches it on (user
+    // request 2026-10-27).
+    in property <bool> on;
     spacing: 2px;
 
     NumberField {
@@ -402,6 +431,12 @@ component ResizeValues inherits HorizontalLayout {
         unit: "px";
         spin: false;
         pixel-steps: true;
+        wheel-opens: root.on;
+        opened => {
+            if !root.on {
+                Filters.switch-on("resize");
+            }
+        }
         tooltip: "Width in pixels; empty keeps the aspect ratio of the height (the dim number is what it comes to; click, then the wheel: 1, Ctrl 10, Shift 100)";
         committed(text) => { return Filters.edit-resize(0, text); }
         stepped(steps) => { Filters.step-resize(0, steps); }
@@ -421,6 +456,12 @@ component ResizeValues inherits HorizontalLayout {
         unit: "px";
         spin: false;
         pixel-steps: true;
+        wheel-opens: root.on;
+        opened => {
+            if !root.on {
+                Filters.switch-on("resize");
+            }
+        }
         tooltip: "Height in pixels; empty keeps the aspect ratio of the width (the dim number is what it comes to; click, then the wheel: 1, Ctrl 10, Shift 100)";
         committed(text) => { return Filters.edit-resize(1, text); }
         stepped(steps) => { Filters.step-resize(1, steps); }
@@ -463,8 +504,10 @@ component FilterRow inherits Rectangle {
             width: 100%;
             height: 100%;
 
+            // The move cursor only while a row is dragged: resting on a row or turning the wheel over it showed it and
+            // looked like something to scroll (user review 2026-10-27).
             area := DragArea {
-                mouse-cursor: MouseCursor.move;
+                mouse-cursor: Filters.dragging ? MouseCursor.move : MouseCursor.default;
                 menu(x, y) => {
                     Filters.row-menu(root.item.kind, x, y,
                         body.absolute-position.x + body.width - FilterMetrics.options-width, body.absolute-position.y + 2px);
@@ -512,7 +555,9 @@ component FilterRow inherits Rectangle {
                             if root.item.kind == "orientation": OrientationValues {
                                 active: root.item.enabled;
                             }
-                            if root.item.kind == "resize": ResizeValues { }
+                            if root.item.kind == "resize": ResizeValues {
+                                on: root.item.enabled;
+                            }
                         }
                     }
 
@@ -532,7 +577,9 @@ component FilterRow inherits Rectangle {
                     Rectangle {
                         opacity: root.item.enabled ? 1 : 0.5;
 
-                        CropEdges { }
+                        CropEdges {
+                            on: root.item.enabled;
+                        }
                     }
                 }
             }

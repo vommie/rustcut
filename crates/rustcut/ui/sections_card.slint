@@ -357,8 +357,10 @@ component SectionRowItem inherits Rectangle {
                 overflow: elide;
             }
 
+            // A small gap after the duration (user review 2026-10-27).
             VerticalLayout {
                 alignment: center;
+                padding-left: 6px;
 
                 IconButton {
                     icon: IconId.section-delete;
@@ -404,16 +406,10 @@ export component SectionsCardBody inherits Rectangle {
 
         CurrentSection { }
 
-        Rectangle {
+        // Without sections the card ends under the current section (no hint text, user review 2026-10-27).
+        if Sections.rows.length > 0: Rectangle {
             height: 1px;
             background: Theme.border;
-        }
-
-        if Sections.rows.length == 0: Text {
-            text: "No sections yet: set a start and an end, then add the section.";
-            color: Theme.text-muted;
-            font-size: 11px;
-            wrap: word-wrap;
         }
 
         if Sections.rows.length > 0: HorizontalLayout {
@@ -443,9 +439,9 @@ export component SectionsCardBody inherits Rectangle {
                 horizontal-alignment: right;
             }
 
-            // The delete buttons' column has no caption.
+            // The delete buttons' column (with its gap) has no caption.
             Rectangle {
-                width: 26px;
+                width: 32px;
             }
         }
 

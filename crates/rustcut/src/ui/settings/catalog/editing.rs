@@ -99,8 +99,9 @@ pub static PLAYER: &[Card] = &[
         ],
     },
     Card {
-        title: "Play and pause",
-        description: "",
+        title: "Symbols over the video",
+        description: "What keys and the mouse wheel show over the video, each on its own (the buttons show their \
+                      state themselves).",
         fields: &[
             switch!(
                 "player.flash_play_pause",
@@ -113,6 +114,24 @@ pub static PLAYER: &[Card] = &[
                 "Keep the pause symbol while paused",
                 "A faint pause symbol stays in the middle of the video while it is paused.",
                 player.keep_pause_symbol
+            ),
+            switch!(
+                "player.flash_mute",
+                "Flash the mute symbol",
+                "When the mute key mutes or unmutes the video, a speaker shows briefly in its middle.",
+                player.flash_mute
+            ),
+            switch!(
+                "player.flash_rating",
+                "Flash the rating",
+                "When Ctrl+0 to Ctrl+5 give a rating, its digit shows briefly in the middle of the video.",
+                player.flash_rating
+            ),
+            switch!(
+                "player.volume_bar",
+                "Show the volume bar",
+                "When the mouse wheel changes the volume, a bar with the level shows near the bottom of the video.",
+                player.volume_bar
             ),
         ],
     },

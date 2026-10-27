@@ -41,6 +41,9 @@ pub struct PlaybackState {
     pub measured: Instant,
     /// The end is reached (`eof-reached` with keep-open): the playhead stands at the end, not at the last frame's start.
     pub at_end: bool,
+    /// The video stands because of a frame step (mpv pauses after it): no pause in the user's sense, so no pause
+    /// symbol, until the user plays or pauses again (user review 2026-10-27).
+    pub stepped: bool,
 }
 
 impl Default for PlaybackState {
@@ -60,6 +63,7 @@ impl Default for PlaybackState {
             reverse_rate: 0,
             measured: Instant::now(),
             at_end: false,
+            stepped: false,
         }
     }
 }
@@ -85,6 +89,9 @@ pub struct PlaybackView {
     pub error_title: String,
     pub error_detail: String,
     pub decoder_text: String,
+    /// The faint pause symbol over the video: paused by the user, not by a frame step, not standing at the end and not
+    /// in the emulated backward playback (user review 2026-10-27).
+    pub pause_symbol: bool,
 }
 
 impl PlaybackState {
@@ -99,6 +106,17 @@ impl PlaybackState {
         self.seek_target = None;
         self.reverse_rate = 0;
         self.at_end = false;
+        self.stepped = false;
+    }
+
+    /// A frame step was sent: the pause that follows is not the user's.
+    pub fn frame_stepping(&mut self) {
+        self.stepped = true;
+    }
+
+    /// The user plays or pauses (a key, a button, the shuttle): a pause from now on is theirs again.
+    pub fn user_playback(&mut self) {
+        self.stepped = false;
     }
 
     /// A seek to `t` was sent.
@@ -203,6 +221,12 @@ impl PlaybackState {
             error_title: failure.map(|f| f.title.clone()).unwrap_or_default(),
             error_detail: failure.map(|f| f.detail.clone()).unwrap_or_default(),
             decoder_text: decoder_text(self.loaded, self.decoder.as_deref()),
+            pause_symbol: self.loaded
+                && failure.is_none()
+                && self.paused
+                && !self.at_end
+                && !self.stepped
+                && self.reverse_rate == 0,
         }
     }
 }
@@ -232,9 +256,13 @@ impl Motion {
     }
 }
 
-/// mpv's volume (0-150, may be fractional) as whole percent.
+/// mpv's volume (0 to `MAX_VOLUME`, may be fractional) as whole percent.
 fn percent(volume: f64) -> u8 {
-    volume.clamp(0.0, 150.0).round().checked_as::<u8>().unwrap_or(0)
+    volume
+        .clamp(0.0, rustcut_player::MAX_VOLUME)
+        .round()
+        .checked_as::<u8>()
+        .unwrap_or(0)
 }
 
 /// The status line's decoder text: empty without a playing file.
@@ -252,6 +280,26 @@ fn decoder_text(loaded: bool, decoder: Option<&str>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_pause_symbol_skips_frame_steps_and_the_end() {
+        let mut s = playing();
+        s.apply(&PlayerEvent::Property(Property::Paused(true)));
+        assert!(s.view().pause_symbol, "paused by the user");
+        s.frame_stepping();
+        // mpv plays the one frame and pauses again.
+        s.apply(&PlayerEvent::Property(Property::Paused(false)));
+        s.apply(&PlayerEvent::Property(Property::Paused(true)));
+        assert!(!s.view().pause_symbol, "a frame step is no pause");
+        s.user_playback();
+        assert!(s.view().pause_symbol, "the user's next toggle counts again");
+        s.apply(&PlayerEvent::Property(Property::Paused(false)));
+        s.apply(&PlayerEvent::Property(Property::EndReached(true)));
+        s.apply(&PlayerEvent::Property(Property::Paused(true)));
+        assert!(!s.view().pause_symbol, "standing at the end is no pause");
+        s.seeking(Timestamp::from_secs(2));
+        assert!(s.view().pause_symbol, "back from the end and not playing: paused");
+    }
 
     #[test]
     fn at_the_end_the_playhead_stands_at_the_end_not_at_the_last_frame() {
@@ -415,7 +463,7 @@ mod tests {
     #[test]
     fn volume_and_decoder_texts() {
         assert_eq!(percent(49.6), 50);
-        assert_eq!(percent(400.0), 150);
+        assert_eq!(percent(400.0), 100);
         assert_eq!(percent(-3.0), 0);
         assert_eq!(percent(f64::NAN), 0);
         assert_eq!(decoder_text(true, Some("vaapi-copy")), "Hardware decoding (vaapi-copy)");

@@ -6,6 +6,7 @@
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { CloseButton } from "controls.slint";
+import { TabStrip, TabView } from "tabs.slint";
 
 /// What the user changed in the dialogs (0 = the dialog's default size); the app restores it at start and saves it at
 /// quit.
@@ -247,6 +248,53 @@ export component DialogHeader inherits VerticalLayout {
             font-size: 12px;
             wrap: word-wrap;
         }
+
+        @children
+    }
+}
+
+/// The content of a dialog between its head and its buttons (user decision 2026-10-27, questionnaire
+/// `2026-10-27-rustcut-review-design`): a framed panel; with `tabs` the tab bar sits on its top edge and the selected
+/// tab opens into it (A), without tabs it is the same frame (B), so every dialog looks alike.
+export component DialogPanel inherits Rectangle {
+    in property <[TabView]> tabs;
+    in property <int> current;
+    in property <length> pad: 10px;
+    callback picked(int);
+
+    // The frame starts on the tab bar's bottom line.
+    property <length> top: root.tabs.length > 0 ? root.strip-height - 1px : 0px;
+    property <length> strip-height: 34px;
+
+    min-height: root.top + body.min-height;
+    preferred-height: root.top + body.preferred-height;
+
+    Rectangle {
+        y: root.top;
+        height: parent.height - root.top;
+        border-radius: 6px;
+        border-width: 1px;
+        border-color: Theme.border;
+        background: Theme.surface;
+    }
+
+    if root.tabs.length > 0: TabStrip {
+        y: 0;
+        width: parent.width;
+        height: root.strip-height;
+        tabs: root.tabs;
+        current: root.current;
+        bar: transparent;
+        panel: Theme.surface;
+        outlined: true;
+        picked(index) => { root.picked(index); }
+    }
+
+    body := VerticalLayout {
+        y: root.top + 1px;
+        height: parent.height - root.top - 2px;
+        padding: root.pad;
+        padding-top: root.pad - 1px;
 
         @children
     }

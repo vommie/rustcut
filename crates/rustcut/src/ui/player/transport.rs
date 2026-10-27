@@ -62,12 +62,14 @@ impl PlayerBridge {
             return;
         }
         self.end_reverse();
+        self.state.lock().frame_stepping();
         self.command(|p| p.frame_step(back));
     }
 
     /// Space: stops a backward shuttle, pauses a fast forward one (back to normal speed), else toggles play/pause (at
     /// the end of the file playing starts over).
     pub fn toggle_pause(&self) {
+        self.state.lock().user_playback();
         if self.end_reverse() {
             return;
         }
@@ -99,7 +101,7 @@ impl PlayerBridge {
         if let Some(window) = self.window.upgrade() {
             let playback = window.global::<Playback<'_>>();
             playback.set_flash_play(play);
-            playback.set_flash_serial(playback.get_flash_serial().wrapping_add(1));
+            super::flash(&playback, super::FlashKind::PlayPause);
         }
     }
 
@@ -117,6 +119,7 @@ impl PlayerBridge {
         let current = current_rate(reverse.map_or(0, |r| r.rate()), playing, speed);
         let next = next_rate(current, key);
         tracing::debug!(current, next, "[Player] Shuttle");
+        self.state.lock().user_playback();
         match next {
             0 => {
                 if !self.end_reverse() {

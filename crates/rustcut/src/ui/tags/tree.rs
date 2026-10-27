@@ -3,7 +3,7 @@
 //! What differs: the tags are the API's `TagItem`s; RustView's selection statistics over several files become the one
 //! job's assigned tags (RustCut's panel is always in assign mode, so nothing is "selected" or "partial"); RustCut adds
 //! locked tags and hidden branches (a tag shown again inside a hidden branch keeps the way to it in the tree, dimmed).
-//! `tests/rustview_parity.rs` pins RustView's functions, so a change there is noticed.
+//! Ported from RustView; RustCut's own since 0.0.72 (no parity check any more, user decision 2026-10-27).
 
 use std::collections::{HashMap, HashSet};
 

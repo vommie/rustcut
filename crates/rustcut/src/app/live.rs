@@ -25,7 +25,7 @@ use crate::ui::probe::ProbeBridge;
 use crate::ui::render_settings::RenderSettingsBridge;
 use crate::ui::tags::TagsBridge;
 use crate::ui::tray::TrayBridge;
-use crate::{HoldConfirm, MainWindow, TooltipSettings};
+use crate::{HoldConfirm, MainWindow, Queue, TooltipSettings};
 
 /// The parts that follow the settings.
 pub struct Parts {
@@ -54,13 +54,15 @@ pub struct Parts {
     pub ui: UiDispatcher,
 }
 
-/// The hold time and the tooltips of the main window.
+/// The hold time, the tooltips and the queue list's following of the main window.
 pub fn look(main: &MainWindow, settings: &Settings) {
     main.global::<HoldConfirm<'_>>()
         .set_duration(i64::from(settings.general.hold_to_confirm_ms));
     let tooltips = main.global::<TooltipSettings<'_>>();
     tooltips.set_enabled(settings.appearance.tooltips);
     tooltips.set_delay(i64::from(settings.appearance.tooltip_delay_ms));
+    main.global::<Queue<'_>>()
+        .set_follow_new(settings.queue.follow_new_jobs);
 }
 
 pub fn connect(writer: &SettingsWriter, parts: Parts) {
@@ -68,7 +70,9 @@ pub fn connect(writer: &SettingsWriter, parts: Parts) {
 }
 
 fn apply(p: &Parts, before: &Settings, after: &Settings) {
-    if (before.general.hold_to_confirm_ms != after.general.hold_to_confirm_ms || before.appearance != after.appearance)
+    if (before.general.hold_to_confirm_ms != after.general.hold_to_confirm_ms
+        || before.appearance != after.appearance
+        || before.queue.follow_new_jobs != after.queue.follow_new_jobs)
         && let Some(main) = p.main.upgrade()
     {
         look(&main, after);

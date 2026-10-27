@@ -6,7 +6,7 @@
 // menu, and a drag moves the selected jobs.
 
 import { Theme } from "styles.slint";
-import { IconId, IconSize } from "icons.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
 import { TooltipHost } from "tooltip.slint";
 import { MiddleText } from "controls_text.slint";
 import { IconButton } from "controls.slint";
@@ -57,6 +57,8 @@ component Progress inherits Rectangle {
 export component QueueRow inherits Rectangle {
     in property <QueueRowView> job;
     in property <int> index;
+    // The state's word beside its symbol (a wide panel); the tooltip names it either way.
+    in property <bool> state-words: true;
     // Drag & drop (P9.4): how far the row moves aside while jobs are dragged and whether it is one of them (the ghost
     // shows it under the pointer, so it is hidden here). The drag reports window coordinates.
     in property <length> drag-shift;
@@ -121,11 +123,27 @@ export component QueueRow inherits Rectangle {
                     font-weight: 600;
                 }
 
-                Text {
-                    text: root.job.state;
-                    color: root.state-color;
-                    font-size: 11px;
-                    font-weight: 600;
+                HorizontalLayout {
+                    horizontal-stretch: 0;
+                    spacing: 4px;
+
+                    VerticalLayout {
+                        alignment: center;
+
+                        AppIcon {
+                            icon: QueueColors.icon(root.job.kind);
+                            size: IconSize.sm;
+                            color: root.state-color;
+                        }
+                    }
+
+                    if root.state-words: Text {
+                        text: root.job.state;
+                        color: root.state-color;
+                        font-size: 11px;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
                 }
             }
 

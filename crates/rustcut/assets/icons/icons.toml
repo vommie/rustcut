@@ -31,6 +31,7 @@ close = { tabler = "x", doc = "Dismiss a banner" }
 sidebar_left_collapse = { tabler = "layout-sidebar-left-collapse", doc = "Collapse the left sidebar to its rail" }
 sidebar_left_expand = { tabler = "layout-sidebar-left-expand", doc = "Expand the left sidebar" }
 sidebar_right_collapse = { tabler = "layout-sidebar-right-collapse", doc = "Collapse the right sidebar to its rail" }
+rail_pinned = { tabler = "pin", style = "filled", doc = "Badge on a collapsed sidebar's expand button: a group is held over the video" }
 sidebar_right_expand = { tabler = "layout-sidebar-right-expand", doc = "Expand the right sidebar" }
 
 # --- Panels --------------------------------------------------------------------------------------------------------
@@ -47,6 +48,8 @@ pause = { tabler = "player-pause", style = "filled", doc = "Pause playback" }
 frame_back = { tabler = "player-skip-back", doc = "Step one frame back" }
 frame_forward = { tabler = "player-skip-forward", doc = "Step one frame forward" }
 volume = { tabler = "volume", doc = "Sound on (click to mute)" }
+volume_low = { tabler = "volume-2", doc = "Volume bar over the video: a low volume" }
+volume_off = { tabler = "volume-off", doc = "Volume bar and mute symbol over the video: muted" }
 volume_muted = { tabler = "volume-3", doc = "Sound muted (click to unmute)" }
 reload = { tabler = "refresh", doc = "Reload the video" }
 drop_file = { tabler = "drag-drop", doc = "Drop a video to open it" }
@@ -54,6 +57,8 @@ open_file = { tabler = "folder-open", doc = "Open a video" }
 
 # --- Sections ------------------------------------------------------------------------------------------------------
 section_add = { tabler = "plus", doc = "Add the current section to the list" }
+section_mark_start = { tabler = "brackets-contain-start", doc = "Set the section start to the playhead (transport bar)" }
+section_mark_end = { tabler = "brackets-contain-end", doc = "Set the section end to the playhead (transport bar)" }
 section_delete = { tabler = "trash", doc = "Delete the selected section" }
 section_up = { tabler = "arrow-up", doc = "Move the selected section up" }
 section_down = { tabler = "arrow-down", doc = "Move the selected section down" }
@@ -142,7 +147,7 @@ confirm = { tabler = "check", doc = "Confirm the input" }
 probe_render = { tabler = "flask", doc = "Probe render around the playhead" }
 probe_cancel = { tabler = "player-stop", doc = "Stop the probe render" }
 probe_play = { tabler = "player-play", doc = "Play the probe render again" }
-probe_exact = { tabler = "target-arrow", doc = "Probe with the exact settings" }
+probe_exact = { tabler = "ruler-measure", doc = "Probe with the exact settings (the target is for jump marks only, user review 2026-10-27)" }
 probe_back = { tabler = "arrow-back", doc = "Back from the probe render to the source" }
 
 # Export (M2.6)
@@ -208,6 +213,8 @@ rustview_app = { custom = "rustview-symbolic.svg", doc = "RustView's symbol (sho
 tags_last = { tabler = "history", doc = "Apply the last saved job's tags" }
 rating_last = { tabler = "star", doc = "Apply the last saved job's rating" }
 tags_clear = { tabler = "tags-off", doc = "Clear the tags and the rating" }
+tags_search_shown = { tabler = "search", doc = "Hide the tag filter field above the tree" }
+tags_search_hidden = { tabler = "search-off", doc = "Show the tag filter field above the tree" }
 tags_show_hidden = { tabler = "eye", doc = "Show the hidden tags in the tree (they are chosen in the tag filter)" }
 tags_filter = { tabler = "filter", doc = "The tag filter window (which tags the tree shows)" }
 job_tags = { tabler = "tag", doc = "Edit the tags and the rating of the job" }

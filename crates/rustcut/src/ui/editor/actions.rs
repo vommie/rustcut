@@ -12,10 +12,10 @@ use super::Editor;
 use crate::ui::filters::FiltersBridge;
 use crate::ui::keymap::{Action, KeyPress};
 use crate::ui::notices::{self, Kind, Notice};
-use crate::ui::player::ShuttleKey;
+use crate::ui::player::{FlashKind, ShuttleKey};
 use crate::ui::queue::QueueBridge;
 use crate::ui::sections::Bound;
-use crate::{MainWindow, Playback, Shortcuts};
+use crate::{MainWindow, Playback, Shortcuts, TagRate};
 
 /// Whether a key event's text is `key` (Slint sends special keys as private-use characters).
 fn is_key(text: &str, key: Key) -> bool {
@@ -48,15 +48,6 @@ pub(super) fn connect(editor: &Rc<Editor>, window: &MainWindow) {
         (None, _) => {}
     });
     let this = Rc::downgrade(editor);
-    sc.on_key_released(move |text| {
-        if let Some(editor) = this.upgrade()
-            && is_key(&text, Key::Control)
-            && let Some(filters) = editor.filters.upgrade()
-        {
-            filters.control_changed(false);
-        }
-    });
-    let this = Rc::downgrade(editor);
     sc.on_modal_changed(move |modal| {
         if let Some(editor) = this.upgrade() {
             editor.set_menu_modal(modal);
@@ -74,18 +65,10 @@ impl Editor {
     /// A key press no focused element took: `true` when it belongs to the keymap (a held key that must not repeat its
     /// action is taken and ignored).
     fn key_pressed(self: &Rc<Self>, press: &KeyPress<'_>) -> bool {
-        if let Some(filters) = self.filters.upgrade() {
-            // Ctrl held over the video edits the crop; any other key (a shortcut like Ctrl+O) cancels that start.
-            if is_key(press.text, Key::Control) {
-                if !press.repeat {
-                    filters.control_changed(true);
-                }
-                return false;
-            }
-            filters.other_key();
-            if filters.crop_key(press.text) {
-                return true;
-            }
+        if let Some(filters) = self.filters.upgrade()
+            && filters.crop_key(press.text)
+        {
+            return true;
         }
         if is_key(press.text, Key::Escape) && self.escape.borrow().as_ref().is_some_and(|hook| hook()) {
             return true;
@@ -163,8 +146,24 @@ impl Editor {
             Action::SeekForwardLong => self.with_player(|p| p.seek_by(self.seek_step_long.get())),
             Action::PreviousCut => self.jump_to_cut(false),
             Action::NextCut => self.jump_to_cut(true),
-            Action::ToggleMute => playback.invoke_toggle_mute(),
+            // The key shows its new state in the middle of the video (RustView's feedback; buttons show it themselves).
+            Action::ToggleMute => {
+                let muted = !playback.get_muted();
+                playback.invoke_toggle_mute();
+                crate::ui::player::flash(&playback, if muted { FlashKind::SoundOff } else { FlashKind::SoundOn });
+            }
             Action::Reload => playback.invoke_reload(),
+            Action::Rate0 | Action::Rate1 | Action::Rate2 | Action::Rate3 | Action::Rate4 | Action::Rate5 => {
+                let rating = match action {
+                    Action::Rate0 => 0,
+                    Action::Rate1 => 1,
+                    Action::Rate2 => 2,
+                    Action::Rate3 => 3,
+                    Action::Rate4 => 4,
+                    _ => 5,
+                };
+                window.global::<TagRate<'_>>().invoke_rate_key(rating);
+            }
             Action::SetStart => self.set_mark_here(Bound::Start),
             Action::SetEnd => self.set_mark_here(Bound::End),
             Action::GoToStart => self.go_to_mark(Bound::Start),
@@ -178,6 +177,7 @@ impl Editor {
                 self.publish();
             }
             Action::CropEdit => self.with_filters(FiltersBridge::toggle_crop_edit),
+            Action::QuickCrop => self.with_filters(FiltersBridge::toggle_quick_crop),
             Action::AutoCrop => self.with_filters(FiltersBridge::auto_crop),
             Action::ToggleFilterPreview => self.with_filters(FiltersBridge::toggle_preview),
             Action::ToggleKeepFilters => self.with_filters(FiltersBridge::toggle_keep),

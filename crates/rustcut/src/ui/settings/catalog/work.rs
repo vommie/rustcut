@@ -27,6 +27,13 @@ pub static QUEUE: &[Card] = &[
                 queue.pause_on_start
             )
             .next_start(),
+            switch!(
+                "queue.follow_new_jobs",
+                "Follow new jobs",
+                "While the queue list stands at the bottom it scrolls along with each new job. Scrolled up, it stays \
+                 where it is until it is scrolled to the bottom again.",
+                queue.follow_new_jobs
+            ),
         ],
     },
     Card {

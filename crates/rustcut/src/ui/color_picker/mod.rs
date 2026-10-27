@@ -134,7 +134,7 @@ pub fn open<P: ComponentHandle>(
     let changed = Rc::clone(&on_change);
     window.on_edited(move |color| changed(color));
     let weak = window.as_weak();
-    window.on_cancelled(move || {
+    window.on_canceled(move || {
         on_change(initial);
         if let Some(window) = weak.upgrade() {
             let _ = window.hide();
@@ -151,7 +151,7 @@ pub fn open<P: ComponentHandle>(
     let weak = window.as_weak();
     window.window().on_close_requested(move || {
         if let Some(window) = weak.upgrade() {
-            window.invoke_cancelled();
+            window.invoke_canceled();
         }
         slint::CloseRequestResponse::HideWindow
     });

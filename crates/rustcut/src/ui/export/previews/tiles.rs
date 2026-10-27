@@ -210,7 +210,12 @@ pub(in crate::ui::export) fn length_text(length: Timestamp) -> String {
     }
 }
 
+/// "2026-10-27 19:00 (today)": the date with how long ago it was (user review 2026-10-27).
 fn date_text(time: std::time::SystemTime) -> String {
     let local: chrono::DateTime<chrono::Local> = time.into();
-    local.format("%Y-%m-%d %H:%M").to_string()
+    let date = local.format("%Y-%m-%d %H:%M").to_string();
+    match crate::util::ago::ago(local.date_naive(), chrono::Local::now().date_naive()) {
+        Some(ago) => format!("{date} ({ago})"),
+        None => date,
+    }
 }

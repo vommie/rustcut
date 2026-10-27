@@ -93,6 +93,8 @@ impl FiltersBridge {
         f.set_search_sections_only(card.search_sections_only);
         let color = card.search_color;
         f.set_search_has_color(color.is_some());
+        // The auto-crop button wears the picked color unless it is pure black (user review 2026-10-27).
+        f.set_search_color_badge(color.is_some_and(|c| c != [0, 0, 0]));
         let [r, g, b] = color.unwrap_or_default();
         f.set_search_color(slint::Color::from_rgb_u8(r, g, b));
         f.set_search_color_text(format!("#{r:02X}{g:02X}{b:02X}").into());
@@ -167,7 +169,7 @@ impl FiltersBridge {
         o.set_hint(
             match session.mode {
                 CropMode::Edit => "Drag a corner, an edge or the area (Shift keeps the ratio) · Enter or a double click keeps · Esc restores",
-                CropMode::Quick => "Ctrl held: drag the nearest edge or corner · Esc restores",
+                CropMode::Quick => "Quick crop: drag the nearest edge or corner · Enter keeps · Esc restores",
                 CropMode::Pick => "Click a border to pick its color for auto-crop · Esc cancels",
             }
             .into(),

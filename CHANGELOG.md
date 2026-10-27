@@ -7,6 +7,75 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+Your UI review "RustCut Feedback" and the requests that came with it.
+
+### Added
+
+- Buttons for the sections under the timeline, after the frame steps: set the start, set the end, add the section. They
+  are off without a video, and Add is off until start and end make a section of at least one frame.
+- The volume bar over the lower part of the video when the mouse wheel changes the volume, and a speaker in the
+  middle of the video when the mute key is pressed, like RustView (the slider and the mute button show it themselves).
+  The symbols in the middle of the video (play, pause, mute, rating) share one look and one timing. Each symbol has
+  its own switch in Settings > Player > Symbols over the video (new settings `player.flash_mute`,
+  `player.flash_rating`, `player.volume_bar`, on by default; older `config.toml` files load unchanged).
+- A collapsed sidebar shows a pin on its expand button while a panel is held over the video. Each side holds its own
+  panel, and the hold is kept while the sidebar is expanded and across restarts (`ui-state.toml`, older files load
+  unchanged).
+- A toggle under the tag history (left of the eye) hides the "Filter tags..." field and gives its room to the tag
+  tree; while it is hidden the filter does not apply. The choice is kept (`ui-state.toml`, older files show the field).
+- The tag history shows the tags the last saved job did not have a little faint, so you see at once what "Apply the
+  last saved job's tags" brings back.
+- The file dialogs show how long ago a file was modified: "(today)", "(yesterday)", "(5 weeks ago)", "(3 years ago)".
+- The auto-crop button wears a round badge of the border color it looks for, unless that color is pure black.
+- The volume slider clings to 25, 50, 75 and 100 % (Ctrl drags freely).
+- The crop's four edges and the resize's width and height step with the mouse wheel at once while their filter is on
+  (the field opens and takes the focus; other fields still step only once they are open), and a click into one of
+  them while the filter is off switches the filter on.
+- The queue follows new jobs while it stands at the bottom; scrolled up it stays put until it is scrolled to the bottom
+  again. It starts at the bottom. Settings > Queue > "Follow new jobs" switches it off (new setting
+  `queue.follow_new_jobs`, on by default; older `config.toml` files load unchanged).
+- Ctrl+0 to Ctrl+5 set the rating, like in RustView (Settings > Hotkeys > Tag & Rate: "Rate 0" to "Rate 5"); the
+  rating's digit shows briefly in the middle of the video (not when a rating button is clicked). "Fit timeline" moves
+  from Ctrl+0 to Ctrl+Backspace and Backspace (RustView's zoom reset keys); a key you set yourself stays.
+
+### Changed
+
+- The quick crop has its own key, F4 (Settings > Hotkeys > Filters > "Quick crop"): F4 starts it, drag the nearest
+  edge or corner, F4 again or Enter keeps it, Escape restores. Holding Ctrl alone does nothing any more (it is only a
+  modifier, so Ctrl+0..5 and Ctrl+O never start a crop).
+
+- The volume goes from 0 to 100 % (no amplification up to 150 % any more); a stored volume above 100 % becomes 100 %.
+- The transport bar: the times stand on the far right, the volume left of them.
+- In a narrow queue (below 350 px) a job's state is its colored symbol; from 350 px the symbol and the word. The row's
+  tooltip names the state.
+- The conflict dialog opens just tall enough for its Decision tab (512 px instead of 560 px; a size you set stays).
+- The conflict dialog's choices: Next free number, Add "(n)", Own name, Overwrite (in this order), with a subtle line
+  between them. The key of "Next free number" is green while the counter auto-iterates, the key of "Overwrite" red.
+- While the counter auto-iterates, the files of the name's series with a lower number (the jobs saved before) are no
+  "similar filename" hint any more; equal and higher numbers still are.
+- Rating buttons are 20 px high, dark with their color as the border, filled with the color on hover and when chosen;
+  also in the question before saving without a rating. RustView gets the same look at the release.
+- File rows in the dialogs light up and open only on their picture and their buttons, not on the whole row.
+- Every dialog shows its content in one framed panel between its head and its buttons; in the dialogs with tabs the
+  tabs sit on that frame and the chosen tab opens into it, so the tab bar no longer floats.
+- The Probe Render card's "Exact settings" button shows a ruler (the target with the arrow is for jump marks only).
+- The question before saving a job without a rating starts with the focus on the rating 5 (Enter saves with 5).
+- "Hold for" takes 100 ms and more (it was 300 ms; 0 still means a click is enough).
+- A filter row shows the move cursor only while it is dragged, not when the pointer rests on it or the wheel turns.
+- The crop is dragged in steps of one pixel; "Divisible by" applies only to the finished video's size.
+- The playhead's line is one pixel wide, and so are the crop's frame lines, also while an edge is dragged.
+- A link in a message bubble lights up and acts only under the pointer, not when the pointer is anywhere on the bubble.
+- The Sections card has no hint text when it has no sections; the delete button of a section has room after the
+  duration.
+
+### Fixed
+
+- The faint pause symbol no longer shows after a frame step or when the video stands at its end; back from the end and
+  not playing, it is paused again. While a key's symbol (mute, rating) shows it steps aside and comes back afterwards.
+- A tooltip no longer flies in from the place of the previous one.
+- The queue's filter menu keeps the typed search when it is opened again.
+- One can type into "Own name" in the conflict dialog again (a click put the focus there and took it away at once).
+
 ## [0.0.71] - 2026-10-27
 
 The tag tree's Compact Mode, RustView's context menu on the tree's free space and a real Refresh Tag Tree.

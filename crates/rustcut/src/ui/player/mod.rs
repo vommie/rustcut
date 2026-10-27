@@ -37,6 +37,8 @@ const VIEW_KEY: CoalesceKey = CoalesceKey::new("playback", 0);
 /// One mouse wheel notch in Slint's `delta-y` on X11 (measured in RustView: winit reports two lines of 60 px); touchpads
 /// send pixels that add up to a notch the same way.
 const WHEEL_NOTCH: f32 = 120.0;
+/// The volume bar's end in whole percent (`rustcut_player::MAX_VOLUME`).
+const MAX_PERCENT: i32 = 100;
 
 /// The function that sees every playback view.
 type ViewHook = Box<dyn Fn(&PlaybackView)>;
@@ -149,9 +151,7 @@ impl PlayerBridge {
             reverse_timer: slint::Timer::default(),
         });
         bridge.connect(window);
-        window
-            .global::<Playback<'_>>()
-            .set_keep_pause_symbol(settings.keep_pause_symbol);
+        show_symbols(&window.global::<Playback<'_>>(), settings);
         bridge.refresh();
         Ok(bridge)
     }
@@ -162,9 +162,7 @@ impl PlayerBridge {
         self.auto_play.set(settings.auto_play);
         self.flash.set(settings.flash_play_pause);
         if let Some(window) = self.window.upgrade() {
-            window
-                .global::<Playback<'_>>()
-                .set_keep_pause_symbol(settings.keep_pause_symbol);
+            show_symbols(&window.global::<Playback<'_>>(), settings);
         }
         self.wheel_step.set(settings.wheel_volume_step);
         let audio = |s: &PlayerSettings| AudioOptions {
@@ -254,6 +252,7 @@ impl PlayerBridge {
 
     /// Pauses or plays (a dialog that needs the user's eyes pauses a playing video and plays it again afterwards).
     pub fn set_paused(&self, paused: bool) {
+        self.state.lock().user_playback();
         self.command(|p| p.set_paused(paused));
     }
 
@@ -352,12 +351,17 @@ impl PlayerBridge {
             return;
         };
         let Some(window) = self.window.upgrade() else { return };
-        let current = window.global::<Playback<'_>>().get_volume();
+        let playback = window.global::<Playback<'_>>();
+        let current = playback.get_volume();
         self.set_volume(current.saturating_add(notches.saturating_mul(i32::from(self.wheel_step.get()))));
+        // Only the wheel shows the volume bar over the video (the slider shows the level itself; RustView's rule).
+        if playback.get_has_video() && playback.get_show_volume_bar() {
+            playback.set_volume_flash_serial(playback.get_volume_flash_serial().wrapping_add(1));
+        }
     }
 
     fn set_volume(&self, percent: i32) {
-        let percent = percent.clamp(0, 150);
+        let percent = percent.clamp(0, MAX_PERCENT);
         // Shown at once; mpv's confirmation arrives as a property change.
         if let Some(window) = self.window.upgrade() {
             window.global::<Playback<'_>>().set_volume(percent);
@@ -380,6 +384,48 @@ impl PlayerBridge {
     }
 }
 
+/// What the symbol in the middle of the video shows after a key (`Playback.flash-kind`; one look for all of them, user
+/// request 2026-10-27).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FlashKind {
+    /// Play or pause (`Playback.flash-play`).
+    PlayPause,
+    SoundOn,
+    SoundOff,
+    /// A rating from 0 to 5 (Ctrl+0..5).
+    Rating(u8),
+}
+
+/// Which symbols over the video the settings show (each on its own, user request 2026-10-27).
+fn show_symbols(playback: &Playback<'_>, settings: &PlayerSettings) {
+    playback.set_keep_pause_symbol(settings.keep_pause_symbol);
+    playback.set_show_mute_symbol(settings.flash_mute);
+    playback.set_show_rating_symbol(settings.flash_rating);
+    playback.set_show_volume_bar(settings.volume_bar);
+}
+
+/// Shows `kind` in the middle of the video (a new one replaces the one that shows); nothing without a video or while
+/// its setting is off (play/pause is checked by `key_flash`).
+pub fn flash(playback: &Playback<'_>, kind: FlashKind) {
+    let wanted = match kind {
+        FlashKind::PlayPause => true,
+        FlashKind::SoundOn | FlashKind::SoundOff => playback.get_show_mute_symbol(),
+        FlashKind::Rating(_) => playback.get_show_rating_symbol(),
+    };
+    if !wanted || !playback.get_has_video() {
+        return;
+    }
+    let (code, rating) = match kind {
+        FlashKind::PlayPause => (0, 0),
+        FlashKind::SoundOn => (1, 0),
+        FlashKind::SoundOff => (2, 0),
+        FlashKind::Rating(r) => (3, i32::from(r)),
+    };
+    playback.set_flash_kind(code);
+    playback.set_flash_rating(rating);
+    playback.set_flash_serial(playback.get_flash_serial().wrapping_add(1));
+}
+
 /// A callback without arguments that runs `f` while the bridge exists.
 fn with(this: &Weak<PlayerBridge>, f: impl Fn(&PlayerBridge) + 'static) -> impl Fn() + 'static {
     let this = Weak::clone(this);
@@ -396,6 +442,7 @@ fn show(window: &MainWindow, view: &PlaybackView) {
     playback.set_has_file(view.has_file);
     playback.set_has_video(view.has_video);
     playback.set_paused(view.paused);
+    playback.set_pause_symbol(view.pause_symbol);
     playback.set_muted(view.muted);
     playback.set_volume(view.volume);
     playback.set_position_text(view.position_text.as_str().into());
