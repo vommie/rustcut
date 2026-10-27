@@ -141,27 +141,42 @@ impl QueueView {
             .collect()
     }
 
-    /// The header's line: how many jobs wait, run and are done.
-    pub fn summary(&self) -> String {
-        let count = |k: JobStateKind| self.rows.iter().filter(|r| r.state.kind() == k).count();
-        let running = count(JobStateKind::Rendering) + count(JobStateKind::Paused);
-        let mut parts = Vec::new();
-        for (n, word) in [
-            (count(JobStateKind::Waiting), "waiting"),
-            (running, "running"),
-            (count(JobStateKind::Held), "held"),
-            (count(JobStateKind::Finished), "finished"),
-            (count(JobStateKind::Failed), "failed"),
-        ] {
-            if n > 0 {
-                parts.push(format!("{n} {word}"));
+    /// The totals line (review 2: a state symbol with a count each, only the states that occur): how many jobs wait,
+    /// run (rendering or paused), are held, finished, failed and canceled, with the word of each.
+    pub fn totals(&self) -> Vec<(JobStateKind, usize, &'static str)> {
+        let mut counts = [0_usize; JobStateKind::ALL.len()];
+        for row in &self.rows {
+            if let Some(n) = JobStateKind::ALL
+                .iter()
+                .position(|k| *k == row.state.kind())
+                .and_then(|i| counts.get_mut(i))
+            {
+                *n += 1;
             }
         }
-        if parts.is_empty() {
-            "No jobs".to_owned()
-        } else {
-            parts.join(" · ")
-        }
+        let count = |k: JobStateKind| {
+            JobStateKind::ALL
+                .iter()
+                .position(|x| *x == k)
+                .and_then(|i| counts.get(i))
+                .copied()
+                .unwrap_or_default()
+        };
+        [
+            (JobStateKind::Waiting, count(JobStateKind::Waiting), "waiting"),
+            (
+                JobStateKind::Rendering,
+                count(JobStateKind::Rendering) + count(JobStateKind::Paused),
+                "running",
+            ),
+            (JobStateKind::Held, count(JobStateKind::Held), "held"),
+            (JobStateKind::Finished, count(JobStateKind::Finished), "finished"),
+            (JobStateKind::Failed, count(JobStateKind::Failed), "failed"),
+            (JobStateKind::Canceled, count(JobStateKind::Canceled), "canceled"),
+        ]
+        .into_iter()
+        .filter(|(_, n, _)| *n > 0)
+        .collect()
     }
 }
 
@@ -237,7 +252,7 @@ mod tests {
         assert_eq!(view.size(JobId(3)), Some(42));
         view.apply(QueueEvent::Removed(vec![JobId(2), JobId(3)]), 0);
         assert!(view.sizes.is_empty());
-        assert_eq!(view.summary(), "1 waiting");
+        assert_eq!(view.totals(), vec![(JobStateKind::Waiting, 1, "waiting")]);
         assert_eq!(view.targets().len(), 1);
     }
 }

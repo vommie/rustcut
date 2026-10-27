@@ -259,10 +259,7 @@ fn output_section(spec: &JobSpec, size: Option<u64>, finished: bool) -> DetailSe
     let mut rows = path_rows(&spec.target_path(), finished);
     rows.push(DetailRow::new("Length", clock(spec.output_duration())));
     if let Some(bytes) = size {
-        rows.push(DetailRow::new(
-            "Size",
-            humansize::format_size(bytes, humansize::DECIMAL),
-        ));
+        rows.push(DetailRow::new("Size", crate::ui::queue::size_text(bytes)));
     }
     if spec.target.overwrite {
         rows.push(DetailRow::muted("Existing file", "Replaced after a verified render"));
@@ -630,7 +627,7 @@ mod tests {
             "a failed job's output does not exist"
         );
         assert_eq!(output.rows[1].actions, [RowAction::OpenFolder(PathBuf::from("/out"))]);
-        assert!(output.rows.iter().any(|r| r.value == "2 MB"));
+        assert!(output.rows.iter().any(|r| r.value == "1.9 MiB"));
         assert!(output.rows.iter().any(|r| r.label == "Existing file"));
         let sections = find(&all, "sections");
         assert_eq!(sections.title, "Sections (2)");

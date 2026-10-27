@@ -87,6 +87,8 @@ pub struct FilterChoice {
     pub label: String,
     pub count: usize,
     pub on: bool,
+    /// The state whose symbol and color the entry shows (`text::kind_number`; none for folders and profiles).
+    pub tone: Option<JobStateKind>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -230,6 +232,7 @@ impl Filter {
                     label: chip.title.to_owned(),
                     count,
                     on: self.is_on(chip),
+                    tone: chip.kinds.first().copied(),
                 })
                 .collect(),
             FilterKind::Folder | FilterKind::Profile => {
@@ -256,6 +259,7 @@ impl Filter {
                         value,
                         label,
                         count,
+                        tone: None,
                     })
                     .collect()
             }

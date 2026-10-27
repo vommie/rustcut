@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use humansize::{DECIMAL, format_size};
+use humansize::{BINARY, format_size};
 use rustcut_core::job::{JobId, JobState, JobStateKind};
 use rustcut_core::queue::{JobProgress, JobSummary};
 use rustcut_core::render::estimate_size;
@@ -44,6 +44,12 @@ pub fn row_text(row: &JobSummary, progress: Option<&JobProgress>, size: Option<u
         (state, Some(p)) if state.kind().is_active() => running_detail(p),
         _ => {
             let mut parts = vec![folder(row), row.profile.clone(), clock(row.duration)];
+            // A finished job shows its output's size (review 2).
+            if row.state.kind() == JobStateKind::Finished
+                && let Some(bytes) = size
+            {
+                parts.push(size_text(bytes));
+            }
             parts.retain(|p| !p.is_empty());
             parts.join(" · ")
         }
@@ -79,9 +85,9 @@ pub fn row_text(row: &JobSummary, progress: Option<&JobProgress>, size: Option<u
             },
             Column::Size => match (row.state.kind(), progress.and_then(estimate_size), size) {
                 (JobStateKind::Rendering | JobStateKind::Paused, Some(bytes), _) => {
-                    format!("~{}", format_size(bytes, DECIMAL))
+                    format!("~{}", size_text(bytes))
                 }
-                (JobStateKind::Finished, _, Some(bytes)) => format_size(bytes, DECIMAL),
+                (JobStateKind::Finished, _, Some(bytes)) => size_text(bytes),
                 _ => String::new(),
             },
             Column::Profile => row.profile.clone(),
@@ -152,7 +158,7 @@ fn running_detail(p: &JobProgress) -> String {
     }
     // The bytes written so far say little before the estimate (header, lookahead): only the estimate is shown.
     if let Some(bytes) = estimate_size(p) {
-        parts.push(format!("~{}", format_size(bytes, DECIMAL)));
+        parts.push(format!("~{}", size_text(bytes)));
     }
     if p.speed > 0.0 {
         parts.push(format!("{:.1}x", p.speed));
@@ -161,6 +167,11 @@ fn running_detail(p: &JobProgress) -> String {
         parts.push(format!("{:.0} fps", p.fps));
     }
     parts.join(" · ")
+}
+
+/// A file's size in binary units with at most one decimal ("324 KiB", "2.1 MiB", "2.3 GiB"; review 2).
+pub fn size_text(bytes: u64) -> String {
+    format_size(bytes, BINARY.decimal_places(1).decimal_zeroes(0))
 }
 
 /// `H:MM:SS`, whole seconds.
@@ -243,7 +254,7 @@ mod tests {
         let t = row_text(&running, Some(&p), None, &ORDER);
         assert_eq!((t.state.as_str(), t.percent.as_str()), ("Pass 2/2", "75 %"));
         assert!((t.progress - 0.75).abs() < 1e-6);
-        assert_eq!(t.detail, "ETA 0:01:15 · ~10 MB · 2.0x · 48 fps");
+        assert_eq!(t.detail, "ETA 0:01:15 · ~9.5 MiB · 2.0x · 48 fps");
         assert_eq!(
             t.cells,
             [
@@ -252,7 +263,7 @@ mod tests {
                 "Pass 2/2 75 %",
                 "1:15",
                 "0:00:10 (3)",
-                "~10 MB",
+                "~9.5 MiB",
                 "AV1 balanced",
                 "clips",
                 ""
@@ -267,7 +278,13 @@ mod tests {
         assert_eq!(waiting.detail, "clips · AV1 balanced · 0:00:10");
         assert_eq!(waiting.cells, ["", ""]);
         let finished = row_text(&row(2, JobState::Finished, "b"), None, Some(1_234_000), &[Column::Size]);
-        assert_eq!(finished.cells, ["1.23 MB"]);
+        assert_eq!(finished.cells, ["1.2 MiB"]);
+        assert_eq!(
+            finished.detail, "clips · AV1 balanced · 0:00:10 · 1.2 MiB",
+            "the output's size"
+        );
+        assert_eq!(size_text(331_776), "324 KiB");
+        assert_eq!(size_text(2_469_606_195), "2.3 GiB");
         assert!((finished.progress - 1.0).abs() < 1e-6);
         let failed = row(
             4,

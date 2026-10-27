@@ -172,6 +172,14 @@ job_cancel = { tabler = "circle-x", doc = "Cancel the job" }
 job_retry = { tabler = "refresh", doc = "Render the job again" }
 job_remove = { tabler = "trash", doc = "Remove the job from the queue" }
 job_hold = { tabler = "hand-stop", doc = "Hold the job (it waits until released)" }
+# One fixed symbol per job state (review 2: the totals line and the filter's state list), colored by `QueueColors`
+state_waiting = { tabler = "hourglass", doc = "Job state: waiting" }
+state_held = { tabler = "hand-stop", doc = "Job state: held" }
+state_rendering = { tabler = "player-play", doc = "Job state: rendering (running)" }
+state_paused = { tabler = "player-pause", doc = "Job state: paused" }
+state_finished = { tabler = "circle-check", doc = "Job state: finished" }
+state_failed = { tabler = "alert-circle", doc = "Job state: failed" }
+state_canceled = { tabler = "ban", doc = "Job state: canceled" }
 
 # Tag & Rate (M3.2); the first block carries the ids RustView's copied components use
 check = { tabler = "check", doc = "Assigned tag (tag tree, tag history)" }

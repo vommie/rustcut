@@ -11,6 +11,7 @@ import { TooltipHost } from "tooltip.slint";
 import { SearchField } from "search_field.slint";
 import { Flyout } from "flyout.slint";
 import { Queue } from "queue_types.slint";
+import { QueueColors } from "queue_row.slint";
 
 /// ALL or ANY in one switch-like button: the knob sits behind the rule that holds; a click switches.
 component RuleSwitch inherits Rectangle {
@@ -159,6 +160,8 @@ export component QueueFilterFlyout inherits Rectangle {
                     everything: "Any state";
                     tooltip: "Show jobs in these states (Ctrl+click picks several)";
                     picked(entry, control) => { Queue.filter-pick(0, entry, control); }
+                    tone-icon(kind) => { QueueColors.icon(kind) }
+                    tone-color(kind) => { QueueColors.of(kind) }
                 }
 
                 MultiChoiceButton {

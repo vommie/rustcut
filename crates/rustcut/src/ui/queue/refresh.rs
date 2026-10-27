@@ -10,10 +10,10 @@ use slint::{ComponentHandle as _, ModelRc, VecModel};
 
 use super::{
     COMPACT_ROW, Column, Filter, FilterChoice, FilterKind, Overall, QueueAction, QueueBridge, ROW_PADDING, RowText,
-    TABLE_ROW, actions, layout, pause, row_text, short_clock, status_of,
+    TABLE_ROW, actions, kind_number, layout, pause, row_text, short_clock, status_of,
 };
 use crate::util::model::sync;
-use crate::{MultiChoiceItem, Queue, QueueColumnView, QueueRowView};
+use crate::{MultiChoiceItem, Queue, QueueColumnView, QueueRowView, QueueTotalView};
 
 impl QueueBridge {
     /// The filter menu: its three choices with their texts, the rule and the badge's number.
@@ -31,6 +31,7 @@ impl QueueBridge {
                         label: c.label.as_str().into(),
                         detail: c.count.to_string().into(),
                         on: c.on,
+                        tone: c.tone.map_or(-1, kind_number),
                     })
                     .collect(),
             );
@@ -83,7 +84,7 @@ impl QueueBridge {
                 visible,
                 view.rows.len(),
                 FilterKind::ALL.map(|kind| (kind, ui.filter.choices(kind, &view.rows))),
-                view.summary(),
+                view.totals(),
                 view.overall(),
                 view.paused(),
                 view.pause_after_current(),
@@ -153,14 +154,26 @@ impl QueueBridge {
             }
             .into(),
         );
-        q.set_summary(summary.as_str().into());
+        q.set_summary(if summary.is_empty() { "No jobs" } else { "" }.into());
+        sync(
+            &self.totals,
+            summary
+                .iter()
+                .map(|(kind, count, word)| QueueTotalView {
+                    kind: kind_number(*kind),
+                    count: i32::try_from(*count).unwrap_or(i32::MAX),
+                    tooltip: format!("{count} {word}").into(),
+                })
+                .collect(),
+        );
         q.set_has_overall(overall.is_some());
         if let Some(o) = overall {
             q.set_overall(az::Az::az::<f32>(o.fraction));
-            q.set_overall_text(overall_text(&summary, &o, paused).into());
+            q.set_overall_text(overall_text(&o, paused).into());
         }
         q.set_paused(paused);
         q.set_pause_after(pause_after);
+        q.set_can_pause_after(!paused && summary.iter().any(|(kind, _, _)| *kind == JobStateKind::Rendering));
         drop(ui);
         actions::publish_toolbar(&q, &selected, &visible, finished);
         self.pause_seen(start.0, start.1);
@@ -194,9 +207,9 @@ impl QueueBridge {
     }
 }
 
-/// "1 running · 2 waiting — 2 of 5 done · about 0:12:30 left".
-fn overall_text(summary: &str, o: &Overall, paused: bool) -> String {
-    let mut text = format!("{summary} — {} of {} done", o.done, o.total);
+/// "2 of 5 done · ~0:12:30 left" (the states' counts are symbols before it).
+fn overall_text(o: &Overall, paused: bool) -> String {
+    let mut text = format!("{} of {} done", o.done, o.total);
     match (o.eta_secs, paused) {
         (_, true) if o.done < o.total => text.push_str(" · paused"),
         (Some(eta), _) => {
@@ -206,7 +219,7 @@ fn overall_text(summary: &str, o: &Overall, paused: bool) -> String {
             let _ = if o.partial {
                 write!(text, " · at least {eta} left")
             } else {
-                write!(text, " · about {eta} left")
+                write!(text, " · ~{eta} left")
             };
         }
         _ => {}
