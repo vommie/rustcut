@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.60] - 2026-10-27
+
+The first release of RustCut.
+
 ### Added
 
 - Choices with at most three short entries show them side by side, the chosen one pressed in (0.0.36): for example
@@ -873,4 +877,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/commits/master
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.60...HEAD
+[0.0.60]: https://github.com/vommie/rustcut/releases/tag/v0.0.60

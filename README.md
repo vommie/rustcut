@@ -1,15 +1,32 @@
 # RustCut
 
 A fast local video cutter for Arch Linux / KDE Plasma, written in Rust with a Slint UI and mpv as the player: mark sections,
-apply filters (crop, deinterlace, resize, rotate, deshake, ...), render them through a queue with professional encoding profiles
+apply filters (crop, deinterlace, resize, orientation, deshake, ...), render them through a queue with professional encoding profiles
 (x264, x265, AV1), and tag and rate the clips directly in the [RustView](https://github.com/vommie/rustview) library.
 
-RustCut is the successor of PyCutRv. Status: in development (no release yet); see `HANDOFF.md` for the plan and the
-current state, `CHANGELOG.md` for what changed.
+RustCut is the successor of PyCutRv. Status: early releases (0.0.x) on the GitHub releases page; see `HANDOFF.md` for
+the plan and the current state, `CHANGELOG.md` for what changed.
+
+![The main window: sections on the timeline, the filters, a queue with one job rendering, tags and a rating for the
+next job](docs/screenshots/main.png)
+
+![The crop edited on the video: the edges in the Filters card, the output size and the ratio button on the
+frame](docs/screenshots/crop.png)
+
+The screenshots come from the test environment and are retaken with one command: `scripts/readme-shots.sh` (after
+`cargo build -p rustcut`).
 
 ## Install (Arch Linux, Manjaro)
 
-Build the package from a checkout and install it:
+Download the newest package from the GitHub releases and install it:
+
+```bash
+gh release download --repo vommie/rustcut --pattern 'rustcut-x86_64.pkg.tar.zst' --pattern SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing
+sudo pacman -U rustcut-x86_64.pkg.tar.zst
+```
+
+Or build the package from a checkout and install it:
 
 ```bash
 ./build-package.sh
