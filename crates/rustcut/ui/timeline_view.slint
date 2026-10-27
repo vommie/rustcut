@@ -177,21 +177,26 @@ export component TimelineStrip inherits Rectangle {
             background: Theme.text.with-alpha(0.5);
         }
 
-        if Timeline.playhead-shown: Rectangle {
-            x: Timeline.playhead-x - 1px;
+        // Head and neck are ONE shape: two elements (a Path head on a Rectangle line) were rasterized apart at
+        // sub-pixel positions and the head wobbled against the line while the playhead glided. Viewbox = pixels.
+        if Timeline.playhead-shown: Path {
+            x: Timeline.playhead-x - 5px;
             y: 0;
-            width: 2px;
+            width: 10px;
             height: root.track-y + TimelineMetrics.track-height;
-            background: Theme.status-corrupt;
+            viewbox-x: 0;
+            viewbox-y: 0;
+            viewbox-width: 10;
+            viewbox-height: self.height / 1px;
+            fill: Theme.status-corrupt;
 
-            Path {
-                x: -4px;
-                y: 0;
-                width: 10px;
-                height: 7px;
-                commands: "M 0 0 L 10 0 L 5 7 Z";
-                fill: Theme.status-corrupt;
-            }
+            MoveTo { x: 0; y: 0; }
+            LineTo { x: 10; y: 0; }
+            LineTo { x: 6; y: 6; }
+            LineTo { x: 6; y: root.track-y / 1px + TimelineMetrics.track-height / 1px; }
+            LineTo { x: 4; y: root.track-y / 1px + TimelineMetrics.track-height / 1px; }
+            LineTo { x: 4; y: 6; }
+            Close { }
         }
 
         // The time under the pointer, on the ruler (over the labels).

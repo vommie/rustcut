@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- The playhead's head wobbled against its line while it glided: head and line are one shape now and move together to
+  the pixel (0.0.69).
+
 ## [0.0.68] - 2026-10-27
 
 The user's review of the Settings window (0.0.67) and the editor issues of 2026-10-27 (0.0.68): the counter, RustView's
