@@ -117,8 +117,8 @@ fn the_choice_survives_a_change_of_the_presets_by_its_label() {
         "O",
         "a removed ratio falls back to the source's"
     );
-    let kept = FiltersState::new(FilterDefaults::default(), true, false, Kept::default(), Some("21:9"));
-    assert_eq!(kept.ratio_choice_label(), "21:9");
+    let kept = FiltersState::new(FilterDefaults::default(), true, false, Kept::default(), Some("9:16"));
+    assert_eq!(kept.ratio_choice_label(), "9:16");
 }
 
 #[test]

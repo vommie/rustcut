@@ -30,6 +30,9 @@ export component NumberField inherits Rectangle {
     // A sign at the right inside the field (a target folder that does not exist yet, P9.7); its color.
     in property <IconId> mark: IconId.none;
     in property <color> mark-color: Theme.accent;
+    // Pixel fields (the crop's edges, review 2): the wheel and the arrow keys of the open field step 1, with Ctrl 10 and
+    // with Shift 100, also without spin arrows.
+    in property <bool> pixel-steps;
     callback committed(string) -> bool;
     callback stepped(/* steps */ int);
     // The text changed while the field is open (the owner checks it again after a refusal).
@@ -77,6 +80,11 @@ export component NumberField inherits Rectangle {
             root.canceled();
         }
         Shortcuts.release-focus();
+    }
+
+    // How many steps a wheel notch or an arrow key goes with these modifiers.
+    function steps-for(up: bool, control: bool, shift: bool) -> int {
+        (up ? 1 : -1) * (root.pixel-steps ? (shift ? 100 : control ? 10 : 1) : (shift ? 10 : 1))
     }
 
     // Steps from the shown value; an open field first keeps what was typed (a refused text stops the step).
@@ -147,10 +155,10 @@ export component NumberField inherits Rectangle {
             }
         }
         scroll-event(event) => {
-            if !root.editing || !root.spin || event.delta-y == 0 {
+            if !root.editing || !(root.spin || root.pixel-steps) || event.delta-y == 0 {
                 return reject;
             }
-            root.step((event.delta-y > 0 ? 1 : -1) * (event.modifiers.shift ? 10 : 1));
+            root.step(root.steps-for(event.delta-y > 0, event.modifiers.control, event.modifiers.shift));
             accept
         }
         changed has-hover => {
@@ -187,7 +195,7 @@ export component NumberField inherits Rectangle {
                 return accept;
             }
             if event.text == Key.UpArrow || event.text == Key.DownArrow {
-                root.step((event.text == Key.UpArrow ? 1 : -1) * (event.modifiers.shift ? 10 : 1));
+                root.step(root.steps-for(event.text == Key.UpArrow, event.modifiers.control, event.modifiers.shift));
                 return accept;
             }
             reject

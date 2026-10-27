@@ -15,10 +15,18 @@ import { Playback } from "player_types.slint";
 import { Flyout } from "flyout.slint";
 import { Filters } from "filters_types.slint";
 
+// Every menu is an invisible two-column grid (review 2: no widths at random): a label or a value takes one half, the
+// controls of a row the other half, so they all end on one line; a segmented choice spans both halves.
 global MenuMetrics {
     out property <length> width: 320px;
-    // A choice of three segments whose texts must not be cut ("Bottom first", "Top + bottom").
-    out property <length> wide-choice: 236px;
+    out property <length> padding: 10px;
+    out property <length> spacing: 8px;
+    // One column: (width - 2 * padding - spacing) / 2.
+    out property <length> half: (self.width - 2 * self.padding - self.spacing) / 2;
+    // Both columns.
+    out property <length> full: self.width - 2 * self.padding;
+    // A switch alone on the right (its label may take more than a half).
+    out property <length> switch-width: 40px;
     out property <length> row-height: 26px;
 }
 
@@ -30,14 +38,16 @@ component Heading inherits Text {
     vertical-alignment: bottom;
 }
 
-/// A label on the left (its tooltip explains the option) and the control on the right (the children).
+/// A label on the left (its tooltip explains the option) and the controls in the right column (the children).
 component MenuRow inherits HorizontalLayout {
     in property <string> label;
     in property <string> tooltip;
     in property <bool> enabled: true;
+    // The controls' column; a switch alone takes less (`MenuMetrics.switch-width`).
+    in property <length> control-width: MenuMetrics.half;
 
     height: MenuMetrics.row-height;
-    spacing: 8px;
+    spacing: MenuMetrics.spacing;
 
     TooltipArea {
         title: root.label;
@@ -56,7 +66,13 @@ component MenuRow inherits HorizontalLayout {
         }
     }
 
-    @children
+    HorizontalLayout {
+        width: root.control-width;
+        spacing: 4px;
+        alignment: root.control-width == MenuMetrics.switch-width ? end : stretch;
+
+        @children
+    }
 }
 
 /// A value labeled by a flat symbol (Deshake): the symbol's tooltip names and explains it.
@@ -67,7 +83,7 @@ component IconCell inherits HorizontalLayout {
     in property <bool> enabled: true;
 
     spacing: 4px;
-    horizontal-stretch: 1;
+    width: MenuMetrics.half;
 
     TooltipArea {
         width: 20px;
@@ -94,7 +110,6 @@ component DeinterlaceMenu inherits VerticalLayout {
         tooltip: Filters.tips.deinterlacer;
 
         ChoiceButton {
-            width: 130px;
             items: Filters.deinterlacers;
             current: Filters.deinterlacer;
             tooltip: Filters.tips.deinterlacer;
@@ -108,7 +123,6 @@ component DeinterlaceMenu inherits VerticalLayout {
         enabled: Filters.field-options;
 
         SegmentedChoice {
-            width: 160px;
             items: ["Frames", "Fields (2×)"];
             current: Filters.field-rate ? 1 : 0;
             enabled: Filters.field-options;
@@ -122,8 +136,7 @@ component DeinterlaceMenu inherits VerticalLayout {
         tooltip: Filters.tips.field-order;
         enabled: Filters.field-options;
 
-        SegmentedChoice {
-            width: MenuMetrics.wide-choice;
+        ChoiceButton {
             items: ["Auto", "Top first", "Bottom first"];
             current: Filters.field-order;
             enabled: Filters.field-options;
@@ -136,6 +149,7 @@ component DeinterlaceMenu inherits VerticalLayout {
         label: "Only interlaced frames";
         tooltip: Filters.tips.only-interlaced;
         enabled: Filters.field-options;
+        control-width: MenuMetrics.switch-width;
 
         VerticalLayout {
             alignment: center;
@@ -156,14 +170,14 @@ component DeinterlaceMenu inherits VerticalLayout {
     MenuRow {
         label: "Detected";
         tooltip: "What ffmpeg's interlace check counted in a few hundred frames.";
+        control-width: MenuMetrics.full - 60px - MenuMetrics.spacing;
 
         TooltipArea {
             title: "Interlace check";
             text: Filters.interlace-detail;
             rows: Filters.interlace-rows;
             min-width: 0;
-            preferred-width: counts.preferred-width;
-            horizontal-stretch: 0;
+            horizontal-stretch: 1;
 
             counts := Text {
                 width: parent.width;
@@ -198,7 +212,7 @@ component CropMenu inherits VerticalLayout {
         tooltip: "What auto-crop cuts: black (dark) borders, or the color you pick at a border in the video (white, gray, any color).";
 
         TooltipArea {
-            width: 64px;
+            horizontal-stretch: 1;
             text: Filters.search-has-color ? "Borders of the color " + Filters.search-color-text : "Dark borders (black up to the limit)";
 
             Rectangle {
@@ -248,7 +262,6 @@ component CropMenu inherits VerticalLayout {
         tooltip: Filters.tips.similarity;
 
         NumberField {
-            width: 70px;
             text: Filters.search-similarity;
             unit: "%";
             tooltip: Filters.tips.similarity;
@@ -263,7 +276,7 @@ component CropMenu inherits VerticalLayout {
         enabled: !Filters.search-has-color;
 
         PlayerSeekBar {
-            width: 120px;
+            horizontal-stretch: 1;
             value: Filters.search-limit / 255;
             changed(value, final) => { Filters.set-search-limit(Math.round(value * 255)); }
         }
@@ -282,9 +295,7 @@ component CropMenu inherits VerticalLayout {
         label: "Search";
         tooltip: Filters.tips.sides;
 
-        SegmentedChoice {
-            // The short label leaves room for the long middle segment.
-            width: MenuMetrics.wide-choice + 10px;
+        ChoiceButton {
             items: ["All", "Top + bottom", "Sides"];
             current: Filters.search-sides;
             tooltip: Filters.tips.sides;
@@ -297,7 +308,6 @@ component CropMenu inherits VerticalLayout {
         tooltip: Filters.tips.samples;
 
         NumberField {
-            width: 70px;
             text: Filters.search-samples;
             tooltip: Filters.tips.samples;
             committed(text) => { return Filters.edit-search-samples(text); }
@@ -310,7 +320,6 @@ component CropMenu inherits VerticalLayout {
         tooltip: Filters.tips.retries;
 
         NumberField {
-            width: 70px;
             text: Filters.search-retries;
             tooltip: Filters.tips.retries;
             committed(text) => { return Filters.edit-search-retries(text); }
@@ -321,6 +330,7 @@ component CropMenu inherits VerticalLayout {
     MenuRow {
         label: "Only inside the sections";
         tooltip: Filters.tips.sections-only;
+        control-width: MenuMetrics.switch-width;
 
         VerticalLayout {
             alignment: center;
@@ -363,7 +373,7 @@ component DeshakeMenu inherits VerticalLayout {
     }
 
     HorizontalLayout {
-        spacing: 12px;
+        spacing: MenuMetrics.spacing;
 
         DeshakeNumber {
             param: 0;
@@ -381,7 +391,7 @@ component DeshakeMenu inherits VerticalLayout {
     }
 
     HorizontalLayout {
-        spacing: 12px;
+        spacing: MenuMetrics.spacing;
 
         DeshakeNumber {
             param: 2;
@@ -401,7 +411,7 @@ component DeshakeMenu inherits VerticalLayout {
     }
 
     HorizontalLayout {
-        spacing: 12px;
+        spacing: MenuMetrics.spacing;
 
         DeshakeNumber {
             param: 3;
@@ -433,7 +443,7 @@ component DeshakeMenu inherits VerticalLayout {
     }
 
     HorizontalLayout {
-        spacing: 12px;
+        spacing: MenuMetrics.spacing;
 
         DeshakeNumber {
             param: 5;
@@ -459,7 +469,7 @@ component DeshakeMenu inherits VerticalLayout {
     }
 
     HorizontalLayout {
-        spacing: 12px;
+        spacing: MenuMetrics.spacing;
 
         DeshakeNumber {
             param: 4;
@@ -480,11 +490,13 @@ component DeshakeMenu inherits VerticalLayout {
     }
 
     IconCell {
+        width: MenuMetrics.full;
         icon: IconId.deshake-optzoom;
         title: "Automatic zoom";
         tooltip: Filters.tips.optzoom;
 
         SegmentedChoice {
+            stretch-fully: true;
             items: ["None", "Static", "Adaptive"];
             current: Filters.deshake-optzoom;
             tooltip: Filters.tips.optzoom;
@@ -493,11 +505,13 @@ component DeshakeMenu inherits VerticalLayout {
     }
 
     IconCell {
+        width: MenuMetrics.full;
         icon: IconId.deshake-borders;
         title: "Borders";
         tooltip: Filters.tips.borders;
 
         SegmentedChoice {
+            stretch-fully: true;
             items: ["Black", "Previous frame"];
             current: Filters.deshake-borders;
             tooltip: Filters.tips.borders;
@@ -574,7 +588,6 @@ component ResizeMenu inherits VerticalLayout {
         tooltip: Filters.tips.scaler;
 
         ChoiceButton {
-            width: 130px;
             items: Filters.algorithms;
             current: Filters.algorithm;
             tooltip: Filters.tips.scaler;
@@ -612,7 +625,7 @@ export component FilterMenuFlyout inherits Rectangle {
 
             body := VerticalLayout {
                 width: MenuMetrics.width;
-                padding: 10px;
+                padding: MenuMetrics.padding;
                 padding-top: 6px;
                 spacing: 4px;
 

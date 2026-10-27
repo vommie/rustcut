@@ -7,6 +7,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The filters' options menus line up on two equal columns (0.0.61): every choice, number field and slider ends on one
+  line; Deshake's values sit in a grid of two halves, its segmented choices span the whole row, and "Field order"
+  (Deinterlace) and "Search" (Crop) are drop-down lists.
+- Segmented choices show a faint line between two parts that are not chosen (0.0.61).
+- The Deshake row of the Filters card shows shakiness and smoothing with small symbols instead of words; that Deshake
+  renders only (not in the preview) is now in the tooltip of its name instead of an extra icon (0.0.61).
+- The crop's four edge fields step with the mouse wheel once clicked into: 1 pixel, 10 with Ctrl, 100 with Shift
+  (also the Up/Down keys) (0.0.61).
+- Sections: the button that sets the end now sits left of the end, like the start's (0.0.61).
+- The timeline's marks are plain thick lines, without the flags (0.0.61).
+- The output name field is as high as the counter and the button beside it (0.0.61).
+- Settings > Filters > Crop ratios: the built-in list no longer has 3:2, 16:10, 21:9 and 2:3 (0.0.61). Migration
+  `crop-ratios-trimmed` (settings version 7, `config.toml` is backed up first): a list that is still the old built-in
+  one becomes the new one; a list you changed stays as it is.
+
 ## [0.0.60] - 2026-10-27
 
 The first release of RustCut.

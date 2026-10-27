@@ -438,7 +438,9 @@ const fn kind_tooltip(kind: FilterKind) -> &'static str {
             "Turns interlaced fields into whole frames (TV and camcorder recordings with combing)."
         }
         FilterKind::Crop => "Cuts pixels off the edges. The fields are the edges as seen in the output.",
-        FilterKind::Deshake => "Stabilizes shaky footage with vid.stab in two render passes.",
+        FilterKind::Deshake => {
+            "Stabilizes shaky footage with vid.stab in two render passes. Render only: the preview does not show it."
+        }
         FilterKind::Orientation => "Turns and mirrors the picture (all eight ways a picture can lie).",
         FilterKind::Resize => "Scales the picture; an empty side keeps the aspect ratio. The output has square pixels.",
     }

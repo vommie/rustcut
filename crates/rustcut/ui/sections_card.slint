@@ -216,8 +216,25 @@ export component TimeField inherits Rectangle {
     }
 }
 
-/// The current section in one row: set the start, the start, the end, set the end, add (P9.5). Both times stretch
-/// and stay equally wide; the length is in their tooltips and in the Add button's.
+/// One mark's time in the current section's row.
+component MarkTime inherits TimeField {
+    in property <int> which;
+
+    horizontal-stretch: 1;
+    text: root.which == 0 ? Sections.mark-start : Sections.mark-end;
+    enabled: Sections.has-media;
+    tooltip: root.which == 0 ? "Start of the current section" : "End of the current section";
+    note: Sections.current-length;
+    bubble: root.which == 0 ? "sections.mark.start" : "sections.mark.end";
+    clicked => { Sections.seek-mark(root.which); }
+    committed(text) => { return Sections.edit-mark(root.which, text); }
+    typed(text) => { Sections.mark-typed(root.which, text); }
+    canceled => { Sections.mark-canceled(root.which); }
+}
+
+/// The current section in one row: set the start, the start, set the end, the end, add (P9.5; each set button before
+/// its field, review 2). Both times stretch and stay equally wide; the length is in their tooltips and in the Add
+/// button's.
 component CurrentSection inherits HorizontalLayout {
     spacing: 4px;
 
@@ -229,17 +246,8 @@ component CurrentSection inherits HorizontalLayout {
         clicked => { Sections.set-mark(0); }
     }
 
-    for which in 2: TimeField {
-        horizontal-stretch: 1;
-        text: which == 0 ? Sections.mark-start : Sections.mark-end;
-        enabled: Sections.has-media;
-        tooltip: which == 0 ? "Start of the current section" : "End of the current section";
-        note: Sections.current-length;
-        bubble: which == 0 ? "sections.mark.start" : "sections.mark.end";
-        clicked => { Sections.seek-mark(which); }
-        committed(text) => { return Sections.edit-mark(which, text); }
-        typed(text) => { Sections.mark-typed(which, text); }
-        canceled => { Sections.mark-canceled(which); }
+    MarkTime {
+        which: 0;
     }
 
     IconButton {
@@ -248,6 +256,10 @@ component CurrentSection inherits HorizontalLayout {
         tooltip: "Set the end to the playhead";
         shortcut: Sections.key-set-end;
         clicked => { Sections.set-mark(1); }
+    }
+
+    MarkTime {
+        which: 1;
     }
 
     IconButton {
