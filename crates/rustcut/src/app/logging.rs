@@ -1,6 +1,7 @@
-//! Logging setup: `tracing` to stderr and to daily rotating files in the profile's state folder (`state/logs/`, the newest
-//! `advanced.log_keep_days` files are kept). The level comes from `RUST_LOG` when set, otherwise from the setting
-//! `advanced.log_level` once the settings are read (`info` until then).
+//! Logging setup: `tracing` to stderr and to daily rotating files in the profile's state folder (`state/logs/`; earlier
+//! days are packed, kept for `advanced.log_keep_days` and within `advanced.log_max_mb`: `log_files`). The level comes
+//! from `RUST_LOG` when set, otherwise from the setting `advanced.log_level` once the settings are read (`info` until
+//! then).
 //!
 //! Logging starts before the settings are read, so the file layer buffers what is logged until [`LogControl::open_file`]
 //! knows the folder and the retention; then the buffer goes first into the file. The file is written by
@@ -22,6 +23,7 @@ use tracing_subscriber::util::SubscriberInitExt as _;
 use tracing_subscriber::{EnvFilter, Registry, fmt, reload};
 
 use super::log_book::LogBook;
+use super::log_files::{Keeper, Retention};
 
 /// Lines logged before the file is open are kept up to this size (startup logs a few kilobytes).
 const EARLY_BUFFER_LIMIT: usize = 1 << 20;
@@ -39,6 +41,7 @@ pub struct LogControl {
     guard: Arc<Mutex<Option<WorkerGuard>>>,
     shareable: FileSink,
     shareable_guard: Arc<Mutex<Option<WorkerGuard>>>,
+    keeper: Keeper,
     book: LogBook,
 }
 
@@ -51,14 +54,16 @@ pub struct LevelSetter {
     guard: Arc<Mutex<Option<WorkerGuard>>>,
     shareable: FileSink,
     shareable_guard: Arc<Mutex<Option<WorkerGuard>>>,
+    keeper: Keeper,
 }
 
 impl LevelSetter {
-    /// Writes the daily files to `dir` again, keeping the newest `keep_days` (older ones are deleted now), with the
-    /// shareable copy or without it.
-    pub fn reopen(&self, dir: &Path, keep_days: u16, shareable: bool) {
-        open_file(&self.file, &self.guard, dir, keep_days, FILE_PREFIX);
-        open_shareable(&self.shareable, &self.shareable_guard, dir, keep_days, shareable);
+    /// Writes the daily files to `dir` again with the shareable copy or without it; the folder is tidied with
+    /// `retention` now and every hour.
+    pub fn reopen(&self, dir: &Path, retention: Retention, shareable: bool) {
+        open_file(&self.file, &self.guard, dir, FILE_PREFIX);
+        open_shareable(&self.shareable, &self.shareable_guard, dir, shareable);
+        self.keeper.start(dir, retention);
     }
 
     /// Uses `level` unless `RUST_LOG` was given (the environment wins).
@@ -113,6 +118,7 @@ pub fn init() -> LogControl {
         guard: Arc::new(Mutex::new(None)),
         shareable,
         shareable_guard: Arc::new(Mutex::new(None)),
+        keeper: Keeper::default(),
         book,
     }
 }
@@ -137,29 +143,29 @@ impl LogControl {
             guard: Arc::clone(&self.guard),
             shareable: self.shareable.clone(),
             shareable_guard: Arc::clone(&self.shareable_guard),
+            keeper: self.keeper.clone(),
         }
     }
 
-    /// Starts writing the log to daily files in `dir`, keeping the newest `keep_days` (at least one), and the shareable
-    /// copy beside it when `shareable`.
-    pub fn open_file(&self, dir: &Path, keep_days: u16, shareable: bool) {
-        open_file(&self.file, &self.guard, dir, keep_days, FILE_PREFIX);
-        open_shareable(&self.shareable, &self.shareable_guard, dir, keep_days, shareable);
+    /// Starts writing the log to daily files in `dir`, and the shareable copy beside it when `shareable`; the folder is
+    /// tidied with `retention` now and every hour.
+    pub fn open_file(&self, dir: &Path, retention: Retention, shareable: bool) {
+        self.level_setter().reopen(dir, retention, shareable);
     }
 }
 
 /// The shareable copy: written like the log (`on`), or not at all.
-fn open_shareable(file: &FileSink, guard: &Mutex<Option<WorkerGuard>>, dir: &Path, keep_days: u16, on: bool) {
+fn open_shareable(file: &FileSink, guard: &Mutex<Option<WorkerGuard>>, dir: &Path, on: bool) {
     if on {
-        open_file(file, guard, dir, keep_days, SHAREABLE_PREFIX);
+        open_file(file, guard, dir, SHAREABLE_PREFIX);
     } else {
         file.close();
         guard.lock().take();
     }
 }
 
-/// Starts writing the log to daily files in `dir` (again) named `prefix.DATE.log`, keeping the newest `keep_days`.
-fn open_file(file: &FileSink, guard: &Mutex<Option<WorkerGuard>>, dir: &Path, keep_days: u16, prefix: &str) {
+/// Starts writing the log to daily files in `dir` (again) named `prefix.DATE.log` (`log_files` tidies the folder).
+fn open_file(file: &FileSink, guard: &Mutex<Option<WorkerGuard>>, dir: &Path, prefix: &str) {
     {
         if let Err(e) = std::fs::create_dir_all(dir) {
             file.close();
@@ -170,14 +176,13 @@ fn open_file(file: &FileSink, guard: &Mutex<Option<WorkerGuard>>, dir: &Path, ke
             .rotation(Rotation::DAILY)
             .filename_prefix(prefix)
             .filename_suffix(FILE_SUFFIX)
-            .max_log_files(usize::from(keep_days.max(1)))
             .build(dir);
         match appender {
             Ok(appender) => {
                 let (writer, new_guard) = tracing_appender::non_blocking(appender);
                 file.open(writer);
                 *guard.lock() = Some(new_guard);
-                tracing::info!(dir = %dir.display(), keep_days, prefix, "[App] Logging to files");
+                tracing::info!(dir = %dir.display(), prefix, "[App] Logging to files");
             }
             Err(e) => {
                 file.close();

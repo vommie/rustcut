@@ -95,6 +95,8 @@ const BUBBLE: &[NoticePlace] = &[Bubble];
 const FIXED_DIALOG: &[NoticePlace] = &[Dialog];
 const BUBBLE_OR_NOT: &[NoticePlace] = &[Bubble, Nothing];
 const TOAST_OR_NOT: &[NoticePlace] = &[Toast, Nothing];
+/// A question before a job is saved: asked, or the safe way taken without asking (a `[warnings]` switch, 0.0.67).
+const DIALOG_OR_NOT: &[NoticePlace] = &[Dialog, Nothing];
 
 macro_rules! kinds {
     ($( $(#[$doc:meta])* $variant:ident = $id:literal, $title:literal, $group:ident, $level:ident, $place:ident,
@@ -147,6 +149,19 @@ kinds! {
     TargetConflict = "target_conflict", "Target file exists or is queued", Saving, Warning, Bubble, BUBBLE_OR_NOT,
         desktop false, critical false, ("Target filename already exists",
         "If you do not fix it here, Save opens a dialog that helps you resolve it.");
+    /// Save asks when the target file exists (`warnings.target_exists`); "Nothing" takes the next free name.
+    AskTargetExists = "ask_target_exists", "Question: the target file exists", Saving, Warning, Dialog,
+        DIALOG_OR_NOT, desktop false, critical false, ("The target file exists",
+        "Save asks what to do. Nothing: the job gets the next free name; a file is never replaced unasked.");
+    /// Save asks when a queued job writes the same file (`warnings.target_queued`); "Nothing" saves anyway.
+    AskTargetQueued = "ask_target_queued", "Question: a queued job writes the same file", Saving, Warning, Dialog,
+        DIALOG_OR_NOT, desktop false, critical false, ("A queued job writes the same file",
+        "Save asks what to do. Nothing: saved anyway; the queue never renders both at the same time.");
+    /// Save asks before a job without tags or rating is queued (`warnings.missing_metadata`, the Tag & Rate panel's
+    /// "Warn" switch).
+    AskMissingMetadata = "ask_missing_metadata", "Question: no tags or rating", Saving, Warning, Dialog,
+        DIALOG_OR_NOT, desktop false, critical false, ("The job has no tags or rating",
+        "Save asks first (tags only when RustView offers some). The same as the Tag & Rate panel's \"Warn\".");
     /// The name or the folder cannot be used: the job cannot be saved like this.
     TargetProblem = "target_problem", "Target cannot be used", Saving, Error, Bubble, BUBBLE, desktop false,
         critical false, ("The folder does not exist or cannot be read", "/videos/out");
@@ -242,6 +257,10 @@ kinds! {
         critical false, ("Tags and rating of \"Clip\" updated", "");
     TagsFailed = "tags_failed", "Tags not changed", Tags, Error, Toast, EVENT, desktop true, critical false,
         ("The job's tags were not changed", "RustView unavailable: not installed");
+    /// RustView refused a job's tags and rating (0.0.67; unreachable calls are retried and say so in the Tag & Rate
+    /// panel instead).
+    SyncFailed = "sync_failed", "Job's tags not written to RustView", Tags, Error, Toast, EVENT, desktop true,
+        critical false, ("Tags of job 3 not written to RustView", "RustView refused: no such media");
     /// At the start, once RustView answers for the first time: "Active" or "Warn" of the Tag & Rate panel is still
     /// off from an earlier run (user decision Q-P8b: a banner by default, or a toast), with a button that switches both on.
     TaggingOff = "tagging_off", "Tagging switched off at the start", Tags, Warning, Banner, LOUD, desktop false,

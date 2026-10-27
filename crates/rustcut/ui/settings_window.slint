@@ -2,12 +2,12 @@
 // left, the page's cards on the right. Every change is saved at once (src/ui/settings/), so there is no Save button;
 // buttons that put options back to their defaults are held (user decision Q-Q4).
 
-import { ScrollView } from "std-widgets.slint";
 import { Theme } from "styles.slint";
 import { IconId } from "icons.slint";
 import { IconButton } from "controls.slint";
 import { TooltipLayer } from "tooltip_layer.slint";
 import { SettingsSidebar } from "settings_sidebar.slint";
+import { SettingsScroll } from "settings_scroll.slint";
 import { SettingsCard } from "settings_card.slint";
 import { SettingsRow } from "settings_row.slint";
 import { SettingsUi } from "settings_types.slint";
@@ -126,27 +126,49 @@ export component SettingsWindow inherits Window {
                         triggered => {
                             let step = DragLogic.scroll-step(DragState.pointer-y - scroll.absolute-position.y, scroll.visible-height);
                             let to = Math.max(Math.min(0px, scroll.visible-height - scroll.content-height),
-                                Math.min(0px, scroll.content-y - step));
-                            if to != scroll.content-y {
-                                scroll.content-y = to;
+                                Math.min(0px, scroll.viewport-y - step));
+                            if to != scroll.viewport-y {
+                                scroll.viewport-y = to;
                                 DragState.scrolls += 1;
                             }
                         }
                     }
 
-                    scroll := ScrollView {
+                    // Every page keeps its own scroll position while RustCut runs (user review 2026-10-27): a page
+                    // shown for the first time starts at its top.
+                    scroll := SettingsScroll {
                         width: parent.width;
                         height: parent.height;
+                        content-height: page.preferred-height;
+                        interactive: !DragState.active && !DragState.holding;
+
+                        property <int> page-now: SettingsUi.page;
+                        // The page whose position `viewport-y` is (set before the position of a new page).
+                        property <int> shown-page: -1;
+                        init => {
+                            self.shown-page = self.page-now;
+                            self.viewport-y = SettingsUi.page-scroll[self.page-now];
+                        }
+                        changed page-now => {
+                            self.shown-page = self.page-now;
+                            self.viewport-y = SettingsUi.page-scroll[self.page-now];
+                        }
+                        changed viewport-y => {
+                            if self.shown-page == self.page-now {
+                                SettingsUi.page-scroll[self.shown-page] = self.viewport-y;
+                            }
+                        }
 
                         // A jump mark reached a row of this page: it scrolls into view (`jump.slint`).
                         property <int> jump: Jump.target-serial;
                         changed jump => {
-                            if Jump.inside(self.absolute-position.x, self.width, self.absolute-position.y + self.content-y, self.content-height) {
-                                self.content-y = Jump.scroll-to(self.absolute-position.y + self.content-y, self.content-y, self.visible-height, self.content-height);
+                            if Jump.inside(self.absolute-position.x, self.width, self.absolute-position.y + self.viewport-y, self.content-height) {
+                                self.viewport-y = Jump.scroll-to(self.absolute-position.y + self.viewport-y, self.viewport-y, self.visible-height, self.content-height);
                             }
                         }
 
                         page := VerticalLayout {
+                            width: scroll.content-width;
                             padding: 16px;
                             spacing: 16px;
                             alignment: start;
@@ -184,7 +206,7 @@ export component SettingsWindow inherits Window {
                     BubbleLayer {
                         x: 0;
                         y: 0;
-                        width: scroll.visible-width;
+                        width: scroll.content-width;
                         height: parent.height;
                         area: "settings";
                     }
@@ -217,6 +239,8 @@ export component SettingsWindow inherits Window {
                             alignment: center;
 
                             IconButton {
+                                height: 30px;
+                                width: 84px;
                                 text: "Close";
                                 tooltip: "Close the settings";
                                 shortcut: "Esc";

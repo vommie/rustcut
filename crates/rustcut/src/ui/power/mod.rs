@@ -17,6 +17,7 @@ use rustcut_core::settings::{QueuePanelState, Settings, TaskbarShows, WhenDone};
 use slint::ComponentHandle as _;
 
 use self::state::{CHOICES, Countdown, Tick};
+use crate::app::SettingsWriter;
 use crate::desktop::logind::PowerAction;
 use crate::desktop::service::{DesktopCommand, DesktopHandle};
 use crate::desktop::taskbar::Badge;
@@ -32,7 +33,9 @@ pub struct PowerBridge {
     desktop: DesktopHandle,
     queue: Weak<QueueBridge>,
     menu: Weak<ContextMenuBridge>,
+    /// `queue.when_done`: the panel's button and Settings > Queue are one choice (user review 2026-10-27).
     when_done: Cell<WhenDone>,
+    writer: SettingsWriter,
     countdown: Cell<Option<Countdown>>,
     timer: slint::Timer,
     /// The close question while it is open (`question.rs`).
@@ -64,7 +67,7 @@ impl PowerBridge {
         parts: (&tokio::runtime::Handle, &Rc<QueueBridge>, &Rc<ContextMenuBridge>),
         desktop: DesktopHandle,
         settings: &Settings,
-        when_done: WhenDone,
+        writer: SettingsWriter,
     ) -> Rc<Self> {
         let (runtime, queue, menu) = parts;
         let bridge = Rc::new_cyclic(|me| Self {
@@ -74,7 +77,8 @@ impl PowerBridge {
             desktop,
             queue: Rc::downgrade(queue),
             menu: Rc::downgrade(menu),
-            when_done: Cell::new(when_done),
+            when_done: Cell::new(settings.queue.when_done),
+            writer,
             countdown: Cell::new(None),
             timer: slint::Timer::default(),
             question: question::Question::default(),
@@ -113,8 +117,11 @@ impl PowerBridge {
         bridge
     }
 
-    /// The settings changed (the Settings window).
+    /// The settings changed (the Settings window, or this bridge's own choice).
     pub fn apply_settings(&self, settings: &Settings) {
+        if self.when_done.get() != settings.queue.when_done {
+            self.set_when_done(settings.queue.when_done);
+        }
         self.seconds.set(settings.queue.when_done_countdown_secs);
         self.confirm.set(settings.general.confirm_quit_while_rendering);
         self.taskbar_shows.set(settings.desktop.taskbar_shows);
@@ -124,9 +131,10 @@ impl PowerBridge {
         });
     }
 
-    /// The choice for `ui-state.toml` (the countdown's actions reset it, so a quit never repeats at the next start).
+    /// `ui-state.toml` no longer keeps a choice of its own: it is the setting `queue.when_done` (0.0.67; an older
+    /// file's value is dropped, so the setting wins at the next start).
     pub fn save_into(&self, state: &mut QueuePanelState) {
-        state.when_done = Some(self.when_done.get());
+        state.when_done = None;
     }
 
     /// Escape: aborts a running countdown (`true` = it did).
@@ -138,8 +146,12 @@ impl PowerBridge {
         true
     }
 
+    /// The panel's menu, its reset, the countdown's reset and Settings > Queue: one choice, saved as the setting.
     fn set_when_done(&self, choice: WhenDone) {
         self.when_done.set(choice);
+        if self.writer.current().queue.when_done != choice && !self.writer.update(|s| s.queue.when_done = choice) {
+            tracing::warn!("[Power] The settings cannot be saved; the choice holds for this run only");
+        }
         if let Some(queue) = self.queue.upgrade()
             && queue.handle().send(QueueCommand::SetWhenDone(choice)).is_err()
         {

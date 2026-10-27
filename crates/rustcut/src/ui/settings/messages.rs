@@ -2,9 +2,11 @@
 //! (`catalog/messages.rs`); "Message kinds" lists every kind of message with its place (only the places the kind
 //! allows; critical kinds are locked), its desktop switch, a test that shows the real message at its real place, and
 //! "Don't show again" for hints and confirmations; "Muted" lists the muted kinds with a way back. The search filters
-//! the kinds and the muted list. Pure rows here; the bridge's handlers below.
+//! the kinds and the muted list. Pure rows here; the bridge's handlers below. The questions before a job is saved and
+//! the similar names hint are kinds whose "Nothing" is a `[warnings]` switch (the former page "Warnings &
+//! Confirmations", 0.0.67): the switch stays the stored value, so older files keep their choice.
 
-use rustcut_core::settings::{NoticePlace, NoticeSettings, Settings};
+use rustcut_core::settings::{NoticePlace, NoticeSettings, Settings, WarningSettings};
 use slint::{ModelRc, SharedString, VecModel};
 
 use super::SettingsBridge;
@@ -67,8 +69,43 @@ pub fn matches(kind: Kind, search: &str) -> bool {
         .any(|text| text.to_lowercase().contains(&needle))
 }
 
+/// The `[warnings]` switch that is off when `kind`'s place is "Nothing".
+fn warning_switch(kind: Kind) -> Option<fn(&mut WarningSettings) -> &mut bool> {
+    match kind {
+        Kind::AskTargetExists => Some(|w| &mut w.target_exists),
+        Kind::AskTargetQueued => Some(|w| &mut w.target_queued),
+        Kind::AskMissingMetadata => Some(|w| &mut w.missing_metadata),
+        Kind::TargetSimilar => Some(|w| &mut w.base_name_in_folder),
+        _ => None,
+    }
+}
+
+/// Where `kind` appears: "Nothing" while its warning switch is off, else its place.
+pub fn place(settings: &Settings, kind: Kind) -> NoticePlace {
+    let mut warnings = settings.warnings.clone();
+    match warning_switch(kind) {
+        Some(switch) if !*switch(&mut warnings) => NoticePlace::Nothing,
+        _ => notices::place_of(&settings.notices, kind),
+    }
+}
+
+/// Sets the place of `kind`, and its warning switch (on unless "Nothing").
+pub fn set_place(settings: &mut Settings, kind: Kind, place: NoticePlace) -> Result<(), String> {
+    if !kind.info().places.contains(&place) {
+        return Err(format!("\"{}\" cannot appear there", kind.info().title));
+    }
+    if let Some(switch) = warning_switch(kind) {
+        *switch(&mut settings.warnings) = place != NoticePlace::Nothing;
+        if place == NoticePlace::Nothing {
+            // The switch says it; the place stays the one it shows when switched on again.
+            return Ok(());
+        }
+    }
+    notices::set_place(&mut settings.notices, kind, place)
+}
+
 /// The kinds that match `search`, in the catalog's order, with their group's title on the first row of each group.
-pub fn kind_rows(settings: &NoticeSettings, search: &str, tested: Option<(Kind, &str)>) -> Vec<KindRow> {
+pub fn kind_rows(settings: &Settings, search: &str, tested: Option<(Kind, &str)>) -> Vec<KindRow> {
     let mut last_group = None;
     Kind::ALL
         .iter()
@@ -82,9 +119,9 @@ pub fn kind_rows(settings: &NoticeSettings, search: &str, tested: Option<(Kind, 
                 kind,
                 header,
                 places: info.places,
-                place: notices::place_of(settings, kind),
-                desktop: notices::desktop_of(settings, kind),
-                muted: settings.muted.contains(info.id),
+                place: place(settings, kind),
+                desktop: notices::desktop_of(&settings.notices, kind),
+                muted: settings.notices.muted.contains(info.id),
                 tested: tested
                     .filter(|(k, _)| *k == kind)
                     .map(|(_, text)| text.to_owned())
@@ -145,7 +182,8 @@ fn view(row: &KindRow) -> MessageKindView {
         place_index: i32::try_from(row.places.iter().position(|p| *p == row.place).unwrap_or(0)).unwrap_or(0),
         locked: info.critical,
         desktop: row.desktop,
-        desktop_allowed: info.place != NoticePlace::Bubble,
+        // Not for a bubble at an input, nor for a question that a warning switch turns off.
+        desktop_allowed: info.place != NoticePlace::Bubble && warning_switch(row.kind).is_none(),
         mutable: notices::can_mute(row.kind),
         muted: row.muted,
         tested: row.tested.as_str().into(),
@@ -165,14 +203,14 @@ impl SettingsBridge {
         let state = self.state.borrow();
         let tested = self.tested.borrow();
         let tested = tested.as_ref().map(|(k, text)| (*k, text.as_str()));
-        let kinds = kind_rows(&settings.notices, &state.messages_search, tested);
+        let kinds = kind_rows(settings, &state.messages_search, tested);
         let muted: Vec<KindRow> = muted_rows(&settings.notices, &state.messages_search)
             .into_iter()
             .map(|kind| KindRow {
                 kind,
                 header: None,
                 places: kind.info().places,
-                place: notices::place_of(&settings.notices, kind),
+                place: place(settings, kind),
                 desktop: false,
                 muted: true,
                 tested: String::new(),
@@ -209,7 +247,7 @@ impl SettingsBridge {
         };
         tracing::info!(kind = id, ?place, "[Settings] Message place");
         self.update(|s| {
-            if let Err(why) = notices::set_place(&mut s.notices, kind, place) {
+            if let Err(why) = set_place(s, kind, place) {
                 tracing::warn!(kind = id, why, "[Settings] Message place refused");
             }
         });
@@ -240,7 +278,17 @@ impl SettingsBridge {
     /// The test: the real message at its real place; the row says where it went for a few seconds (Q-N10).
     pub(super) fn kind_test(&self, id: &str) {
         let Some(kind) = Kind::from_id(id) else { return };
-        let route = notices::test(kind);
+        let switched_off =
+            warning_switch(kind).is_some() && place(&self.writer.current(), kind) == NoticePlace::Nothing;
+        let route = if switched_off {
+            Route {
+                place: NoticePlace::Nothing,
+                desktop: false,
+                muted: false,
+            }
+        } else {
+            notices::test(kind)
+        };
         tracing::info!(kind = id, place = ?route.place, desktop = route.desktop, "[Settings] Message tested");
         self.tested.replace(Some((kind, test_note(route))));
         let me = std::rc::Weak::clone(&self.me);
@@ -262,6 +310,7 @@ impl SettingsBridge {
         self.update(|s| {
             s.notices.kinds.clear();
             s.notices.muted.clear();
+            s.warnings = WarningSettings::default();
         });
     }
 }
@@ -272,7 +321,7 @@ mod tests {
 
     #[test]
     fn the_search_filters_and_groups_have_one_header() {
-        let settings = NoticeSettings::default();
+        let settings = Settings::default();
         let all = kind_rows(&settings, "", None);
         assert_eq!(all.len(), Kind::ALL.len());
         assert_eq!(all.first().and_then(|r| r.header), Some("Saving"));
@@ -290,6 +339,33 @@ mod tests {
         // A group's header appears on its first matching row.
         assert!(failed.first().and_then(|r| r.header).is_some());
         assert!(kind_rows(&settings, "no such message", None).is_empty());
+    }
+
+    #[test]
+    fn the_questions_before_saving_are_warning_switches() {
+        let mut s = Settings::default();
+        assert_eq!(place(&s, Kind::AskTargetExists), NoticePlace::Dialog);
+        assert_eq!(set_place(&mut s, Kind::AskTargetExists, NoticePlace::Nothing), Ok(()));
+        assert!(!s.warnings.target_exists);
+        assert_eq!(place(&s, Kind::AskTargetExists), NoticePlace::Nothing);
+        assert!(s.notices.kinds.is_empty(), "the switch is the stored value");
+        assert!(set_place(&mut s, Kind::AskTargetQueued, NoticePlace::Toast).is_err());
+        assert!(s.warnings.target_queued);
+
+        // The similar names hint: "Nothing" switches the folder check off, a bubble on again.
+        s.warnings.base_name_in_folder = false;
+        assert_eq!(place(&s, Kind::TargetSimilar), NoticePlace::Nothing);
+        assert_eq!(set_place(&mut s, Kind::TargetSimilar, NoticePlace::Bubble), Ok(()));
+        assert!(s.warnings.base_name_in_folder);
+        assert_eq!(place(&s, Kind::TargetSimilar), NoticePlace::Bubble);
+
+        // The Tag & Rate panel's "Warn" is the same switch.
+        s.warnings.missing_metadata = false;
+        let rows = kind_rows(&s, "tags or rating", None);
+        assert_eq!(
+            rows.first().map(|r| (r.kind, r.place)),
+            Some((Kind::AskMissingMetadata, NoticePlace::Nothing))
+        );
     }
 
     #[test]

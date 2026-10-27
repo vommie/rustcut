@@ -324,6 +324,8 @@ fn the_settings_window_round_trips_and_old_files_load() {
         settings: SettingsWindowState {
             width: 1000,
             height: 700,
+            x: Some(-20),
+            y: Some(340),
             page: "hotkeys".into(),
             profile: Some("my-hevc".into()),
             hotkey_search: "crop".into(),
@@ -364,6 +366,11 @@ hotkey_search = \"x\"
     assert_eq!(
         read.settings.diagnostics_passed, [false; 2],
         "0.0.54's field starts folded"
+    );
+    assert_eq!(
+        (read.settings.x, read.settings.y),
+        (None, None),
+        "0.0.66 kept no position: the window manager places the window"
     );
     std::fs::write(dir.path().join("ui-state.toml"), "version = 1\nsettings = 3\n").unwrap();
     let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();

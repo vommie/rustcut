@@ -3,6 +3,7 @@
 // About). Every change goes from here to Rust, which writes `config.toml` and gives the new values back.
 
 import { OptionRowView, RenderIssueView } from "render_types.slint";
+import { IconId } from "icons.slint";
 
 // One option. kind: 0 switch, 1 choice, 2 number, 3 text, 4 folder path, 5 file path, 6 button.
 export struct SettingRowView {
@@ -23,6 +24,12 @@ export struct SettingRowView {
     indent: bool,
     // Why the last typed text was refused.
     error: string,
+    // A button's symbol instead of its text (none = the text).
+    icon: IconId,
+    // Whether the row's program or connection works (0.0.67): 0 nothing shown, 1 ok, 2 busy (turning; a button waits),
+    // 3 problem; the words go under the description.
+    status: int,
+    status-text: string,
 }
 
 export struct SettingCardView {
@@ -72,6 +79,8 @@ export struct ProfileItemView {
     builtin: bool,
     // New jobs start with it.
     default: bool,
+    // The Codecs panel does not offer it.
+    hidden: bool,
 }
 
 // A key of an action on the Hotkeys page.
@@ -119,6 +128,8 @@ export global SettingsUi {
     in property <[string]> pages;
     in property <int> page;
     in property <string> page-title;
+    // Each page's scroll position while RustCut runs (one entry per page, filled by Rust; never saved).
+    in-out property <[length]> page-scroll;
     // 0 none, 1 target folders, 2 render profiles, 3 hotkeys, 4 About, 5 Messages, 6 crop ratios (Filters), 7 Diagnostics.
     in property <int> special;
     in property <[SettingCardView]> cards;
@@ -198,6 +209,9 @@ export global SettingsUi {
     in property <[ProfileItemView]> profiles;
     in property <int> profile-index;
     in property <bool> profile-builtin;
+    // The selected profile is the default one / is hidden from the Codecs panel.
+    in property <bool> profile-default;
+    in property <bool> profile-hidden;
     in property <string> profile-name;
     in property <[RenderIssueView]> profile-issues;
     in property <[OptionRowView]> profile-video;
@@ -206,6 +220,8 @@ export global SettingsUi {
     in property <string> encoders-note;
     callback select-profile(int);
     callback duplicate-profile();
+    callback add-profile();
+    callback toggle-profile-hidden();
     callback rename-profile(string) -> bool;
     callback delete-profile();
     callback default-profile();

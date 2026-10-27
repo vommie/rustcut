@@ -75,7 +75,8 @@ impl RenderSettingsBridge {
         cache_dir: &std::path::Path,
         encoders: watch::Receiver<Option<Arc<Capabilities>>>,
     ) -> Rc<Self> {
-        let library = ProfileLibrary::new(settings.render.profiles.clone());
+        let library =
+            ProfileLibrary::new(settings.render.profiles.clone()).with_hidden(&settings.render.hidden_profiles);
         let selection = Selection::restore(
             &library,
             export.profile.as_deref(),
@@ -133,12 +134,12 @@ impl RenderSettingsBridge {
         self.changed(false);
     }
 
-    /// Every profile (id, name) for "Render again with".
+    /// Every profile that is not hidden (id, name) for "Render again with".
     pub fn profiles(&self) -> Vec<(String, String)> {
         self.state
             .borrow()
             .library
-            .all()
+            .listed("")
             .map(|p| (p.id.clone(), p.name.clone()))
             .collect()
     }
@@ -160,11 +161,23 @@ impl RenderSettingsBridge {
             if st.library.user() == user {
                 return;
             }
-            st.library = ProfileLibrary::new(user.to_vec());
+            let hidden = st.library.hidden().to_vec();
+            st.library = ProfileLibrary::new(user.to_vec()).with_hidden(&hidden);
             let state = &mut *st;
             state.selection.follow(&state.library);
         }
         self.settings.borrow_mut().render.profiles = user.to_vec();
+        self.changed(false);
+    }
+
+    /// Settings > Render Profiles hid or showed profiles: the choice follows (the shown profile stays in it).
+    pub fn hidden_changed(&self, hidden: &[String]) {
+        {
+            let mut st = self.state.borrow_mut();
+            let library = std::mem::replace(&mut st.library, ProfileLibrary::new(Vec::new()));
+            st.library = library.with_hidden(hidden);
+        }
+        self.settings.borrow_mut().render.hidden_profiles = hidden.to_vec();
         self.changed(false);
     }
 

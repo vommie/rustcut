@@ -5,6 +5,7 @@
 //! [`run`] adds what only a look at the system tells (on the tokio runtime), and the page shows the problems first.
 //! Each check's `id` is its jump mark (`settings:diagnostics.<id>`), so messages and panels can lead to it.
 
+mod locate;
 mod probes;
 
 use std::path::PathBuf;
@@ -13,6 +14,7 @@ use std::sync::Arc;
 use crate::render::{Availability, Capabilities, EncoderBackend};
 use crate::rustview::ConnectionState;
 
+pub use locate::{Located, locate};
 pub use probes::{FreeSpace, first_line, free_space, program_version, writable};
 
 /// How a check came out (the order is the severity).

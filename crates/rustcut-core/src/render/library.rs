@@ -15,11 +15,12 @@ pub enum LibraryError {
     NoName,
 }
 
-/// Built-in and user profiles.
+/// Built-in and user profiles, and which of them the Codecs panel does not offer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProfileLibrary {
     builtin: Vec<RenderProfile>,
     user: Vec<RenderProfile>,
+    hidden: Vec<String>,
 }
 
 impl ProfileLibrary {
@@ -28,12 +29,33 @@ impl ProfileLibrary {
         Self {
             builtin: builtin_profiles(),
             user,
+            hidden: Vec::new(),
         }
+    }
+
+    /// The library with the ids of `Settings.render.hidden_profiles`.
+    #[must_use]
+    pub fn with_hidden(mut self, hidden: &[String]) -> Self {
+        self.hidden = hidden.to_vec();
+        self
+    }
+
+    pub fn hidden(&self) -> &[String] {
+        &self.hidden
+    }
+
+    pub fn is_hidden(&self, id: &str) -> bool {
+        self.hidden.iter().any(|h| h == id)
     }
 
     /// Every profile: the built-ins first, then the user's in their order.
     pub fn all(&self) -> impl Iterator<Item = &RenderProfile> {
         self.builtin.iter().chain(&self.user)
+    }
+
+    /// The profiles a choice offers: every one that is not hidden, and `keep` (the one shown now) in any case.
+    pub fn listed<'a>(&'a self, keep: &'a str) -> impl Iterator<Item = &'a RenderProfile> {
+        self.all().filter(move |p| p.id == keep || !self.is_hidden(&p.id))
     }
 
     pub fn user(&self) -> &[RenderProfile] {
@@ -254,6 +276,18 @@ mod tests {
         lib.delete(&id).unwrap();
         assert!(sel.is_modified(&lib), "a deleted profile leaves a modified copy");
         assert_eq!(lib.delete("gone"), Err(LibraryError::Unknown("gone".into())));
+    }
+
+    #[test]
+    fn hidden_profiles_are_left_out_of_choices_except_the_shown_one() {
+        let lib = ProfileLibrary::new(Vec::new()).with_hidden(&["x265-quality".to_owned()]);
+        assert!(lib.is_hidden("x265-quality"));
+        assert_eq!(lib.listed("").count() + 1, lib.all().count());
+        assert!(lib.listed("").all(|p| p.id != "x265-quality"));
+        assert!(
+            lib.listed("x265-quality").any(|p| p.id == "x265-quality"),
+            "the shown one stays"
+        );
     }
 
     #[test]

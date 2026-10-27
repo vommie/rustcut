@@ -234,7 +234,7 @@ export component SettingsDiagnostics inherits VerticalLayout {
         IconButton {
             icon: IconId.copy;
             enabled: !SettingsUi.diag-running;
-            tooltip: "Copy the report (to paste it into a message)";
+            tooltip: "Copy the report";
             clicked => { SettingsUi.diag-copy(); }
         }
     }

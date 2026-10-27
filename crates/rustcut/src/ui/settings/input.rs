@@ -94,6 +94,10 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     let t = this.clone();
     ui.on_duplicate_profile(move || with(&t, SettingsBridge::duplicate_profile));
     let t = this.clone();
+    ui.on_add_profile(move || with(&t, SettingsBridge::add_profile));
+    let t = this.clone();
+    ui.on_toggle_profile_hidden(move || with(&t, SettingsBridge::toggle_profile_hidden));
+    let t = this.clone();
     ui.on_rename_profile(move |name| with(&t, |b| b.rename_profile(&name)));
     let t = this.clone();
     ui.on_delete_profile(move || with(&t, SettingsBridge::delete_profile));

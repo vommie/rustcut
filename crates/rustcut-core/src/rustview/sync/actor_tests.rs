@@ -438,3 +438,36 @@ async fn shutdown_does_not_wait_for_a_hanging_call() {
     .unwrap()
     .unwrap();
 }
+
+#[tokio::test]
+async fn the_test_asks_rustview_again_also_when_connected() {
+    let h = start(RustViewSettings::default());
+    let test = || async {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        h.sync.handle.send(SyncCommand::Test { reply: tx }).unwrap();
+        tokio::time::timeout(WAIT, rx).await.unwrap().unwrap()
+    };
+    let trees = || h.fake.calls().iter().filter(|c| *c == "tag-tree").count();
+    assert_eq!(test().await.unwrap().total_tags, 10);
+    let before = trees();
+    assert_eq!(test().await.unwrap().total_tags, 10);
+    assert_eq!(
+        trees(),
+        before + 1,
+        "every test calls RustView, the cache does not answer it"
+    );
+    h.fake.set_unreachable(true);
+    assert!(test().await.unwrap_err().is_transient());
+    // During the pause after a failure the test does not wait for it.
+    h.fake.set_unreachable(false);
+    assert_eq!(test().await.unwrap().total_tags, 10);
+
+    let off = start(RustViewSettings {
+        enabled: false,
+        ..RustViewSettings::default()
+    });
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    off.sync.handle.send(SyncCommand::Test { reply: tx }).unwrap();
+    assert!(rx.await.unwrap().is_err());
+    assert!(off.fake.calls().is_empty());
+}

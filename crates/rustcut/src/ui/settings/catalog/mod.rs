@@ -31,7 +31,6 @@ pub fn cards(page: Page) -> &'static [Card] {
         Page::Profiles | Page::Hotkeys | Page::Diagnostics | Page::About => &[],
         Page::Queue => work::QUEUE,
         Page::RustView => work::RUSTVIEW,
-        Page::Warnings => app::WARNINGS,
         Page::Messages => messages::MESSAGES,
         Page::Dialogs => dialogs::DIALOGS,
         Page::Desktop => app::DESKTOP,

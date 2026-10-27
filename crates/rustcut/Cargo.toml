@@ -42,6 +42,7 @@ clap.workspace = true
 parking_lot.workspace = true
 humansize.workspace = true
 chrono.workspace = true
+flate2.workspace = true
 opener.workspace = true
 arboard.workspace = true
 zbus.workspace = true

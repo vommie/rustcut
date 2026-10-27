@@ -1,0 +1,91 @@
+// The vertical scroll area of the Settings window (the pages and the page list; user review 2026-10-27): the wheel,
+// a drag or swipe anywhere on the content (a Flickable; it only takes vertical moves past its threshold, so sliders and
+// buttons keep theirs) and a scrollbar of normal width beside the content, styled like RustView's SmoothScrollArea
+// (smooth_scroll_view.slint, which is a copy and stays unchanged). The children are laid out at `content-width` and
+// pass their height in `content-height`; the bar shows only when the content is higher than the area.
+
+import { Theme } from "styles.slint";
+
+export component SettingsScroll inherits Rectangle {
+    in property <length> content-height;
+    in-out property <length> viewport-y <=> flick.content-y;
+    // Off while a list row is dragged: else the Flickable takes the gesture (drag.slint).
+    in property <bool> interactive: true;
+    in property <length> bar-size: 8px;
+    in property <length> bar-padding: 2px;
+
+    out property <bool> has-bar: root.content-height > root.height + 0.5px;
+    // The width the children may use: the scrollbar's strip is always kept (a width that depended on the bar would
+    // depend on the content's height, which depends on its width).
+    out property <length> content-width: root.width - root.bar-size - 2 * root.bar-padding;
+    out property <length> visible-height: root.height;
+    property <length> max-scroll: Math.max(0px, root.content-height - root.height);
+
+    clip: true;
+
+    flick := Flickable {
+        width: root.width;
+        height: root.height;
+        content-width: root.content-width;
+        content-height: Math.max(root.height, root.content-height);
+        interactive: root.interactive;
+
+        @children
+    }
+
+    if root.has-bar: track := Rectangle {
+        x: root.width - root.bar-size - root.bar-padding;
+        y: root.bar-padding;
+        width: root.bar-size;
+        height: root.height - 2 * root.bar-padding;
+        background: #00000028;
+        border-radius: root.bar-size / 2;
+
+        property <length> thumb-h: Math.max(32px, self.height * (root.height / Math.max(1px, root.content-height)));
+        property <length> track-avail: Math.max(1px, self.height - self.thumb-h);
+        property <length> thumb-y: Math.max(0, Math.min(1, -root.viewport-y / Math.max(1px, root.max-scroll))) * self.track-avail;
+
+        Rectangle {
+            x: 0;
+            y: track.thumb-y;
+            width: root.bar-size;
+            height: track.thumb-h;
+            border-radius: root.bar-size / 2;
+            background: bar-touch.pressed ? Theme.accent : (
+                bar-touch.has-hover && bar-touch.mouse-y >= track.thumb-y && bar-touch.mouse-y <= track.thumb-y + track.thumb-h
+                ? Theme.primary : #585b70);
+        }
+
+        bar-touch := TouchArea {
+            property <length> grab: 0px;
+
+            scroll-event(event) => {
+                root.viewport-y = Math.max(-root.max-scroll, Math.min(0px, root.viewport-y + event.delta-y));
+                accept
+            }
+
+            pointer-event(e) => {
+                if e.kind == PointerEventKind.down && e.button == PointerEventButton.left {
+                    if self.mouse-y >= track.thumb-y && self.mouse-y <= track.thumb-y + track.thumb-h {
+                        self.grab = self.mouse-y - track.thumb-y;
+                    } else {
+                        // A click on the free track: the thumb's middle jumps under the pointer.
+                        self.grab = track.thumb-h / 2;
+                        self.follow();
+                    }
+                }
+            }
+
+            moved => {
+                if self.pressed {
+                    self.follow();
+                }
+            }
+
+            function follow() {
+                let to = Math.max(0px, Math.min(track.track-avail, self.mouse-y - self.grab));
+                root.viewport-y = -(to / track.track-avail) * root.max-scroll;
+            }
+        }
+    }
+}

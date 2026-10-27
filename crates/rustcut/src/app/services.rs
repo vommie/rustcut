@@ -135,7 +135,7 @@ pub(super) fn start_queue(
         workers: settings.queue.workers,
         paused: loaded.ui_state.queue.paused,
         pause_on_start: settings.queue.pause_on_start,
-        when_done: loaded.ui_state.queue.when_done.unwrap_or(settings.queue.when_done),
+        when_done: settings.queue.when_done,
     };
     let env = RenderEnv::new(settings, &loaded.paths, HardwareContext::default());
     let (service, _task) = spawn_queue_linked(runtime.handle(), store.clone(), env.clone(), options, Some(sync));

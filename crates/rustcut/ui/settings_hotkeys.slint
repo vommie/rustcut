@@ -1,6 +1,6 @@
 // Hotkeys: every action of the keymap with its keys. The keyboard button waits for a key (Escape cancels); a key another
 // action has is not taken at once: pressing it a second time moves it here. A key's cross removes it, the reset button
-// puts the action's default keys back, the held button in the page header every default.
+// puts the action's default keys back, the held button beside the filter every default.
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
@@ -88,10 +88,27 @@ export component SettingsHotkeys inherits SettingsCard {
         }
     }
 
-    SettingsSearch {
-        initial: SettingsUi.hotkey-search;
-        placeholder: "Filter by action or key";
-        edited(text) => { SettingsUi.hotkey-search-edited(text); }
+    HorizontalLayout {
+        spacing: 6px;
+
+        SettingsSearch {
+            horizontal-stretch: 1;
+            initial: SettingsUi.hotkey-search;
+            placeholder: "Filter by action or key";
+            edited(text) => { SettingsUi.hotkey-search-edited(text); }
+        }
+
+        // Every key back to RustCut's defaults (user review 2026-10-27): held, it discards every own key.
+        VerticalLayout {
+            alignment: center;
+
+            IconButton {
+                icon: IconId.settings-reset;
+                hold: true;
+                tooltip: "Reset all keys: every action gets its default keys back, your own keys are removed";
+                clicked => { SettingsUi.reset-hotkeys(); }
+            }
+        }
     }
 
     if SettingsUi.hotkey-note != "": Text {

@@ -109,6 +109,11 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
     {
         render.profiles_changed(&after.render.profiles);
     }
+    if before.render.hidden_profiles != after.render.hidden_profiles
+        && let Some(render) = p.render.upgrade()
+    {
+        render.hidden_changed(&after.render.hidden_profiles);
+    }
     let programs = |s: &Settings| (s.advanced.ffmpeg.clone(), s.advanced.ffprobe.clone());
     let changed_programs = programs(before) != programs(after);
     if changed_programs {
@@ -171,6 +176,7 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
     let power = |s: &Settings| {
         (
             s.desktop.clone(),
+            s.queue.when_done,
             s.queue.when_done_countdown_secs,
             s.general.confirm_quit_while_rendering,
         )
@@ -189,11 +195,12 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
         p.log.apply(&after.advanced.log_level);
     }
     if before.advanced.log_keep_days != after.advanced.log_keep_days
+        || before.advanced.log_max_mb != after.advanced.log_max_mb
         || before.advanced.shareable_log != after.advanced.shareable_log
     {
         p.log.reopen(
             &p.paths.log_dir(),
-            after.advanced.log_keep_days,
+            super::log_files::Retention::new(after.advanced.log_keep_days, after.advanced.log_max_mb),
             after.advanced.shareable_log,
         );
     }

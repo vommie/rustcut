@@ -3,7 +3,8 @@
 // a switch row switches with a click anywhere on it. The row is generic: Rust says which control it has (`kind`).
 
 import { Theme } from "styles.slint";
-import { IconId } from "icons.slint";
+import { AppIcon, IconId, IconRegistry, IconSize } from "icons.slint";
+import { TooltipArea } from "tooltip.slint";
 import { ChoiceButton, ControlMetrics, IconButton, NumberField, SegmentedChoice } from "controls.slint";
 import { ToggleSwitch } from "toggle_switch.slint";
 import { SettingRowView, SettingsUi } from "settings_types.slint";
@@ -75,6 +76,43 @@ export component SettingsRow inherits Rectangle {
                 wrap: word-wrap;
             }
 
+            // Whether the program or the connection works (0.0.67).
+            if root.option.status-text != "" && root.option.enabled: Text {
+                text: root.option.status-text;
+                color: root.option.status == 1 ? Theme.status-ok : root.option.status == 3 ? Theme.status-corrupt : Theme.text-muted;
+                font-size: 11px;
+                wrap: word-wrap;
+            }
+        }
+
+        // The symbol of the state, left of the control: a check, a turning circle while it runs, a cross.
+        if root.option.status != 0 && root.option.enabled: VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 0;
+
+            TooltipArea {
+                width: 18px;
+                height: 18px;
+                text: root.option.status-text;
+
+                if root.option.status == 2: Image {
+                    x: 1px;
+                    y: 1px;
+                    width: 16px;
+                    height: 16px;
+                    source: IconRegistry.source(IconId.busy);
+                    colorize: Theme.primary;
+                    transform-rotation: Math.mod(animation-tick() / 1ms, 900) / 900 * 360deg;
+                }
+
+                if root.option.status != 2: AppIcon {
+                    x: 1px;
+                    y: 1px;
+                    icon: root.option.status == 1 ? IconId.status-ok : IconId.status-problem;
+                    size: 16px;
+                    color: root.option.status == 1 ? Theme.status-ok : Theme.status-corrupt;
+                }
+            }
         }
 
         VerticalLayout {
@@ -130,7 +168,7 @@ export component SettingsRow inherits Rectangle {
                 canceled => { SettingsUi.text-canceled(root.option.key); }
             }
 
-            if root.option.kind == 3: NumberField {
+            if root.option.kind == 3 && root.option.items.length == 0: NumberField {
                 width: 260px;
                 text: root.option.text;
                 placeholder: root.option.placeholder;
@@ -140,6 +178,32 @@ export component SettingsRow inherits Rectangle {
                 committed(text) => { return SettingsUi.type-text(root.option.key, text); }
                 typed(text) => { SettingsUi.text-typed(root.option.key, text); }
                 canceled => { SettingsUi.text-canceled(root.option.key); }
+            }
+
+            // A text with suggestions (Hardware decoding, 0.0.67): typed freely, or picked from the list beside it.
+            if root.option.kind == 3 && root.option.items.length > 0: HorizontalLayout {
+                spacing: 4px;
+
+                NumberField {
+                    width: 260px - 38px - 4px;
+                    text: root.option.text;
+                    placeholder: root.option.placeholder;
+                    enabled: root.option.enabled;
+                    alignment: left;
+                    bubble: "settings:" + root.option.key;
+                    committed(text) => { return SettingsUi.type-text(root.option.key, text); }
+                    typed(text) => { SettingsUi.text-typed(root.option.key, text); }
+                    canceled => { SettingsUi.text-canceled(root.option.key); }
+                }
+
+                ChoiceButton {
+                    compact: true;
+                    items: root.option.items;
+                    current: root.option.index;
+                    enabled: root.option.enabled;
+                    tooltip: "Pick a known value";
+                    selected(index) => { SettingsUi.type-text(root.option.key, root.option.items[index]); }
+                }
             }
 
             if root.option.kind == 4 || root.option.kind == 5: HorizontalLayout {
@@ -165,10 +229,14 @@ export component SettingsRow inherits Rectangle {
                 }
             }
 
+            // A button; one that opens another program shows that symbol instead of its text. It waits while its
+            // test runs.
             if root.option.kind == 6: IconButton {
-                text: root.option.suffix;
-                tooltip: root.option.description;
-                enabled: root.option.enabled;
+                icon: root.option.icon;
+                text: root.option.icon == IconId.none ? root.option.suffix : "";
+                tooltip: root.option.icon == IconId.open-external ? "Open in the file manager: " + root.option.description
+                    : root.option.status == 2 ? "The test runs..." : root.option.description;
+                enabled: root.option.enabled && root.option.status != 2;
                 clicked => { SettingsUi.action(root.option.key); }
             }
 

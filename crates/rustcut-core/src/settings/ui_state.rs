@@ -42,13 +42,17 @@ pub struct UiState {
     pub dialogs: super::dialog_ui::DialogUiState,
 }
 
-/// The Settings window (M4.2): its size, the page it showed last and what each page had selected.
+/// The Settings window (M4.2): its size and place, the page it showed last and what each page had selected.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SettingsWindowState {
     /// Logical pixels.
     pub width: u32,
     pub height: u32,
+    /// Position of the window frame in physical screen pixels when known (X11, 0.0.67); `None` lets the window
+    /// manager place it.
+    pub x: Option<i32>,
+    pub y: Option<i32>,
     /// The page's id (`general`, `hotkeys`, ...; an unknown id shows the first page).
     pub page: String,
     /// The profile selected on the Render Profiles page.
@@ -72,6 +76,8 @@ impl Default for SettingsWindowState {
         Self {
             width: 900,
             height: 660,
+            x: None,
+            y: None,
             page: String::new(),
             profile: None,
             hotkey_search: String::new(),
@@ -223,7 +229,8 @@ pub struct QueuePanelState {
     pub filter_any: bool,
     /// Column widths in logical pixels by column id.
     pub columns: std::collections::BTreeMap<String, u32>,
-    /// One-time choice for this run of the queue (the default is `Settings.queue.when_done`).
+    /// The queue panel's own choice up to 0.0.66; since 0.0.67 it is `Settings.queue.when_done` and this stays empty
+    /// (read so older files load, never used).
     pub when_done: Option<WhenDone>,
     /// The selected jobs in the order they were selected (ids that are gone are dropped when the queue is known).
     #[serde_as(as = "DefaultOnError")]

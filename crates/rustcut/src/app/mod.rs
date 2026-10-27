@@ -5,6 +5,7 @@ mod cli;
 mod dialogs;
 mod live;
 pub mod log_book;
+mod log_files;
 mod logging;
 mod persistence;
 pub mod redaction;
@@ -129,7 +130,10 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     }
     log.open_file(
         &loaded.paths.log_dir(),
-        loaded.settings.advanced.log_keep_days,
+        log_files::Retention::new(
+            loaded.settings.advanced.log_keep_days,
+            loaded.settings.advanced.log_max_mb,
+        ),
         loaded.settings.advanced.shareable_log,
     );
 
@@ -473,11 +477,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         (runtime.handle(), &queue, &menu),
         desktop,
         &loaded.settings,
-        loaded
-            .ui_state
-            .queue
-            .when_done
-            .unwrap_or(loaded.settings.queue.when_done),
+        writer.clone(),
     );
     {
         let power = Rc::downgrade(&power);
@@ -512,8 +512,13 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     {
         let mut hooks = settings_window.hooks();
         let sync_handle = sync.handle.clone();
-        hooks.probe_rustview = Some(Box::new(move || {
-            let _ = sync_handle.send(SyncCommand::Probe);
+        hooks.test_rustview = Some(Box::new(move || {
+            let (reply, answer) = tokio::sync::oneshot::channel();
+            sync_handle.send(SyncCommand::Test { reply }).ok().map(|()| answer)
+        }));
+        let tags = Rc::downgrade(&tags);
+        hooks.rustview_connection = Some(Box::new(move || {
+            tags.upgrade().map(|t| t.connection_state()).unwrap_or_default()
         }));
         let render = Rc::downgrade(&render);
         hooks.encoders = Some(Box::new(move || {

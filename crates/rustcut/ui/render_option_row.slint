@@ -119,15 +119,8 @@ export component OptionRow inherits Rectangle {
             horizontal-stretch: 1;
             max-width: ControlMetrics.field-max-width;
 
-            slider := PlayerSeekBar {
-                height: 20px;
-                enabled: root.option.enabled;
-                value: root.option.steps > 0 ? root.option.position / root.option.steps : 0;
-                changed(value, final) => {
-                    root.slide(root.option.key, Math.round(value * root.option.steps));
-                }
-            }
-
+            // The value's words above the slider, so the pointer on the knob never covers them (user review
+            // 2026-10-27).
             TooltipArea {
                 text: root.option.tooltip;
                 height: 16px;
@@ -141,6 +134,15 @@ export component OptionRow inherits Rectangle {
                     horizontal-alignment: center;
                     vertical-alignment: center;
                     overflow: elide;
+                }
+            }
+
+            slider := PlayerSeekBar {
+                height: 20px;
+                enabled: root.option.enabled;
+                value: root.option.steps > 0 ? root.option.position / root.option.steps : 0;
+                changed(value, final) => {
+                    root.slide(root.option.key, Math.round(value * root.option.steps));
                 }
             }
         }

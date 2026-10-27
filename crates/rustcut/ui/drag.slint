@@ -21,6 +21,9 @@ export global DragState {
     // The pointer's window y while a list in a card stack is dragged (the list sets it).
     in-out property <length> pointer-y;
     in-out property <int> scrolls;
+    // A draggable row is pressed (`DragArea`): a scroll area that pans with drags (the Settings pages) leaves the
+    // gesture to the row until the release.
+    in-out property <bool> holding;
     callback cancel();
 }
 
@@ -183,6 +186,7 @@ export component DragArea inherits Rectangle {
                 if event.button == PointerEventButton.right {
                     root.menu(self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y);
                 } else if event.button == PointerEventButton.left {
+                    DragState.holding = root.draggable;
                     root.control = event.modifiers.control;
                     root.shift = event.modifiers.shift;
                     root.press-y = self.mouse-y;
@@ -190,6 +194,9 @@ export component DragArea inherits Rectangle {
                     root.dragging = false;
                     root.dragged = false;
                 }
+            }
+            if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) || event.kind == PointerEventKind.cancel {
+                DragState.holding = false;
             }
             if event.kind == PointerEventKind.up && event.button == PointerEventButton.left && root.dragging {
                 root.dragging = false;

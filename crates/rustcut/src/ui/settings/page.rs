@@ -11,7 +11,6 @@ pub enum Page {
     Profiles,
     Queue,
     RustView,
-    Warnings,
     Messages,
     Dialogs,
     Hotkeys,
@@ -39,7 +38,7 @@ pub enum Special {
 }
 
 impl Page {
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 16] = [
         Self::General,
         Self::Player,
         Self::Editor,
@@ -48,7 +47,6 @@ impl Page {
         Self::Profiles,
         Self::Queue,
         Self::RustView,
-        Self::Warnings,
         Self::Messages,
         Self::Dialogs,
         Self::Hotkeys,
@@ -70,7 +68,6 @@ impl Page {
             Self::Profiles => "profiles",
             Self::Queue => "queue",
             Self::RustView => "rustview",
-            Self::Warnings => "warnings",
             Self::Messages => "messages",
             Self::Dialogs => "dialogs",
             Self::Hotkeys => "hotkeys",
@@ -92,7 +89,6 @@ impl Page {
             Self::Profiles => "Render Profiles",
             Self::Queue => "Queue",
             Self::RustView => "RustView",
-            Self::Warnings => "Warnings & Confirmations",
             Self::Messages => "Messages",
             Self::Dialogs => "Dialogs",
             Self::Hotkeys => "Hotkeys",
