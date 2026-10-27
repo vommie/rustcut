@@ -7,23 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Changed
+## [0.0.66] - 2026-10-27
 
-- The resize's width and height fields step with the mouse wheel once clicked into, like the crop's edges: 1 pixel,
-  10 with Ctrl, 100 with Shift (also the Up/Down keys; before, a step was 16 pixels) (0.0.66).
-
-- The taskbar entry's progress bar follows the current job by default (0.0.65): Settings > Desktop Integration >
-  "The bar shows" chooses between the current job (the render that started first when several run) and all jobs
-  (the whole run, as before). Older settings files load with "Current job".
-
-- The queue handles hundreds of jobs smoothly (0.0.64): it creates only the rows in view and updates only the rows
-  that changed (before, every row was made and rewritten up to ten times a second while rendering).
-- The symbols of the queue's totals line say "3/4 finished" in their tooltips: of every job in the queue (0.0.64).
-
-### Fixed
-
-- A window that was maximized when RustCut ended opens maximized again (0.0.63); before, it opened at its windowed
-  size although the state was saved. Un-maximizing returns to the saved size.
+The user's UI review round 2: filters, option menus and the queue; a faster queue list; the maximized window comes
+back; the taskbar shows the current job.
 
 ### Added
 
@@ -33,12 +20,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The resize's width and height fields step with the mouse wheel once clicked into, like the crop's edges: 1 pixel,
+  10 with Ctrl, 100 with Shift (also the Up/Down keys; before, a step was 16 pixels) (0.0.66).
+- The taskbar entry's progress bar follows the current job by default (0.0.65): Settings > Desktop Integration >
+  "The bar shows" chooses between the current job (the render that started first when several run) and all jobs
+  (the whole run, as before). Older settings files load with "Current job".
+
+- The queue handles hundreds of jobs smoothly (0.0.64): it creates only the rows in view and updates only the rows
+  that changed (before, every row was made and rewritten up to ten times a second while rendering).
+- The symbols of the queue's totals line say "3/4 finished" in their tooltips: of every job in the queue (0.0.64).
 - The queue's totals line shows a colored symbol per state with its count in a small badge (only states that occur)
   instead of words, and "~0:22 left" instead of "about 0:22 left" (0.0.62).
 - File sizes in the queue and the Job panel are in binary units with at most one decimal ("324 KiB", "2.1 MiB",
   "2.3 GiB") (0.0.62).
 - "Pause after the running jobs" is off while nothing renders or processing is paused (0.0.62).
-
 - The filters' options menus line up on two equal columns (0.0.61): every choice, number field and slider ends on one
   line; Deshake's values sit in a grid of two halves, its segmented choices span the whole row, and "Field order"
   (Deinterlace) and "Search" (Crop) are drop-down lists.
@@ -53,6 +48,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Settings > Filters > Crop ratios: the built-in list no longer has 3:2, 16:10, 21:9 and 2:3 (0.0.61). Migration
   `crop-ratios-trimmed` (settings version 7, `config.toml` is backed up first): a list that is still the old built-in
   one becomes the new one; a list you changed stays as it is.
+
+### Fixed
+
+- A window that was maximized when RustCut ended opens maximized again (0.0.63); before, it opened at its windowed
+  size although the state was saved. Un-maximizing returns to the saved size.
 
 ## [0.0.60] - 2026-10-27
 
@@ -924,5 +924,6 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.60...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.66...HEAD
+[0.0.66]: https://github.com/vommie/rustcut/compare/v0.0.60...v0.0.66
 [0.0.60]: https://github.com/vommie/rustcut/releases/tag/v0.0.60
