@@ -56,9 +56,9 @@ component TotalSymbol inherits Rectangle {
 }
 
 export component QueuePanel inherits Rectangle {
-    // A narrow sidebar shows a job's state as its colored symbol only, from 350 px with its word (user review
+    // A narrow sidebar shows a job's state as its colored symbol only, from 450 px with its word (user review
     // 2026-10-27).
-    property <bool> state-words: root.width >= 350px;
+    property <bool> state-words: root.width >= 450px;
     property <length> row-step: Queue.row-height + 2px;
     // The list's whole height (every row has the same pitch).
     property <length> content-height: Queue.rows.length * root.row-step;

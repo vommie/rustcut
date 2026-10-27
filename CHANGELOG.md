@@ -11,6 +11,8 @@ Your UI review "RustCut Feedback" and the requests that came with it.
 
 ### Added
 
+- The last saved job's rating button lights up under the pointer, darkens while pressed and is filled while the
+  current job has that rating (0.0.75).
 - A refresh button over the tag tree's "RustView's library has no tags yet" hint (the tree's Refresh Tag Tree, which
   needs a tree for its context menu) (0.0.74).
 
@@ -52,13 +54,14 @@ Your UI review "RustCut Feedback" and the requests that came with it.
 
 - The volume goes from 0 to 100 % (no amplification up to 150 % any more); a stored volume above 100 % becomes 100 %.
 - The transport bar: the times stand on the far right, the volume left of them.
-- In a narrow queue (below 350 px) a job's state is its colored symbol; from 350 px the symbol and the word. The row's
+- In a narrow queue (below 450 px) a job's state is its colored symbol; from 450 px the symbol and the word. The row's
   tooltip names the state.
 - The conflict dialog opens just tall enough for its Decision tab (512 px instead of 560 px; a size you set stays).
 - The conflict dialog's choices: Next free number, Add "(n)", Own name, Overwrite (in this order), with a subtle line
   between them. The key of "Next free number" is green while the counter auto-iterates, the key of "Overwrite" red.
-- While the counter auto-iterates, the files of the name's series with a lower number (the jobs saved before) are no
-  "similar filename" hint any more; equal and higher numbers still are.
+- While the counter auto-iterates, the files of the name's series with a lower number (the jobs saved before) and the
+  name without a number are no "similar filename" hint any more; equal and higher numbers still are (0.0.75: the
+  name without a number kept the hint).
 - Rating buttons are 20 px high, dark with their color as the border, filled with the color on hover and when chosen;
   the chosen one has no white border any more and gets a little lighter under the pointer (0.0.74); also in the
   question before saving without a rating. RustView gets the same look at the release.
@@ -70,7 +73,8 @@ Your UI review "RustCut Feedback" and the requests that came with it.
 - "Hold for" takes 100 ms and more (it was 300 ms; 0 still means a click is enough).
 - A filter row shows the move cursor only while it is dragged, not when the pointer rests on it or the wheel turns.
 - The crop is dragged in steps of one pixel; "Divisible by" applies only to the finished video's size.
-- The playhead's line is one pixel wide, and so are the crop's frame lines, also while an edge is dragged.
+- The playhead's line (below its head) is exactly one pixel wide (0.0.75: it was drawn about three pixels wide), and so
+  are the crop's frame lines, also while an edge is dragged.
 - A link in a message bubble lights up and acts only under the pointer, not when the pointer is anywhere on the bubble.
 - The Sections card has no hint text when it has no sections; the delete button of a section has room after the
   duration.

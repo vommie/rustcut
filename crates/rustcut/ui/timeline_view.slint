@@ -177,28 +177,33 @@ export component TimelineStrip inherits Rectangle {
             background: Theme.text.with-alpha(0.5);
         }
 
-        // Head and neck are ONE shape: two elements (a Path head on a Rectangle line) were rasterized apart at
-        // sub-pixel positions and the head wobbled against the line while the playhead glided. Viewbox = pixels.
-        // The neck is one pixel wide (user review 2026-10-27), so the shape stands on whole pixels: the neck covers
-        // exactly the pixel column of the playhead instead of two half-lit ones.
+        // The playhead on whole pixels: the head a small Path, the neck a Rectangle exactly one pixel wide (user review
+        // 2026-10-28: a filled Path was antialiased to about three pixels). Both take the same whole-pixel x, so they
+        // never drift apart while the playhead glides (two shapes at sub-pixel positions wobbled, 0.0.69).
         if Timeline.playhead-shown: Path {
             x: Math.floor(Timeline.playhead-x / 1px) * 1px - 5px;
             y: 0;
             width: 11px;
-            height: root.track-y + TimelineMetrics.track-height;
+            height: 6px;
             viewbox-x: 0;
             viewbox-y: 0;
             viewbox-width: 11;
-            viewbox-height: self.height / 1px;
+            viewbox-height: 6;
             fill: Theme.status-corrupt;
 
             MoveTo { x: 0; y: 0; }
             LineTo { x: 11; y: 0; }
-            LineTo { x: 6; y: 5; }
-            LineTo { x: 6; y: root.track-y / 1px + TimelineMetrics.track-height / 1px; }
-            LineTo { x: 5; y: root.track-y / 1px + TimelineMetrics.track-height / 1px; }
-            LineTo { x: 5; y: 5; }
+            LineTo { x: 6; y: 6; }
+            LineTo { x: 5; y: 6; }
             Close { }
+        }
+
+        if Timeline.playhead-shown: Rectangle {
+            x: Math.floor(Timeline.playhead-x / 1px) * 1px;
+            y: 5px;
+            width: 1px;
+            height: root.track-y + TimelineMetrics.track-height - 5px;
+            background: Theme.status-corrupt;
         }
 
         // The time under the pointer, on the ruler (over the labels).
