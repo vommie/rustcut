@@ -237,6 +237,12 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
     });
     f.on_menu_reset(with_menu(&this, FiltersBridge::menu_reset));
     f.on_menu_save(with_menu(&this, FiltersBridge::menu_save));
+    f.on_output_jump(|| {
+        jump::go(JumpTarget::Settings {
+            page: Page::Filters,
+            key: "filters.final_multiple",
+        });
+    });
     f.on_menu_jump(with_menu(&this, |_, kind| {
         jump::go(JumpTarget::Settings {
             page: Page::Filters,

@@ -182,6 +182,7 @@ pub fn plan(input: PlanInput<'_>) -> Result<RenderPlan, PlanError> {
     let render_target = |deshake| LavfiTarget::Render {
         source: source_size,
         deshake,
+        multiple: spec.final_multiple,
     };
     let final_pass = transforms
         .as_deref()
@@ -239,7 +240,7 @@ pub fn plan(input: PlanInput<'_>) -> Result<RenderPlan, PlanError> {
         expected: Expectation {
             duration,
             audio_streams: audio_tracks,
-            size: spec.filters.output_size(source_size)?.even_floor(),
+            size: spec.filters.final_size(source_size, spec.final_multiple)?,
         },
         transforms,
         passlog,

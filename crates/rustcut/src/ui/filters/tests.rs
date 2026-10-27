@@ -242,7 +242,7 @@ fn editing_a_filter_that_is_off_keeps_it_off() {
     assert_eq!(s.shown_crop().bottom, 90);
     assert_eq!(s.resize().0, Some(1280));
     s.toggle(FilterKind::Crop);
-    assert_eq!(view::card(&s).output, "1920×990");
+    assert_eq!(view::card(&s).output.text, "1920×990");
     s.switch_on(FilterKind::Deinterlace);
     assert_eq!(
         s.chain().get(FilterKind::Deinterlace).map(|slot| slot.filter),
@@ -359,15 +359,38 @@ fn keep_carries_the_chain_to_the_next_video_and_start() {
 #[test]
 fn the_card_tells_the_output_size_and_the_interlace_check() {
     let mut s = state();
-    assert_eq!(view::card(&s).output, "1920×1080");
+    let plain = view::card(&s).output;
+    assert_eq!(plain.text, "1920×1080");
+    assert_eq!(plain.tooltip, "The final output size after every filter.");
+    assert!(
+        !plain.adjusted && plain.rows.is_empty(),
+        "nothing cut: no rows, no jump"
+    );
     s.set_crop(Crop::new(1, 0, 0, 3));
     s.switch_on(FilterKind::Crop);
     let card = view::card(&s);
-    assert_eq!(card.output, "1917×1079");
-    assert!(
-        card.output_tooltip
-            .ends_with("the render makes it 1916×1078 (even sizes)")
+    // Q-P9s: the header shows the final size; its tooltip names both only when the rule cut something.
+    assert_eq!(card.output.text, "1916×1078");
+    assert!(card.output.adjusted);
+    assert_eq!(
+        card.output.rows,
+        vec![
+            ("After the filters".to_owned(), "1917×1079".to_owned()),
+            ("Divisible by 2".to_owned(), "1916×1078".to_owned())
+        ]
     );
+    // The rule off: the odd size stays, nothing to explain or jump to.
+    s.set_defaults(FilterDefaults {
+        final_multiple: 0,
+        ..FilterDefaults::default()
+    });
+    let card = view::card(&s);
+    assert_eq!((card.output.text.as_str(), card.output.adjusted), ("1917×1079", false));
+    s.set_defaults(FilterDefaults {
+        final_multiple: 16,
+        ..FilterDefaults::default()
+    });
+    assert_eq!(view::card(&s).output.text, "1904×1072");
     assert_eq!(card.crop_size, "1917×1079");
     s.interlace = InterlaceHint::Known(
         Interlacing::Interlaced { top_field_first: true },

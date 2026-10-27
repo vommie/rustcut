@@ -223,6 +223,7 @@ impl ProbeBridge {
             playhead,
             seconds: self.seconds.get(),
             filters: &chain,
+            final_multiple: filters.final_multiple(),
             profile: &profile,
             exact,
             job_duration: job,

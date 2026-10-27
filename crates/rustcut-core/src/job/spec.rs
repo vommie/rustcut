@@ -29,6 +29,11 @@ pub struct JobSpec {
     pub sections: SectionList,
     #[serde(default)]
     pub filters: FilterChain,
+    /// The final size rule (Settings > Filters > Final size, 0.0.60, Q-P9s): the output's width and height are cut
+    /// down to multiples of it at the end of the chain (`edit::FINAL_MULTIPLES`, 0 = off). A spec written before reads
+    /// 2 (even), the rule those versions applied.
+    #[serde(default = "crate::edit::even_multiple")]
+    pub final_multiple: u8,
     /// A snapshot of the render profile; editing the profile later does not change queued jobs.
     pub profile: RenderProfile,
     pub target: TargetSpec,
@@ -126,6 +131,7 @@ pub(crate) mod tests {
             }),
             sections: vec![section].into(),
             filters: FilterChain::default(),
+            final_multiple: 2,
             profile: builtin_profiles().remove(0),
             target: TargetSpec {
                 folder: PathBuf::from("/videos/out"),
@@ -188,11 +194,16 @@ pub(crate) mod tests {
             {{"enabled":true,"filter":{{"kind":"resize","width":640,"height":null,"algorithm":"bicubic"}}}}]}}"#
         );
         let read: JobSpec = serde_json::from_str(&row).unwrap();
+        assert_eq!(
+            read.final_multiple, 2,
+            "a spec of 0.0.59 and older keeps the even rule it rendered with"
+        );
         let render = read
             .filters
             .to_lavfi(crate::edit::LavfiTarget::Render {
                 source: Size::new(1920, 1080),
                 deshake: crate::edit::DeshakePass::None,
+                multiple: read.final_multiple,
             })
             .unwrap();
         assert_eq!(

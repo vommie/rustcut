@@ -91,7 +91,7 @@ pub struct CropView {
     sar: f64,
     /// Where the shown frame is in the video area (letterboxed like mpv).
     picture: Rect,
-    /// Dragged and placed crops keep a width and height that are multiples of this (2 = even, P9.14).
+    /// Dragged and placed crops keep an even width and height (the final size rule acts after every filter, Q-P9s).
     multiple: u32,
 }
 
@@ -122,13 +122,6 @@ impl CropView {
             },
             multiple: 2,
         })
-    }
-
-    /// Dragged and placed crops keep a width and height that are multiples of `n` (2, 4, 8, 16).
-    #[must_use]
-    pub fn with_multiple(mut self, n: u32) -> Self {
-        self.multiple = n.max(2);
-        self
     }
 
     /// The multiple the crop's size keeps.

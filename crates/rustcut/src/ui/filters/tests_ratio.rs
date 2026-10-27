@@ -122,50 +122,24 @@ fn the_choice_survives_a_change_of_the_presets_by_its_label() {
 }
 
 #[test]
-fn a_dragged_crop_keeps_the_multiple_while_it_sets_the_output_size() {
+fn a_dragged_crop_keeps_even_sizes() {
+    // The crop's "Divisible by" became the final size rule (Q-P9s): a dragged crop only stays even.
     let mut s = editing(&["16:9"]);
-    s.set_multiple(16);
-    // Pull the right edge 37 view pixels (74 frame pixels) in: the width lands on a multiple of 16.
+    // Pull the right edge 37 view pixels (74 frame pixels) in.
     assert!(s.crop_pointer_down(960.0, 270.0));
     s.crop_pointer_moved(923.0, 270.0, false);
     s.crop_pointer_up();
     let (w, h) = kept(&s);
-    assert_eq!((w % 16, h), (0, 1072), "{w}x{h}: choosing 16 fitted the height too");
+    assert_eq!((w % 2, h), (0, 1080), "{w}x{h}");
     assert_eq!(s.crop().left, 0, "only the dragged edge moves");
-    // Shift moves the other axis too: both land on multiples.
     let c = s.crop();
     #[expect(clippy::cast_possible_truncation, reason = "view coordinates")]
     let right = (960.0 - f64::from(c.right) / 2.0) as f32;
     assert!(s.crop_pointer_down(right, 540.0));
-    s.crop_pointer_moved(right - 30.0, 520.0, true);
+    s.crop_pointer_moved(right - 31.0, 521.0, true);
     s.crop_pointer_up();
     let (w, h) = kept(&s);
-    assert_eq!((w % 16, h % 16), (0, 0), "{w}x{h}");
-    // A Resize after the crop sets the output: the crop is free again (even pixels).
-    s.end_crop(true);
-    s.set_resize_side(0, Some(1280));
-    s.switch_on(FilterKind::Resize);
-    assert_eq!(s.effective_multiple(), 2);
-    assert!(s.resize_sets_size());
-}
-
-#[test]
-fn choosing_a_multiple_fits_the_crop_and_counts_as_an_option_of_the_menu() {
-    let mut s = editing(&["16:9"]);
-    s.end_crop(false);
-    s.set_crop(Crop::new(138, 0, 138, 0));
-    assert!(s.options_are_default(FilterKind::Crop));
-    s.set_multiple(8);
-    assert_eq!(s.crop(), Crop::new(140, 0, 140, 0), "1920x804 becomes 1920x800");
-    assert!(
-        !s.chain().is_enabled(FilterKind::Crop),
-        "an option keeps the filter off"
-    );
-    assert!(!s.options_are_default(FilterKind::Crop));
-    assert_eq!(s.options_as_defaults(FilterKind::Crop).crop_multiple, 8);
-    s.reset_options(FilterKind::Crop);
-    assert_eq!(s.multiple, 2);
-    assert_eq!(s.kept().multiple, None, "nothing is kept while keep is off");
+    assert_eq!((w % 2, h % 2), (0, 0), "{w}x{h}");
 }
 
 #[test]

@@ -28,6 +28,48 @@ impl Size {
             height: self.height & !1,
         }
     }
+
+    /// The size rounded down to multiples of `n` (the final size rule, Q-P9s); `n` below 2 (the rule off) keeps it.
+    /// A side shorter than `n` stays as it is, made even.
+    pub const fn floor_to(self, n: u32) -> Self {
+        const fn side(v: u32, n: u32) -> u32 {
+            if n < 2 {
+                v
+            } else if v >= n {
+                v / n * n
+            } else if v >= 2 {
+                v & !1
+            } else {
+                v
+            }
+        }
+        Self {
+            width: side(self.width, n),
+            height: side(self.height, n),
+        }
+    }
+}
+
+/// The values of the final size rule (Settings > Filters > Final size, Q-P9s): 0 = off (the size stays as the filters
+/// make it), else every render's width and height are cut down to multiples of it (2 = even, the default).
+pub const FINAL_MULTIPLES: [u8; 5] = [0, 2, 4, 8, 16];
+
+/// The final size rule's default: even sizes (the only rule every 4:2:0 encoder needs, Q-P9s research).
+pub const fn even_multiple() -> u8 {
+    2
+}
+
+/// `n` as one of [`FINAL_MULTIPLES`]: 0 stays off, anything else the largest multiple that does not exceed it (2 for 1).
+pub fn final_multiple(n: u8) -> u8 {
+    if n == 0 {
+        return 0;
+    }
+    FINAL_MULTIPLES
+        .iter()
+        .rev()
+        .copied()
+        .find(|m| *m != 0 && *m <= n)
+        .unwrap_or(2)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -186,6 +228,12 @@ impl FilterChain {
             return Err(ChainError::TooSmall(size.width, size.height));
         }
         Ok(size)
+    }
+
+    /// The size the render writes: [`Self::output_size`] cut down by the final size rule (`multiple`, see
+    /// [`FINAL_MULTIPLES`]).
+    pub fn final_size(&self, source: Size, multiple: u8) -> Result<Size, ChainError> {
+        Ok(self.output_size(source)?.floor_to(u32::from(final_multiple(multiple))))
     }
 
     /// The chain with every filter from `kind` on switched off: what reaches `kind`.

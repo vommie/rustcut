@@ -112,6 +112,7 @@ impl Fixture {
             source_info: None,
             sections: list,
             filters: FilterChain::default(),
+            final_multiple: 2,
             profile: fast_profile(preset),
             target: TargetSpec {
                 folder: self.out(),

@@ -70,6 +70,7 @@ fn spec(sections: usize) -> JobSpec {
         source_info: None,
         sections: list,
         filters: full_chain(),
+        final_multiple: 2,
         profile: builtin_profiles().into_iter().next().unwrap(),
         target: TargetSpec {
             folder: PathBuf::from("/media/out"),
@@ -92,6 +93,7 @@ fn lavfi(c: &mut Criterion) {
                 deshake: DeshakePass::Transform {
                     input: Path::new("/data/deshake/job-1.trf"),
                 },
+                multiple: 2,
             })
         });
     });

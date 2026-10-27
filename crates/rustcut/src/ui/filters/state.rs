@@ -6,7 +6,7 @@ use rustcut_core::edit::{
     OrientationParams, RatioChoice, RatioSet, ResizeAlgorithm, Size,
 };
 use rustcut_core::media::{CropSearch, IdetCounts, Interlacing};
-use rustcut_core::settings::{FilterDefaults, crop_multiple};
+use rustcut_core::settings::FilterDefaults;
 use rustcut_core::time::Timestamp;
 use rustcut_player::VideoFilter;
 
@@ -92,22 +92,18 @@ pub struct FiltersState {
     pub interlace: InterlaceHint,
     /// How auto-crop searches (kept and reset with the chain).
     pub search: CropSearch,
-    /// The crop's width and height are multiples of this while the crop sets the output size (kept and reset with
-    /// the chain, P9.14).
-    pub multiple: u8,
     pub auto_crop_running: bool,
     pub(super) crop: Option<CropSession>,
     /// The video area in logical pixels.
     view: (f32, f32),
 }
 
-/// What "keep" carries to the next video and the next start (`ui-state.toml`): the chain, the auto-crop search and
-/// the crop's size multiple.
+/// What "keep" carries to the next video and the next start (`ui-state.toml`): the chain and the auto-crop search
+/// (the crop's size multiple of 0.0.51-0.0.59 became the final size rule of Settings > Filters, Q-P9s).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Kept {
     pub chain: Option<FilterChain>,
     pub search: Option<CropSearch>,
-    pub multiple: Option<u8>,
 }
 
 /// A fresh chain with the configured defaults (Settings > Filters), every filter off.
@@ -130,7 +126,6 @@ impl FiltersState {
     pub fn new(defaults: FilterDefaults, preview: bool, keep: bool, kept: Kept, ratio: Option<&str>) -> Self {
         let chain = kept.chain.filter(|_| keep).unwrap_or_else(|| default_chain(&defaults));
         let search = kept.search.filter(|_| keep).unwrap_or(defaults.crop_search).sanitized();
-        let multiple = crop_multiple(kept.multiple.filter(|_| keep).unwrap_or(defaults.crop_multiple));
         let ratios = defaults.ratios();
         let ratio = ratio.and_then(|label| ratios.choice_of(label)).unwrap_or_default();
         Self {
@@ -143,7 +138,6 @@ impl FiltersState {
             ratios,
             interlace: InterlaceHint::None,
             search,
-            multiple,
             auto_crop_running: false,
             crop: None,
             view: (0.0, 0.0),
@@ -170,7 +164,6 @@ impl FiltersState {
         Kept {
             chain: Some(self.chain.clone()),
             search: Some(self.search),
-            multiple: Some(self.multiple),
         }
     }
 
@@ -198,7 +191,6 @@ impl FiltersState {
         if !self.keep {
             self.chain = default_chain(&self.defaults);
             self.search = self.defaults.crop_search.sanitized();
-            self.multiple = crop_multiple(self.defaults.crop_multiple);
         }
     }
 
@@ -245,7 +237,6 @@ impl FiltersState {
     pub fn reset(&mut self) {
         self.chain = default_chain(&self.defaults);
         self.search = self.defaults.crop_search.sanitized();
-        self.multiple = crop_multiple(self.defaults.crop_multiple);
         self.crop = None;
     }
 
@@ -514,18 +505,5 @@ impl FiltersState {
             self.view.0,
             self.view.1,
         )
-        .map(|view| view.with_multiple(u32::from(self.effective_multiple())))
-    }
-
-    /// Whether an enabled Resize after the crop sets the output size: then the crop is free (even pixels only).
-    pub fn resize_sets_size(&self) -> bool {
-        let order: Vec<FilterKind> = self.chain.order().collect();
-        let at = |kind| order.iter().position(|k| *k == kind);
-        self.chain.is_enabled(FilterKind::Resize) && at(FilterKind::Resize) > at(FilterKind::Crop)
-    }
-
-    /// The multiple the crop's size keeps now: the chosen one while the crop sets the output size, else 2 (P9.14).
-    pub fn effective_multiple(&self) -> u8 {
-        if self.resize_sets_size() { 2 } else { self.multiple }
     }
 }

@@ -163,6 +163,7 @@ fn every_filter_runs_and_the_output_size_is_predicted() {
             .to_lavfi(LavfiTarget::Render {
                 source: source_size,
                 deshake: DeshakePass::None,
+                multiple: 2,
             })
             .unwrap();
         let out = dir.path().join(format!("out{i}.nut"));
@@ -174,7 +175,7 @@ fn every_filter_runs_and_the_output_size_is_predicted() {
         args.extend(s(&["-c:v", "rawvideo", "-f", "nut"]));
         args.push(out.to_string_lossy().into_owned());
         run("ffmpeg", &args);
-        let expected = chain.output_size(source_size).unwrap().even_floor();
+        let expected = chain.final_size(source_size, 2).unwrap();
         assert_eq!(probe_size(&out), expected, "chain {i}: {lavfi}");
         let preview = chain.to_lavfi(LavfiTarget::Preview).unwrap();
         assert!(
@@ -212,6 +213,7 @@ fn deshake_two_passes_with_a_hostile_path() {
         .to_lavfi(LavfiTarget::Render {
             source: size,
             deshake: DeshakePass::Detect { result: &trf },
+            multiple: 2,
         })
         .unwrap();
     let mut args = s(&["-hide_banner", "-y", "-i"]);
@@ -227,6 +229,7 @@ fn deshake_two_passes_with_a_hostile_path() {
         .to_lavfi(LavfiTarget::Render {
             source: size,
             deshake: DeshakePass::Transform { input: &trf },
+            multiple: 2,
         })
         .unwrap();
     let out = dir.path().join("stable.nut");

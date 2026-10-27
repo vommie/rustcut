@@ -22,7 +22,6 @@ pub(super) fn tips() -> FilterTips {
         sides: t("filters.crop_search.sides"),
         samples: t("filters.crop_search.samples"),
         sections_only: t("filters.crop_search.sections_only"),
-        multiple: t("filters.crop_multiple"),
         similarity: t("filters.crop_search.similarity"),
         retries: t("filters.crop_search.retries"),
         shakiness: t("filters.deshake.shakiness"),
@@ -50,9 +49,13 @@ impl FiltersBridge {
         f.set_has_media(card.has_media);
         f.set_preview(card.preview);
         f.set_keep(card.keep);
-        f.set_output(card.output.as_str().into());
-        f.set_output_tooltip(card.output_tooltip.as_str().into());
-        f.set_output_warning(card.output_warning);
+        let o = &card.output;
+        f.set_output(o.text.as_str().into());
+        f.set_output_title(o.title.as_str().into());
+        f.set_output_tooltip(o.tooltip.as_str().into());
+        f.set_output_rows(tip_rows(&o.rows));
+        f.set_output_adjusted(o.adjusted);
+        f.set_output_warning(o.warning);
         sync(
             &self.rows,
             card.rows
@@ -75,16 +78,7 @@ impl FiltersBridge {
         f.set_interlace_hint(card.interlace_hint.as_str().into());
         f.set_interlace_level(card.interlace_level as i32);
         f.set_interlace_detail(card.interlace_detail.as_str().into());
-        f.set_interlace_rows(ModelRc::new(VecModel::from(
-            card.interlace_rows
-                .iter()
-                .map(|(label, value)| TipRow {
-                    label: label.as_str().into(),
-                    value: value.as_str().into(),
-                    heading: false,
-                })
-                .collect::<Vec<_>>(),
-        )));
+        f.set_interlace_rows(tip_rows(&card.interlace_rows));
         f.set_interlace_counts(card.interlace_counts.as_str().into());
         f.set_interlace_checking(card.interlace_checking);
         let c = card.crop;
@@ -105,8 +99,6 @@ impl FiltersBridge {
         f.set_search_similarity(card.search_similarity.to_string().into());
         f.set_search_retries(card.search_retries.to_string().into());
         f.set_picking(card.picking);
-        f.set_crop_multiple(index(card.crop_multiple));
-        f.set_crop_multiple_free(card.crop_multiple_free);
         // The glyph shows the result (turns, then a mirror left to right); the buttons show the mirrors as set.
         let (turns, mirrored) = card.orientation.orientation().turns_and_mirror();
         f.set_orientation_turns(i32::from(turns));
@@ -181,4 +173,17 @@ impl FiltersBridge {
             .into(),
         );
     }
+}
+
+/// Tooltip rows (label, value) as Slint's `TipRow`s.
+fn tip_rows(rows: &[(String, String)]) -> ModelRc<TipRow> {
+    ModelRc::new(VecModel::from(
+        rows.iter()
+            .map(|(label, value)| TipRow {
+                label: label.as_str().into(),
+                value: value.as_str().into(),
+                heading: false,
+            })
+            .collect::<Vec<_>>(),
+    ))
 }

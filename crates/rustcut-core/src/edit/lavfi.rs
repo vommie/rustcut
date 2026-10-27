@@ -22,8 +22,13 @@ pub enum DeshakePass<'a> {
 pub enum LavfiTarget<'a> {
     /// mpv's live preview: deshake is left out (it needs two passes; the probe render shows it).
     Preview,
-    /// The ffmpeg render of a `source`-sized video; an odd output size gets a final 1-pixel crop to even numbers.
-    Render { source: Size, deshake: DeshakePass<'a> },
+    /// The ffmpeg render of a `source`-sized video; the final size rule (`multiple`, `FINAL_MULTIPLES`: 0 = off, 2 =
+    /// even) cuts the output down at the end, centered (ffmpeg's `crop` default; Q-P9s).
+    Render {
+        source: Size,
+        deshake: DeshakePass<'a>,
+        multiple: u8,
+    },
 }
 
 impl FilterChain {
@@ -36,7 +41,11 @@ impl FilterChain {
                     parts.push(filter_lavfi(filter, None)?);
                 }
             }
-            LavfiTarget::Render { source, deshake } => {
+            LavfiTarget::Render {
+                source,
+                deshake,
+                multiple,
+            } => {
                 let out = self.output_size(source)?;
                 if self.needs_two_passes() && deshake == DeshakePass::None {
                     return Err(ChainError::DeshakeNeedsPass);
@@ -49,9 +58,9 @@ impl FilterChain {
                         return Ok(parts.join(","));
                     }
                 }
-                if !out.is_even() {
-                    let even = out.even_floor();
-                    parts.push(format!("crop=w={}:h={}", even.width, even.height));
+                let cut = self.final_size(source, multiple)?;
+                if cut != out {
+                    parts.push(format!("crop=w={}:h={}", cut.width, cut.height));
                 }
             }
         }
@@ -212,7 +221,13 @@ mod tests {
     }
 
     fn render(chain: &FilterChain, source: Size, deshake: DeshakePass<'_>) -> String {
-        chain.to_lavfi(LavfiTarget::Render { source, deshake }).unwrap()
+        chain
+            .to_lavfi(LavfiTarget::Render {
+                source,
+                deshake,
+                multiple: 2,
+            })
+            .unwrap()
     }
 
     #[test]
@@ -352,6 +367,35 @@ mod tests {
     }
 
     #[test]
+    fn the_final_size_rule_cuts_the_output_at_the_end() {
+        // Q-P9s: after every filter, centered (ffmpeg's crop default), off keeps odd sizes.
+        let chain = chain_with(&[Filter::Crop(Crop::new(0, 0, 1, 3))]);
+        let with = |multiple| {
+            chain
+                .to_lavfi(LavfiTarget::Render {
+                    source: HD,
+                    deshake: DeshakePass::None,
+                    multiple,
+                })
+                .unwrap()
+        };
+        assert_eq!(with(2), "crop=w=iw-3:h=ih-1:x=3:y=0,crop=w=1916:h=1078");
+        assert_eq!(with(8), "crop=w=iw-3:h=ih-1:x=3:y=0,crop=w=1912:h=1072");
+        assert_eq!(with(0), "crop=w=iw-3:h=ih-1:x=3:y=0", "off: 1917x1079 stays");
+        assert_eq!(chain.final_size(HD, 16).unwrap(), Size::new(1904, 1072));
+        assert_eq!(
+            render(&FilterChain::default(), HD, DeshakePass::None),
+            "",
+            "1920x1080 is even: nothing to cut"
+        );
+        assert_eq!(
+            Size::new(6, 7).floor_to(8),
+            Size::new(6, 6),
+            "a side shorter than the rule stays, even"
+        );
+    }
+
+    #[test]
     fn odd_output_gets_an_even_crop() {
         let chain = chain_with(&[Filter::Crop(Crop::new(1, 0, 0, 3))]);
         assert_eq!(
@@ -400,7 +444,8 @@ mod tests {
         assert_eq!(
             chain.to_lavfi(LavfiTarget::Render {
                 source: HD,
-                deshake: DeshakePass::None
+                deshake: DeshakePass::None,
+                multiple: 2,
             }),
             Err(ChainError::DeshakeNeedsPass)
         );
@@ -454,7 +499,8 @@ mod tests {
             chain
                 .to_lavfi(LavfiTarget::Render {
                     source: HD,
-                    deshake: DeshakePass::None
+                    deshake: DeshakePass::None,
+                    multiple: 2,
                 })
                 .is_err()
         );
