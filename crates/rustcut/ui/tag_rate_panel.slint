@@ -459,7 +459,9 @@ export component TagRatePanel inherits Rectangle {
             opacity: root.closed ? 0.4 : 1;
             body-height: TagRate.history-height;
             is-dragging: history-resizer.is-dragging;
-            rows: TagRate.history-rows;
+            pills: TagRate.history-pills;
+            pills-height: TagRate.history-pills-height;
+            pill-measured(id, check, width) => { TagRate.history-pill-measured(id, check, width); }
             tag-count: TagRate.history-count;
             is-collapsed <=> TagRate.history-collapsed;
             has-selection: root.has-job;

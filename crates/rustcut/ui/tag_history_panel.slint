@@ -1,7 +1,7 @@
 // Started as a copy of RustView's crates/rustview/ui/tag_history_panel.slint. RustCut's own since 0.0.72 (no parity check any more, user decision 2026-10-27): change it here freely.
 
 import { Theme } from "styles.slint";
-import { TagHistoryRowModel } from "tag_types.slint";
+import { TagHistoryItemModel } from "tag_types.slint";
 import { TagHistoryItemView } from "tag_history_item.slint";
 import { SmoothScrollArea } from "smooth_scroll_view.slint";
 import { CollapsiblePanel } from "collapsible_panel.slint";
@@ -10,21 +10,40 @@ export { TagHistoryItemView } from "tag_history_item.slint";
 
 /// Collapsible Assigned Tags History panel inheriting from the unified CollapsiblePanel component.
 /// Supports smooth ease-in-out height animation, interactive dragging without animation lag,
-/// horizontal flow wrapping, and scrollable rows.
+/// horizontal flow wrapping, and scrollable rows. RustCut 0.0.72: the pills stand at the places Rust computed
+/// (`pills`, stable rows) and glide to new places, so a tag used again visibly moves to the front (user request
+/// 2026-10-27; a FLIP-style layout animation through Slint's own property animation).
 export component TagHistoryPanel inherits CollapsiblePanel {
-    in property <[TagHistoryRowModel]> rows: [];
+    in property <[TagHistoryItemModel]> pills: [];
+    in property <length> pills-height;
+    // Moves glide, except right after the panel's width changed (the pills then follow its edge at once).
+    property <bool> settled: true;
     in property <int> tag-count: 0;
     in property <bool> has-selection: true;
 
     callback tag-clicked(int /* tag_id */);
     callback geometry-changed(length /* available_width */);
+    callback pill-measured(int /* tag_id */, bool /* check */, length /* natural width */);
 
     title: "TAG HISTORY";
     count-badge: root.tag-count > 0 ? (root.tag-count + "") : "";
 
     changed width => {
         if self.width > 20px {
+            root.settled = false;
+            // `restart()` alone does nothing on a stopped timer.
+            settle.running = true;
+            settle.restart();
             root.geometry-changed(self.width);
+        }
+    }
+
+    settle := Timer {
+        interval: 300ms;
+        running: false;
+        triggered => {
+            self.running = false;
+            root.settled = true;
         }
     }
 
@@ -32,7 +51,7 @@ export component TagHistoryPanel inherits CollapsiblePanel {
         width: 100%;
         height: 100%;
 
-        if root.rows.length == 0 : VerticalLayout {
+        if root.pills.length == 0 : VerticalLayout {
             alignment: center;
             Text {
                 text: "No recent tags in history";
@@ -42,33 +61,44 @@ export component TagHistoryPanel inherits CollapsiblePanel {
             }
         }
 
-        if root.rows.length > 0 : SmoothScrollArea {
+        if root.pills.length > 0 : SmoothScrollArea {
             width: 100%;
             height: 100%;
             enable-horizontal: false;
             enable-vertical: true;
             content-width: self.width;
-            content-height: rows-layout.preferred-height;
+            content-height: root.pills-height + 8px;
             scrollbar-size: 6px;
 
-            rows-layout := VerticalLayout {
-                padding-left: 6px;
-                padding-right: 6px;
-                padding-top: 4px;
-                padding-bottom: 4px;
-                spacing: 4px;
-                alignment: start;
+            // Placed at the top left (a bare child of a plain element would be centered).
+            Rectangle {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: root.pills-height + 8px;
 
-                for row in root.rows : HorizontalLayout {
-                    spacing: 4px;
-                    alignment: start;
+                for item in root.pills : TagHistoryItemView {
+                    x: 6px + item.x;
+                    y: 4px + item.y;
+                    width: item.width;
+                    // The newest pill lies over the others while it glides to the front.
+                    z: item.front ? 1 : 0;
+                    item: item;
+                    is-enabled: root.has-selection;
 
-                    for item in row.items : TagHistoryItemView {
-                        item: item;
-                        is-enabled: root.has-selection;
-                        clicked => {
-                            root.tag-clicked(item.id);
-                        }
+                    animate x, y {
+                        duration: root.settled ? 260ms : 0ms;
+                        easing: ease-in-out;
+                    }
+
+                    init => {
+                        root.pill-measured(item.id, item.is-assigned || item.is-partial, self.natural-width);
+                    }
+                    changed natural-width => {
+                        root.pill-measured(item.id, item.is-assigned || item.is-partial, self.natural-width);
+                    }
+                    clicked => {
+                        root.tag-clicked(item.id);
                     }
                 }
             }

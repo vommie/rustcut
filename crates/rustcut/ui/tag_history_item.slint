@@ -12,6 +12,9 @@ export component TagHistoryItemView inherits Rectangle {
     in property <string> disabled-hint: "Disabled: No file selected. Select a file to assign this tag";
     callback clicked();
 
+    // Its natural width (the history places the pills with it, history_view.rs).
+    out property <length> natural-width: content-layout.preferred-width;
+
     width: content-layout.preferred-width;
     height: 22px;
     border-radius: 4px;
