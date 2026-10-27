@@ -19,6 +19,7 @@ mod messages;
 pub mod page;
 mod profiles;
 mod ratios;
+mod status;
 mod view;
 
 use std::cell::{Cell, RefCell};
@@ -56,13 +57,20 @@ pub fn option_help(key: &str) -> &'static str {
 /// What the window asks of other parts of the app (set by the app after install).
 #[derive(Default)]
 pub struct Hooks {
-    /// "Test the connection": the RustView link asks RustView now.
-    pub probe_rustview: Option<Box<dyn Fn()>>,
     /// What the capability check knows about the encoders (the profile editor offers those that work).
     pub encoders: Option<Box<dyn Fn() -> Encoders>>,
     /// What the app knows for the Diagnostics page (the capability check, RustView's connection, the queue's database).
     pub diagnostics: Option<Box<dyn Fn() -> rustcut_core::diagnostics::Facts>>,
+    /// The RustView link's state (the test row's symbol before a test).
+    pub rustview_connection: Option<Box<dyn Fn() -> rustcut_core::rustview::ConnectionState>>,
+    /// The connection test: RustView is asked for its tag tree now; the answer comes on the receiver.
+    pub test_rustview: Option<Box<dyn Fn() -> Option<RustViewTest>>>,
 }
+
+/// The answer of the connection test.
+pub type RustViewTest = tokio::sync::oneshot::Receiver<
+    Result<std::sync::Arc<rustcut_core::rustview::TagTree>, rustcut_core::rustview::RustViewError>,
+>;
 
 /// A card's row model and the rows it shows.
 type CardSlot = (Rc<VecModel<SettingRowView>>, Vec<view::RowView>);
@@ -113,6 +121,8 @@ pub struct SettingsBridge {
     folder_shifts: Rc<VecModel<f32>>,
     /// The Diagnostics page's last report and whether its checks run (P9.16).
     diag: RefCell<diagnostics::DiagState>,
+    /// The programs' and the RustView test's states beside their rows (0.0.67).
+    status: RefCell<status::Board>,
 }
 
 impl SettingsBridge {
@@ -169,6 +179,7 @@ impl SettingsBridge {
             tested_timer: slint::Timer::default(),
             messages_shown: RefCell::default(),
             diag: RefCell::default(),
+            status: RefCell::default(),
             folder_drag: RefCell::new(None),
             folder_shifts: Rc::new(VecModel::default()),
         });
@@ -221,12 +232,16 @@ impl SettingsBridge {
         if let Some(page) = page {
             self.page.set(page);
         }
+        if !self.window.borrow().as_ref().is_some_and(|w| w.window().is_visible()) {
+            self.status_refresh();
+        }
         if let Some(encoders) = self.hooks.borrow().encoders.as_ref().map(|f| f()) {
             self.profiles.borrow_mut().set_encoders(encoders);
         }
         self.publish();
         let window = self.window.borrow();
         let Some(window) = window.as_ref() else { return };
+        self.restore_position(window);
         if let Err(e) = window.show() {
             tracing::error!(error = %e, "[Settings] The settings window could not be shown");
         }
@@ -254,7 +269,7 @@ impl SettingsBridge {
         }
     }
 
-    /// Hides the window and remembers its size.
+    /// Hides the window and remembers its size and position.
     pub fn close(&self) {
         let window = self.window.borrow();
         let Some(window) = window.as_ref() else { return };
@@ -264,7 +279,8 @@ impl SettingsBridge {
         }
     }
 
-    /// The window goes away: a key being recorded is dropped, an open color picker closes, the size is kept.
+    /// The window goes away: a key being recorded is dropped, an open color picker closes, the size and position are
+    /// kept.
     fn closing(&self, window: &SettingsWindow) {
         self.hotkeys.borrow_mut().cancel();
         crate::ui::color_picker::close();
@@ -294,15 +310,30 @@ impl SettingsBridge {
         }
     }
 
+    /// The window's size and position while it is shown (a maximized or minimized window keeps its last normal ones).
     fn capture_size(&self, window: &SettingsWindow) {
         let w = window.window();
         if w.is_maximized() || w.is_minimized() {
             return;
         }
         let size = w.size().to_logical(w.scale_factor());
+        let position = w.position();
         let mut state = self.state.borrow_mut();
         state.width = to_dimension(size.width, state.width);
         state.height = to_dimension(size.height, state.height);
+        state.x = Some(position.x);
+        state.y = Some(position.y);
+    }
+
+    /// Puts a hidden window back where it was last (the window manager may still place it elsewhere).
+    fn restore_position(&self, window: &SettingsWindow) {
+        if window.window().is_visible() {
+            return;
+        }
+        let state = self.state.borrow();
+        if let (Some(x), Some(y)) = (state.x, state.y) {
+            window.window().set_position(slint::PhysicalPosition::new(x, y));
+        }
     }
 
     fn create(&self) -> Result<SettingsWindow, slint::PlatformError> {
@@ -310,6 +341,8 @@ impl SettingsBridge {
         let ui = window.global::<SettingsUi<'_>>();
         let m = &self.models;
         ui.set_pages(ModelRc::from(Rc::clone(&m.pages)));
+        // Each page starts at its top the first time it shows; the window keeps the positions while it is hidden.
+        ui.set_page_scroll(ModelRc::from(Rc::new(VecModel::from(vec![0.0_f32; Page::ALL.len()]))));
         ui.set_cards(ModelRc::from(Rc::clone(&m.cards)));
         ui.set_folders(ModelRc::from(Rc::clone(&m.folders)));
         ui.set_ratios(ModelRc::from(Rc::clone(&m.ratios)));
@@ -436,7 +469,8 @@ impl SettingsBridge {
             Special::CropRatios => 6,
             Special::Diagnostics => 7,
         });
-        ui.set_resettable(!catalog::cards(page).is_empty() || page == Page::Hotkeys);
+        ui.set_resettable(!catalog::cards(page).is_empty());
+        self.check_programs(page, &settings);
         let cards = view::cards(page, &settings, &self.errors.borrow(), self);
         self.publish_cards(&cards);
         match page.special() {
@@ -497,6 +531,10 @@ impl view::Context for SettingsBridge {
         };
         Some(path.display().to_string())
     }
+
+    fn status(&self, key: &str) -> status::RowStatus {
+        self.status.borrow().get(key)
+    }
 }
 
 fn row_view(r: &view::RowView) -> SettingRowView {
@@ -517,6 +555,9 @@ fn row_view(r: &view::RowView) -> SettingRowView {
         enabled: r.enabled,
         indent: r.indent,
         error: r.error.as_str().into(),
+        icon: r.icon.map_or(crate::IconId::None, crate::icons::Icon::to_slint),
+        status: r.status.index(),
+        status_text: r.status.text().into(),
     }
 }
 

@@ -1,4 +1,4 @@
-//! General, Warnings & Confirmations, Desktop Integration, Appearance and Advanced & Logs.
+//! General, Desktop Integration, Appearance and Advanced & Logs.
 
 use rustcut_core::settings::{GeneralSettings, Settings, TaskbarShows};
 
@@ -64,53 +64,6 @@ fn set_hold(s: &mut Settings, v: Value) -> Result<(), String> {
     Ok(())
 }
 
-pub static WARNINGS: &[Card] = &[
-    Card {
-        title: "When a job is saved",
-        description: "Each of these asks or hints before a job is queued. Switched off, RustCut takes the safe way \
-                      without asking.",
-        fields: &[
-            switch!(
-                "warnings.target_exists",
-                "Ask when the target file exists",
-                "Off: the job gets the next free name (the next counter number, else \"Name (n)\"); an existing file \
-                 is never replaced unasked.",
-                warnings.target_exists
-            ),
-            switch!(
-                "warnings.target_queued",
-                "Ask when a queued job writes the same file",
-                "Off: the job is saved anyway; the queue never renders two jobs with the same target at once.",
-                warnings.target_queued
-            ),
-            switch!(
-                "warnings.base_name_in_folder",
-                "Show similar names in the target folder",
-                "A hint in the export card with the files whose names start with the typed name (never a question).",
-                warnings.base_name_in_folder
-            ),
-            switch!(
-                "warnings.missing_metadata",
-                "Warn about missing tags or rating",
-                "The Tag & Rate panel's \"Warn\" switch: asks before a job without tags or rating is saved (tags only \
-                 when RustView offers some), while the RustView link and the panel's \"Active\" switch are on. The \
-                 question holds the rating bar: one click saves with it.",
-                warnings.missing_metadata
-            ),
-        ],
-    },
-    Card {
-        title: "When a video opens",
-        description: "",
-        fields: &[Field::button(
-            "page.messages",
-            "Warning about a source cut before",
-            "Moved to Messages: the kind \"Source cut before\" (its place \"Nothing\" = the video's MD5 is not read).",
-            "Open Messages",
-        )],
-    },
-];
-
 fn tray_on(s: &Settings) -> bool {
     s.desktop.tray.enabled
 }
@@ -120,17 +73,6 @@ fn taskbar_on(s: &Settings) -> bool {
 }
 
 pub static DESKTOP: &[Card] = &[
-    Card {
-        title: "Notifications",
-        description: "",
-        fields: &[Field::button(
-            "page.messages.desktop",
-            "Desktop notifications",
-            "Moved to Messages: the master switch and the time on its first tab, which kinds go to the desktop on \
-             the second.",
-            "Open Messages",
-        )],
-    },
     Card {
         title: "Tray",
         description: "",
@@ -220,7 +162,9 @@ fn set_log_level(s: &mut Settings, v: Value) -> Result<(), String> {
 pub static ADVANCED: &[Card] = &[
     Card {
         title: "Programs",
-        description: "Empty = the program found in PATH.",
+        description: "Optional: leave a field empty when the command (ffmpeg, ffprobe) works in a terminal; RustCut \
+                      finds it in PATH. Type another command name or a full path to use another build. Each row \
+                      says which program runs.",
         fields: &[
             path_field!(
                 "advanced.ffmpeg",
@@ -249,7 +193,10 @@ pub static ADVANCED: &[Card] = &[
                 label: "Log level",
                 help: "error, warn, info, debug or trace, or a filter such as rustcut=debug,info. The RUST_LOG \
                        variable wins when it is set.",
-                kind: Kind::Text { placeholder: "info" },
+                kind: Kind::Text {
+                    placeholder: "info",
+                    suggestions: &["error", "warn", "info", "debug", "trace"],
+                },
                 live: true,
                 get: |s| Value::Text(s.advanced.log_level.clone()),
                 set: set_log_level,
@@ -259,11 +206,22 @@ pub static ADVANCED: &[Card] = &[
             number!(
                 "advanced.log_keep_days",
                 "Keep log files for",
-                "One file per day; older files are deleted at start.",
+                "One file per day (and one of the shareable copy); the files of earlier days are packed (.log.gz) \
+                 and deleted when they are older.",
                 advanced.log_keep_days: u16,
                 1..=365,
                 1,
                 "days"
+            ),
+            number!(
+                "advanced.log_max_mb",
+                "Use at most",
+                "The space the log files may take together; above it the oldest files are deleted first (today's \
+                 files stay). Checked at start and every hour.",
+                advanced.log_max_mb: u32,
+                1..=100_000,
+                10,
+                "MB"
             ),
             Field::button("open.logs", "Log folder", "The daily log files of the app.", "Open"),
         ],

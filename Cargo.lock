@@ -5046,7 +5046,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut"
-version = "0.0.66"
+version = "0.0.67"
 dependencies = [
  "arboard",
  "az",
@@ -5054,6 +5054,7 @@ dependencies = [
  "clap",
  "criterion",
  "directories",
+ "flate2",
  "fnv",
  "humansize",
  "interprocess",
@@ -5085,7 +5086,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-core"
-version = "0.0.66"
+version = "0.0.67"
 dependencies = [
  "atomic-write-file",
  "az",
@@ -5118,11 +5119,12 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
+ "which",
 ]
 
 [[package]]
 name = "rustcut-player"
-version = "0.0.66"
+version = "0.0.67"
 dependencies = [
  "glow",
  "hdrhistogram",
@@ -6796,6 +6798,15 @@ dependencies = [
  "naga-types",
  "raw-window-handle",
  "static_assertions",
+]
+
+[[package]]
+name = "which"
+version = "8.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bae2f2b2b816647a1cab1acc91f5bd20812d53cb344382635ec2181940c8034f"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

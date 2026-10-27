@@ -80,7 +80,7 @@ pub fn panel(state: &PanelState) -> PanelView {
     let base = &state.selection.base;
     let profiles = state
         .library
-        .all()
+        .listed(base)
         .map(|p| {
             if p.id == *base && modified {
                 format!("{} (modified)", p.name)
@@ -89,7 +89,7 @@ pub fn panel(state: &PanelState) -> PanelView {
             }
         })
         .collect();
-    let profile_index = state.library.all().position(|p| p.id == *base).unwrap_or(0);
+    let profile_index = state.library.listed(base).position(|p| p.id == *base).unwrap_or(0);
     let rows =
         |list: &[Row]| -> Vec<RowView> { list.iter().filter_map(|row| row_view(state, *row, &issues)).collect() };
     let (check_text, check_running) = match state.check_status() {

@@ -2,6 +2,7 @@
 // come from Rust).
 
 import { Theme } from "styles.slint";
+import { SettingsScroll } from "settings_scroll.slint";
 
 export component SettingsCategoryItem inherits Rectangle {
     in property <string> title: "";
@@ -46,15 +47,23 @@ export component SettingsSidebar inherits Rectangle {
         background: Theme.border;
     }
 
-    VerticalLayout {
-        padding: 8px;
-        spacing: 4px;
-        alignment: start;
+    // A window too low for every page scrolls the list (user review 2026-10-27).
+    list-scroll := SettingsScroll {
+        width: parent.width - 1px;
+        height: parent.height;
+        content-height: list.preferred-height;
 
-        for cat[idx] in root.categories: SettingsCategoryItem {
-            title: cat;
-            is-active: root.active-category == idx;
-            clicked => { root.category-selected(idx); }
+        list := VerticalLayout {
+            width: list-scroll.content-width;
+            padding: 8px;
+            spacing: 4px;
+            alignment: start;
+
+            for cat[idx] in root.categories: SettingsCategoryItem {
+                title: cat;
+                is-active: root.active-category == idx;
+                clicked => { root.category-selected(idx); }
+            }
         }
     }
 }

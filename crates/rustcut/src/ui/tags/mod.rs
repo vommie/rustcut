@@ -13,6 +13,7 @@ mod hidden;
 mod history;
 mod state;
 mod switches;
+mod sync_notice;
 mod tree;
 mod view;
 
@@ -360,7 +361,7 @@ impl TagsBridge {
                 }
             }
             SyncEvent::TagTreeChanged(tree) => self.tree_changed(tree),
-            SyncEvent::JobSynced { .. } => {}
+            SyncEvent::JobSynced { id, record } => sync_notice::job_synced(id, &record),
         }
     }
 

@@ -31,7 +31,9 @@ pub static QUEUE: &[Card] = &[
     },
     Card {
         title: "When the queue is done",
-        description: "The queue panel changes this for the current run; this is the choice a fresh start begins with.",
+        description: "The same choice as the queue panel's \"When the queue finishes\" button: a change in either \
+                      place shows in the other. After quitting, suspending or powering off it goes back to \"Do \
+                      Nothing\", so it never repeats by surprise.",
         fields: &[
             choice!(
                 "queue.when_done",
@@ -40,11 +42,11 @@ pub static QUEUE: &[Card] = &[
                  off the computer.",
                 queue.when_done,
                 [
-                    (WhenDone::Nothing, "Nothing"),
-                    (WhenDone::Notify, "Notify"),
-                    (WhenDone::Quit, "Quit RustCut"),
-                    (WhenDone::Suspend, "Suspend"),
-                    (WhenDone::PowerOff, "Power off")
+                    (WhenDone::Nothing, "Do Nothing"),
+                    (WhenDone::Notify, "Send Notification"),
+                    (WhenDone::Quit, "Quit App"),
+                    (WhenDone::Suspend, "Suspend Device"),
+                    (WhenDone::PowerOff, "Power Off Device")
                 ]
             ),
             number!(
@@ -109,7 +111,8 @@ pub static RUSTVIEW: &[Card] = &[
             path_field!(
                 "rustview.binary",
                 "Program",
-                "The rustview binary. Empty = rustview from PATH.",
+                "Optional: leave it empty when the command rustview works in a terminal (RustCut finds it in PATH). \
+                 Else type another command name or the full path of the rustview program, or choose the file.",
                 rustview.binary,
                 "rustview (from PATH)",
                 folder: false
@@ -118,7 +121,10 @@ pub static RUSTVIEW: &[Card] = &[
             number!(
                 "rustview.timeout_secs",
                 "Time limit per call",
-                "A call that takes longer is stopped and tried again later.",
+                "How long one call to RustView may take. A call that takes longer or does not reach RustView is \
+                 tried again while RustCut runs: after 2 s, then twice as long each time, at most every 2 minutes. \
+                 Tags and ratings that did not arrive stay with their jobs and are sent again at the next start; \
+                 the Tag & Rate panel shows while RustView cannot be reached, a message when RustView refuses a job.",
                 rustview.timeout_secs: u8,
                 1..=120,
                 1,
@@ -128,7 +134,7 @@ pub static RUSTVIEW: &[Card] = &[
             Field::button(
                 "rustview.test",
                 "Test the connection",
-                "Asks RustView for its tags now; the Tag & Rate panel shows the answer.",
+                "Asks RustView for its tags now (the Tag & Rate panel loads them again).",
                 "Test",
             )
             .under(link_on),
@@ -163,11 +169,13 @@ pub static RUSTVIEW: &[Card] = &[
     },
     Card {
         title: "Source hashes",
-        description: "RustView recognizes a source by its MD5. RustCut takes it from RustView's library or from a sidecar                       file next to the video, and reads the whole video only when neither has it.",
+        description: "RustView recognizes a source by its MD5. RustCut takes it from RustView's library or from a sidecar \
+                      file next to the video, and reads the whole video only when neither has it.",
         fields: &[switch!(
             "hashing.write_sidecar",
             "Write a sidecar",
-            "When RustCut had to read a video for its MD5, it writes \".<name>.md5\" next to it (md5sum's format), so              neither RustCut nor other programs read it again. An existing sidecar is never changed.",
+            "When RustCut had to read a video for its MD5, it writes \".<name>.md5\" next to it (md5sum's format), so \
+             neither RustCut nor other programs read it again. An existing sidecar is never changed.",
             hashing.write_sidecar
         )],
     },

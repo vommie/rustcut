@@ -7,6 +7,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+The user's review of the Settings window (0.0.67).
+
+### Added
+
+- Settings > Render Profiles: "+" makes a new profile with the standard settings (no copy of the selected one), and
+  the eye hides a profile from the Codecs panel's choice and "Render again with" (it stays in Settings; the profile new
+  jobs start with is always offered). The buttons under the list: duplicate, delete, star, eye on the left, "+" on
+  the right. New setting `render.hidden_profiles` (older files load with nothing hidden).
+- Settings > Advanced & Logs > Logs: "Use at most" (default 100 MB) limits the space of the log files; the oldest go
+  first. The files of earlier days are packed as `.log.gz`. New setting `advanced.log_max_mb`.
+- Settings > RustView > "Test the connection" answers every time: a turning symbol while RustView is asked (the
+  button waits), then a green check or a red cross with the reason beside the button and under the row. Before a
+  test the row shows the link's state.
+- The program rows (RustView's program, ffmpeg, ffprobe) say whether the program works and where it was found
+  ("Found in PATH: /usr/bin/ffmpeg (ffmpeg version 9.0.1)"), or what is missing; the texts say that the fields are
+  optional.
+- A message when RustView refuses a job's tags and rating ("Job's tags not written to RustView", a toast with the
+  reason and a link to the job; Settings > Messages).
+- Settings > Hotkeys: a held "Reset all keys" button beside the filter.
+- Settings > Player > Hardware decoding: a list of mpv's values beside the field (typing any value still works); the
+  log level has one too.
+
+### Changed
+
+- "Hold for" (Settings > General) is 1000 ms by default (was 2000 ms). A value saved in `config.toml` stays.
+- The queue panel's "When the queue finishes" button and Settings > Queue > "Then" are one choice: a change in either
+  place shows in the other and is kept for the next start (before, the panel's choice was kept apart in
+  `ui-state.toml` and hid the setting after the first quit). After quitting, suspending or powering off it goes back
+  to "Do Nothing". Both use the same words.
+- The page "Warnings & Confirmations" is gone: its four options are kinds on Settings > Messages > Message kinds
+  ("Question: the target file exists", "Question: a queued job writes the same file", "Question: no tags or rating",
+  and "Similar names in the target folder"), with "Dialog" (or "Bubble") or "Nothing". The values stay in
+  `[warnings]`, so nothing is migrated. The link card "When a video opens" and the "Notifications" card of Desktop
+  Integration (they only led to Messages) are removed.
+- Every Settings page keeps its own scroll position while RustCut runs; a page opened for the first time starts at
+  its top. The pages scroll with a drag or swipe, too, and have a scrollbar of normal width; the page list scrolls
+  when the window is too low.
+- The quality slider's words ("High - CRF 23") stand above the slider, so the pointer never covers them (Settings and
+  the Codecs panel).
+- The Open buttons of Advanced & Logs show the "open in another program" symbol; the Close button has a normal size;
+  the Diagnostics copy button says "Copy the report".
+- The Settings window comes back where it was (its position is kept in `ui-state.toml`, like its size).
+
+### Fixed
+
+- The last card of a Settings page (e.g. RustView's "Source hashes") could not be scrolled into view; its text had a
+  gap of blanks in the middle.
+- The log's daily cleanup counted the shareable copy's files with the log's, so it could delete them early.
+
 ## [0.0.66] - 2026-10-27
 
 The user's UI review round 2: filters, option menus and the queue; a faster queue list; the maximized window comes

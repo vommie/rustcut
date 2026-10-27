@@ -165,14 +165,14 @@ fn sanitizing_repairs_bad_values() {
 
 #[test]
 fn hold_time_and_job_load_have_defaults_and_are_tolerant() {
-    // A file of 0.0.12 has neither: the defaults fill in (2 s, replace), nothing is migrated.
+    // A file of 0.0.12 has neither: the defaults fill in (1 s, replace), nothing is migrated.
     let dir = tempfile::tempdir().unwrap();
     let old = "version = 1\n[general]\nsingle_instance = false\n[editor]\nauto_section = \"whole_video\"\n";
     std::fs::write(dir.path().join("config.toml"), old).unwrap();
     let outcome = load::<Settings>(dir.path(), &dir.path().join("b")).unwrap();
     assert!(clean_v1(&outcome), "{outcome:?}");
     let value = outcome.into_value();
-    assert_eq!(value.general.hold_to_confirm_ms, 2_000);
+    assert_eq!(value.general.hold_to_confirm_ms, 1_000);
     assert!(!value.general.single_instance);
     assert_eq!(value.editor.on_job_load, OnJobLoad::Replace);
     assert_eq!(value.editor.auto_section, AutoSection::WholeVideo);
@@ -566,4 +566,19 @@ fn a_file_without_the_taskbar_choice_shows_the_current_job() {
     assert_eq!(all.desktop.taskbar_shows, TaskbarShows::AllJobs);
     let odd: Settings = toml::from_str("version = 7\n[desktop]\ntaskbar_shows = \"both\"\n").unwrap();
     assert_eq!(odd.desktop.taskbar_shows, TaskbarShows::CurrentJob);
+}
+
+#[test]
+fn hidden_profiles_keep_known_ids_and_never_the_default() {
+    // 0.0.66 wrote no `hidden_profiles`: nothing is hidden.
+    assert!(Settings::default().render.hidden_profiles.is_empty());
+    let mut s = Settings::default();
+    s.render.hidden_profiles = vec![
+        "x265-quality".into(),
+        "x265-quality".into(),
+        "gone".into(),
+        s.render.default_profile.clone(),
+    ];
+    assert_eq!(s.sanitize().len(), 1);
+    assert_eq!(s.render.hidden_profiles, ["x265-quality"]);
 }

@@ -1,6 +1,7 @@
 // Render Profiles: every profile with the one new jobs start with (the star), and the editor of the selected one. The
-// built-in profiles never change: "Duplicate" makes an own copy to edit. An own profile is saved with every change; the
-// Codecs panel keeps its own working copy for the next job (user decision Q-E4).
+// built-in profiles never change: "Duplicate" makes an own copy to edit, "+" a new one with the standard settings. A
+// hidden profile (the eye) is not offered by the Codecs panel. An own profile is saved with every change; the Codecs
+// panel keeps its own working copy for the next job (user decision Q-E4).
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
@@ -39,7 +40,7 @@ export component SettingsProfiles inherits VerticalLayout {
 
     SettingsCard {
         title: "Profiles";
-        description: "The star marks the profile the Codecs panel starts with in a fresh profile and after a reset.";
+        description: "The star marks the profile the Codecs panel starts with in a fresh profile and after a reset. Hidden profiles (the crossed eye) are not offered in the Codecs panel.";
 
         for profile[index] in SettingsUi.profiles: Rectangle {
             height: 34px;
@@ -77,7 +78,7 @@ export component SettingsProfiles inherits VerticalLayout {
 
                     Text {
                         text: profile.name;
-                        color: Theme.text;
+                        color: profile.hidden ? Theme.text-muted : Theme.text;
                         font-size: 12px;
                         font-weight: index == SettingsUi.profile-index ? 700 : 400;
                         overflow: elide;
@@ -90,19 +91,25 @@ export component SettingsProfiles inherits VerticalLayout {
                         overflow: elide;
                     }
                 }
+
+                if profile.hidden: VerticalLayout {
+                    alignment: center;
+
+                    AppIcon {
+                        icon: IconId.profile-hidden;
+                        size: IconSize.sm;
+                        color: Theme.text-muted;
+                    }
+                }
             }
         }
 
+        // The selected profile's buttons on the left; "+" needs no selection and stands apart on the right (user
+        // review 2026-10-27).
         HorizontalLayout {
             spacing: 4px;
             padding-left: 8px;
-            alignment: start;
-
-            IconButton {
-                icon: IconId.profile-default;
-                tooltip: "New jobs start with this profile";
-                clicked => { SettingsUi.default-profile(); }
-            }
+            padding-right: 8px;
 
             IconButton {
                 icon: IconId.job-duplicate;
@@ -116,6 +123,33 @@ export component SettingsProfiles inherits VerticalLayout {
                 enabled: !SettingsUi.profile-builtin;
                 tooltip: SettingsUi.profile-builtin ? "Built-in profiles cannot be deleted" : "Delete this profile";
                 clicked => { SettingsUi.delete-profile(); }
+            }
+
+            IconButton {
+                icon: SettingsUi.profile-default ? IconId.profile-default-set : IconId.profile-default;
+                checked: SettingsUi.profile-default;
+                tooltip: SettingsUi.profile-default ? "New jobs start with this profile" : "Start new jobs with this profile";
+                clicked => { SettingsUi.default-profile(); }
+            }
+
+            IconButton {
+                icon: SettingsUi.profile-hidden ? IconId.profile-hidden : IconId.profile-shown;
+                checked: SettingsUi.profile-hidden;
+                enabled: !SettingsUi.profile-default;
+                tooltip: SettingsUi.profile-default ? "The profile new jobs start with is always offered"
+                    : SettingsUi.profile-hidden ? "Hidden in the Codecs panel: show it there again"
+                    : "Hide it in the Codecs panel's choice (it stays here)";
+                clicked => { SettingsUi.toggle-profile-hidden(); }
+            }
+
+            Rectangle {
+                horizontal-stretch: 1;
+            }
+
+            IconButton {
+                icon: IconId.profile-add;
+                tooltip: "New profile with the standard settings";
+                clicked => { SettingsUi.add-profile(); }
             }
         }
     }

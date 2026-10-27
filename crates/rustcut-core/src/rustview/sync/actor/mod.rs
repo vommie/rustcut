@@ -294,6 +294,17 @@ where
                 }
                 self.want_tree = self.settings.enabled;
             }
+            SyncCommand::Test { reply } => {
+                if !self.settings.enabled {
+                    let _ = reply.send(Err(RustViewError::Unavailable(SWITCHED_OFF.into())));
+                    return;
+                }
+                if let Some(backoff) = &mut self.backoff {
+                    backoff.retry_at = Instant::now();
+                }
+                self.tree_waiters.push(reply);
+                self.want_tree = true;
+            }
             SyncCommand::Reconfigure { settings } => self.reconfigure(settings),
             // The loop handles it.
             SyncCommand::Shutdown { reply } => {

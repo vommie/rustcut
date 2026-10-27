@@ -112,7 +112,7 @@ impl RenderSettingsBridge {
             let mut st = self.state.borrow_mut();
             let id = usize::try_from(index)
                 .ok()
-                .and_then(|i| st.library.all().nth(i))
+                .and_then(|i| st.library.listed(&st.selection.base).nth(i))
                 .map(|p| p.id.clone());
             let state = &mut *st;
             id.is_some_and(|id| state.selection.select(&state.library, &id))

@@ -188,20 +188,11 @@ impl SettingsBridge {
     /// A button option.
     pub(super) fn action(&self, key: &str) {
         match key {
-            // Options that moved to the Messages page (M6.5b): their old places lead there.
-            "page.messages" | "page.messages.desktop" => {
-                self.state.borrow_mut().messages_tab = u8::from(key == "page.messages");
-                self.select_page(Some(Page::Messages.index()));
-            }
             "open.logs" => self.open_folder("logs"),
             "open.config" => self.open_folder("config"),
             "open.data" => self.open_folder("data"),
             "open.cache" => self.open_folder("cache"),
-            "rustview.test" => {
-                if let Some(probe) = &self.hooks.borrow().probe_rustview {
-                    probe();
-                }
-            }
+            "rustview.test" => self.test_rustview(),
             _ => tracing::debug!(key, "[Settings] Unknown button"),
         }
     }
@@ -267,6 +258,28 @@ impl SettingsBridge {
         self.profiles_result(result.map(|id| format!("Profile {id} added")));
     }
 
+    pub(super) fn add_profile(&self) {
+        let result = self.profiles.borrow_mut().add();
+        self.profiles_result(result.map(|id| format!("Profile {id} added")));
+    }
+
+    /// The selected profile is offered by the Codecs panel or not (0.0.67); the default profile always is.
+    pub(super) fn toggle_profile_hidden(&self) {
+        let id = self.profiles.borrow().selected_id().to_owned();
+        self.update(|s| {
+            if s.render.default_profile == id {
+                return;
+            }
+            if let Some(at) = s.render.hidden_profiles.iter().position(|h| *h == id) {
+                s.render.hidden_profiles.remove(at);
+            } else {
+                s.render.hidden_profiles.push(id.clone());
+            }
+        });
+        tracing::info!(profile = id, "[Settings] Profile shown or hidden in the Codecs panel");
+        self.publish();
+    }
+
     pub(super) fn rename_profile(&self, name: &str) -> bool {
         let result = self.profiles.borrow_mut().rename(name);
         let ok = result.is_ok();
@@ -287,7 +300,11 @@ impl SettingsBridge {
 
     pub(super) fn default_profile(&self) {
         let id = self.profiles.borrow().selected_id().to_owned();
-        self.update(|s| s.render.default_profile = id);
+        self.update(|s| {
+            // The default profile is always offered.
+            s.render.hidden_profiles.retain(|h| *h != id);
+            s.render.default_profile = id;
+        });
         self.publish();
     }
 
@@ -349,16 +366,20 @@ impl SettingsBridge {
 
     pub(super) fn publish_profiles(&self, ui: &SettingsUi<'_>, settings: &Settings) {
         let page = self.profiles.borrow();
-        let items = page
-            .items(&settings.render.default_profile)
+        let items: Vec<ProfileItemView> = page
+            .items(&settings.render.default_profile, &settings.render.hidden_profiles)
             .into_iter()
             .map(|i| ProfileItemView {
                 name: i.name.into(),
                 summary: i.summary.into(),
                 builtin: i.builtin,
                 default: i.default,
+                hidden: i.hidden,
             })
             .collect();
+        let selected = items.get(page.index()).map(|i| (i.default, i.hidden));
+        ui.set_profile_default((selected.unwrap_or_default()).0);
+        ui.set_profile_hidden((selected.unwrap_or_default()).1);
         sync(&self.models.profiles, items);
         ui.set_profile_index(i32::try_from(page.index()).unwrap_or(0));
         ui.set_profile_builtin(page.is_builtin());

@@ -14,6 +14,27 @@ fn set_background(s: &mut Settings, v: Value) -> Result<(), String> {
     Ok(())
 }
 
+/// mpv's `hwdec` values for Linux (mpv 0.41's manual and `--hwdec=help`; other systems' values are left out).
+const HWDEC: &[&str] = &[
+    "auto-copy",
+    "auto",
+    "auto-unsafe",
+    "no",
+    "vaapi-copy",
+    "vaapi",
+    "nvdec-copy",
+    "nvdec",
+    "vulkan-copy",
+    "vulkan",
+    "drm-copy",
+    "drm",
+    "cuda-copy",
+    "cuda",
+    "vdpau-copy",
+    "vdpau",
+    "v4l2m2m-copy",
+];
+
 fn set_hwdec(s: &mut Settings, v: Value) -> Result<(), String> {
     let text = v.as_text()?;
     let text = if text.is_empty() { "auto-copy" } else { text };
@@ -50,10 +71,13 @@ pub static PLAYER: &[Card] = &[
             Field {
                 key: "player.hwdec",
                 label: "Hardware decoding",
-                help: "mpv's hwdec: auto-copy (default), auto, no, vaapi, nvdec, vulkan. Without a GPU, mpv decodes in \
-                       software.",
+                help: "mpv's hwdec: pick a value from the list or type one (several separated by commas try them in \
+                       turn). auto-copy (the default) uses the GPU where it works safely, no always decodes in \
+                       software; the -copy variants copy each frame back to the CPU. Without a usable GPU, mpv \
+                       decodes in software.",
                 kind: Kind::Text {
                     placeholder: "auto-copy",
+                    suggestions: HWDEC,
                 },
                 live: true,
                 get: |s| Value::Text(s.player.hwdec.clone()),
@@ -206,6 +230,7 @@ pub static EXPORT: &[Card] = &[Card {
         help: "Jinja syntax, for example {{ name }}{% if counter %} - {{ counter | pad(2) }}{% endif %}.",
         kind: Kind::Text {
             placeholder: rustcut_core::naming::DEFAULT_TEMPLATE,
+            suggestions: &[],
         },
         live: true,
         get: |s| Value::Text(s.export.name_template.clone()),

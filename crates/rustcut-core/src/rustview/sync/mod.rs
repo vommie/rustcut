@@ -158,6 +158,11 @@ pub enum SyncCommand {
     },
     /// Try the connection now (the Retry button) instead of waiting for the back-off.
     Probe,
+    /// Settings > RustView's test (0.0.67): ask RustView for its tag tree now, also when connected, and answer with
+    /// the result (the tree loaded again, or why RustView cannot be reached).
+    Test {
+        reply: Reply<Result<Arc<TagTree>, RustViewError>>,
+    },
     /// The settings changed (enabled, binary, timeout, write timing).
     Reconfigure {
         settings: crate::settings::RustViewSettings,

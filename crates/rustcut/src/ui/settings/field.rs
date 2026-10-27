@@ -16,8 +16,10 @@ pub enum Kind {
         step: i64,
         unit: &'static str,
     },
+    /// Free text; `suggestions` (when any) are offered by a list beside the field (Hardware decoding, 0.0.67).
     Text {
         placeholder: &'static str,
+        suggestions: &'static [&'static str],
     },
     /// A number typed as text, drawn like [`Kind::Number`] (its width, its unit) without steps: an empty field or a
     /// decimal means something (the setter checks it; "No limit", "0.25").

@@ -3,7 +3,7 @@
 //! built-in profile is shown read-only, an own profile is saved with every change (D-S2), so the page never holds
 //! unsaved settings.
 
-use rustcut_core::render::{LibraryError, ProfileLibrary, RenderProfile, Selection};
+use rustcut_core::render::{DEFAULT_PROFILE_ID, LibraryError, ProfileLibrary, RenderProfile, Selection};
 
 use crate::ui::render_settings::state::{Encoders, PanelState};
 use crate::ui::render_settings::view::{self, PanelView};
@@ -15,6 +15,8 @@ pub struct ProfileItem {
     pub summary: String,
     pub builtin: bool,
     pub default: bool,
+    /// The Codecs panel does not offer it (`render.hidden_profiles`).
+    pub hidden: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -75,6 +77,25 @@ impl ProfilesPage {
         Ok(id)
     }
 
+    /// A new own profile with the standard settings (the built-in default profile's), named "New profile" (with a
+    /// number when taken), selected afterwards; returns its id (the "+" button, 0.0.67).
+    pub fn add(&mut self) -> Result<String, LibraryError> {
+        let state = &mut self.state;
+        let base = state
+            .library
+            .get(DEFAULT_PROFILE_ID)
+            .cloned()
+            .ok_or_else(|| LibraryError::Unknown(DEFAULT_PROFILE_ID.to_owned()))?;
+        let taken = |name: &str| state.library.all().any(|p| p.name == name);
+        let name = std::iter::once("New profile".to_owned())
+            .chain((2..1000).map(|n| format!("New profile {n}")))
+            .find(|n| !taken(n))
+            .unwrap_or_else(|| "New profile".to_owned());
+        let id = state.library.save_as(&name, &base)?;
+        state.selection.select(&state.library, &id);
+        Ok(id)
+    }
+
     pub fn rename(&mut self, name: &str) -> Result<bool, LibraryError> {
         let state = &mut self.state;
         if name.trim() == state.selection.working.name {
@@ -109,7 +130,7 @@ impl ProfilesPage {
         }
     }
 
-    pub fn items(&self, default: &str) -> Vec<ProfileItem> {
+    pub fn items(&self, default: &str, hidden: &[String]) -> Vec<ProfileItem> {
         self.state
             .library
             .all()
@@ -118,6 +139,7 @@ impl ProfilesPage {
                 summary: summary(p),
                 builtin: !self.state.library.is_user(&p.id),
                 default: p.id == default,
+                hidden: hidden.contains(&p.id),
             })
             .collect()
     }
@@ -163,7 +185,7 @@ pub fn summary(p: &RenderProfile) -> String {
 
 #[cfg(test)]
 mod tests {
-    use rustcut_core::render::{DEFAULT_PROFILE_ID, VideoEncoder};
+    use rustcut_core::render::VideoEncoder;
 
     use super::*;
 
@@ -173,13 +195,17 @@ mod tests {
         assert_eq!(page.selected_id(), DEFAULT_PROFILE_ID);
         assert!(page.is_builtin());
         assert!(page.view().video.iter().all(|r| !r.enabled));
-        let builtins = page.items(DEFAULT_PROFILE_ID).len();
-        assert!(page.items(DEFAULT_PROFILE_ID).iter().any(|i| i.default && i.builtin));
+        let builtins = page.items(DEFAULT_PROFILE_ID, &[]).len();
+        assert!(
+            page.items(DEFAULT_PROFILE_ID, &[])
+                .iter()
+                .any(|i| i.default && i.builtin)
+        );
 
         let id = page.duplicate().unwrap();
         assert_eq!(page.selected_id(), id);
         assert!(!page.is_builtin() && page.view().video.iter().all(|r| r.enabled));
-        assert_eq!(page.items(DEFAULT_PROFILE_ID).len(), builtins + 1);
+        assert_eq!(page.items(DEFAULT_PROFILE_ID, &[]).len(), builtins + 1);
         assert_eq!(page.index(), builtins);
 
         page.state.selection.working.set_encoder(VideoEncoder::X264);
@@ -187,7 +213,7 @@ mod tests {
         let saved = page.state.library.get(&id).unwrap();
         assert_eq!(saved.video.encoder, VideoEncoder::X264);
         assert!(!page.state.is_modified());
-        assert!(page.items(&id).last().unwrap().summary.starts_with("H.264"));
+        assert!(page.items(&id, &[]).last().unwrap().summary.starts_with("H.264"));
 
         assert_eq!(page.rename("  Shared clips "), Ok(true));
         assert_eq!(page.state.library.get(&id).unwrap().name, "Shared clips");
@@ -207,6 +233,22 @@ mod tests {
         assert!(page.select(builtins));
         assert_eq!(page.delete(DEFAULT_PROFILE_ID).unwrap().id, id);
         assert_eq!(page.selected_id(), DEFAULT_PROFILE_ID);
+    }
+
+    #[test]
+    fn new_profiles_start_with_the_standard_settings_and_unique_names() {
+        let mut page = ProfilesPage::new(Vec::new(), None, DEFAULT_PROFILE_ID);
+        page.state.selection.select(&page.state.library, "x265-quality");
+        let first = page.add().unwrap();
+        assert_eq!(page.selected_id(), first);
+        let standard = page.state.library.get(DEFAULT_PROFILE_ID).unwrap();
+        let added = page.state.library.get(&first).unwrap();
+        assert_eq!(added.name, "New profile");
+        assert!(added.same_settings(standard), "not a copy of the shown profile");
+        let second = page.add().unwrap();
+        assert_eq!(page.state.library.get(&second).unwrap().name, "New profile 2");
+        let items = page.items(DEFAULT_PROFILE_ID, std::slice::from_ref(&second));
+        assert!(items.last().unwrap().hidden && !items.first().unwrap().hidden);
     }
 
     #[test]

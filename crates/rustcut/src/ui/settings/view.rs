@@ -8,6 +8,8 @@ use rustcut_core::settings::Settings;
 use super::catalog::{self, Card};
 use super::field::{Field, Kind, Value};
 use super::page::Page;
+use super::status::RowStatus;
+use crate::icons::Icon;
 
 /// The control of a row as Slint draws it (`kind` in `SettingRowView`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,6 +43,10 @@ pub struct RowView {
     pub indent: bool,
     /// Why the last typed text was refused (the field stays marked until a value is kept).
     pub error: String,
+    /// A button's symbol instead of its text (the Open buttons: another program opens the folder).
+    pub icon: Option<Icon>,
+    /// Whether the program or connection of the row works (a symbol beside the control, words under the row).
+    pub status: RowStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,6 +60,11 @@ pub struct CardView {
 pub trait Context {
     /// The text under a button's label (`None` = its help).
     fn button_text(&self, key: &str) -> Option<String>;
+
+    /// The state beside the row of `key`.
+    fn status(&self, _key: &str) -> RowStatus {
+        RowStatus::None
+    }
 }
 
 /// The cards of `page` with the values of `settings`; `errors` are the refused texts by key.
@@ -94,7 +105,10 @@ pub fn row(field: &Field, settings: &Settings, errors: &BTreeMap<String, String>
         Kind::Switch => (RowKind::Switch, Vec::new(), "", ""),
         Kind::Choice(items) => (RowKind::Choice, items.to_vec(), "", ""),
         Kind::Number { unit, .. } => (RowKind::Number, Vec::new(), "", unit),
-        Kind::Text { placeholder } => (RowKind::Text, Vec::new(), placeholder, ""),
+        Kind::Text {
+            placeholder,
+            suggestions,
+        } => (RowKind::Text, suggestions.to_vec(), placeholder, ""),
         Kind::Amount { placeholder, unit } => (RowKind::Amount, Vec::new(), placeholder, unit),
         Kind::Path { placeholder, folder } => (
             if folder { RowKind::Folder } else { RowKind::File },
@@ -109,7 +123,8 @@ pub fn row(field: &Field, settings: &Settings, errors: &BTreeMap<String, String>
         Value::Bool(b) => (b, 0, String::new()),
         Value::Index(i) => (false, i, String::new()),
         Value::Number(n) => (false, 0, n.to_string()),
-        Value::Text(t) => (false, 0, t),
+        // A text's suggestion that is typed now (past the list when it is none).
+        Value::Text(t) => (false, items.iter().position(|i| *i == t).unwrap_or(items.len()), t),
         Value::None => (false, 0, String::new()),
     };
     RowView {
@@ -126,6 +141,8 @@ pub fn row(field: &Field, settings: &Settings, errors: &BTreeMap<String, String>
         enabled: (field.enabled)(settings),
         indent: field.indent,
         error: errors.get(field.key).cloned().unwrap_or_default(),
+        icon: (kind == RowKind::Button && field.key.starts_with("open.")).then_some(Icon::OpenExternal),
+        status: ctx.status(field.key),
     }
 }
 

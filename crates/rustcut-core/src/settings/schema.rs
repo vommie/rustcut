@@ -67,7 +67,7 @@ impl Default for GeneralSettings {
         Self {
             single_instance: true,
             confirm_quit_while_rendering: true,
-            hold_to_confirm_ms: 2_000,
+            hold_to_confirm_ms: 1_000,
         }
     }
 }
@@ -195,6 +195,8 @@ pub struct RenderSettings {
     pub profiles: Vec<RenderProfile>,
     /// Profile selected for new jobs.
     pub default_profile: String,
+    /// Profiles (built-in or own) the Codecs panel does not offer (0.0.67); never the default profile.
+    pub hidden_profiles: Vec<String>,
     /// Niceness of ffmpeg (0 normal to 19 lowest).
     pub nice: u8,
     /// Idle I/O priority for ffmpeg (the desktop stays responsive while rendering).
@@ -208,6 +210,7 @@ impl Default for RenderSettings {
         Self {
             profiles: Vec::new(),
             default_profile: DEFAULT_PROFILE_ID.into(),
+            hidden_profiles: Vec::new(),
             nice: 10,
             idle_io: true,
             stall_timeout_secs: 300,
@@ -412,6 +415,8 @@ pub struct AdvancedSettings {
     pub log_level: String,
     /// Days of log files kept.
     pub log_keep_days: u16,
+    /// The most the log folder may hold, in MiB (0.0.67): the oldest files go first; earlier days are packed.
+    pub log_max_mb: u32,
     /// Write the shareable copy of the log beside it (`rustcut-shareable.DATE.log`; 0.0.55, P9.17).
     pub shareable_log: bool,
     /// What the shareable copy replaces (every kind by default, user decision Q-P9).
@@ -425,6 +430,7 @@ impl Default for AdvancedSettings {
             ffprobe: None,
             log_level: "info".into(),
             log_keep_days: 14,
+            log_max_mb: 100,
             shareable_log: true,
             redact: crate::redact::RedactKinds::default(),
         }
@@ -533,6 +539,9 @@ impl VersionedFile for Settings {
         if fix("advanced.log_keep_days raised to 1", self.advanced.log_keep_days == 0) {
             self.advanced.log_keep_days = 1;
         }
+        if fix("advanced.log_max_mb raised to 1", self.advanced.log_max_mb == 0) {
+            self.advanced.log_max_mb = 1;
+        }
         if fix("rustview.timeout_secs raised to 1", self.rustview.timeout_secs == 0) {
             self.rustview.timeout_secs = 1;
         }
@@ -605,6 +614,18 @@ impl VersionedFile for Settings {
         if fix("render.default_profile was unknown", !known) {
             self.render.default_profile = DEFAULT_PROFILE_ID.into();
         }
+        let r = &mut self.render;
+        let before = r.hidden_profiles.clone();
+        let mut seen = std::collections::HashSet::new();
+        r.hidden_profiles.retain(|id| {
+            *id != r.default_profile
+                && (is_builtin_id(id) || r.profiles.iter().any(|p| p.id == *id))
+                && seen.insert(id.clone())
+        });
+        fix(
+            "render.hidden_profiles: unknown, repeated or default ids dropped",
+            r.hidden_profiles != before,
+        );
         notes.extend(self.dialogs.conflict.sanitize());
         self.notices.sanitize(&mut notes);
         notes
