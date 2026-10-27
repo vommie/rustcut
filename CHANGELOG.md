@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- A window that was maximized when RustCut ended opens maximized again (0.0.63); before, it opened at its windowed
+  size although the state was saved. Un-maximizing returns to the saved size.
+
 ### Added
 
 - Every job state has its own colored symbol (0.0.62): waiting (hourglass), running (play), paused, held (hand),

@@ -590,6 +590,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     }
     // Not `main.run()`: the event loop has to go on while the window is hidden in the tray; the quit path ends it.
     main.show()?;
+    let _maximize = window::keep_maximized(&main, &loaded.ui_state.window);
     slint::run_event_loop_until_quit()?;
     let _ = main.hide();
 
