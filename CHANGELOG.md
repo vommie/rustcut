@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The queue handles hundreds of jobs smoothly (0.0.64): it creates only the rows in view and updates only the rows
+  that changed (before, every row was made and rewritten up to ten times a second while rendering).
+- The symbols of the queue's totals line say "3/4 finished" in their tooltips: of every job in the queue (0.0.64).
+
 ### Fixed
 
 - A window that was maximized when RustCut ended opens maximized again (0.0.63); before, it opened at its windowed

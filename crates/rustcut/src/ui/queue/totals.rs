@@ -44,8 +44,13 @@ impl Totals {
     /// Follows the rows after a change; `now_ms` is the wall clock in Unix milliseconds (for the speed measurement).
     pub fn update(&mut self, rows: &[JobSummary], progress: &HashMap<JobId, JobProgress>, now_ms: i64) {
         let open: Vec<JobId> = rows.iter().filter(|r| is_open(r.state.kind())).map(|r| r.id).collect();
-        self.batch
-            .retain(|id| rows.iter().any(|r| r.id == *id && r.state.kind() != JobStateKind::Held));
+        // One set per update instead of a search through every row per id (O(n), hundreds of jobs).
+        let kept: HashSet<JobId> = rows
+            .iter()
+            .filter(|r| r.state.kind() != JobStateKind::Held)
+            .map(|r| r.id)
+            .collect();
+        self.batch.retain(|id| kept.contains(id));
         if open.is_empty() {
             self.closed = true;
         } else {

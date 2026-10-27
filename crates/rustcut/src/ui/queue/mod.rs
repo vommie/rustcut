@@ -137,6 +137,8 @@ pub struct QueueBridge {
     shared: Arc<Mutex<Shared>>,
     ui: RefCell<PanelUi>,
     rows: Rc<VecModel<QueueRowView>>,
+    /// The rows as last shown (`refresh::ShownRow`), to change only the rows that differ.
+    shown_rows: RefCell<Vec<refresh::ShownRow>>,
     columns: Rc<VecModel<QueueColumnView>>,
     totals: Rc<VecModel<QueueTotalView>>,
     /// The filter menu's state, folder and profile choices, and the values of their entries as shown.
@@ -190,6 +192,7 @@ impl QueueBridge {
                 ..PanelUi::default()
             }),
             rows: Rc::new(VecModel::default()),
+            shown_rows: RefCell::new(Vec::new()),
             columns: Rc::new(VecModel::default()),
             totals: Rc::new(VecModel::default()),
             filter_models: std::array::from_fn(|_| Rc::new(VecModel::default())),

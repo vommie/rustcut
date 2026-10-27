@@ -12,7 +12,7 @@ use super::{
     COMPACT_ROW, Column, Filter, FilterChoice, FilterKind, Overall, QueueAction, QueueBridge, ROW_PADDING, RowText,
     TABLE_ROW, actions, kind_number, layout, pause, row_text, short_clock, status_of,
 };
-use crate::util::model::sync;
+use crate::util::model::{sync, sync_with};
 use crate::{MultiChoiceItem, Queue, QueueColumnView, QueueRowView, QueueTotalView};
 
 impl QueueBridge {
@@ -100,31 +100,20 @@ impl QueueBridge {
         ui.visible.clone_from(&visible);
         let current = ui.selection.current();
         let editing = self.editing.get();
-        let rows: Vec<QueueRowView> = texts
+        let rows: Vec<ShownRow> = texts
             .into_iter()
-            .map(|(t, removable)| QueueRowView {
-                id: i32::try_from(t.id.0).unwrap_or(i32::MAX),
+            .map(|(text, removable)| ShownRow {
+                selected: ui.selection.contains(text.id),
+                current: current == Some(text.id),
+                editing: editing == Some(text.id),
                 removable,
-                percent: t.percent.into(),
-                selected: ui.selection.contains(t.id),
-                current: current == Some(t.id),
-                editing: editing == Some(t.id),
-                name: t.name.into(),
-                state: t.state.into(),
-                kind: t.kind,
-                progress: t.progress,
-                detail: t.detail.into(),
-                tooltip: t.tooltip.into(),
-                cells: ModelRc::new(VecModel::from(
-                    t.cells
-                        .into_iter()
-                        .map(Into::into)
-                        .collect::<Vec<slint::SharedString>>(),
-                )),
+                text,
             })
             .collect();
         let row_count = rows.len();
-        sync(&self.rows, rows);
+        // Only the rows that changed are made again: a row's cells are a model, which Slint compares by pointer, so
+        // comparing the Slint rows would rewrite every row on every refresh (10 Hz while rendering).
+        sync_with(&self.rows, &mut self.shown_rows.borrow_mut(), &rows, ShownRow::view);
         self.drag_rows_changed(&visible);
         let column_views = layout
             .slots
@@ -162,7 +151,8 @@ impl QueueBridge {
                 .map(|(kind, count, word)| QueueTotalView {
                     kind: kind_number(*kind),
                     count: i32::try_from(*count).unwrap_or(i32::MAX),
-                    tooltip: format!("{count} {word}").into(),
+                    // "3/4 finished": of every job in the queue (the user's wish, review 2).
+                    tooltip: format!("{count}/{total} {word}").into(),
                 })
                 .collect(),
         );
@@ -225,4 +215,40 @@ fn overall_text(o: &Overall, paused: bool) -> String {
         _ => {}
     }
     text
+}
+
+/// A row as last shown: its texts and the selection marks (compared to find the rows that changed).
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct ShownRow {
+    text: RowText,
+    removable: bool,
+    selected: bool,
+    current: bool,
+    editing: bool,
+}
+
+impl ShownRow {
+    fn view(&self) -> QueueRowView {
+        let t = &self.text;
+        QueueRowView {
+            id: i32::try_from(t.id.0).unwrap_or(i32::MAX),
+            removable: self.removable,
+            percent: t.percent.as_str().into(),
+            selected: self.selected,
+            current: self.current,
+            editing: self.editing,
+            name: t.name.as_str().into(),
+            state: t.state.as_str().into(),
+            kind: t.kind,
+            progress: t.progress,
+            detail: t.detail.as_str().into(),
+            tooltip: t.tooltip.as_str().into(),
+            cells: ModelRc::new(VecModel::from(
+                t.cells
+                    .iter()
+                    .map(|c| slint::SharedString::from(c.as_str()))
+                    .collect::<Vec<_>>(),
+            )),
+        }
+    }
 }
