@@ -163,6 +163,11 @@ pub enum SyncCommand {
     Test {
         reply: Reply<Result<Arc<TagTree>, RustViewError>>,
     },
+    /// The tag tree's "Refresh Tag Tree": ask RustView for its tree now and answer with it. `TagTreeChanged` follows
+    /// only when the tree differs from the one RustCut has.
+    RefreshTree {
+        reply: Reply<Result<Arc<TagTree>, RustViewError>>,
+    },
     /// The settings changed (enabled, binary, timeout, write timing).
     Reconfigure {
         settings: crate::settings::RustViewSettings,
@@ -181,7 +186,7 @@ pub enum SyncEvent {
         id: JobId,
         record: JobSyncRecord,
     },
-    /// The tag tree was loaded again (after connecting, or when RustView changed it).
+    /// The tag tree was loaded and differs from the one before (after connecting, or when RustView changed it).
     TagTreeChanged(Arc<TagTree>),
 }
 

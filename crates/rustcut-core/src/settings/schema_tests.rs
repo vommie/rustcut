@@ -225,6 +225,29 @@ fn appearance_and_tag_history_have_defaults_and_are_sanitized() {
 }
 
 #[test]
+fn the_compact_tree_switch_defaults_to_off_and_is_kept() {
+    // A file of 0.0.69 has no `rustview.compact_tree`: Normal Mode, no migration, no backup.
+    let dir = tempfile::tempdir().unwrap();
+    let old = "version = 1\n[rustview]\ntimeout_secs = 7\ntag_history_size = 30\n";
+    std::fs::write(dir.path().join("config.toml"), old).unwrap();
+    let outcome = load::<Settings>(dir.path(), &dir.path().join("b")).unwrap();
+    assert!(clean_v1(&outcome), "{outcome:?}");
+    let value = outcome.into_value();
+    assert_eq!(
+        (value.rustview.tag_history_size, value.rustview.compact_tree),
+        (30, false)
+    );
+
+    let mut s = Settings::default();
+    s.rustview.compact_tree = true;
+    save(dir.path(), &s).unwrap();
+    let again = load::<Settings>(dir.path(), &dir.path().join("b"))
+        .unwrap()
+        .into_value();
+    assert!(again.rustview.compact_tree);
+}
+
+#[test]
 fn dialog_settings_have_defaults_bad_values_read_as_defaults_and_ranges_are_kept() {
     use crate::settings::{ConflictPreselect, DialogSettings, PictureScope, TileSize};
     // A file of 0.0.19 has no `[dialogs]`: the defaults fill in, no migration, no backup.

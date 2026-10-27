@@ -196,6 +196,11 @@ point = { tabler = "point", style = "filled", doc = "Leaf marker of the tag tree
 regex = { tabler = "regex", doc = "Regular expression tag filter" }
 search = { tabler = "search", doc = "Search field" }
 tag_locked = { tabler = "lock", doc = "A locked tag stays assigned for the next jobs" }
+tree_expand_all = { tabler = "chevrons-down", doc = "The tag tree's menu: Expand All (RustView's expand_all)" }
+tree_collapse_all = { tabler = "chevrons-up", doc = "The tag tree's menu: Collapse All (RustView's collapse_all)" }
+tree_refresh = { tabler = "refresh", doc = "The tag tree's menu: Refresh Tag Tree (asks RustView again)" }
+tree_compact = { tabler = "baseline-density-small", doc = "The tag tree's menu: switch to Compact Mode" }
+tree_normal = { tabler = "baseline-density-medium", doc = "The tag tree's menu: switch back to Normal Mode" }
 rustview_connected = { tabler = "plug-connected", doc = "RustView is connected" }
 rustview_unavailable = { tabler = "plug-connected-x", doc = "RustView cannot be reached" }
 open_settings = { tabler = "settings", doc = "Open a page of the Settings window" }

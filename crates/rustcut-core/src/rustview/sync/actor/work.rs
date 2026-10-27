@@ -165,13 +165,20 @@ where
             Answer::Tree(Ok(tree)) => {
                 self.reached();
                 self.want_tree = false;
-                let tree = Arc::new(tree);
-                tracing::info!(tags = tree.tags.len(), "[RustView] Tag tree loaded");
+                // An unchanged tree keeps its `Arc`: the panel is told nothing (the Refresh and the test reload it).
+                let changed = self.tree.as_deref() != Some(&tree);
+                let tree = match &self.tree {
+                    Some(known) if !changed => Arc::clone(known),
+                    _ => Arc::new(tree),
+                };
+                tracing::info!(tags = tree.tags.len(), changed, "[RustView] Tag tree loaded");
                 self.tree = Some(Arc::clone(&tree));
                 for waiter in self.tree_waiters.drain(..) {
                     let _ = waiter.send(Ok(Arc::clone(&tree)));
                 }
-                self.events.publish(SyncEvent::TagTreeChanged(tree));
+                if changed {
+                    self.events.publish(SyncEvent::TagTreeChanged(tree));
+                }
             }
             Answer::Tree(Err(error)) => {
                 for waiter in self.tree_waiters.drain(..) {

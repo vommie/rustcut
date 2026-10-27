@@ -471,3 +471,36 @@ async fn the_test_asks_rustview_again_also_when_connected() {
     assert!(rx.await.unwrap().is_err());
     assert!(off.fake.calls().is_empty());
 }
+
+#[tokio::test]
+async fn a_refresh_asks_rustview_and_tells_only_a_changed_tree() {
+    let h = start(RustViewSettings::default());
+    let mut events = h.sync.events.subscribe();
+    let refresh = || async {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        h.sync.handle.send(SyncCommand::RefreshTree { reply: tx }).unwrap();
+        tokio::time::timeout(WAIT, rx).await.unwrap().unwrap().unwrap()
+    };
+    let trees = || h.fake.calls().iter().filter(|c| *c == "tag-tree").count();
+    let first = refresh().await;
+    let before = trees();
+    let changes = |events: &mut tokio::sync::broadcast::Receiver<SyncEvent>| {
+        std::iter::from_fn(|| events.try_recv().ok())
+            .filter(|e| matches!(e, SyncEvent::TagTreeChanged(_)))
+            .count()
+    };
+    assert_eq!(changes(&mut events), 1, "the first tree is news");
+
+    let same = refresh().await;
+    assert!(
+        std::sync::Arc::ptr_eq(&first, &same),
+        "an unchanged tree is the one RustCut has"
+    );
+    assert_eq!(changes(&mut events), 0, "an unchanged tree is not announced");
+    assert_eq!(trees(), before + 1, "a refresh always asks RustView");
+
+    h.fake.0.lock().tags.push(11);
+    let grown = refresh().await;
+    assert_eq!(grown.total_tags, 11);
+    assert_eq!(changes(&mut events), 1, "a new tag is announced");
+}

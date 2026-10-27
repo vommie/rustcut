@@ -165,6 +165,13 @@ pub static RUSTVIEW: &[Card] = &[
                 1,
                 "tags"
             ),
+            switch!(
+                "rustview.compact_tree",
+                "Compact tag tree",
+                "Dense rows that share one line, in PyCutRv's font size (Compact Mode). The tree's context menu \
+                 switches it too.",
+                rustview.compact_tree
+            ),
         ],
     },
     Card {

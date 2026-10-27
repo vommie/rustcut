@@ -7,6 +7,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Compact Mode for the tag tree: dense rows that share one line, in PyCutRv's font size, with the same colors, marks,
+  lock look, expand buttons and indentation; text, lines and symbols sit on whole pixels and stay sharp. Right-click the
+  tree's free space and choose "Compact Mode" ("Normal Mode" switches back), or use Settings > RustView > Tags and
+  rating > Compact tag tree. The choice is kept (new setting `rustview.compact_tree`, off by default; older
+  `config.toml` files load unchanged, no migration). Normal Mode looks exactly as before (0.0.70).
+- The tag tree's free space has RustView's context menu: Expand All, Collapse All, Refresh Tag Tree and the mode switch
+  (RustCut never adds tags, so there is no "Add Root Tag"). Refresh Tag Tree asks RustView for its tags now and changes
+  the tree only when they differ, in place: the chosen, locked and expanded tags that still exist stay (0.0.70).
+
 ## [0.0.69] - 2026-10-27
 
 The playhead's head and line move together to the pixel.

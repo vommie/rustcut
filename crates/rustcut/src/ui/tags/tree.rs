@@ -21,6 +21,12 @@ pub const TAG_COLUMN_SPACING: f32 = 6.0;
 pub const TAG_PADDING_H: f32 = 4.0;
 pub const TAG_PADDING_V: f32 = 4.0;
 
+/// Compact Mode (`CompactTreeMetrics` in `tag_tree_compact.slint`, D-CT1): a row without its line, the one line
+/// neighbors share, and the list's padding.
+pub const COMPACT_ITEM_HEIGHT: f32 = 14.0;
+pub const COMPACT_LINE: f32 = 1.0;
+pub const COMPACT_PADDING_V: f32 = 4.0;
+
 #[derive(Debug, Clone)]
 pub struct TagTreeNode {
     pub record: TagItem,
@@ -187,6 +193,29 @@ impl TagTreeBuilder {
             return (Vec::new(), rows_per_col);
         }
         (nodes.chunks(rows_per_col).map(<[_]>::to_vec).collect(), rows_per_col)
+    }
+
+    /// `chunk_into_columns` for Compact Mode's rows.
+    pub fn chunk_into_compact_columns(nodes: &[TagNodeView], available_height: f32) -> (Vec<Vec<TagNodeView>>, usize) {
+        let rows_per_col = Self::rows_per_compact_column(available_height);
+        (nodes.chunks(rows_per_col).map(<[_]>::to_vec).collect(), rows_per_col)
+    }
+
+    /// How many Compact Mode rows fit into one column of `available_height` (at least one): n rows take
+    /// n * (row + line) + line.
+    pub fn rows_per_compact_column(available_height: f32) -> usize {
+        let usable_h = available_height - (COMPACT_PADDING_V * 2.0) - COMPACT_LINE;
+        let rows = (usable_h / (COMPACT_ITEM_HEIGHT + COMPACT_LINE)).floor().max(1.0);
+        az::checked_cast::<f32, usize>(rows).unwrap_or(1)
+    }
+
+    /// `rows_per_column` or `rows_per_compact_column`.
+    pub fn rows_per_column_in(available_height: f32, compact: bool) -> usize {
+        if compact {
+            Self::rows_per_compact_column(available_height)
+        } else {
+            Self::rows_per_column(available_height)
+        }
     }
 
     /// How many rows fit into one column of `available_height` (at least one).
@@ -407,6 +436,13 @@ mod tests {
         let (columns, per) = TagTreeBuilder::chunk_into_columns(&out, 80.0);
         assert_eq!((per, columns.iter().map(Vec::len).collect::<Vec<_>>()), (3, vec![3, 3]));
         assert!(TagTreeBuilder::chunk_into_columns(&[], 80.0).0.is_empty());
+        // Compact Mode: n rows take n * 15 + 1 inside the padding of 4 + 4, so 80 px hold 4 rows.
+        let (columns, per) = TagTreeBuilder::chunk_into_compact_columns(&out, 80.0);
+        assert_eq!((per, columns.iter().map(Vec::len).collect::<Vec<_>>()), (4, vec![4, 2]));
+        assert!(TagTreeBuilder::chunk_into_compact_columns(&[], 80.0).0.is_empty());
+        // The mockup's area (286 x 613, the user's PyCutRv screenshot): 40 rows (answer "rows" = C).
+        assert_eq!(TagTreeBuilder::rows_per_compact_column(613.0), 40);
+        assert_eq!(TagTreeBuilder::rows_per_column_in(613.0, false), 25);
     }
 
     #[test]

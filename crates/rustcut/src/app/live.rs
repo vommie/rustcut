@@ -159,6 +159,11 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
     {
         tags.set_history_size(after.rustview.tag_history_size);
     }
+    if before.rustview.compact_tree != after.rustview.compact_tree
+        && let Some(tags) = p.tags.upgrade()
+    {
+        tags.set_compact(after.rustview.compact_tree);
+    }
     if before.warnings.missing_metadata != after.warnings.missing_metadata
         && let Some(tags) = p.tags.upgrade()
     {
@@ -243,10 +248,11 @@ fn programs_changed(p: &Parts, after: &Settings) {
     }
 }
 
-/// What the RustView link itself uses (the history size is the panel's).
+/// What the RustView link itself uses (the history size and the tree's mode are the panel's).
 fn link(s: &RustViewSettings) -> RustViewSettings {
     RustViewSettings {
         tag_history_size: 0,
+        compact_tree: false,
         ..s.clone()
     }
 }
