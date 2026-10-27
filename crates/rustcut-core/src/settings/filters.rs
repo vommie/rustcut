@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::edit::{
     DEFAULT_RATIOS, DeinterlaceRate, Deinterlacer, DeshakeParams, FieldParity, Filter, FilterChain, RatioSet,
-    ResizeAlgorithm,
+    ResizeAlgorithm, even_multiple, final_multiple,
 };
 use crate::media::CropSearch;
 
@@ -28,9 +28,10 @@ pub struct FilterDefaults {
     pub resize_algorithm: ResizeAlgorithm,
     /// The aspect ratios the crop's ratio button goes through and Resize offers ("16:9", "2.39:1"; 0.0.50, P9.14).
     pub crop_ratios: Vec<String>,
-    /// The crop's width and height are multiples of this (2, 4, 8 or 16) while the crop sets the output size
-    /// (0.0.51, P9.14).
-    pub crop_multiple: u8,
+    /// The final size rule (0.0.60, Q-P9s): every render's width and height are cut down to multiples of this after
+    /// all filters (`edit::FINAL_MULTIPLES`: 0 = off, 2 = even, the default, 4, 8, 16). 0.0.51-0.0.59 had it as the
+    /// crop's `crop_multiple` (moved by the migration `final-size-rule`).
+    pub final_multiple: u8,
 }
 
 impl Default for FilterDefaults {
@@ -44,17 +45,9 @@ impl Default for FilterDefaults {
             deshake: DeshakeParams::default(),
             resize_algorithm: ResizeAlgorithm::Lanczos,
             crop_ratios: DEFAULT_RATIOS.iter().map(ToString::to_string).collect(),
-            crop_multiple: 2,
+            final_multiple: even_multiple(),
         }
     }
-}
-
-/// The multiples the crop offers.
-pub const CROP_MULTIPLES: [u8; 4] = [2, 4, 8, 16];
-
-/// `n` as one of [`CROP_MULTIPLES`]: the largest that does not exceed it (2 for anything smaller).
-pub fn crop_multiple(n: u8) -> u8 {
-    CROP_MULTIPLES.iter().rev().copied().find(|m| *m <= n).unwrap_or(2)
 }
 
 impl FilterDefaults {
@@ -68,7 +61,7 @@ impl FilterDefaults {
             },
             deshake: self.deshake.sanitized(),
             crop_ratios: self.ratios().entries(),
-            crop_multiple: crop_multiple(self.crop_multiple),
+            final_multiple: final_multiple(self.final_multiple),
             ..self.clone()
         }
     }
@@ -129,6 +122,21 @@ pub(super) fn migrate_deshake_sharpen(table: &mut toml::Table) -> Result<(), Str
     Ok(())
 }
 
+/// Settings version 5 -> 6 (0.0.60, Q-P9s): "Divisible by" left the Crop menu and became the final size rule;
+/// `filters.crop_multiple` is now `filters.final_multiple`, with the value the user chose.
+pub(super) fn migrate_final_size_rule(table: &mut toml::Table) -> Result<(), String> {
+    let Some(filters) = table.get_mut("filters") else {
+        return Ok(());
+    };
+    let filters = filters
+        .as_table_mut()
+        .ok_or_else(|| "filters is not a table".to_owned())?;
+    if let Some(value) = filters.remove("crop_multiple") {
+        filters.entry("final_multiple").or_insert(value);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -160,7 +168,7 @@ mod tests {
             DEFAULT_RATIOS.len(),
             "0.0.50's ratios start with RustView's list"
         );
-        assert_eq!(f.crop_multiple, 2, "0.0.51's multiple starts at even sizes");
+        assert_eq!(f.final_multiple, 2, "the final size rule starts at even sizes");
     }
 
     #[test]
@@ -175,7 +183,11 @@ mod tests {
         );
         let text = toml::to_string(&defaults.sanitized()).unwrap();
         assert!(text.contains("crop_ratios = [\"21:9\", \"4:5\"]"), "{text}");
-        assert_eq!([0, 3, 4, 9, 16, 200].map(crop_multiple), [2, 2, 4, 8, 16, 16]);
+        assert_eq!(
+            [0, 1, 3, 4, 9, 16, 200].map(final_multiple),
+            [0, 2, 2, 4, 8, 16, 16],
+            "0 = off"
+        );
     }
 
     #[test]

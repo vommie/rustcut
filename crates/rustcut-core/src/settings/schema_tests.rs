@@ -477,6 +477,10 @@ fn a_file_of_0_0_58_gets_deshake_sharpening_with_a_backup() {
     };
     assert!(notes.is_empty(), "{notes:?}");
     assert_eq!(std::fs::read_to_string(&backup).unwrap(), old, "backed up first");
+    assert_eq!(
+        value.filters.final_multiple, 2,
+        "no crop multiple saved: the even default"
+    );
     let d = value.filters.deshake;
     assert!(d.sharpen, "switched on by the migration");
     assert_eq!((d.shakiness, d.tripod), (7, true), "the other values stay");
@@ -486,6 +490,36 @@ fn a_file_of_0_0_58_gets_deshake_sharpening_with_a_backup() {
         .unwrap()
         .into_value();
     assert!(value.filters.deshake.sharpen);
-    let off: Settings = toml::from_str("version = 5\n[filters.deshake]\nsharpen = false\n").unwrap();
+    let off: Settings = toml::from_str("version = 6\n[filters.deshake]\nsharpen = false\n").unwrap();
     assert!(!off.filters.deshake.sharpen);
+}
+
+#[test]
+fn a_file_of_0_0_59_moves_the_crop_multiple_to_the_final_size_rule() {
+    // Settings version 5 -> 6 (Q-P9s): `filters.crop_multiple` becomes `filters.final_multiple`, backed up first.
+    let dir = tempfile::tempdir().unwrap();
+    let old = "version = 5\n[filters]\ncrop_multiple = 8\ndeinterlacer = \"yadif\"\n";
+    std::fs::write(dir.path().join("config.toml"), old).unwrap();
+    let outcome = load::<Settings>(dir.path(), &dir.path().join("b")).unwrap();
+    let LoadOutcome::Migrated {
+        value,
+        from: 5,
+        backup,
+        notes,
+    } = outcome
+    else {
+        panic!("{outcome:?}")
+    };
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(std::fs::read_to_string(&backup).unwrap(), old, "backed up first");
+    assert_eq!(value.filters.final_multiple, 8, "the user's choice stays");
+    save(dir.path(), &value).unwrap();
+    let text = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
+    assert!(
+        text.contains("final_multiple = 8") && !text.contains("crop_multiple"),
+        "{text}"
+    );
+    // "Off" is a value of its own.
+    let off: Settings = toml::from_str("version = 6\n[filters]\nfinal_multiple = 0\n").unwrap();
+    assert_eq!(off.filters.sanitized().final_multiple, 0);
 }

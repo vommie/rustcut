@@ -100,7 +100,8 @@ impl ExportBridge {
         let sections = editor.sections_for_save(self.auto_section.get())?;
         let render = self.render.upgrade().ok_or_else(gone)?;
         let profile = render.working_profile();
-        let filters = self.filters.upgrade().ok_or_else(gone)?.chain();
+        let filters_bridge = self.filters.upgrade().ok_or_else(gone)?;
+        let (filters, final_multiple) = (filters_bridge.chain(), filters_bridge.final_multiple());
         let media = self.media.upgrade();
         let info = media.as_ref().and_then(|m| m.current());
         if let Some(problem) = super::job_check::job_problem(&profile, sections.len(), info.as_deref()) {
@@ -146,6 +147,7 @@ impl ExportBridge {
             source,
             sections,
             filters,
+            final_multiple,
             profile,
             target: TargetSpec {
                 folder: folder.clone(),

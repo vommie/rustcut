@@ -144,6 +144,7 @@ async fn a_probe_render_with_deshake_and_crop() {
         playhead: Timestamp::from_secs(3),
         seconds: 4,
         filters: &filters,
+        final_multiple: 2,
         profile: &p,
         exact: false,
         job_duration: duration,

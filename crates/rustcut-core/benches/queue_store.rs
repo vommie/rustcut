@@ -26,6 +26,7 @@ fn spec(n: usize) -> JobSpec {
         source_info: None,
         sections,
         filters: FilterChain::default(),
+        final_multiple: 2,
         profile: builtin_profiles().into_iter().next().unwrap(),
         target: TargetSpec {
             folder: PathBuf::from("/media/out"),

@@ -182,9 +182,19 @@ fn kept_filters_round_trip_and_bad_values_read_as_missing() {
     assert!(value.export.keep_filters);
     assert_eq!(value.export.filters, None);
     assert_eq!(value.export.crop_aspect, CropAspect::Free);
-    // The menu's pin is new in 0.0.49, the crop's multiple in 0.0.51: an older file has neither.
+    // The menu's pin is new in 0.0.49: an older file has none.
     assert!(!value.export.filter_menu_pinned);
-    assert_eq!(value.export.crop_multiple, None);
+
+    // 0.0.51-0.0.59 kept the crop's multiple with the filters; it is gone (the final size rule lives in config.toml,
+    // Q-P9s): such a file still loads, the rest unchanged.
+    std::fs::write(
+        dir.path().join("ui-state.toml"),
+        "version = 1\n[export]\nvolume = 55\nkeep_filters = true\ncrop_multiple = 8\n",
+    )
+    .unwrap();
+    let value = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+    assert_eq!(value.export.volume, 55);
+    assert!(value.export.keep_filters);
 }
 
 #[test]

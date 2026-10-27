@@ -8,12 +8,13 @@ import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Dock, DockCardView } from "dock_types.slint";
 import { Playback } from "player_types.slint";
 import { Jump, JumpFlash } from "jump.slint";
-import { BubbleAnchor, BubbleLayer } from "bubble.slint";
+import { BubbleLayer } from "bubble.slint";
 import { MediaInfoPanelView } from "media_info_panel.slint";
 import { Sections, SectionsCardBody } from "sections_card.slint";
 import { FiltersCardBody } from "filters_card.slint";
 import { Filters } from "filters_types.slint";
 import { TooltipArea } from "tooltip.slint";
+import { NoticeIcon } from "notice_parts.slint";
 import { FinalizeCardBody } from "export_card.slint";
 import { QueuePanel } from "queue_panel.slint";
 import { JobPanel } from "job_panel.slint";
@@ -90,9 +91,11 @@ component DockCard inherits Rectangle {
                     }
                 }
 
-                // The output size, the preview, keep and reset of the filters (Q-P9.13 A).
+                // The final output size, the preview, keep and reset of the filters (Q-P9.13 A, Q-P9s).
                 if root.card.id == "filters": TooltipArea {
+                    title: Filters.output-title;
                     text: Filters.output-tooltip;
+                    rows: Filters.output-rows;
                     horizontal-stretch: 0;
                     min-width: 0;
                     preferred-width: output.preferred-width;
@@ -104,10 +107,16 @@ component DockCard inherits Rectangle {
                         color: Filters.output-warning ? Theme.status-corrupt : Theme.text-muted;
                         overflow: elide;
                     }
+                }
 
-                    // The output size's bubble (odd, or no multiple of the codec's blocks; P9.14).
-                    BubbleAnchor {
-                        key: "filters.header";
+                // Only while the final size rule cut the size: the way to the rule (a jump mark, Q-P9s).
+                if root.card.id == "filters" && Filters.output-adjusted: VerticalLayout {
+                    alignment: center;
+
+                    NoticeIcon {
+                        icon: IconId.jump-to;
+                        tooltip: "Show the final size rule in Settings > Filters";
+                        clicked => { Filters.output-jump(); }
                     }
                 }
 

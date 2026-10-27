@@ -21,8 +21,6 @@ pub const ALGORITHMS: [ResizeAlgorithm; 4] = [
 ];
 /// The field orders in the order of the menu's segments.
 pub const FIELD_ORDERS: [FieldParity; 3] = [FieldParity::Auto, FieldParity::TopFirst, FieldParity::BottomFirst];
-/// The crop's size multiples, in the order of the menu's segments.
-pub const MULTIPLES: [u8; 4] = rustcut_core::settings::CROP_MULTIPLES;
 /// The sides auto-crop searches, in the order of the menu's segments.
 pub const SIDES: [CropSides; 3] = [CropSides::All, CropSides::TopBottom, CropSides::LeftRight];
 
@@ -66,10 +64,9 @@ pub const fn has_menu(kind: FilterKind) -> bool {
 pub struct CardView {
     pub has_media: bool,
     pub rows: Vec<RowView>,
-    /// The header's output size ("1280×540"; empty without a probed video), what it means, and whether it is a problem.
-    pub output: String,
-    pub output_tooltip: String,
-    pub output_warning: bool,
+    /// The header's final output size ("1280×540"; empty without a probed video), its tooltip, and whether it is a
+    /// problem.
+    pub output: OutputView,
     pub deinterlacer: usize,
     pub field_rate: bool,
     /// The deinterlacer knows fields, the field order and "only interlaced frames".
@@ -101,9 +98,6 @@ pub struct CardView {
     pub search_retries: u8,
     /// The next click on the video picks a border color.
     pub picking: bool,
-    /// The index of the crop's size multiple in [`MULTIPLES`], and whether a Resize after the crop makes it free.
-    pub crop_multiple: usize,
-    pub crop_multiple_free: bool,
     pub orientation: OrientationParams,
     /// Typed sizes ("" = automatic) and what "automatic" comes to (the fields' dim placeholders).
     pub resize_width: String,
@@ -135,7 +129,7 @@ pub fn card(state: &FiltersState) -> CardView {
             can_down: i + 1 < count,
         })
         .collect();
-    let (output, output_tooltip, output_warning) = output_text(state);
+    let output = output_view(state);
     let (interlace_hint, interlace_level, interlace_detail) = interlace(state.interlace);
     let (width, height, algorithm) = state.resize();
     let (auto_w, auto_h) = resize_auto(state, width, height);
@@ -153,8 +147,6 @@ pub fn card(state: &FiltersState) -> CardView {
         has_media: state.source().is_some(),
         rows,
         output,
-        output_tooltip,
-        output_warning,
         deinterlacer: DEINTERLACERS
             .iter()
             .position(|d| *d == state.deinterlacer())
@@ -183,8 +175,6 @@ pub fn card(state: &FiltersState) -> CardView {
         search_similarity: state.search.similarity,
         search_retries: state.search.retries,
         picking: session.is_some_and(|s| s.mode == CropMode::Pick),
-        crop_multiple: MULTIPLES.iter().position(|m| *m == state.multiple).unwrap_or(0),
-        crop_multiple_free: state.resize_sets_size(),
         orientation: state.orientation(),
         resize_width: width.map(|w| w.to_string()).unwrap_or_default(),
         resize_height: height.map(|h| h.to_string()).unwrap_or_default(),
@@ -199,30 +189,56 @@ pub fn card(state: &FiltersState) -> CardView {
     }
 }
 
-/// The header's size after every filter, its tooltip, and whether it is a problem (the chain leaves no picture).
-fn output_text(state: &FiltersState) -> (String, String, bool) {
+/// The Filters card header's size (Q-P9s): the final size the render writes, after every filter and the final size
+/// rule of Settings > Filters. Its tooltip names the size before the rule only when the rule cut something; only then
+/// the header offers the jump to the rule.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OutputView {
+    pub text: String,
+    pub title: String,
+    pub tooltip: String,
+    pub rows: Vec<(String, String)>,
+    /// The final size rule made the size smaller (the jump to Settings > Filters > Final size shows).
+    pub adjusted: bool,
+    /// The chain leaves no picture.
+    pub warning: bool,
+}
+
+fn output_view(state: &FiltersState) -> OutputView {
     let Some(source) = state.source() else {
-        return (String::new(), String::new(), false);
+        return OutputView::default();
     };
-    match state.chain().output_size(source.size) {
-        Ok(size) if size.is_even() => (
-            dims(size),
-            format!("The output after every filter: {}", dims(size)),
-            false,
-        ),
-        Ok(size) => (
-            dims(size),
-            format!(
-                "The output after every filter: {}; the render makes it {} (even sizes)",
-                dims(size),
-                dims(size.even_floor())
-            ),
-            false,
-        ),
-        Err(ChainError::CropTooLarge { .. }) => {
-            ("No picture".into(), "The crop removes the whole picture.".into(), true)
-        }
-        Err(e) => ("No picture".into(), capitalized(&e.to_string()), true),
+    let multiple = state.defaults().final_multiple;
+    let chain = state.chain();
+    match (chain.output_size(source.size), chain.final_size(source.size, multiple)) {
+        (Ok(filtered), Ok(cut)) if cut != filtered => OutputView {
+            text: dims(cut),
+            title: "Final output size".into(),
+            tooltip: "The render cuts the rest evenly from both sides (Settings > Filters > Final size).".into(),
+            rows: vec![
+                ("After the filters".into(), dims(filtered)),
+                (format!("Divisible by {multiple}"), dims(cut)),
+            ],
+            adjusted: true,
+            warning: false,
+        },
+        (Ok(_), Ok(cut)) => OutputView {
+            text: dims(cut),
+            tooltip: "The final output size after every filter.".into(),
+            ..OutputView::default()
+        },
+        (Err(ChainError::CropTooLarge { .. }), _) | (_, Err(ChainError::CropTooLarge { .. })) => OutputView {
+            text: "No picture".into(),
+            tooltip: "The crop removes the whole picture.".into(),
+            warning: true,
+            ..OutputView::default()
+        },
+        (Err(e), _) | (_, Err(e)) => OutputView {
+            text: "No picture".into(),
+            tooltip: capitalized(&e.to_string()),
+            warning: true,
+            ..OutputView::default()
+        },
     }
 }
 

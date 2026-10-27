@@ -170,6 +170,7 @@ async fn render_case(
         source_info: None,
         sections,
         filters: case.filters.clone(),
+        final_multiple: 2,
         profile: case.profile.clone(),
         target: TargetSpec {
             folder: out,

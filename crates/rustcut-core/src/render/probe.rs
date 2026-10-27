@@ -31,6 +31,8 @@ pub struct ProbeInput<'a> {
     pub playhead: Timestamp,
     pub seconds: u16,
     pub filters: &'a FilterChain,
+    /// The final size rule the jobs get (Settings > Filters > Final size), so the probe shows their size.
+    pub final_multiple: u8,
     pub profile: &'a RenderProfile,
     pub exact: bool,
     /// Length of the job (the sections, or the whole source): a target size needs it.
@@ -115,6 +117,7 @@ pub fn probe_job(input: &ProbeInput<'_>) -> Option<ProbeJob> {
         source_info: None,
         sections: vec![window].into(),
         filters: input.filters.clone(),
+        final_multiple: input.final_multiple,
         profile: probe_profile(input.profile, input.exact, input.job_duration),
         target: TargetSpec {
             folder: input.folder.to_path_buf(),
@@ -234,6 +237,7 @@ mod tests {
             playhead: t(60),
             seconds: 10,
             filters: &filters,
+            final_multiple: 2,
             profile: &profile,
             exact: false,
             job_duration: t(600),

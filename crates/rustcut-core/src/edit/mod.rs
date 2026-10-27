@@ -12,7 +12,7 @@ mod ratio;
 mod section;
 mod section_list;
 
-pub use chain::{ChainError, FilterChain, FilterSlot, Size};
+pub use chain::{ChainError, FINAL_MULTIPLES, FilterChain, FilterSlot, Size, even_multiple, final_multiple};
 pub use crop::{Crop, CropAspect};
 pub use filter::{
     DeinterlaceRate, Deinterlacer, DeshakeCrop, DeshakeInterpolation, DeshakeParams, FieldParity, Filter, FilterKind,

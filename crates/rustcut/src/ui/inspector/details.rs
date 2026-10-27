@@ -548,6 +548,7 @@ mod tests {
             }),
             sections: vec![s(1, 3), s(10, 13)].into(),
             filters,
+            final_multiple: 2,
             profile: builtin_profiles().remove(0),
             target: TargetSpec {
                 folder: PathBuf::from("/out"),

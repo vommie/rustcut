@@ -24,7 +24,6 @@ export struct FilterTips {
     sides: string,
     samples: string,
     sections-only: string,
-    multiple: string,
     similarity: string,
     retries: string,
     shakiness: string,
@@ -48,10 +47,14 @@ export global Filters {
     in property <bool> has-media;
     in property <bool> preview;
     in property <bool> keep;
-    // The output size for the card's header ("1280×540"), what it means, and whether it is a problem (the crop removes
-    // the whole picture).
+    // The final output size for the card's header ("1280×540", after every filter and the final size rule, Q-P9s), its
+    // tooltip (title and rows only when the rule cut something), whether the rule cut something (the jump to Settings >
+    // Filters > Final size shows) and whether it is a problem (the crop removes the whole picture).
     in property <string> output;
+    in property <string> output-title;
     in property <string> output-tooltip;
+    in property <[TipRow]> output-rows;
+    in property <bool> output-adjusted;
     in property <bool> output-warning;
     in property <[FilterRowView]> rows;
     in property <FilterTips> tips;
@@ -96,8 +99,6 @@ export global Filters {
     in property <bool> picking;
     // The crop's size multiple (0: 2, 1: 4, 2: 8, 3: 16), and whether a Resize after the crop sets the output size
     // (then the crop is free: even pixels only).
-    in property <int> crop-multiple;
-    in property <bool> crop-multiple-free;
 
     // The orientation's result for the glyph (quarter turns clockwise, then mirrored left to right) and in words; the
     // two mirror switches as set.
@@ -199,7 +200,6 @@ export global Filters {
     callback step-search-similarity(int);
     callback edit-search-retries(string) -> bool;
     callback step-search-retries(int);
-    callback set-crop-multiple(int);
     // The orientation's buttons: a quarter turn, a mirror of the result.
     callback rotate(/* clockwise */ bool);
     callback mirror(/* horizontal */ bool);
@@ -215,6 +215,8 @@ export global Filters {
     // 0 automatic zoom, 1 borders, 2 interpolation.
     callback set-deshake-choice(int, int);
     callback set-tripod(bool);
+    // The header's jump to Settings > Filters > Final size (shown while the rule cuts the size).
+    callback output-jump();
     callback set-sharpen(bool);
     // A right click on a row (window coordinates): its menu (switch, options, move up and down); "Options..." hangs the
     // options menu from the row's adjustments button (its top left corner).

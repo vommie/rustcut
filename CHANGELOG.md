@@ -147,6 +147,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- A final size rule (0.0.60, your questionnaire about the final size): Settings > Filters > Final size > "Divisible
+  by" (Off, 2, 4, 8, 16; 2 by default) acts on the finished video, after every filter in the order of the Filters
+  card, and cuts the rest evenly from both sides. "Off" keeps odd sizes (H.264 and H.265 refuse them, AV1 and VP9
+  take them). The Filters card's header shows the final size; its tooltip says it is the final size, and only when
+  the rule cut something it shows the size before and after and a jump symbol leads to the setting. Migration:
+  `config.toml` goes to version 6 ("final-size-rule", backed up first): your Crop "Divisible by" value becomes the
+  final size rule. Jobs saved before keep the even rule they rendered with.
 - Deshake sharpens lightly after stabilizing (0.0.59, your night questionnaire): every moved frame is computed anew and
   comes out a little softer, so the render adds the sharpening the ffmpeg manual recommends right after the
   stabilization. "Sharpen" in the Deshake menu and in Settings > Filters switches it, on by default. Migration:
@@ -817,6 +824,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Removed
 
+- "Divisible by" in the Crop menu (0.0.60): the rule now applies to the finished video (Settings > Filters > Final
+  size); a dragged or found crop only stays even. The kept crop multiple in `ui-state.toml` is no longer read.
+- The size hint on the Filters card's header and its message kind "Output size" (0.0.60): the research showed that
+  sizes that are no multiple of 8 or 16 cause no problem with any encoder here, and an odd size is handled by the
+  final size rule; the header's tooltip says what the rule did.
 - Updating a queued job from the editor, and the message kind "Edited job updated" (0.0.35): loading a job is always
   a copy now.
 - "Duplicate" of a queued job (context menu and Job panel), on the user's decision (0.0.31): load the job into the

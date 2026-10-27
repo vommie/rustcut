@@ -130,18 +130,6 @@ pub static FILTERS: &[Card] = &[
         ],
     },
     Card {
-        title: "Crop",
-        description: "",
-        fields: &[choice!(
-            "filters.crop_multiple",
-            "Divisible by",
-            "The crop's width and height while it is dragged or found: 2 is what every encoder needs; 16 suits H.264, \
-             8 HEVC and AV1 (their block sizes; no pixels coded for nothing). Typed edges stay exact.",
-            filters.crop_multiple,
-            [(2, "2"), (4, "4"), (8, "8"), (16, "16")]
-        )],
-    },
-    Card {
         title: "Auto-crop",
         description: "How auto-crop looks for black borders. Each video starts with these; the Crop filter's menu \
                       changes them for one video.",
@@ -398,6 +386,19 @@ pub static FILTERS: &[Card] = &[
                 (ResizeAlgorithm::Spline, "spline"),
                 (ResizeAlgorithm::Bilinear, "bilinear")
             ]
+        )],
+    },
+    Card {
+        title: "Final size",
+        description: "",
+        fields: &[choice!(
+            "filters.final_multiple",
+            "Divisible by",
+            "After every filter, in the order of the Filters card, the render cuts the width and height down to \
+             multiples of this, the rest evenly from both sides. 2 (even) is all an encoder needs. Off keeps odd \
+             sizes: H.264 and H.265 refuse them in 4:2:0, AV1 and VP9 take them.",
+            filters.final_multiple,
+            [(0, "Off"), (2, "2"), (4, "4"), (8, "8"), (16, "16")]
         )],
     },
 ];

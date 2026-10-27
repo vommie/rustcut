@@ -67,6 +67,7 @@ mod tests {
             source_info: None,
             sections: vec![s(30, 45), s(2, 9)].into(),
             filters,
+            final_multiple: 2,
             profile,
             target: TargetSpec {
                 folder: PathBuf::from("/out/clips"),
@@ -136,6 +137,7 @@ mod tests {
             source_info: None,
             sections: list,
             filters: filters.chain().clone(),
+            final_multiple: 2,
             profile,
             target: TargetSpec {
                 folder: export.target_folder().unwrap(),
