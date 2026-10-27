@@ -220,6 +220,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The size hint on the Filters card's header also comes for an odd size when no filter changes it, the video's own size
+  too (0.0.58, your night questionnaire): the render cuts the last pixel row or column off to make it even. Whether
+  the hint should still speak about multiples of 8 or 16 waits for the next questionnaire.
 - The × that closes a filter's options menu, and the × of every dialog, is flat (0.0.57, your night questionnaire): no
   frame like the buttons beside it, only a light tint under the pointer.
 - A filter row is lightly tinted while the pointer is anywhere on it, its buttons and fields too (0.0.57); "Switch On"

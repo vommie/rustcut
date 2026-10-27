@@ -47,6 +47,9 @@ validate_metainfo() {
   return "$status"
 }
 
+# Below 40 GB free, the incremental caches go first (Q-P9n: /home ran full once); loud, never silent.
+scripts/disk-guard.sh
+
 step "Dependencies and tools" scripts/check-deps.sh --quiet
 step "Formatting (cargo fmt --check)" cargo fmt --all --check
 step "Clippy with warnings denied" cargo cl
