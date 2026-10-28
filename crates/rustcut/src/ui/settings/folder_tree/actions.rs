@@ -96,6 +96,20 @@ impl SettingsBridge {
         true
     }
 
+    /// The wheel's short name of the selected entry (empty: the name again).
+    fn folder_set_short_name(&self, text: &str) -> bool {
+        let Some(id) = self.folder_page.selected.get() else {
+            return true;
+        };
+        let mut result = Ok(false);
+        self.update(|s| result = s.export.folders.set_short_name(id, text));
+        if result == Ok(true) {
+            tracing::info!(id = id.0, "[Settings] Short name of a target folder entry changed");
+        }
+        self.folders_changed();
+        true
+    }
+
     fn folder_rename_end(&self) {
         self.folder_page.renaming.set(None);
         self.folders_changed();
@@ -592,6 +606,8 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     ui.on_rename(move |id, name| with(&t, |b| id_of(id).is_some_and(|id| b.folder_rename(id, &name))));
     let t = this.clone();
     ui.on_rename_end(move || with(&t, SettingsBridge::folder_rename_end));
+    let t = this.clone();
+    ui.on_set_short_name(move |text| with(&t, |b| b.folder_set_short_name(&text)));
     let t = this.clone();
     ui.on_star(move |id| with(&t, |b| id_of(id).map(|id| b.folder_star(id)).unwrap_or_default()));
     let t = this.clone();

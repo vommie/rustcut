@@ -56,6 +56,9 @@ pub struct FolderNode {
     /// A favorite's place on the wheel's first level (0 = top, clockwise).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub place: Option<u8>,
+    /// The name the wheel shows instead of `name` (0.0.84, the user's answer; none = the name).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub short_name: Option<String>,
     /// A group's entries (a folder has none). An entry that cannot be read is skipped, so one typo never loses the
     /// others.
     #[serde_as(as = "DefaultOnError<VecSkipError<_>>")]
@@ -106,6 +109,9 @@ pub struct SourceEntry {
     pub color: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub place: Option<u8>,
+    /// The name the wheel shows (0.0.84; none = "Next to the source").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub short_name: Option<String>,
 }
 
 /// The whole tree.
@@ -152,6 +158,22 @@ impl<'a> EntryRef<'a> {
         match self {
             Self::Source(s) => s.color.as_deref(),
             Self::Node(n) => n.color.as_deref(),
+        }
+    }
+
+    /// The name the wheel shows: the short name when there is one.
+    pub fn wheel_name(self) -> &'a str {
+        let short = match self {
+            Self::Source(s) => s.short_name.as_deref(),
+            Self::Node(n) => n.short_name.as_deref(),
+        };
+        short.unwrap_or_else(|| self.name())
+    }
+
+    pub fn short_name(self) -> Option<&'a str> {
+        match self {
+            Self::Source(s) => s.short_name.as_deref(),
+            Self::Node(n) => n.short_name.as_deref(),
         }
     }
 

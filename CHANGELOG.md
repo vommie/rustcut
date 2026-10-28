@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- A short name per target folder entry (Settings > Target Folders, "Short"): the folder wheel shows it instead of the
+  name; empty = the name (0.0.84).
 - Settings > Target Folders: "Opacity" (how much the wheel's fields cover what is behind them; 92 % by default, more
   than before) and "Middle shows" (the pointed entry's picture or first letter, or its name) in the
   "Folder wheel" card, which now also holds the picture and color options (0.0.82).
@@ -44,6 +46,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Long names in the folder wheel break at word boundaries (spaces, `_ - .`, a capital after a small letter) on at
+  most two lines; the font first shrinks to 85 %, then a word that still does not fit keeps its start and end
+  ("einzusamm…" over "…ordnername") instead of being broken letter by letter (0.0.84).
+- Settings > Target Folders shows the details below the tree, the small wheel first, so it no longer moves when the
+  icons open (0.0.84).
 - The wheel's middle shows the first letter of a folder without a picture (as the lists do), not its name (0.0.83).
 - The folder wheel is no longer limited to the video: "Automatic" grows from 40 % of the window's shorter side in a
   large window to 90 % in a small one, Small/Medium/Large are 40/60/80 %; it always stays inside the window (0.0.82).

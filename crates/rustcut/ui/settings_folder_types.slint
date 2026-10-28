@@ -26,6 +26,8 @@ export struct FolderDetailsView {
     source: bool,
     group: bool,
     name: string,
+    // The wheel's short name (empty = the name).
+    short-name: string,
     path: string,
     missing: bool,
     // 0 none, 1 built-in icon, 2 own picture.
@@ -95,6 +97,7 @@ export global FolderTreeUi {
     callback rename-start(/* id */ int);
     callback rename(/* id */ int, string) -> bool;
     callback rename-end();
+    callback set-short-name(string) -> bool;
     callback star(/* id */ int);
     callback add-folder();
     callback add-group();

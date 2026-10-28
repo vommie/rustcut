@@ -4,6 +4,7 @@
 //! Picking a folder only sets the Job Finalization card's target (never saves).
 
 pub mod geometry;
+pub mod label;
 pub mod nav;
 
 use std::cell::RefCell;
@@ -326,7 +327,8 @@ impl WheelBridge {
         ui.set_size(size);
         ui.set_inner(inner);
         ui.set_outer(outer);
-        ui.set_font_size((size * 0.034).clamp(11.0, 22.0));
+        let font = (size * 0.034).clamp(11.0, 22.0);
+        ui.set_font_size(font);
         ui.set_dim(w.dim);
         ui.set_animations(w.animations);
         ui.set_labels(match w.labels {
@@ -359,6 +361,15 @@ impl WheelBridge {
                 };
                 let color = entry.and_then(|e| view::color(e.color()));
                 let tinted = color.is_some() && (w.color_mode != ColorMode::Pointed || highlighted);
+                // The wheel's name (the short one when set), broken and cut to fit the field (the user's answers).
+                let name = match slot {
+                    Slot::More(ids) => format!("More ... ({})", ids.len()),
+                    _ => entry
+                        .map(rustcut_core::folders::EntryRef::wheel_name)
+                        .unwrap_or_default()
+                        .to_owned(),
+                };
+                let label = label::fit(&name, box_w, font);
                 WheelSlotView {
                     segment: geometry::segment(c, inner, outer, i, n).into(),
                     fill: fill
@@ -375,13 +386,8 @@ impl WheelBridge {
                     y: ly - box_h / 2.0,
                     w: box_w,
                     h: box_h,
-                    name: match slot {
-                        Slot::More(ids) => format!("More ... ({})", ids.len()).into(),
-                        _ => entry
-                            .map(rustcut_core::folders::EntryRef::name)
-                            .unwrap_or_default()
-                            .into(),
-                    },
+                    name: label.text().into(),
+                    scale: label.scale,
                     picture: entry.map_or_else(FolderPictureView::default, |e| view::picture(e, &self.pictures)),
                     filled: !matches!(slot, Slot::Empty),
                     highlighted,
@@ -421,14 +427,17 @@ impl WheelBridge {
             };
             let name = match pointed {
                 Some(Slot::More(ids)) => format!("More ... ({})", ids.len()),
-                _ => entry.map(|e| e.name().to_owned()).unwrap_or_default(),
+                _ => entry.map(|e| e.wheel_name().to_owned()).unwrap_or_default(),
             };
+            // The middle's text is fitted like a field's (its width: three quarters of the middle).
+            let middle = label::fit(&name, (inner - 4.0) * 2.0 * 0.76, font);
             let picture = entry.map(|e| view::picture(e, &self.pictures)).unwrap_or_default();
             // The picture (the default); an entry without one shows its first letter instead, like everywhere else
             // (the user's wish 2026-10-28). "More ..." has neither: its name.
             ui.set_middle_shows_picture(w.middle == WheelMiddle::Picture && entry.is_some());
             ui.set_middle_picture(picture);
-            ui.set_middle_name(name.into());
+            ui.set_middle_name(middle.text().into());
+            ui.set_middle_scale(middle.scale);
         }
         ui.set_breadcrumb(
             if w.breadcrumb && nav.depth() > 0 {
