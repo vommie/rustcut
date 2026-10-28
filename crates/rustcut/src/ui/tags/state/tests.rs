@@ -28,53 +28,59 @@ fn panel() -> TagPanel {
 }
 
 #[test]
-fn clicks_assign_record_history_and_rating_toggles() {
+fn clicks_assign_and_rating_toggles() {
     let mut p = panel();
-    p.click_tag(2, false);
-    p.click_tag(4, false);
-    p.click_tag(99, false);
+    p.click_tag(2);
+    p.click_tag(4);
+    p.click_tag(99);
     assert_eq!(p.draft.tags, [2, 4]);
-    assert_eq!(p.history, [4, 2]);
-    p.click_tag(2, false);
-    assert_eq!((p.draft.tags.as_slice(), p.history.as_slice()), (&[4][..], &[4, 2][..]));
+    assert!(p.history.is_empty(), "only a saved job changes the history");
+    p.click_tag(2);
+    assert_eq!(p.draft.tags, [4]);
     p.click_rating(3);
     assert_eq!(p.draft.rating, Some(3));
     p.click_rating(3);
     assert_eq!(p.draft.rating, None, "the chosen rating again clears it");
     p.click_rating(7);
     assert_eq!(p.draft.rating, None);
-    p.click_tag(2, false);
+    p.click_tag(2);
     assert_eq!(p.draft.tags, [4, 2]);
 }
 
 #[test]
-fn history_pills_wait_until_the_history_settles() {
+fn a_saved_job_moves_its_tags_to_the_front_and_ages_the_others() {
     let mut p = panel();
-    p.history = vec![1, 2, 3, 4];
-    p.click_tag(3, true);
-    p.click_tag(4, true);
-    assert_eq!(
-        (p.draft.tags.as_slice(), p.history.as_slice()),
-        (&[3, 4][..], &[1, 2, 3, 4][..])
-    );
+    p.history = vec![1, 2, 3];
+    p.last_tags = vec![1];
+    assert_eq!((p.age(1), p.age(2)), (0, 1), "a file before 0.0.76 has no ages");
+    p.click_tag(4);
+    p.click_tag(3);
+    p.click_tag(2);
+    p.click_tag(2);
+    assert_eq!(p.history, [1, 2, 3], "clicks change nothing");
+    p.saved(&[3, 4], None);
+    assert_eq!(p.history, [3, 4, 1, 2], "the last clicked first");
+    assert_eq!([3, 4, 1, 2].map(|id| p.age(id)), [0, 0, 1, 2]);
+    p.click_tag(1);
+    p.saved(&[1], None);
+    p.saved(&[1], None);
+    assert_eq!(p.history, [1, 3, 4, 2]);
+    assert_eq!([1, 3, 4, 2].map(|id| p.age(id)), [0, 2, 2, 4]);
+    p.saved(&[], None);
+    assert_eq!(p.age(1), 0, "a job without tags changes nothing");
     let mut saved = TagPanelState::default();
     p.save_into(&mut saved);
-    assert_eq!(saved.history, [4, 3, 1, 2], "a quit keeps the waiting moves");
-    p.click_tag(2, false);
     assert_eq!(
-        p.history,
-        [2, 4, 3, 1],
-        "a tag from the tree moves the waiting ones too"
+        (saved.history.clone(), saved.history_age.clone()),
+        (vec![1, 3, 4, 2], vec![0, 2, 2, 4])
     );
-    p.click_tag(1, true);
-    assert!(p.settle_history() && !p.settle_history());
-    assert_eq!(p.history, [1, 2, 4, 3]);
+    assert_eq!(TagPanel::new(&saved).age(2), 4, "a restart keeps the ages");
 }
 
 #[test]
 fn locked_tags_survive_a_save_and_clear() {
     let mut p = panel();
-    p.click_tag(2, false);
+    p.click_tag(2);
     assert!(p.toggle_lock(4));
     assert_eq!(p.draft.tags, [2, 4], "locking assigns");
     p.click_rating(5);
@@ -96,7 +102,7 @@ fn locked_tags_survive_a_save_and_clear() {
     p.toggle_lock(4);
     assert_eq!((p.locked.is_empty(), p.draft.tags.clone()), (true, vec![4]));
     p.toggle_lock(4);
-    p.click_tag(4, false);
+    p.click_tag(4);
     assert!(p.locked.is_empty() && p.draft.tags.is_empty());
 }
 
@@ -115,7 +121,7 @@ fn editing_a_job_leaves_the_draft_alone() {
     assert_eq!(p.choice().tags, [3]);
     assert!(p.edited().is_none(), "nothing changed yet");
     assert!(!p.toggle_lock(2), "no locks while a job is edited");
-    p.click_tag(2, false);
+    p.click_tag(2);
     p.click_rating(4);
     let (id, metadata) = p.edited().unwrap();
     assert_eq!(id, JobId(7));
@@ -141,7 +147,7 @@ fn editing_a_job_leaves_the_draft_alone() {
 #[test]
 fn hidden_branches_the_eye_and_a_new_tree_prune_unknown_ids() {
     let mut p = panel();
-    p.click_tag(2, false);
+    p.click_tag(2);
     p.toggle_branch(1);
     assert!(p.marks.hidden.contains(&1));
     assert_eq!(p.draft.tags, [2], "hiding does not assign");
@@ -155,7 +161,7 @@ fn hidden_branches_the_eye_and_a_new_tree_prune_unknown_ids() {
         [(4, false), (1, true), (3, true), (2, true)],
         "the eye shows them dimmed"
     );
-    p.click_tag(3, false);
+    p.click_tag(3);
     assert_eq!(p.draft.tags, [2, 3], "a click on a shown hidden tag assigns it");
     p.toggle_show_hidden();
 

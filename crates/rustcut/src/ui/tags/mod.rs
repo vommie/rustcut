@@ -21,6 +21,7 @@ mod tree_menu;
 mod view;
 
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
 use rustcut_core::job::JobId;
@@ -31,7 +32,6 @@ use slint::{ComponentHandle as _, Model as _, ModelRc, VecModel};
 
 pub use hidden::{Check, FilterRow};
 pub use history::{TagHistoryItem, TagHistoryLayoutEngine, TagHistoryManager, TagHistoryRow};
-use history_view::LastTags;
 pub use state::{Choice, Editing, TagPanel};
 pub use tree::{
     MAX_TAG_ITEM_WIDTH, MIN_TAG_ITEM_WIDTH, TAG_COLUMN_SPACING, TAG_ITEM_HEIGHT, TAG_PADDING_H, TAG_PADDING_V,
@@ -504,21 +504,15 @@ impl TagsBridge {
     }
 
     fn publish_history(&self) {
-        let (items, last) = {
+        let (items, ages) = {
             let state = self.state.borrow();
-            (state.history_items(), LastTags::new(&state.last_tags))
+            let items = state.history_items();
+            let ages: HashMap<u32, u8> = items.iter().map(|item| (item.id, state.age(item.id))).collect();
+            (items, ages)
         };
-        let height = self.history.show(items, &last, self.history_width.get());
+        let height = self.history.show(items, &ages, self.history_width.get());
         if let Some(window) = self.window.upgrade() {
             window.global::<TagRate<'_>>().set_history_pills_height(height);
-        }
-    }
-
-    /// The pointer left the history 2 s ago (or its panel was made again): the waiting pills glide to the front.
-    fn history_settle(&self) {
-        if self.state.borrow_mut().settle_history() {
-            tracing::debug!("[Tags] Tag history reordered");
-            self.publish_history();
         }
     }
 

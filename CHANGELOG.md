@@ -9,10 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- A tag clicked in the tag history stays where it is, so several tags can be clicked one after the other. The history
-  reorders once the pointer has been outside it for 2 seconds (coming back before stops the countdown): the clicked
-  tags glide to the front together, the last clicked first. A tag clicked in the tag tree still moves at once, and a
-  quit keeps the new order (0.0.76).
+- The tag history changes only when a job is saved: clicking a tag (in the tree or the history) no longer adds it or
+  moves it, since it may be removed again before saving. A save moves the job's tags to the front together, the last
+  clicked first (0.0.76).
+- The tag history shows how long ago each tag was saved: the last saved job's tags are fully visible, tags last saved
+  two, three and four jobs ago fade to 85, 75 and 65 %, older ones stay at 55 %. A job saved without tags changes
+  nothing. `ui-state.toml` keeps the count beside the history (`history_age`); a file of an older version counts the
+  last job's tags as new and the others as one job older (0.0.76).
 
 ### Fixed
 

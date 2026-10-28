@@ -38,26 +38,6 @@ impl TagHistoryManager {
         history.truncate(max_items);
     }
 
-    /// Notes a tag used through a pill of the history itself: the pill stays where it is until the history settles
-    /// (`settle`), so quick clicks on several pills never hit a pill that just moved (user request 2026-10-28).
-    pub fn defer(pending: &mut Vec<u32>, tag_id: u32) {
-        pending.retain(|&id| id != tag_id);
-        pending.push(tag_id);
-    }
-
-    /// Moves the waiting tags (oldest click first) to the front together, the last clicked first; `true` when the
-    /// order changed.
-    pub fn settle(history: &mut Vec<u32>, pending: &mut Vec<u32>, max_items: usize) -> bool {
-        if pending.is_empty() {
-            return false;
-        }
-        let before = history.clone();
-        for id in pending.drain(..) {
-            Self::record_tag_used(history, id, max_items);
-        }
-        *history != before
-    }
-
     /// Drops ids RustView does not know (any more).
     pub fn prune_invalid(history: &mut Vec<u32>, valid_tag_ids: &HashSet<u32>) {
         history.retain(|id| valid_tag_ids.contains(id));
@@ -239,28 +219,6 @@ mod tests {
         assert_eq!(history, [9, 3, 1]);
         TagHistoryManager::prune_invalid(&mut history, &[3, 1].into_iter().collect());
         assert_eq!(history, [3, 1]);
-    }
-
-    #[test]
-    fn deferred_tags_move_together_the_last_clicked_first() {
-        let mut history: Vec<u32> = (1..=9).collect();
-        let mut pending = Vec::new();
-        for id in [1, 5, 9, 5] {
-            TagHistoryManager::defer(&mut pending, id);
-        }
-        assert_eq!(pending, [1, 9, 5], "a second click counts as the latest");
-        assert!(TagHistoryManager::settle(&mut history, &mut pending, 9));
-        assert_eq!(history, [5, 9, 1, 2, 3, 4, 6, 7, 8]);
-        assert!(pending.is_empty());
-        assert!(
-            !TagHistoryManager::settle(&mut history, &mut pending, 9),
-            "nothing waits"
-        );
-        TagHistoryManager::defer(&mut pending, 5);
-        assert!(
-            !TagHistoryManager::settle(&mut history, &mut pending, 9),
-            "already in front"
-        );
     }
 
     #[test]

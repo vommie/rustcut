@@ -357,6 +357,10 @@ pub struct TagPanelState {
     pub regex: bool,
     /// Recently used tags, newest first (at most [`TagPanelState::HISTORY_MAX`]).
     pub history: Vec<u32>,
+    /// Beside `history`: how many jobs were saved since each tag was last saved with one (0 = the last saved job; the
+    /// pill fades with it, 0.0.76). Files before 0.0.76 have none: the app counts a missing age as 0 for the last job's
+    /// tags and 1 for the others.
+    pub history_age: Vec<u8>,
     pub history_collapsed: bool,
     /// Height of the tag history's body in logical pixels.
     pub history_height: u32,
@@ -400,7 +404,6 @@ impl TagPanelState {
     fn sanitize(&mut self, notes: &mut Vec<String>) {
         for list in [
             &mut self.expanded,
-            &mut self.history,
             &mut self.hidden,
             &mut self.shown,
             &mut self.locked,
@@ -410,10 +413,27 @@ impl TagPanelState {
             let mut seen = std::collections::HashSet::new();
             list.retain(|id| seen.insert(*id));
         }
+        // The ages stay beside their tags.
+        let mut seen = std::collections::HashSet::new();
+        let mut ages = self
+            .history_age
+            .iter()
+            .copied()
+            .map(Some)
+            .chain(std::iter::repeat(None));
+        let (history, history_age): (Vec<u32>, Vec<Option<u8>>) = self
+            .history
+            .iter()
+            .map(|id| (*id, ages.next().flatten()))
+            .filter(|(id, _)| seen.insert(*id))
+            .unzip();
+        self.history = history;
+        self.history_age = history_age.into_iter().map_while(|age| age).collect();
         if self.history.len() > Self::HISTORY_MAX {
             notes.push(format!("tag history shortened to {}", Self::HISTORY_MAX));
             self.history.truncate(Self::HISTORY_MAX);
         }
+        self.history_age.truncate(self.history.len());
         if !Self::HISTORY_HEIGHT.contains(&self.history_height) {
             notes.push(format!("tag history height {} brought into range", self.history_height));
             self.history_height = self
@@ -443,6 +463,7 @@ impl Default for TagPanelState {
             filter: String::new(),
             regex: false,
             history: Vec::new(),
+            history_age: Vec::new(),
             history_collapsed: false,
             history_height: 96,
             hidden: Vec::new(),

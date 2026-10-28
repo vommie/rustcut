@@ -1,11 +1,12 @@
-//! The tag history's pills in their Slint form: which are faint (the tags the last saved job did not have, so the pills
-//! of "Apply the last saved job's tags" stand out, user request 2026-10-27) and where each one stands. The pills are
+//! The tag history's pills in their Slint form: how faint each is (the more jobs were saved since its tag was last
+//! saved with one, the fainter, so the last job's tags stand out and long unused ones show, user requests 2026-10-27
+//! and 2026-10-28) and where each one stands. The pills are
 //! placed here (the flow layout with the widths Slint measured) and kept as stable rows, so a pill that moves (a tag
 //! used again goes to the front, also from the last row) glides to its new place instead of jumping (a FLIP-style
 //! layout animation done with Slint's property animation, user request 2026-10-27).
 
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use slint::VecModel;
@@ -25,7 +26,7 @@ pub struct HistoryPills {
 
 impl HistoryPills {
     /// Shows `items` (newest first) in `container` pixels; returns the height they take.
-    pub fn show(&self, items: Vec<TagHistoryItem>, last: &LastTags, container: f32) -> f32 {
+    pub fn show(&self, items: Vec<TagHistoryItem>, ages: &HashMap<u32, u8>, container: f32) -> f32 {
         let widths = self.widths.borrow();
         let items: Vec<TagHistoryItem> = items
             .into_iter()
@@ -45,7 +46,8 @@ impl HistoryPills {
             .map(|(index, (item, x, y))| {
                 let front = lies_over(shown.get(&item.id).copied(), index);
                 shown.insert(item.id, (index, front));
-                let mut view = history_item_view(item, last);
+                let age = ages.get(&item.id).copied().unwrap_or(0);
+                let mut view = history_item_view(item, age);
                 view.x = x;
                 view.y = y;
                 view.front = front;
@@ -98,23 +100,23 @@ pub fn place(items: Vec<TagHistoryItem>, container: f32) -> (Vec<(TagHistoryItem
     (placed, height)
 }
 
-/// The tags of the last saved job; a pill outside them is faint unless it is assigned now. Before any job was saved
-/// nothing is faint.
-#[derive(Debug, Default)]
-pub struct LastTags(HashSet<u32>);
-
-impl LastTags {
-    pub fn new(last: &[u32]) -> Self {
-        Self(last.iter().copied().collect())
+/// A pill's opacity: full for the last saved job's tags and for tags assigned now, then 85, 75 and 65 % for tags last
+/// saved two, three and four jobs ago, 55 % for anything older (user request 2026-10-28).
+pub fn fade(item: &TagHistoryItem, age: u8) -> f32 {
+    if item.is_assigned || item.is_partial {
+        return 1.0;
     }
-
-    pub fn older(&self, item: &TagHistoryItem) -> bool {
-        !self.0.is_empty() && !self.0.contains(&item.id) && !item.is_assigned && !item.is_partial
+    match age {
+        0 => 1.0,
+        1 => 0.85,
+        2 => 0.75,
+        3 => 0.65,
+        _ => 0.55,
     }
 }
 
-pub fn history_item_view(item: TagHistoryItem, last: &LastTags) -> TagHistoryItemModel {
-    let older = last.older(&item);
+pub fn history_item_view(item: TagHistoryItem, age: u8) -> TagHistoryItemModel {
+    let fade = fade(&item, age);
     TagHistoryItemModel {
         id: i32::try_from(item.id).unwrap_or(i32::MAX),
         name: item.name.into(),
@@ -125,7 +127,7 @@ pub fn history_item_view(item: TagHistoryItem, last: &LastTags) -> TagHistoryIte
         is_italic: item.is_italic,
         width: item.width,
         tooltip: item.tooltip.into(),
-        older,
+        fade,
         x: 0.0,
         y: 0.0,
         front: false,
@@ -159,14 +161,9 @@ mod tests {
     }
 
     #[test]
-    fn tags_outside_the_last_saved_job_are_faint() {
-        let last = LastTags::new(&[2, 5]);
-        assert!(!last.older(&item(2, false)), "the last job's tag");
-        assert!(last.older(&item(7, false)), "used before the last job");
-        assert!(!last.older(&item(7, true)), "assigned now");
-        assert!(
-            !LastTags::new(&[]).older(&item(7, false)),
-            "no job saved yet: nothing faint"
-        );
+    fn pills_fade_with_the_jobs_saved_since() {
+        let fades: Vec<f32> = (0..6).map(|age| fade(&item(7, false), age)).collect();
+        assert_eq!(fades, [1.0, 0.85, 0.75, 0.65, 0.55, 0.55]);
+        assert!((fade(&item(7, true), 4) - 1.0).abs() < f32::EPSILON, "assigned now");
     }
 }

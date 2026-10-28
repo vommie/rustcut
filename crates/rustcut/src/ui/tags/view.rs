@@ -170,7 +170,7 @@ mod tests {
         assert_eq!(eye_tooltip(&panel), "No tag is hidden (the tag filter hides tags)");
         panel.toggle_branch(1);
         assert_eq!(eye_tooltip(&panel), "Show the 2 hidden tags");
-        panel.click_tag(2, false);
+        panel.click_tag(2);
         assert_eq!(eye_tooltip(&panel), "Show the 2 hidden tags (1 of them assigned)");
         panel.toggle_show_hidden();
         assert_eq!(eye_tooltip(&panel), "Hide the hidden tags again");

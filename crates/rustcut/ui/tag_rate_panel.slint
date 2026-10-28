@@ -491,7 +491,6 @@ export component TagRatePanel inherits Rectangle {
             has-selection: root.has-job;
             collapsed-toggled(c) => { TagRate.history-collapsed-changed(c); }
             tag-clicked(id) => { TagRate.history-tag-clicked(id); }
-            moves-due => { TagRate.history-settle(); }
             geometry-changed(w) => { TagRate.history-width-changed(w); }
         }
 

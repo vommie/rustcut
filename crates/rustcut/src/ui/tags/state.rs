@@ -74,8 +74,8 @@ pub struct TagPanel {
     pub filter: String,
     pub regex: bool,
     pub history: Vec<u32>,
-    /// Tags assigned through the history's pills that wait to move to its front (oldest click first, `settle_history`).
-    pub history_pending: Vec<u32>,
+    /// Jobs saved since each history tag was last saved with one (0.0.76; missing = see `TagPanel::age`).
+    pub history_age: HashMap<u32, u8>,
     pub history_collapsed: bool,
     pub history_height: u32,
     /// The hidden branches the tree leaves out.
@@ -108,6 +108,12 @@ impl TagPanel {
             filter: saved.filter.clone(),
             regex: saved.regex,
             history: saved.history.clone(),
+            history_age: saved
+                .history
+                .iter()
+                .zip(&saved.history_age)
+                .map(|(id, age)| (*id, *age))
+                .collect(),
             history_collapsed: saved.history_collapsed,
             history_height: saved.history_height,
             marks: Marks {
@@ -148,7 +154,8 @@ impl TagPanel {
             expanded: sorted(&self.expanded),
             filter: self.filter.clone(),
             regex: self.regex,
-            history: self.settled_history(),
+            history: self.history.clone(),
+            history_age: self.history.iter().map(|id| self.age(*id)).collect(),
             history_collapsed: self.history_collapsed,
             history_height: self.history_height,
             hidden: sorted(&self.marks.hidden),
@@ -179,7 +186,7 @@ impl TagPanel {
             draft.retain(&valid);
         }
         TagHistoryManager::prune_invalid(&mut self.history, &valid);
-        TagHistoryManager::prune_invalid(&mut self.history_pending, &valid);
+        self.history_age.retain(|id, _| valid.contains(id));
         for list in [&mut self.locked, &mut self.last_tags, &mut self.draft.tags] {
             list.retain(|id| valid.contains(id));
         }
@@ -227,20 +234,14 @@ impl TagPanel {
         }
     }
 
-    /// A click on a tag in the tree or (`from_history`) a pill of the tag history: assigns or unassigns it. Unassigning
-    /// a locked tag unlocks it. A pill stays where it is until the history settles; a tag from the tree moves to the
-    /// front at once, together with the waiting ones.
-    pub fn click_tag(&mut self, id: u32, from_history: bool) {
+    /// A click on a tag in the tree or a pill of the tag history: assigns or unassigns it. Unassigning a locked tag
+    /// unlocks it. The history changes only when a job is saved (`saved`, user request 2026-10-28).
+    pub fn click_tag(&mut self, id: u32) {
         if !self.by_id.contains_key(&id) {
             return;
         }
         let assigned = self.choice_mut().toggle(id);
-        if assigned && from_history {
-            TagHistoryManager::defer(&mut self.history_pending, id);
-        } else if assigned {
-            self.settle_history();
-            TagHistoryManager::record_tag_used(&mut self.history, id, self.history_size);
-        } else if self.editing.is_none() {
+        if !assigned && self.editing.is_none() {
             self.locked.retain(|t| *t != id);
         }
     }
@@ -257,8 +258,6 @@ impl TagPanel {
             self.locked.push(id);
             if !self.draft.tags.contains(&id) {
                 self.draft.tags.push(id);
-                self.settle_history();
-                TagHistoryManager::record_tag_used(&mut self.history, id, self.history_size);
             }
         }
         true
@@ -317,17 +316,13 @@ impl TagPanel {
         }
     }
 
-    /// The pointer left the history 2 s ago (or its panel was made again): the waiting tags move to the front;
-    /// `true` when the order changed.
-    pub fn settle_history(&mut self) -> bool {
-        TagHistoryManager::settle(&mut self.history, &mut self.history_pending, self.history_size)
-    }
-
-    /// The history's order with the waiting tags in front (what a restart shows).
-    fn settled_history(&self) -> Vec<u32> {
-        let mut history = self.history.clone();
-        TagHistoryManager::settle(&mut history, &mut self.history_pending.clone(), self.history_size);
-        history
+    /// Jobs saved since tag `id` was last saved with one. Without a count (files before 0.0.76): 0 for the last
+    /// job's tags (and for every tag before any job was saved), 1 for the others.
+    pub fn age(&self, id: u32) -> u8 {
+        self.history_age
+            .get(&id)
+            .copied()
+            .unwrap_or_else(|| u8::from(!self.last_tags.is_empty() && !self.last_tags.contains(&id)))
     }
 
     pub fn history_items(&self) -> Vec<TagHistoryItem> {
@@ -353,6 +348,7 @@ impl TagPanel {
     /// A job was saved with `tags` and `rating`: they become "last", the draft starts again with the locked tags.
     pub fn saved(&mut self, tags: &[u32], rating: Option<u8>) {
         if !tags.is_empty() {
+            self.record_saved(tags);
             self.last_tags = tags.to_vec();
         }
         if rating.is_some() {
@@ -362,6 +358,25 @@ impl TagPanel {
             tags: self.locked.clone(),
             rating: None,
         };
+    }
+
+    /// The history after a job was saved with `tags`: every other tag gets a job older, the saved ones move to the
+    /// front together in the order they were clicked, the last clicked first (user request 2026-10-28).
+    fn record_saved(&mut self, tags: &[u32]) {
+        let ages: Vec<(u32, u8)> = self
+            .history
+            .iter()
+            .map(|id| (*id, self.age(*id).saturating_add(1)))
+            .collect();
+        self.history_age = ages.into_iter().collect();
+        let clicked = self.draft.tags.iter().filter(|id| tags.contains(id));
+        let rest = tags.iter().filter(|id| !self.draft.tags.contains(id));
+        let order: Vec<u32> = rest.chain(clicked).copied().collect();
+        for id in order {
+            TagHistoryManager::record_tag_used(&mut self.history, id, self.history_size);
+            self.history_age.insert(id, 0);
+        }
+        self.history_age.retain(|id, _| self.history.contains(id));
     }
 
     /// A job loaded into the editor (or a draft put back): its tags and rating become the draft. Locked tags stay
