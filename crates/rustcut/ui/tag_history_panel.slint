@@ -22,6 +22,9 @@ export component TagHistoryPanel inherits CollapsiblePanel {
     in property <bool> has-selection: true;
 
     callback tag-clicked(int /* tag_id */);
+    // A clicked pill stays where it is while the pointer is in the panel; 2 s after the pointer left, the clicked pills
+    // move to the front together (user request 2026-10-28; Rust keeps them, `TagPanel::settle_history`).
+    callback moves-due();
     callback geometry-changed(length /* available_width */);
     callback pill-measured(int /* tag_id */, bool /* check */, length /* natural width */);
 
@@ -35,6 +38,29 @@ export component TagHistoryPanel inherits CollapsiblePanel {
             settle.running = true;
             settle.restart();
             root.geometry-changed(self.width);
+        }
+    }
+
+    changed has-hover => {
+        // A single-shot timer, armed when the pointer leaves; coming back stops it.
+        move-timer.running = !self.has-hover;
+        if !self.has-hover {
+            move-timer.restart();
+        }
+    }
+
+    // A panel made again (another dock tab, a restart of the window's content) has no countdown: moves waiting from
+    // before are made at once.
+    init => {
+        root.moves-due();
+    }
+
+    move-timer := Timer {
+        interval: 2s;
+        running: false;
+        triggered => {
+            self.running = false;
+            root.moves-due();
         }
     }
 

@@ -119,6 +119,8 @@ export global TagRate {
     // the switch between Normal Mode and Compact Mode.
     callback tree-menu(length /* x */, length /* y */);
     callback history-tag-clicked(int);
+    // The pointer left the tag history 2 s ago (or the panel was made again): the clicked pills move to the front.
+    callback history-settle();
     callback history-width-changed(length);
     // A pill's natural width (`check` = it shows its check mark): the flow uses the measured widths.
     callback history-pill-measured(/* tag id */ int, /* check */ bool, length);

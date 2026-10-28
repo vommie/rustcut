@@ -7,6 +7,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- A tag clicked in the tag history stays where it is, so several tags can be clicked one after the other. The history
+  reorders once the pointer has been outside it for 2 seconds (coming back before stops the countdown): the clicked
+  tags glide to the front together, the last clicked first. A tag clicked in the tag tree still moves at once, and a
+  quit keeps the new order (0.0.76).
+
+### Fixed
+
+- Tags in the tag history look disabled (gray text, no highlight under the pointer) while they cannot be assigned,
+  for example without a video; before, only the faint tags of older jobs looked different. Older disabled tags are
+  gray and faint (0.0.76).
+
 ## [0.0.75] - 2026-10-28
 
 Your UI review "RustCut Feedback" and the requests that came with it: the transport bar, the symbols over the video,

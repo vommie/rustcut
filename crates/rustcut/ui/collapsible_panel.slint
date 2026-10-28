@@ -14,6 +14,9 @@ export component CollapsiblePanel inherits Rectangle {
     in property <length> header-height: 24px;
     in property <length> body-height: 100px;
 
+    // The pointer is over the panel (header or body, also over the children).
+    out property <bool> has-hover: hover-area.has-hover;
+
     callback collapsed-toggled(bool /* is_collapsed */);
 
     height: root.is-collapsed ? root.header-height : (root.header-height + root.body-height);
@@ -25,69 +28,72 @@ export component CollapsiblePanel inherits Rectangle {
     border-color: Theme.border;
     clip: true;
 
-    VerticalLayout {
-        padding: 0px;
-        spacing: 0px;
+    // Wraps the content: a parent TouchArea keeps its `has-hover` over its children, which get the events first.
+    hover-area := TouchArea {
+        VerticalLayout {
+            padding: 0px;
+            spacing: 0px;
 
-        // 1. Collapsible Interactive Header Bar
-        header-bar := Rectangle {
-            height: root.header-height;
-            background: header-touch.has-hover ? Theme.surface-hover : Theme.surface-variant;
-            border-radius: root.is-collapsed ? 4px : 0px;
-            animate background { duration: 100ms; }
+            // 1. Collapsible Interactive Header Bar
+            header-bar := Rectangle {
+                height: root.header-height;
+                background: header-touch.has-hover ? Theme.surface-hover : Theme.surface-variant;
+                border-radius: root.is-collapsed ? 4px : 0px;
+                animate background { duration: 100ms; }
 
-            header-touch := TouchArea {
-                width: 100%;
-                height: 100%;
-                mouse-cursor: pointer;
-                clicked => {
-                    root.is-collapsed = !root.is-collapsed;
-                    root.collapsed-toggled(root.is-collapsed);
-                }
-            }
-
-            HorizontalLayout {
-                padding-left: 8px;
-                padding-right: 8px;
-                alignment: space-between;
-
-                HorizontalLayout {
-                    spacing: 4px;
-                    alignment: start;
-
-                    Text {
-                        text: root.title + (root.count-badge != "" ? (" (" + root.count-badge + ")") : "");
-                        font-size: 10px;
-                        font-weight: 700;
-                        color: Theme.primary;
-                        vertical-alignment: center;
-                        overflow: elide;
+                header-touch := TouchArea {
+                    width: 100%;
+                    height: 100%;
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.is-collapsed = !root.is-collapsed;
+                        root.collapsed-toggled(root.is-collapsed);
                     }
                 }
 
-                // Toggle Chevron Icon (switches between chevron-down and chevron-right)
-                IconSlot {
-                    icon: root.is-collapsed ? IconId.chevron-right : IconId.chevron-down;
-                    size: IconSize.sm;
-                    color: header-touch.has-hover ? Theme.primary : Theme.text-muted;
+                HorizontalLayout {
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    alignment: space-between;
+
+                    HorizontalLayout {
+                        spacing: 4px;
+                        alignment: start;
+
+                        Text {
+                            text: root.title + (root.count-badge != "" ? (" (" + root.count-badge + ")") : "");
+                            font-size: 10px;
+                            font-weight: 700;
+                            color: Theme.primary;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                    }
+
+                    // Toggle Chevron Icon (switches between chevron-down and chevron-right)
+                    IconSlot {
+                        icon: root.is-collapsed ? IconId.chevron-right : IconId.chevron-down;
+                        size: IconSize.sm;
+                        color: header-touch.has-hover ? Theme.primary : Theme.text-muted;
+                    }
+                }
+
+                // Bottom separator line when expanded
+                if !root.is-collapsed : Rectangle {
+                    y: parent.height - 1px;
+                    height: 1px;
+                    background: Theme.border;
                 }
             }
 
-            // Bottom separator line when expanded
-            if !root.is-collapsed : Rectangle {
-                y: parent.height - 1px;
-                height: 1px;
-                background: Theme.border;
+            // 2. Collapsible Body Container with Height Animation & Clipping
+            body-container := Rectangle {
+                height: root.is-collapsed ? 0px : root.body-height;
+                animate height { duration: root.is-dragging ? 0ms : 180ms; easing: ease-in-out; }
+                clip: true;
+
+                @children
             }
-        }
-
-        // 2. Collapsible Body Container with Height Animation & Clipping
-        body-container := Rectangle {
-            height: root.is-collapsed ? 0px : root.body-height;
-            animate height { duration: root.is-dragging ? 0ms : 180ms; easing: ease-in-out; }
-            clip: true;
-
-            @children
         }
     }
 }

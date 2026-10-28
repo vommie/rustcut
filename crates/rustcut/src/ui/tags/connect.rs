@@ -47,7 +47,7 @@ pub(super) fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
         }
     });
     on!(on_tag_clicked, |b, id| if let Some(id) = tag_id(id) {
-        b.change(|s| s.click_tag(id));
+        b.change(|s| s.click_tag(id, false));
     });
     on!(on_tag_right_clicked, |b, id| if let Some(id) = tag_id(id) {
         let locked = b.state.borrow_mut().toggle_lock(id);
@@ -65,8 +65,9 @@ pub(super) fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
     on!(on_tree_menu, |b, x, y| b.show_tree_menu(x, y));
     on!(on_refresh_tree, |b| b.refresh_tree());
     on!(on_history_tag_clicked, |b, id| if let Some(id) = tag_id(id) {
-        b.change(|s| s.click_tag(id));
+        b.change(|s| s.click_tag(id, true));
     });
+    on!(on_history_settle, |b| b.history_settle());
     on!(on_history_width_changed, |b, width| b.history_width_changed(width));
     on!(
         on_history_pill_measured,

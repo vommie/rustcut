@@ -514,6 +514,14 @@ impl TagsBridge {
         }
     }
 
+    /// The pointer left the history 2 s ago (or its panel was made again): the waiting pills glide to the front.
+    fn history_settle(&self) {
+        if self.state.borrow_mut().settle_history() {
+            tracing::debug!("[Tags] Tag history reordered");
+            self.publish_history();
+        }
+    }
+
     /// Slint measured a pill: the pills are placed again when its width changed.
     fn history_pill_measured(&self, id: u32, check: bool, width: f32) {
         if self.history.measured(id, check, width) {

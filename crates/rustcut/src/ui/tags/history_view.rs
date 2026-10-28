@@ -19,6 +19,8 @@ use crate::util::model::sync_stable;
 pub struct HistoryPills {
     pub model: Rc<VecModel<TagHistoryItemModel>>,
     widths: RefCell<HashMap<(u32, bool), f32>>,
+    /// Each shown pill's index and whether it lies over the others.
+    shown: RefCell<HashMap<u32, (usize, bool)>>,
 }
 
 impl HistoryPills {
@@ -36,17 +38,21 @@ impl HistoryPills {
             .collect();
         drop(widths);
         let (placed, height) = place(items, container);
+        let mut shown = self.shown.borrow_mut();
         let rows = placed
             .into_iter()
             .enumerate()
             .map(|(index, (item, x, y))| {
+                let front = lies_over(shown.get(&item.id).copied(), index);
+                shown.insert(item.id, (index, front));
                 let mut view = history_item_view(item, last);
                 view.x = x;
                 view.y = y;
-                view.front = index == 0;
+                view.front = front;
                 view
             })
             .collect();
+        drop(shown);
         sync_stable(&self.model, rows, |r| r.id);
         height
     }
@@ -59,6 +65,17 @@ impl HistoryPills {
         let mut widths = self.widths.borrow_mut();
         let old = widths.insert((id, check), width);
         old.is_none_or(|w| (w - width).abs() > 0.5)
+    }
+}
+
+/// Whether a pill now at `index` lies over the others: the pills that moved forward (several move together when the
+/// history settles) glide over the ones that make room; a pill that kept its place keeps its layer, a new one lies
+/// over the others in front.
+fn lies_over(before: Option<(usize, bool)>, index: usize) -> bool {
+    match before {
+        Some((old, front)) if old == index => front,
+        Some((old, _)) => index < old,
+        None => index == 0,
     }
 }
 
@@ -131,6 +148,14 @@ mod tests {
             width: 40.0,
             tooltip: String::new(),
         }
+    }
+
+    #[test]
+    fn pills_that_move_forward_lie_over_the_others() {
+        assert!(lies_over(Some((5, false)), 1), "moved forward");
+        assert!(!lies_over(Some((1, true)), 2), "made room");
+        assert!(lies_over(Some((0, true)), 0), "kept its place and layer");
+        assert!(lies_over(None, 0) && !lies_over(None, 3), "new pills");
     }
 
     #[test]
