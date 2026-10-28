@@ -8,6 +8,7 @@ pub mod log_book;
 mod log_files;
 mod logging;
 mod persistence;
+mod pictures;
 pub mod redaction;
 mod services;
 mod shutdown;
@@ -166,6 +167,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &loaded.settings,
     );
     let (store, store_thread, store_problem) = open_store(&loaded.paths);
+    let (pictures, pictures_thread) = pictures::start(&loaded.paths, &loaded.settings.export.folders);
     // The RustView link (ADR-6): one `rustview api` call at a time on the runtime; the queue tells it about the jobs.
     let (sync, sync_records, _sync_task) =
         spawn_sync(runtime.handle(), loaded.settings.rustview.clone(), CliClient::new);
@@ -549,6 +551,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             editing: Rc::downgrade(&editing),
             queue: queue_service.handle.clone(),
             sync: sync.handle.clone(),
+            pictures: pictures.clone(),
             paths: loaded.paths.clone(),
             env: RenderEnv::new(&loaded.settings, &loaded.paths, HardwareContext::default()),
             log: log.level_setter(),
@@ -657,6 +660,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     stop_sync(&sync);
     stop_queue(&queue_service);
     stop_store(&store, store_thread);
+    pictures::stop(&pictures, pictures_thread);
     stop_player(player);
     runtime.shutdown_timeout(RUNTIME_SHUTDOWN);
     Ok(Outcome::Quit)

@@ -122,6 +122,14 @@ backon = { version = "1", default-features = false, features = ["std"] }
 # key are shared (`get_value_or_guard_async`).
 quick_cache = "0.7"
 
+# Folder pictures (P11.2): own images scaled down (Lanczos3) and stored as lossy WebP with alpha (libwebp), own SVGs
+# sanitized by usvg and checked by resvg (the versions Slint already uses), the BLAKE3 hash names a stored picture.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "tiff", "ico", "qoi"] }
+webp = { version = "0.3", default-features = false }
+usvg = { version = "0.48", default-features = false, features = ["writer"] }
+resvg = { version = "0.48", default-features = false }
+blake3 = "1"
+
 # Tests only.
 proptest = "1"
 insta = "1"
