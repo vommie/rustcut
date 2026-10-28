@@ -30,6 +30,7 @@ import { OptionRowView, Probe, RenderIssueView, RenderSettings } from "render_ty
 import { ConflictJobView, ConflictOptionView, Export, PreviewView } from "export_types.slint";
 import { Queue, QueueColumnView, QueueRowView } from "queue_types.slint";
 import { QueueFilterFlyout } from "queue_filter.slint";
+import { FolderList, FolderListFlyout, FolderListRowView } from "folder_list.slint";
 import { MultiChoiceItem } from "controls_choice.slint";
 import { Job, JobLoad, JobRowView, JobSectionView, LogLineView, Logs } from "job_types.slint";
 import { ContextMenu, ContextMenuLayer, MenuItemView, MenuLevelView } from "context_menu.slint";
@@ -67,7 +68,7 @@ export {
     ConflictJobView, ConflictOptionView, PreviewView, TipRow, Tip, TipKey, TipKeys, TipPlacement, TipRect, TipSide,
     GlobalTooltip, TooltipLogic, DialogState, Queue, QueueRowView, QueueColumnView, MultiChoiceItem, TagRate, TagNodeView,
     TagColumnView, TagHistoryItemModel, TagHistoryRowModel, Job, JobRowView, JobSectionView, Logs, LogLineView, JobLoad,
-    ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderTreeUi, FolderTreeRowView, FolderDetailsView, FolderPlaceView, FolderIconView, FolderIconRowView, FolderPictureView, RatioChipView, DiagCheckView, DiagGroupView,
+    ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderTreeUi, FolderTreeRowView, FolderList, FolderListRowView, FolderDetailsView, FolderPlaceView, FolderIconView, FolderIconRowView, FolderPictureView, RatioChipView, DiagCheckView, DiagGroupView,
     ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power, AppTray, Jump, Notices,
     ToastView, BannerView, HistoryView, MessageKindView, Bubbles, BubbleView, BubbleButtonView, Problems, ColorCodec, ColorPickerWindow, TagFilterWindow, TagFilterRowView,
     TextLogic, TextSplit, DragLogic, DragState, AppMenu, MenuBarMenu, TabView
@@ -123,7 +124,7 @@ export component MainWindow inherits Window {
 
     // A modal dialog covers the window: the menu bar's keys (which Slint gives the menu before any focused element) must
     // not act on the editor behind it (found by the P8 audit: I, O and Shift+I moved the marks under the save question).
-    property <bool> modal-open: Export.dialog-open || Export.meta-open || Power.asking || Problems.newer-open
+    property <bool> modal-open: FolderList.open || Export.dialog-open || Export.meta-open || Power.asking || Problems.newer-open
         || Problems.db-open || JobLoad.open;
     changed modal-open => {
         Shortcuts.modal-changed(root.modal-open);
@@ -525,6 +526,18 @@ export component MainWindow inherits Window {
         visible: Notices.bell;
         x: parent.width - self.width - 8px;
         y: (root.bar-height - self.height) / 2;
+    }
+
+    // The Job Finalization card's folder list hangs from its field (P11.4).
+    if FolderList.open: FolderListFlyout {
+        x: 0;
+        y: root.bar-height;
+        width: parent.width;
+        height: parent.height - root.bar-height;
+        anchor-x: FolderList.anchor-x - root.content-x;
+        anchor-y: FolderList.anchor-y - root.content-y;
+        anchor-width: FolderList.anchor-width;
+        anchor-height: FolderList.anchor-height;
     }
 
     // The queue's filter menu hangs from its button (P9.6).

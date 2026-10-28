@@ -135,6 +135,10 @@ pub struct ExportPanelState {
     #[serde_as(as = "DefaultOnError")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub recent_targets: Vec<FolderId>,
+    /// The groups folded in the Job Finalization card's folder list (P11.4).
+    #[serde_as(as = "DefaultOnError")]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub list_collapsed: Vec<FolderId>,
     /// The counter suffix is on and its value.
     pub counter_enabled: bool,
     pub counter: u32,
@@ -186,6 +190,7 @@ impl Default for ExportPanelState {
         Self {
             target_id: FolderId::SOURCE,
             recent_targets: Vec::new(),
+            list_collapsed: Vec::new(),
             counter_enabled: false,
             counter: 1,
             auto_increment: true,

@@ -8,7 +8,8 @@
 import { Theme } from "styles.slint";
 import { IconId } from "icons.slint";
 import { Shortcuts } from "shortcuts.slint";
-import { ChoiceButton, IconButton, NumberField } from "controls.slint";
+import { IconButton, NumberField } from "controls.slint";
+import { FolderField } from "folder_list.slint";
 import { TooltipHost } from "tooltip.slint";
 import { Export } from "export_types.slint";
 import { BubbleAnchor } from "bubble.slint";
@@ -158,13 +159,8 @@ export component FinalizeCardBody inherits VerticalLayout {
     HorizontalLayout {
         spacing: 4px;
 
-        ChoiceButton {
-            stretch-fully: true;
-            items: Export.folders;
-            current: Export.folder-index;
-            tooltip: Export.folder-path;
+        FolderField {
             bubble: Playback.has-video ? "export.folder" : "";
-            selected(index) => { Export.select-folder(index); }
         }
 
         IconButton {
