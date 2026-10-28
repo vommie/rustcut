@@ -159,6 +159,34 @@ export component FolderDetails inherits VerticalLayout {
         }
     }
 
+    if root.shown: HorizontalLayout {
+        spacing: 6px;
+
+        Label {
+            text: "Wheel";
+        }
+
+        IconButton {
+            icon: FolderTreeUi.details.place >= 0 ? IconId.folder-favorite-set : IconId.folder-favorite;
+            checked: FolderTreeUi.details.place >= 0;
+            tooltip: FolderTreeUi.details.place >= 0 ? "A favorite on place " + (FolderTreeUi.details.place + 1) + " (click: no favorite)"
+                : "Make it a favorite (a place on the wheel's first level)";
+            clicked => { FolderTreeUi.star(FolderTreeUi.details.id); }
+        }
+
+        Text {
+            text: FolderTreeUi.details.place >= 0 ? "Place " + (FolderTreeUi.details.place + 1) + ": click or drag onto another place"
+                : "Click a place, or drag an entry from the tree onto it";
+            color: Theme.text-muted;
+            font-size: 11px;
+            vertical-alignment: center;
+            wrap: word-wrap;
+            horizontal-stretch: 1;
+        }
+    }
+
+    if root.shown: PlacePreview { }
+
     if root.shown && !FolderTreeUi.details.source: HorizontalLayout {
         spacing: 6px;
 
@@ -174,6 +202,24 @@ export component FolderDetails inherits VerticalLayout {
             placeholder: "Name";
             tooltip: "The name the pickers show (F2 in the tree renames too)";
             committed(text) => { return FolderTreeUi.rename(FolderTreeUi.details.id, text); }
+        }
+    }
+
+    if root.shown: HorizontalLayout {
+        spacing: 6px;
+
+        Label {
+            text: "Short";
+        }
+
+        NumberField {
+            spin: false;
+            alignment: left;
+            max-width: 100000px;
+            text: FolderTreeUi.details.short-name;
+            placeholder: FolderTreeUi.details.name;
+            tooltip: "The name the folder wheel shows instead (empty: the name)";
+            committed(text) => { return FolderTreeUi.set-short-name(text); }
         }
     }
 
@@ -203,6 +249,37 @@ export component FolderDetails inherits VerticalLayout {
             icon: IconId.browse;
             tooltip: "Choose the folder";
             clicked => { FolderTreeUi.pick-path(); }
+        }
+    }
+
+    if root.shown: HorizontalLayout {
+        spacing: 6px;
+
+        Label {
+            text: "Color";
+        }
+
+        if FolderTreeUi.details.has-color: ColorSwatchButton {
+            value: FolderTreeUi.details.color;
+            tooltip: "The entry's color (wheel fields, the list's stripe, its icon)";
+            clicked => { FolderTreeUi.pick-color(); }
+        }
+
+        if !FolderTreeUi.details.has-color: IconButton {
+            icon: IconId.folder-color;
+            tooltip: "No color (the theme's colors): click to choose one";
+            clicked => { FolderTreeUi.pick-color(); }
+        }
+
+        IconButton {
+            icon: IconId.close;
+            enabled: FolderTreeUi.details.has-color;
+            tooltip: "No color (the theme's colors)";
+            clicked => { FolderTreeUi.clear-color(); }
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
         }
     }
 
@@ -289,63 +366,4 @@ export component FolderDetails inherits VerticalLayout {
             }
         }
     }
-
-    if root.shown: HorizontalLayout {
-        spacing: 6px;
-
-        Label {
-            text: "Color";
-        }
-
-        if FolderTreeUi.details.has-color: ColorSwatchButton {
-            value: FolderTreeUi.details.color;
-            tooltip: "The entry's color (wheel fields, the list's stripe, its icon)";
-            clicked => { FolderTreeUi.pick-color(); }
-        }
-
-        if !FolderTreeUi.details.has-color: IconButton {
-            icon: IconId.folder-color;
-            tooltip: "No color (the theme's colors): click to choose one";
-            clicked => { FolderTreeUi.pick-color(); }
-        }
-
-        IconButton {
-            icon: IconId.close;
-            enabled: FolderTreeUi.details.has-color;
-            tooltip: "No color (the theme's colors)";
-            clicked => { FolderTreeUi.clear-color(); }
-        }
-
-        Rectangle {
-            horizontal-stretch: 1;
-        }
-    }
-
-    if root.shown: HorizontalLayout {
-        spacing: 6px;
-
-        Label {
-            text: "Wheel";
-        }
-
-        IconButton {
-            icon: FolderTreeUi.details.place >= 0 ? IconId.folder-favorite-set : IconId.folder-favorite;
-            checked: FolderTreeUi.details.place >= 0;
-            tooltip: FolderTreeUi.details.place >= 0 ? "A favorite on place " + (FolderTreeUi.details.place + 1) + " (click: no favorite)"
-                : "Make it a favorite (a place on the wheel's first level)";
-            clicked => { FolderTreeUi.star(FolderTreeUi.details.id); }
-        }
-
-        Text {
-            text: FolderTreeUi.details.place >= 0 ? "Place " + (FolderTreeUi.details.place + 1) + ": click or drag onto another place"
-                : "Click a place, or drag an entry from the tree onto it";
-            color: Theme.text-muted;
-            font-size: 11px;
-            vertical-alignment: center;
-            wrap: word-wrap;
-            horizontal-stretch: 1;
-        }
-    }
-
-    if root.shown: PlacePreview { }
 }

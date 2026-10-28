@@ -18,7 +18,9 @@ export struct WheelSlotView {
     y: length,
     w: length,
     h: length,
+    // The label's lines ("\n" between them) and its font scale (Rust fits it to the field).
     name: string,
+    scale: float,
     picture: FolderPictureView,
     filled: bool,
     highlighted: bool,
@@ -46,6 +48,7 @@ export global FolderWheel {
     // The middle: the pointed entry's picture or name, or back/cancel/settings (`middle-mode` 1 back, 2 cancel, 3 the
     // empty wheel's jump to Settings > Target Folders) with its progress arc.
     in property <string> middle-name;
+    in property <float> middle-scale: 1;
     in property <FolderPictureView> middle-picture;
     in property <bool> middle-shows-picture;
     in property <int> middle-mode;
@@ -233,11 +236,9 @@ export component FolderWheelLayer inherits Rectangle {
                 if FolderWheel.labels != 1 || slot.more: Text {
                     text: slot.name;
                     color: Theme.text;
-                    font-size: FolderWheel.font-size;
+                    font-size: FolderWheel.font-size * slot.scale;
                     horizontal-alignment: center;
-                    wrap: word-wrap;
-                    overflow: elide;
-                    max-height: FolderWheel.font-size * 2.6;
+                    wrap: no-wrap;
                 }
             }
         }
@@ -269,12 +270,11 @@ export component FolderWheelLayer inherits Rectangle {
                 height: parent.height;
                 text: FolderWheel.middle-name;
                 color: Theme.text;
-                font-size: FolderWheel.font-size;
+                font-size: FolderWheel.font-size * FolderWheel.middle-scale;
                 font-weight: 600;
                 horizontal-alignment: center;
                 vertical-alignment: center;
-                wrap: word-wrap;
-                overflow: elide;
+                wrap: no-wrap;
             }
 
             if FolderWheel.middle-mode != 0: VerticalLayout {

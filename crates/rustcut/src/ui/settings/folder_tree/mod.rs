@@ -187,6 +187,7 @@ impl SettingsBridge {
             source: id.is_source(),
             group: entry.is_group(),
             name: details::title(tree, id).into(),
+            short_name: entry.short_name().unwrap_or_default().into(),
             path: path
                 .as_deref()
                 .map(|p| p.display().to_string())

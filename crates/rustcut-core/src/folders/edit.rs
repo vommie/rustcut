@@ -182,6 +182,21 @@ impl FolderTree {
         Ok(true)
     }
 
+    /// The wheel's short name; an empty text removes it (the wheel shows the name again).
+    pub fn set_short_name(&mut self, id: FolderId, short: &str) -> Result<bool, EditError> {
+        let short = Some(short.trim()).filter(|s| !s.is_empty()).map(str::to_owned);
+        let slot = if id.is_source() {
+            &mut self.source.short_name
+        } else {
+            &mut self.find_mut(id).ok_or(EditError::Unknown)?.short_name
+        };
+        if *slot == short {
+            return Ok(false);
+        }
+        *slot = short;
+        Ok(true)
+    }
+
     /// `#RRGGBB` or none; another text is refused as unknown.
     pub fn set_color(&mut self, id: FolderId, color: Option<&str>) -> Result<bool, EditError> {
         let color = color.filter(|c| is_color(c)).map(str::to_ascii_lowercase);

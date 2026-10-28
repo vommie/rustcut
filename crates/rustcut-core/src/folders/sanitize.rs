@@ -51,6 +51,9 @@ impl FolderTree {
             } else if node.name.trim() != node.name {
                 node.name = node.name.trim().to_owned();
             }
+            if node.short_name.as_deref().is_some_and(|s| s.trim().is_empty()) {
+                node.short_name = None;
+            }
             if node.color.as_deref().is_some_and(|c| !is_color(c)) {
                 node.color = None;
                 fix("export.folders: colors that are not #RRGGBB dropped", true);

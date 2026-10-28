@@ -93,6 +93,18 @@ fn edits_keep_the_rules() {
     assert_eq!(t.set_picture(FolderId::SOURCE, icon.clone()), Ok(true));
     assert_eq!(t.source.picture, icon);
     assert_eq!(t.pictures().len(), 1);
+    // The wheel's short name (0.0.84): empty = none.
+    assert_eq!(t.set_short_name(id(6), "  Crete "), Ok(true));
+    assert_eq!(t.entry(id(6)).map(EntryRef::wheel_name), Some("Crete"));
+    assert_eq!(t.set_short_name(id(6), ""), Ok(true));
+    assert_eq!(
+        t.entry(id(6)).map(EntryRef::wheel_name),
+        Some("Crete"),
+        "the name itself"
+    );
+    assert_eq!(t.set_short_name(FolderId::SOURCE, "Here"), Ok(true));
+    assert_eq!(t.entry(FolderId::SOURCE).map(EntryRef::wheel_name), Some("Here"));
+    assert_eq!(t.entry(FolderId::SOURCE).map(EntryRef::name), Some(SOURCE_NAME));
 }
 
 #[test]
