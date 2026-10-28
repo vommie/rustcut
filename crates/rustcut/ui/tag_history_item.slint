@@ -19,28 +19,33 @@ export component TagHistoryItemView inherits Rectangle {
     height: 22px;
     border-radius: 4px;
     clip: true;
-    // RustCut begin: the tags the last saved job did not have are faint (user request 2026-10-27)
-    opacity: root.item.older && !touch-area.has-hover ? 0.5 : 1;
+    // The pointer is over a pill that can be clicked (a disabled pill never lights up).
+    property <bool> lit: touch-area.has-hover && root.is-enabled;
+
+    // RustCut begin: the more jobs were saved since a tag was last saved with one, the fainter its pill (`fade`, user
+    // requests 2026-10-27 and 2026-10-28); a disabled pill is gray on top of that (UI review
+    // 2026-10-28-allgemein-feedback-rustcut)
+    opacity: root.lit ? 1 : root.item.fade;
     // RustCut end
 
-    background: root.item.is-assigned ? (
-        touch-area.has-hover ? #a6e3a133 : #a6e3a122
+    background: !root.is-enabled ? Theme.surface : root.item.is-assigned ? (
+        root.lit ? #a6e3a133 : #a6e3a122
     ) : (
         root.item.is-partial ? (
-            touch-area.has-hover ? #f9e2af33 : #f9e2af22
+            root.lit ? #f9e2af33 : #f9e2af22
         ) : (
-            touch-area.has-hover ? Theme.surface-hover : Theme.surface-variant
+            root.lit ? Theme.surface-hover : Theme.surface-variant
         )
     );
 
     border-width: 1px;
-    border-color: root.item.is-assigned ? (
-        touch-area.has-hover ? #a6e3a1 : #a6e3a1aa
+    border-color: !root.is-enabled ? Theme.border : root.item.is-assigned ? (
+        root.lit ? #a6e3a1 : #a6e3a1aa
     ) : (
         root.item.is-partial ? (
-            touch-area.has-hover ? #f9e2af : #f9e2afaa
+            root.lit ? #f9e2af : #f9e2afaa
         ) : (
-            touch-area.has-hover ? Theme.primary : Theme.border
+            root.lit ? Theme.primary : Theme.border
         )
     );
 
@@ -88,7 +93,7 @@ export component TagHistoryItemView inherits Rectangle {
         if root.item.is-assigned || root.item.is-partial : IconSlot {
             icon: root.item.is-assigned ? IconId.check : IconId.partial;
             size: IconSize.sm;
-            color: root.item.is-assigned ? #a6e3a1 : #f9e2af;
+            color: !root.is-enabled ? Theme.text-disabled : root.item.is-assigned ? #a6e3a1 : #f9e2af;
         }
 
         // Zero-jitter bold text measurement box
@@ -110,9 +115,9 @@ export component TagHistoryItemView inherits Rectangle {
                 font-size: 11px;
                 font-weight: root.item.is-bold ? 700 : 400;
                 font-italic: root.item.is-italic;
-                color: root.item.is-assigned ? #a6e3a1 : (
+                color: !root.is-enabled ? Theme.text-disabled : root.item.is-assigned ? #a6e3a1 : (
                     root.item.is-partial ? #f9e2af : (
-                        touch-area.has-hover ? Theme.primary : Theme.text
+                        root.lit ? Theme.primary : Theme.text
                     )
                 );
                 vertical-alignment: center;

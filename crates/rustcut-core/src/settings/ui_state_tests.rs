@@ -29,6 +29,7 @@ fn the_tag_panel_round_trips_is_sanitized_and_old_files_load() {
             filter: "be.*".into(),
             regex: true,
             history: vec![5, 3],
+            history_age: vec![0, 2],
             history_collapsed: true,
             history_height: 120,
             hidden: vec![9],
@@ -53,6 +54,7 @@ fn the_tag_panel_round_trips_is_sanitized_and_old_files_load() {
 
     let mut bad = UiState::default();
     bad.tags.history = (0..120).chain([1, 1]).collect();
+    bad.tags.history_age = vec![0; 200];
     bad.tags.locked = vec![4, 4, 2];
     bad.tags.history_height = 9;
     bad.tags.last_rating = Some(9);
@@ -60,6 +62,16 @@ fn the_tag_panel_round_trips_is_sanitized_and_old_files_load() {
     assert_eq!(bad.sanitize().len(), 4);
     assert_eq!(bad.tags.filter_width, 260);
     assert_eq!(bad.tags.history.len(), TagPanelState::HISTORY_MAX);
+    assert_eq!(
+        bad.tags.history_age.len(),
+        TagPanelState::HISTORY_MAX,
+        "the ages stay beside their tags"
+    );
+    let mut twice = UiState::default();
+    twice.tags.history = vec![4, 4, 6];
+    twice.tags.history_age = vec![1, 2, 3];
+    twice.sanitize();
+    assert_eq!((twice.tags.history, twice.tags.history_age), (vec![4, 6], vec![1, 3]));
     assert_eq!(bad.tags.locked, vec![4, 2]);
     assert_eq!((bad.tags.history_height, bad.tags.last_rating), (40, None));
 
@@ -82,6 +94,7 @@ fn the_tag_panel_round_trips_is_sanitized_and_old_files_load() {
     .unwrap();
     let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
     assert!(read.tags.active && read.tags.shown.is_empty());
+    assert!(read.tags.history_age.is_empty(), "a file of 0.0.75 has no ages");
     assert!(
         !read.tags.show_hidden,
         "a file of 0.0.42 has no eye switch: the hidden tags stay hidden"

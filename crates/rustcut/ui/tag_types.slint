@@ -32,7 +32,7 @@ export struct TagHistoryItemModel {
     tooltip: string,
     // RustCut: a tag the last saved job did not have (and not assigned now): the pill is faint (user request
     // 2026-10-27).
-    older: bool,
+    fade: float,
     // Its place in the history's flow (from the rows' top left, src/ui/tags/history_view.rs) and whether it is the
     // newest (it lies on top while it glides to the front).
     x: length,
