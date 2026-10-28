@@ -44,6 +44,7 @@ use crate::ui::editing::{EditingParts, JobEditor};
 use crate::ui::editor::Editor;
 use crate::ui::export::{ExportBridge, ExportParts};
 use crate::ui::filters::{self, FiltersBridge};
+use crate::ui::folders::pictures::Pictures;
 use crate::ui::inspector::InspectorBridge;
 use crate::ui::jump::JumpBridge;
 use crate::ui::keymap::{Action, Keymap};
@@ -168,6 +169,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     );
     let (store, store_thread, store_problem) = open_store(&loaded.paths);
     let (pictures, pictures_thread) = pictures::start(&loaded.paths, &loaded.settings.export.folders);
+    let folder_pictures = Pictures::new(pictures.clone(), runtime.handle().clone());
     // The RustView link (ADR-6): one `rustview api` call at a time on the runtime; the queue tells it about the jobs.
     let (sync, sync_records, _sync_task) =
         spawn_sync(runtime.handle(), loaded.settings.rustview.clone(), CliClient::new);
@@ -503,6 +505,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         writer.clone(),
         loaded.paths.clone(),
         &loaded.ui_state.settings,
+        &folder_pictures,
     );
     // Jump marks lead from messages to the options (Q-N6); held until the event loop ends.
     let _jump = JumpBridge::install(&main, &dock, &settings_window, &queue);

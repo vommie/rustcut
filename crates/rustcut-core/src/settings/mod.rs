@@ -15,6 +15,7 @@ mod ui_state;
 #[cfg(test)]
 mod ui_state_tests;
 mod unknown;
+mod wheel;
 
 pub use dialog_ui::{DialogSize, DialogUiState};
 pub use dialogs::{ConflictDialogSettings, ConflictPreselect, DialogSettings, PictureScope, TileSize};
@@ -36,3 +37,4 @@ pub use ui_state::{
     TagPanelState, TimelineState, UiState, WindowState,
 };
 pub use unknown::unknown_keys;
+pub use wheel::{ColorMode, FolderWheelSettings, PictureShape, WheelButton, WheelLabels, WheelSize};

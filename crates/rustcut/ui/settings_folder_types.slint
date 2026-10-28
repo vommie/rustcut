@@ -1,0 +1,122 @@
+// The Target Folders page's data (P11.3, user decision Q-FP2; src/ui/settings/folder_tree/ fills `FolderTreeUi`): the
+// tree's shown rows, the selected entry's details, the wheel's places for its star and the built-in icons.
+
+import { FolderPictureView } from "folder_picture.slint";
+
+export struct FolderTreeRowView {
+    id: int,
+    depth: int,
+    group: bool,
+    expanded: bool,
+    // "Next to the source" (first, fixed).
+    source: bool,
+    name: string,
+    path: string,
+    // The folder does not exist (now).
+    missing: bool,
+    // The wheel place of a favorite, -1 = none.
+    place: int,
+    picture: FolderPictureView,
+    selected: bool,
+}
+
+export struct FolderDetailsView {
+    shown: bool,
+    id: int,
+    source: bool,
+    group: bool,
+    name: string,
+    path: string,
+    missing: bool,
+    // 0 none, 1 built-in icon, 2 own picture.
+    picture-kind: int,
+    picture: FolderPictureView,
+    icon-name: string,
+    has-color: bool,
+    color: color,
+    place: int,
+    // A group: how many entries it holds (all levels).
+    contents: int,
+}
+
+// One place of the wheel preview.
+export struct FolderPlaceView {
+    taken: bool,
+    mine: bool,
+    name: string,
+    picture: FolderPictureView,
+}
+
+export struct FolderIconView {
+    name: string,
+    picture: FolderPictureView,
+    chosen: bool,
+}
+
+export struct FolderIconRowView {
+    icons: [FolderIconView],
+}
+
+export global FolderTreeUi {
+    in property <[FolderTreeRowView]> rows;
+    in property <FolderDetailsView> details;
+    in property <[FolderPlaceView]> places;
+    in property <[FolderIconRowView]> icon-rows;
+    in property <int> icons-per-row: 9;
+    in property <string> icon-search;
+    // The pictures' shape in lists (Settings > Folder Wheel) and whether one-color pictures take the entry's color.
+    in property <int> shape: 1;
+    in property <bool> tint: true;
+    // The delete button's tooltip (a group goes with its contents) and whether it can delete.
+    in property <string> delete-tip;
+    in property <bool> can-delete;
+    // An entry being renamed in its row (F2 or a double click), -1 = none.
+    in property <int> renaming: -1;
+    // The icon grid is shown in the details.
+    in property <bool> icons-open;
+    // Dragging an entry: the line where it would land (content y, indentation in levels) or the group row that takes
+    // it (-1 = none), and the dragged name.
+    in property <bool> dragging;
+    in property <bool> drop-shown;
+    in property <length> drop-y;
+    in property <int> drop-depth;
+    in property <int> drop-into: -1;
+    in property <string> drag-name;
+    // The pointer in window coordinates while dragging, and the wheel place under it (-1 = none; the small wheel of
+    // the details sets it).
+    in-out property <length> pointer-x;
+    in-out property <length> pointer-y;
+    in-out property <int> drop-place: -1;
+    out property <length> row-height: 28px;
+    out property <length> indent: 18px;
+
+    callback select(/* id */ int);
+    callback toggle(/* id */ int);
+    callback rename-start(/* id */ int);
+    callback rename(/* id */ int, string) -> bool;
+    callback rename-end();
+    callback star(/* id */ int);
+    callback add-folder();
+    callback add-group();
+    callback delete();
+    callback key(/* text */ string) -> bool;
+    callback put-on-place(/* place */ int);
+    // The "x" badge of a taken place: its favorite loses the star.
+    callback clear-place(/* place */ int);
+    callback set-path(string) -> bool;
+    callback path-typed(string);
+    callback path-canceled();
+    callback pick-path();
+    callback picture-kind(/* 0 none, 1 icon, 2 own */ int);
+    callback pick-icon(/* name */ string);
+    // Shows or hides the icon grid.
+    callback toggle-icons();
+    callback pick-file();
+    callback search-icons(string);
+    callback pick-color();
+    callback clear-color();
+    callback drag-start(/* id */ int);
+    // The pointer over the list (`inside`) at content y.
+    callback drag-move(/* content y */ length, /* inside */ bool);
+    callback drag-end(/* dropped */ bool);
+}

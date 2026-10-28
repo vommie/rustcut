@@ -10,7 +10,7 @@ use slint::ComponentHandle as _;
 use super::field::{Edit, Kind, Value};
 use super::hotkeys::{self, Recorded};
 use super::page::Page;
-use super::{SettingsBridge, catalog, folders, hotkey_view};
+use super::{SettingsBridge, catalog, hotkey_view};
 use crate::ui::color_picker::{self, PickerRequest};
 use crate::ui::keymap::{Action, Chord, KeyPress, Keymap};
 use crate::ui::notices::{self, Area, Notice, TYPING};
@@ -195,54 +195,6 @@ impl SettingsBridge {
             "rustview.test" => self.test_rustview(),
             _ => tracing::debug!(key, "[Settings] Unknown button"),
         }
-    }
-
-    // --- Target folders -----------------------------------------------------------------------------------------
-
-    pub(super) fn add_folder(&self) {
-        let mut dialog = rfd::AsyncFileDialog::new().set_title("Add a Target Folder");
-        if let Some(window) = self.window.borrow().as_ref() {
-            dialog = dialog.set_parent(&window.window().window_handle());
-        }
-        let picked = dialog.pick_folder();
-        let weak = Weak::clone(&self.me);
-        let spawned = slint::spawn_local(async move {
-            let Some(folder) = picked.await else { return };
-            let Some(bridge) = weak.upgrade() else { return };
-            let path = folder.path().to_path_buf();
-            bridge.update(|s| {
-                if folders::add(&mut s.export.folders, &path) {
-                    tracing::info!(folder = %path.display(), "[Settings] Target folder added");
-                }
-            });
-            bridge.publish();
-        });
-        if let Err(e) = spawned {
-            tracing::error!(error = %e, "[Settings] The event loop is gone; no folder dialog");
-        }
-    }
-
-    pub(super) fn remove_folder(&self, index: usize) {
-        self.update(|s| {
-            if let Some(folder) = folders::remove(&mut s.export.folders, index) {
-                tracing::info!(folder = %folder.name, "[Settings] Target folder removed from the list");
-            }
-        });
-        self.publish();
-    }
-
-    pub(super) fn move_folder(&self, index: usize, by: i32) {
-        self.update(|s| {
-            folders::shift(&mut s.export.folders.entries, index, by);
-        });
-        self.publish();
-    }
-
-    pub(super) fn rename_folder(&self, index: usize, label: &str) -> bool {
-        let mut ok = true;
-        self.update(|s| ok = folders::rename(&mut s.export.folders, index, label).is_ok());
-        self.publish();
-        ok
     }
 
     // --- Render profiles ----------------------------------------------------------------------------------------

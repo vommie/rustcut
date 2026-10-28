@@ -158,6 +158,8 @@ export component DragArea inherits Rectangle {
     in property <MouseCursor> mouse-cursor: MouseCursor.default;
     out property <bool> has-hover: touch.has-hover;
     out property <bool> pressed: touch.pressed;
+    // The pointer's window x during a drag (a drop target beside the list, the folder wheel's places, P11.3).
+    out property <length> pointer-x;
     callback tapped(/* control */ bool, /* shift */ bool);
     callback double-tapped();
     callback menu(/* window x */ length, /* window y */ length);
@@ -210,6 +212,7 @@ export component DragArea inherits Rectangle {
                     root.dragged = true;
                     root.drag-started(root.press-window-y);
                 }
+                root.pointer-x = self.absolute-position.x + self.mouse-x;
                 root.drag-moved(self.absolute-position.y + self.mouse-y);
             }
         }

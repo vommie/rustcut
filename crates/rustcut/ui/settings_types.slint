@@ -63,14 +63,6 @@ export struct RatioChipView {
     kind: int,
 }
 
-// A named target folder of the Export & Naming page.
-export struct FolderRowView {
-    label: string,
-    path: string,
-    // The folder does not exist (now).
-    missing: bool,
-}
-
 // A profile in the Render Profiles page's list.
 export struct ProfileItemView {
     name: string,
@@ -130,7 +122,7 @@ export global SettingsUi {
     in property <string> page-title;
     // Each page's scroll position while RustCut runs (one entry per page, filled by Rust; never saved).
     in-out property <[length]> page-scroll;
-    // 0 none, 1 target folders, 2 render profiles, 3 hotkeys, 4 About, 5 Messages, 6 crop ratios (Filters), 7 Diagnostics.
+    // 0 none, 1 target folders (`FolderTreeUi`, above the cards), 2 render profiles, 3 hotkeys, 4 About, 5 Messages, 6 crop ratios (Filters), 7 Diagnostics.
     in property <int> special;
     in property <[SettingCardView]> cards;
     // The page has generic options that can go back to their defaults.
@@ -177,33 +169,6 @@ export global SettingsUi {
     callback ratio-canceled();
     callback remove-ratio(int);
     callback reset-ratios();
-
-    // Export & Naming: the named target folders.
-    in property <[FolderRowView]> folders;
-    callback add-folder();
-    callback remove-folder(int);
-    callback move-folder(/* index */ int, /* by */ int);
-    callback rename-folder(/* index */ int, /* label */ string) -> bool;
-    // A typed path (checked, the folder made when missing; false = refused, P9.7), its typing and closing, the folder
-    // dialog of a row.
-    callback set-folder-path(/* index */ int, /* path */ string) -> bool;
-    callback folder-path-typed(/* index */ int, string);
-    callback folder-path-canceled(/* index */ int);
-    callback pick-folder-path(/* index */ int);
-    // Dragging a folder row to another place (P9.7 with the module of P9.4): the rows' shifts, the gap, the ghost.
-    in property <bool> folder-dragging;
-    in property <[length]> folder-drag-shifts;
-    in property <bool> folder-drag-instant;
-    in property <length> folder-drag-gap-y;
-    in property <length> folder-drag-gap-height;
-    in property <length> folder-drag-ghost-y;
-    in property <string> folder-drag-title;
-    // The dragged row.
-    in property <int> folder-drag-row: -1;
-    out property <length> folder-row-height: 24px;
-    callback folder-drag-start(/* row */ int, /* pointer */ length, /* pitch */ length, /* height */ length);
-    callback folder-drag-move(/* pointer */ length);
-    callback folder-drag-end();
 
     // Render Profiles.
     in property <[ProfileItemView]> profiles;

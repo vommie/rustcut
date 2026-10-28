@@ -1,0 +1,351 @@
+// The selected entry of Settings > Target Folders (P11.3, user decision Q-FP2): its name, its path (a folder), its
+// picture (none = the first letter, a built-in icon from the grid, or an own image or SVG), its color and its place on
+// the folder wheel's first level (a small wheel: a click puts the entry on that place).
+
+import { ListView } from "std-widgets.slint";
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { IconButton, NumberField, SegmentedChoice } from "controls.slint";
+import { ColorSwatchButton } from "color_picker_window.slint";
+import { SettingsSearch } from "settings_search.slint";
+import { TooltipArea } from "tooltip.slint";
+import { FolderPicture } from "folder_picture.slint";
+import { FolderTreeUi } from "settings_folder_types.slint";
+
+component Label inherits Text {
+    width: 54px;
+    color: Theme.text-muted;
+    font-size: 12px;
+    vertical-alignment: center;
+}
+
+/// The first level's places around a small wheel; the selected entry's place is marked.
+component PlacePreview inherits Rectangle {
+    property <length> radius: 58px;
+    property <int> count: FolderTreeUi.places.length;
+    // The place under a dragged entry (-1 = none): near the ring, by its angle clockwise from the top.
+    property <length> dx: FolderTreeUi.pointer-x - self.absolute-position.x - self.width / 2;
+    property <length> dy: FolderTreeUi.pointer-y - self.absolute-position.y - self.height / 2;
+    property <length> distance: Math.sqrt((root.dx / 1px) * (root.dx / 1px) + (root.dy / 1px) * (root.dy / 1px)) * 1px;
+    property <int> hit: !FolderTreeUi.dragging || root.count == 0 || root.distance < root.radius - 26px || root.distance > root.radius + 26px ? -1
+        : Math.mod(Math.round((Math.atan2(root.dx / 1px, -root.dy / 1px) + 360deg) / (360deg / root.count)), root.count);
+
+    changed hit => {
+        FolderTreeUi.drop-place = root.hit;
+    }
+
+    height: 2 * root.radius + 32px;
+
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: 2 * root.radius;
+        height: self.width;
+        border-radius: self.width / 2;
+        border-width: 1px;
+        border-color: Theme.border;
+    }
+
+    for place[i] in FolderTreeUi.places: TooltipArea {
+        x: root.width / 2 + root.radius * Math.sin(i * 360deg / Math.max(1, root.count)) - self.width / 2;
+        y: root.height / 2 - root.radius * Math.cos(i * 360deg / Math.max(1, root.count)) - self.height / 2;
+        width: 28px;
+        height: 28px;
+        text: place.taken ? "Place " + (i + 1) + ": " + place.name + (place.mine ? "" : " (a click swaps)")
+            : "Place " + (i + 1) + ": free (a click puts the entry here)";
+
+        Rectangle {
+            border-radius: self.width / 2;
+            background: place.taken ? transparent : Theme.surface;
+            border-width: place.mine || root.hit == i ? 2px : 1px;
+            border-color: root.hit == i ? Theme.accent : place.mine ? Theme.primary : touch.has-hover ? Theme.text-muted : Theme.border;
+
+            if place.taken: FolderPicture {
+                x: 3px;
+                y: 3px;
+                width: parent.width - 6px;
+                height: self.width;
+                picture: place.picture;
+                shape: 0;
+                tint: FolderTreeUi.tint;
+            }
+
+            if !place.taken: Text {
+                text: i + 1;
+                color: Theme.status-deleted;
+                font-size: 10px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            touch := TouchArea {
+                clicked => { FolderTreeUi.put-on-place(i); }
+            }
+        }
+
+        // Frees the place: its favorite loses the star.
+        if place.taken: TooltipArea {
+            x: parent.width - self.width + 3px;
+            y: -3px;
+            width: 14px;
+            height: 14px;
+            text: "Free place " + (i + 1) + " (\"" + place.name + "\" loses its star)";
+
+            Rectangle {
+                border-radius: self.width / 2;
+                background: clear.has-hover ? Theme.status-corrupt : Theme.surface-selected;
+                border-width: 1px;
+                border-color: Theme.surface;
+
+                AppIcon {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    icon: IconId.close;
+                    size: 10px;
+                    color: clear.has-hover ? Theme.surface : Theme.text;
+                }
+
+                clear := TouchArea {
+                    clicked => { FolderTreeUi.clear-place(i); }
+                }
+            }
+        }
+    }
+}
+
+export component FolderDetails inherits VerticalLayout {
+    property <bool> shown: FolderTreeUi.details.shown;
+
+    spacing: 8px;
+    alignment: start;
+
+    if !root.shown: Text {
+        text: "Select an entry to change its name, path, picture, color or place on the wheel.";
+        color: Theme.text-muted;
+        font-size: 12px;
+        wrap: word-wrap;
+    }
+
+    if root.shown: HorizontalLayout {
+        spacing: 10px;
+
+        FolderPicture {
+            width: 40px;
+            height: 40px;
+            picture: FolderTreeUi.details.picture;
+            shape: FolderTreeUi.shape;
+            tint: FolderTreeUi.tint;
+            plate: true;
+        }
+
+        VerticalLayout {
+            alignment: center;
+
+            Text {
+                text: FolderTreeUi.details.name;
+                color: Theme.text;
+                font-weight: 700;
+                overflow: elide;
+            }
+
+            Text {
+                text: FolderTreeUi.details.source ? "Jobs go next to their source video"
+                    : FolderTreeUi.details.group ? (FolderTreeUi.details.contents == 1 ? "A group with 1 entry"
+                    : "A group with " + FolderTreeUi.details.contents + " entries")
+                    : "A target folder";
+                color: Theme.text-muted;
+                font-size: 11px;
+            }
+        }
+    }
+
+    if root.shown && !FolderTreeUi.details.source: HorizontalLayout {
+        spacing: 6px;
+
+        Label {
+            text: "Name";
+        }
+
+        NumberField {
+            spin: false;
+            alignment: left;
+            max-width: 100000px;
+            text: FolderTreeUi.details.name;
+            placeholder: "Name";
+            tooltip: "The name the pickers show (F2 in the tree renames too)";
+            committed(text) => { return FolderTreeUi.rename(FolderTreeUi.details.id, text); }
+        }
+    }
+
+    if root.shown && !FolderTreeUi.details.source && !FolderTreeUi.details.group: HorizontalLayout {
+        spacing: 6px;
+
+        Label {
+            text: "Path";
+        }
+
+        NumberField {
+            spin: false;
+            alignment: left;
+            max-width: 100000px;
+            text: FolderTreeUi.details.path;
+            placeholder: "/home/you/Videos";
+            tooltip: FolderTreeUi.details.missing ? "The folder does not exist yet: it is made when a job writes into it"
+                : "The folder's path (a folder that does not exist yet is made when a job writes into it)";
+            mark: FolderTreeUi.details.missing ? IconId.status-warning : IconId.none;
+            bubble: "settings:folder.path";
+            committed(text) => { return FolderTreeUi.set-path(text); }
+            typed(text) => { FolderTreeUi.path-typed(text); }
+            canceled => { FolderTreeUi.path-canceled(); }
+        }
+
+        IconButton {
+            icon: IconId.browse;
+            tooltip: "Choose the folder";
+            clicked => { FolderTreeUi.pick-path(); }
+        }
+    }
+
+    if root.shown: HorizontalLayout {
+        spacing: 6px;
+
+        Label {
+            text: "Picture";
+        }
+
+        SegmentedChoice {
+            items: ["Letter", "Icon", "Own"];
+            current: FolderTreeUi.details.picture-kind;
+            tooltip: "The first letter on the color, a built-in icon, or an own image or SVG (stored small in RustCut's data folder)";
+            selected(i) => { FolderTreeUi.picture-kind(i); }
+        }
+
+        IconButton {
+            icon: FolderTreeUi.icons-open ? IconId.chevron-up : IconId.chevron-down;
+            checked: FolderTreeUi.icons-open;
+            tooltip: FolderTreeUi.icons-open ? "Hide the built-in icons" : "Show the built-in icons";
+            clicked => { FolderTreeUi.toggle-icons(); }
+        }
+
+        IconButton {
+            icon: IconId.folder-picture-file;
+            tooltip: "Choose an own image or SVG";
+            clicked => { FolderTreeUi.pick-file(); }
+        }
+    }
+
+    if root.shown && FolderTreeUi.icons-open: VerticalLayout {
+        spacing: 4px;
+
+        SettingsSearch {
+            initial: FolderTreeUi.icon-search;
+            placeholder: "Search icons";
+            edited(text) => { FolderTreeUi.search-icons(text); }
+        }
+
+        Rectangle {
+            height: 170px;
+            border-radius: 4px;
+            border-width: 1px;
+            border-color: Theme.border;
+
+            ListView {
+                x: 1px;
+                y: 1px;
+                width: parent.width - 2px;
+                height: parent.height - 2px;
+
+                for line in FolderTreeUi.icon-rows: HorizontalLayout {
+                    height: 30px;
+                    padding-left: 2px;
+                    spacing: 2px;
+                    alignment: start;
+
+                    for icon in line.icons: TooltipArea {
+                        width: 28px;
+                        text: icon.name;
+
+                        Rectangle {
+                            border-radius: 4px;
+                            background: icon.chosen ? Theme.surface-selected : cell.has-hover ? Theme.surface-hover : transparent;
+                            border-width: icon.chosen ? 1px : 0px;
+                            border-color: Theme.primary;
+
+                            FolderPicture {
+                                x: 4px;
+                                y: 4px;
+                                width: 20px;
+                                height: 20px;
+                                picture: icon.picture;
+                                tint: false;
+                            }
+
+                            cell := TouchArea {
+                                clicked => { FolderTreeUi.pick-icon(icon.name); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if root.shown: HorizontalLayout {
+        spacing: 6px;
+
+        Label {
+            text: "Color";
+        }
+
+        if FolderTreeUi.details.has-color: ColorSwatchButton {
+            value: FolderTreeUi.details.color;
+            tooltip: "The entry's color (wheel fields, the list's stripe, its icon)";
+            clicked => { FolderTreeUi.pick-color(); }
+        }
+
+        if !FolderTreeUi.details.has-color: IconButton {
+            icon: IconId.folder-color;
+            tooltip: "No color (the theme's colors): click to choose one";
+            clicked => { FolderTreeUi.pick-color(); }
+        }
+
+        IconButton {
+            icon: IconId.close;
+            enabled: FolderTreeUi.details.has-color;
+            tooltip: "No color (the theme's colors)";
+            clicked => { FolderTreeUi.clear-color(); }
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+        }
+    }
+
+    if root.shown: HorizontalLayout {
+        spacing: 6px;
+
+        Label {
+            text: "Wheel";
+        }
+
+        IconButton {
+            icon: FolderTreeUi.details.place >= 0 ? IconId.folder-favorite-set : IconId.folder-favorite;
+            checked: FolderTreeUi.details.place >= 0;
+            tooltip: FolderTreeUi.details.place >= 0 ? "A favorite on place " + (FolderTreeUi.details.place + 1) + " (click: no favorite)"
+                : "Make it a favorite (a place on the wheel's first level)";
+            clicked => { FolderTreeUi.star(FolderTreeUi.details.id); }
+        }
+
+        Text {
+            text: FolderTreeUi.details.place >= 0 ? "Place " + (FolderTreeUi.details.place + 1) + "; click another place to move it"
+                : "Click a place to put it there";
+            color: Theme.text-muted;
+            font-size: 11px;
+            vertical-alignment: center;
+            wrap: word-wrap;
+            horizontal-stretch: 1;
+        }
+    }
+
+    if root.shown: PlacePreview { }
+}

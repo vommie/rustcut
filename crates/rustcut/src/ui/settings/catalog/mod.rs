@@ -5,6 +5,7 @@ mod app;
 mod dialogs;
 mod editing;
 mod filters;
+mod folders;
 mod messages;
 mod work;
 
@@ -28,6 +29,7 @@ pub fn cards(page: Page) -> &'static [Card] {
         Page::Editor => editing::EDITOR,
         Page::Filters => filters::FILTERS,
         Page::Export => editing::EXPORT,
+        Page::Folders => folders::FOLDERS,
         Page::Profiles | Page::Hotkeys | Page::Diagnostics | Page::About => &[],
         Page::Queue => work::QUEUE,
         Page::RustView => work::RUSTVIEW,

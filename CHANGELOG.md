@@ -7,6 +7,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Settings > Target Folders: the target folders as a tree. Groups (menu entries without a path) hold folders and other
+  groups at any depth; drag an entry before, after or into a group; F2 or a double click renames it; new folders come
+  from the folder dialog or are dropped from the file manager. Deleting is held (2 s); a group goes with everything in
+  it, and the button's tooltip says so (0.0.78).
+- Every entry can have a picture (the first letter, one of about 240 built-in icons, or an own image or SVG) and a
+  color. Own images are stored small (256 px, WebP); own SVGs are cleaned of scripts and external references first.
+  They live in `pictures.sqlite` in RustCut's data folder; pictures no entry uses any more are removed (0.0.78).
+- A star makes an entry a favorite with its own place on the folder wheel's first level; the details show the wheel's
+  places: a click or dragging an entry from the tree onto a place puts it there, the small "×" on a place frees it. In a
+  narrow Settings window the details stand below the tree, and the page scrolls while an entry is dragged near its top
+  or bottom edge (0.0.78).
+- The options of the coming folder wheel (mouse button, hold time, rest on a group, push through, places, size,
+  labels, path, dimming, animations) and how pictures and colors show (0.0.78).
+
 ### Changed
 
 - The target folders are now a folder tree (the first step of the new target folder picker): your folders move into
@@ -14,6 +30,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `ui-state.toml` to version 2 (`target-folder-id`, the chosen folder is kept by an id); both files are backed up
   first (0.0.77).
 - "Source folder" in the Job Finalization card is now called "Next to the source" (0.0.77).
+- The target folders moved from Settings > Export & Naming to their own page, Settings > Target Folders; the Job
+  Finalization card's edit button leads there (0.0.78).
 - A loaded job whose folder is not among the target folders keeps that folder in the card ("not in the list") and a
   message offers "Add to target folders"; the folder is no longer added silently (0.0.77).
 

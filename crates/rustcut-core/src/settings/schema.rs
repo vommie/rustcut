@@ -12,6 +12,7 @@ use super::dialogs::DialogSettings;
 use super::file::{MigrationStep, VersionedFile};
 use super::filters::FilterDefaults;
 use super::notices::{NoticeSettings, migrate_notice_options};
+use super::wheel::FolderWheelSettings;
 use crate::folders::FolderTree;
 use crate::naming::DEFAULT_TEMPLATE;
 use crate::render::{DEFAULT_PROFILE_ID, RenderProfile, is_builtin_id};
@@ -25,6 +26,8 @@ pub struct Settings {
     pub editor: EditorSettings,
     pub filters: FilterDefaults,
     pub export: ExportSettings,
+    /// The folder wheel and the pictures of both folder pickers (P11.3).
+    pub folder_wheel: FolderWheelSettings,
     pub render: RenderSettings,
     pub queue: QueueSettings,
     pub rustview: RustViewSettings,
@@ -643,6 +646,7 @@ impl VersionedFile for Settings {
             r.hidden_profiles != before,
         );
         notes.extend(self.export.folders.sanitize());
+        self.folder_wheel.sanitize(&mut notes);
         notes.extend(self.dialogs.conflict.sanitize());
         self.notices.sanitize(&mut notes);
         notes
