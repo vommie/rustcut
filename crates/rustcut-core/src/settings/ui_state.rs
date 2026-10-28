@@ -44,6 +44,7 @@ pub struct UiState {
 }
 
 /// The Settings window (M4.2): its size and place, the page it showed last and what each page had selected.
+#[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SettingsWindowState {
@@ -65,6 +66,13 @@ pub struct SettingsWindowState {
     pub messages_search: String,
     /// The Diagnostics page lists the checks that passed (Dependencies, Health; 0.0.54).
     pub diagnostics_passed: [bool; 2],
+    /// The Target Folders page (P11.3): the selected entry and the folded groups. Values this version cannot read
+    /// count as missing.
+    #[serde_as(as = "DefaultOnError")]
+    pub folder_selected: Option<FolderId>,
+    #[serde_as(as = "DefaultOnError")]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub folder_collapsed: Vec<FolderId>,
 }
 
 impl SettingsWindowState {
@@ -85,6 +93,8 @@ impl Default for SettingsWindowState {
             messages_tab: 0,
             messages_search: String::new(),
             diagnostics_passed: [false; 2],
+            folder_selected: None,
+            folder_collapsed: Vec::new(),
         }
     }
 }

@@ -1,0 +1,56 @@
+// An entry's picture in the folder pickers (P11, user decision Q-FP2): a built-in icon or an own SVG drawn in one color
+// (`mono`: the folder's color or the text color), an own image as it is, or the first letter on the folder's color.
+// Shapes: 0 round, 1 rounded square, 2 square.
+
+import { Theme } from "styles.slint";
+
+export struct FolderPictureView {
+    image: image,
+    has-image: bool,
+    // Drawn in one color (tinted here).
+    mono: bool,
+    // The first letter when there is no picture.
+    initial: string,
+    // The entry's color (`has-color` = it has one) and a readable color for a letter on it.
+    color: color,
+    has-color: bool,
+    ink: color,
+}
+
+export component FolderPicture inherits Rectangle {
+    in property <FolderPictureView> picture;
+    in property <int> shape: 1;
+    // One-color pictures take the entry's color (color mode "background + colored icons").
+    in property <bool> tint: true;
+    // The background behind a one-color picture (the list's rows have none).
+    in property <bool> plate: false;
+
+    border-radius: root.shape == 0 ? root.width / 2 : root.shape == 1 ? root.width * 0.22 : 0px;
+    clip: true;
+    background: !root.picture.has-image ? (root.picture.has-color ? root.picture.color : Theme.surface-selected)
+        : root.picture.mono && root.plate && root.picture.has-color ? root.picture.color.with-alpha(0.22) : transparent;
+
+    if root.picture.has-image && !root.picture.mono: Image {
+        width: 100%;
+        height: 100%;
+        source: root.picture.image;
+        image-fit: cover;
+    }
+
+    if root.picture.has-image && root.picture.mono: Image {
+        width: root.plate ? 72% : 100%;
+        height: root.plate ? 72% : 100%;
+        source: root.picture.image;
+        image-fit: contain;
+        colorize: root.tint && root.picture.has-color ? root.picture.color : Theme.text;
+    }
+
+    if !root.picture.has-image: Text {
+        text: root.picture.initial;
+        color: root.picture.has-color ? root.picture.ink : Theme.text;
+        font-size: root.height * 0.55;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}

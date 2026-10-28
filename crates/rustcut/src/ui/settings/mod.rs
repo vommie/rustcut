@@ -9,8 +9,7 @@
 mod catalog;
 pub mod diagnostics;
 mod field;
-mod folder_drag;
-mod folder_path;
+mod folder_tree;
 pub mod folders;
 mod handlers;
 mod hotkeys;
@@ -35,6 +34,7 @@ use self::page::{Page, Special};
 use self::profiles::ProfilesPage;
 use crate::app::SettingsWriter;
 use crate::app::window::to_dimension;
+use crate::ui::folders::pictures::Pictures;
 use crate::ui::folders::presence::FolderPresence;
 use crate::ui::keymap::Keymap;
 use crate::ui::notices::{self, Kind, Notice};
@@ -44,9 +44,8 @@ use crate::util::model::{sync, sync_with};
 const PROFILE_JUMP_KEY: &str = "settings:profiles.selected";
 
 use crate::{
-    FolderRowView, HoldConfirm, HotkeyChipView, HotkeyRowView, MainWindow, MessageKindView, OptionRowView,
-    ProfileItemView, RatioChipView, RenderIssueView, SettingCardView, SettingRowView, SettingsUi, SettingsWindow,
-    TooltipSettings,
+    HoldConfirm, HotkeyChipView, HotkeyRowView, MainWindow, MessageKindView, OptionRowView, ProfileItemView,
+    RatioChipView, RenderIssueView, SettingCardView, SettingRowView, SettingsUi, SettingsWindow, TooltipSettings,
 };
 
 /// The help text of the option `key` (`config.toml`'s name, as `Field::key`); empty for an unknown key. The filters'
@@ -81,7 +80,6 @@ struct Models {
     cards: Rc<VecModel<SettingCardView>>,
     /// One row model per card slot, so a card keeps its elements while its rows change, and the rows it shows.
     card_rows: RefCell<Vec<CardSlot>>,
-    folders: Rc<VecModel<FolderRowView>>,
     ratios: Rc<VecModel<RatioChipView>>,
     profiles: Rc<VecModel<ProfileItemView>>,
     issues: Rc<VecModel<RenderIssueView>>,
@@ -117,9 +115,9 @@ pub struct SettingsBridge {
     tested: RefCell<Option<(Kind, String)>>,
     tested_timer: slint::Timer,
     messages_shown: RefCell<messages::Shown>,
-    /// A target folder that is dragged (P9.7) and how far each row moves aside meanwhile.
-    folder_drag: RefCell<Option<folder_drag::FolderDrag>>,
-    folder_shifts: Rc<VecModel<f32>>,
+    /// The Target Folders page (P11.3) and the folder pictures it shows.
+    folder_page: folder_tree::FolderPage,
+    pictures: Rc<Pictures>,
     /// Which target folders are missing (checked on the runtime, P11.1).
     presence: Rc<FolderPresence>,
     /// The Diagnostics page's last report and whether its checks run (P9.16).
@@ -136,6 +134,7 @@ impl SettingsBridge {
         writer: SettingsWriter,
         paths: AppPaths,
         state: &SettingsWindowState,
+        pictures: &Rc<Pictures>,
     ) -> Rc<Self> {
         let settings = writer.current();
         let page = Page::from_id(&state.page).unwrap_or(Page::General);
@@ -167,7 +166,6 @@ impl SettingsBridge {
                 )),
                 cards: Rc::new(VecModel::default()),
                 card_rows: RefCell::default(),
-                folders: Rc::new(VecModel::default()),
                 ratios: Rc::new(VecModel::default()),
                 profiles: Rc::new(VecModel::default()),
                 issues: Rc::new(VecModel::default()),
@@ -183,8 +181,8 @@ impl SettingsBridge {
             messages_shown: RefCell::default(),
             diag: RefCell::default(),
             status: RefCell::default(),
-            folder_drag: RefCell::new(None),
-            folder_shifts: Rc::new(VecModel::default()),
+            folder_page: folder_tree::FolderPage::new(state),
+            pictures: Rc::clone(pictures),
             presence: Rc::default(),
         });
         let this = Rc::downgrade(&bridge);
@@ -203,6 +201,14 @@ impl SettingsBridge {
         main.on_open_folder(move |which| {
             if let Some(b) = this.upgrade() {
                 b.open_folder(&which);
+            }
+        });
+        let this = Rc::downgrade(&bridge);
+        pictures.listen(move || {
+            if let Some(b) = this.upgrade()
+                && b.page.get().special() == Special::Folders
+            {
+                b.publish_folder_tree(&b.writer.current());
             }
         });
         let this = Rc::downgrade(&bridge);
@@ -303,6 +309,7 @@ impl SettingsBridge {
         self.page.get().id().clone_into(&mut current.page);
         current.profile = Some(self.profiles.borrow().selected_id().to_owned());
         current.hotkey_search.clone_from(&self.hotkeys.borrow().search);
+        self.folder_page.save_into(&mut current);
         *state = current;
     }
 
@@ -348,9 +355,7 @@ impl SettingsBridge {
         // Each page starts at its top the first time it shows; the window keeps the positions while it is hidden.
         ui.set_page_scroll(ModelRc::from(Rc::new(VecModel::from(vec![0.0_f32; Page::ALL.len()]))));
         ui.set_cards(ModelRc::from(Rc::clone(&m.cards)));
-        ui.set_folders(ModelRc::from(Rc::clone(&m.folders)));
         ui.set_ratios(ModelRc::from(Rc::clone(&m.ratios)));
-        ui.set_folder_drag_shifts(ModelRc::from(Rc::clone(&self.folder_shifts)));
         ui.set_profiles(ModelRc::from(Rc::clone(&m.profiles)));
         ui.set_profile_issues(ModelRc::from(Rc::clone(&m.issues)));
         ui.set_profile_video(ModelRc::from(Rc::clone(&m.video)));
@@ -371,6 +376,8 @@ impl SettingsBridge {
             );
         }
         input::connect(&self.me, &window);
+        self.folder_page.attach(&window);
+        folder_tree::connect(&self.me, &window);
         ratios::connect(&self.me, &window);
         diagnostics::connect(&self.me, &window);
         let this = Weak::clone(&self.me);
@@ -478,7 +485,7 @@ impl SettingsBridge {
         let cards = view::cards(page, &settings, &self.errors.borrow(), self);
         self.publish_cards(&cards);
         match page.special() {
-            Special::Folders => self.publish_folders(&settings),
+            Special::Folders => self.publish_folder_tree(&settings),
             Special::Profiles => self.publish_profiles(&ui, &settings),
             Special::Hotkeys => self.publish_hotkeys(&ui),
             Special::Messages => self.publish_messages(&ui, &settings),
@@ -506,31 +513,6 @@ impl SettingsBridge {
             })
             .collect();
         sync(&self.models.cards, views);
-    }
-
-    fn publish_folders(&self, settings: &Settings) {
-        let entries = &settings.export.folders.entries;
-        let rows = entries
-            .iter()
-            .map(|f| FolderRowView {
-                label: f.name.as_str().into(),
-                path: f
-                    .path
-                    .as_deref()
-                    .map(|p| p.display().to_string())
-                    .unwrap_or_default()
-                    .into(),
-                missing: f.path.as_deref().is_some_and(|p| self.presence.is_missing(p)),
-            })
-            .collect();
-        sync(&self.models.folders, rows);
-        let paths = entries.iter().filter_map(|f| f.path.clone()).collect();
-        let weak = Weak::clone(&self.me);
-        self.presence.refresh(&self.runtime, paths, move || {
-            if let Some(bridge) = weak.upgrade() {
-                bridge.publish_folders(&bridge.writer.current());
-            }
-        });
     }
 }
 

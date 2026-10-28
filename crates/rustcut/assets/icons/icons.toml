@@ -155,6 +155,11 @@ job_save = { tabler = "device-floppy", doc = "Save the job into the queue" }
 target_folder = { tabler = "folder", doc = "Target folder" }
 folder_add = { tabler = "folder-plus", doc = "Add a target folder" }
 folder_remove = { tabler = "folder-minus", doc = "Remove the target folder from the list" }
+folder_group_add = { tabler = "category-plus", doc = "Add a group to the target folder tree (P11.3)" }
+folder_favorite = { tabler = "star", doc = "Make the entry a favorite with a place on the folder wheel (P11.3)" }
+folder_favorite_set = { tabler = "star", style = "filled", doc = "The entry is a favorite with a place on the folder wheel" }
+folder_picture_file = { tabler = "photo-plus", doc = "Choose an own image or SVG as the entry's picture" }
+folder_color = { tabler = "palette", doc = "Choose a color for a target folder entry" }
 target_name = { tabler = "file-pencil", doc = "File name of the job" }
 counter = { tabler = "hash", doc = "Counter in the file name" }
 auto_increment = { tabler = "sort-ascending-numbers", doc = "Raise the counter after each save" }

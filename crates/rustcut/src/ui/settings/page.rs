@@ -8,6 +8,8 @@ pub enum Page {
     Editor,
     Filters,
     Export,
+    /// The target folder tree and the folder wheel (P11.3).
+    Folders,
     Profiles,
     Queue,
     RustView,
@@ -38,12 +40,13 @@ pub enum Special {
 }
 
 impl Page {
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
         Self::General,
         Self::Player,
         Self::Editor,
         Self::Filters,
         Self::Export,
+        Self::Folders,
         Self::Profiles,
         Self::Queue,
         Self::RustView,
@@ -65,6 +68,7 @@ impl Page {
             Self::Editor => "editor",
             Self::Filters => "filters",
             Self::Export => "export",
+            Self::Folders => "folders",
             Self::Profiles => "profiles",
             Self::Queue => "queue",
             Self::RustView => "rustview",
@@ -86,6 +90,7 @@ impl Page {
             Self::Editor => "Editor & Sections",
             Self::Filters => "Filters",
             Self::Export => "Export & Naming",
+            Self::Folders => "Target Folders",
             Self::Profiles => "Render Profiles",
             Self::Queue => "Queue",
             Self::RustView => "RustView",
@@ -115,7 +120,7 @@ impl Page {
 
     pub const fn special(self) -> Special {
         match self {
-            Self::Export => Special::Folders,
+            Self::Folders => Special::Folders,
             Self::Filters => Special::CropRatios,
             Self::Profiles => Special::Profiles,
             Self::Hotkeys => Special::Hotkeys,

@@ -213,6 +213,10 @@ kinds! {
         critical false, ("Profile \"My HEVC\" saved", "");
     ProfileRefused = "profile_refused", "Render profile not changed", Codecs, Warning, Toast, EVENT, desktop false,
         critical false, ("A profile with this name exists", "");
+    /// The Target Folders page could not do what was asked: a picture refused, no free place on the wheel, a folder
+    /// already in the tree (P11.3).
+    FolderEdit = "folder_edit", "Target folder not changed", Settings, Warning, Toast, EVENT, desktop false,
+        critical false, ("The picture was not taken", "The file is neither an image nor an SVG RustCut can read.");
     SettingsReadOnly = "settings_read_only", "Settings not saved", Settings, Warning, Toast, EVENT, desktop false,
         critical false, ("Not saved", "config.toml is from a newer RustCut: the choice is kept for this run only.");
     /// A typed value the option refuses (the Settings window, the Codecs panel; M6.5c).

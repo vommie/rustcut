@@ -14,7 +14,7 @@ import { SettingsUi } from "settings_types.slint";
 import { Jump } from "jump.slint";
 import { DragLogic, DragState } from "drag.slint";
 import { BubbleLayer } from "bubble.slint";
-import { SettingsFolders } from "settings_folders.slint";
+import { SettingsFolderTree } from "settings_folder_tree.slint";
 import { SettingsCropRatios } from "settings_ratios.slint";
 import { SettingsDiagnostics } from "settings_diagnostics.slint";
 import { SettingsProfiles } from "settings_profiles.slint";
@@ -173,6 +173,9 @@ export component SettingsWindow inherits Window {
                             spacing: 16px;
                             alignment: start;
 
+                            // The Target Folders page shows its tree above its cards (the Folder Wheel's options).
+                            if SettingsUi.special == 1: SettingsFolderTree { }
+
                             // The Messages page shows its cards on its first tab.
                             if SettingsUi.special != 5: VerticalLayout {
                                 spacing: 16px;
@@ -186,8 +189,6 @@ export component SettingsWindow inherits Window {
                                     }
                                 }
                             }
-
-                            if SettingsUi.special == 1: SettingsFolders { }
 
                             if SettingsUi.special == 2: SettingsProfiles { }
 

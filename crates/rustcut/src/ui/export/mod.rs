@@ -450,7 +450,7 @@ fn connect(bridge: &Rc<ExportBridge>, window: &MainWindow) {
     });
     e.on_edit_folders(|| {
         crate::ui::jump::go(JumpTarget::Settings {
-            page: Page::Export,
+            page: Page::Folders,
             key: FOLDERS_KEY,
         });
     });

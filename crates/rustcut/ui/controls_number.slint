@@ -66,6 +66,11 @@ export component NumberField inherits Rectangle {
     border-color: root.invalid ? Theme.status-corrupt : root.editing ? Theme.primary : Theme.border;
     clip: true;
 
+    // Opens the field for typing (an inline rename that starts with F2 or a double click, P11.3).
+    public function edit() {
+        root.start-edit();
+    }
+
     function start-edit() {
         input.text = root.text;
         root.invalid = false;
