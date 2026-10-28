@@ -5,6 +5,7 @@
 mod edit;
 mod levels;
 mod list;
+pub mod pictures;
 mod sanitize;
 #[cfg(test)]
 mod tests;

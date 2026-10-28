@@ -39,6 +39,8 @@ pub struct Parts {
     pub editing: Weak<JobEditor>,
     pub queue: QueueHandle,
     pub sync: SyncHandle,
+    /// The folder pictures' store (P11.2): told which pictures the tree still uses.
+    pub pictures: rustcut_core::folders::pictures::PictureHandle,
     pub paths: AppPaths,
     /// The renders' environment as started (its hardware until the capability check knows better).
     pub env: RenderEnv,
@@ -217,6 +219,7 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
         super::redaction::set_kinds(after.advanced.redact);
     }
     if before.export.folders != after.export.folders {
+        super::pictures::retain(&p.pictures, &after.export.folders);
         for folder in after.export.folders.folders() {
             if let Some(path) = &folder.path {
                 super::redaction::learn_dir(path);

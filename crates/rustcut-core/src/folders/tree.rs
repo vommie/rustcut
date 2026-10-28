@@ -291,6 +291,17 @@ impl FolderTree {
             .collect()
     }
 
+    /// The hashes of the stored pictures the tree uses (the picture store keeps these, removes the rest).
+    pub fn stored_pictures(&self) -> std::collections::HashSet<String> {
+        self.pictures()
+            .into_iter()
+            .filter_map(|p| match p {
+                Picture::Stored(hash) => Some(hash.clone()),
+                Picture::Icon(_) => None,
+            })
+            .collect()
+    }
+
     /// The favorites with their places: the source first when it is one, then the tree's order.
     pub fn favorites(&self) -> Vec<(FolderId, u8)> {
         self.source
