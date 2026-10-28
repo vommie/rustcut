@@ -24,7 +24,7 @@ export component TagHistoryItemView inherits Rectangle {
 
     // RustCut begin: the tags the last saved job did not have are faint (user request 2026-10-27); a disabled pill is
     // gray on top of that, so an older disabled pill is faint and gray (UI review 2026-10-28-allgemein-feedback-rustcut)
-    opacity: root.item.older && !root.lit ? 0.5 : 1;
+    opacity: root.item.older && !root.lit ? 0.9 : 1;
     // RustCut end
 
     background: !root.is-enabled ? Theme.surface : root.item.is-assigned ? (
