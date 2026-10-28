@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Settings > Target Folders: "Opacity" (how much the wheel's fields cover what is behind them; 92 % by default, more
-  than before) and "Middle shows" (the pointed entry's picture, its name when it has none; or always the name) in the
+  than before) and "Middle shows" (the pointed entry's picture or first letter, or its name) in the
   "Folder wheel" card, which now also holds the picture and color options (0.0.82).
 - The tree rows have a drag handle: drag an entry within the tree or onto a place of the small wheel (0.0.82).
 - A loaded job whose folder is not among the target folders keeps it as the temporary entry "Job target" (first in
@@ -44,6 +44,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The wheel's middle shows the first letter of a folder without a picture (as the lists do), not its name (0.0.83).
 - The folder wheel is no longer limited to the video: "Automatic" grows from 40 % of the window's shorter side in a
   large window to 90 % in a small one, Small/Medium/Large are 40/60/80 %; it always stays inside the window (0.0.82).
 - A wheel without favorites shows a settings symbol in its middle instead of a text; resting there, clicking it or
