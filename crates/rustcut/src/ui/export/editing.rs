@@ -16,8 +16,8 @@ use crate::Export;
 use crate::ui::editing::JobEditor;
 use crate::ui::notices::{self, Kind, Notice};
 
-/// The key of the message that offers a loaded job's folder.
-const FOLDER_UNKNOWN: &str = "export:folder-unknown";
+/// The key of the message that offers a loaded job's folder (a banner while it is the target).
+pub(super) const FOLDER_UNKNOWN: &str = "export:folder-unknown";
 
 impl ExportBridge {
     /// Connects the loading of queued jobs.
@@ -45,19 +45,23 @@ impl ExportBridge {
         });
         let loose = self.state.borrow_mut().load_target(target, &facts);
         if loose {
-            Self::offer_folder(&target.folder);
+            self.offer_folder(&target.folder);
         }
         self.rescan();
     }
 
     /// The loaded job's folder is not in the tree: it is chosen as it is, and a message offers to add it (Q-FP2).
-    fn offer_folder(folder: &Path) {
+    fn offer_folder(&self, folder: &Path) {
+        self.job_target_banner.set(true);
         tracing::info!(folder = %folder.display(), "[Export] The job's folder is not in the target folders");
         let weak = BRIDGE.with(|b| b.borrow().clone());
         let path = folder.to_path_buf();
         notices::post(
             Notice::new(Kind::FolderUnknown, "The job's folder is not in the target folders")
-                .detail(folder.display().to_string())
+                .detail(format!(
+                    "{} stays the target (\"Job target\") until you choose another folder or open another video.",
+                    folder.display()
+                ))
                 .key(FOLDER_UNKNOWN)
                 .action("Add to target folders", move || {
                     if let Some(bridge) = weak.upgrade() {

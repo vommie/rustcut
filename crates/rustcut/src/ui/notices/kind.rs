@@ -254,8 +254,8 @@ kinds! {
     JobLoaded = "job_loaded", "Job loaded into the editor", Editing, Info, Nothing, TOAST_OR_NOT, desktop false,
         critical false, ("Job #3 loaded: Beach - 03.mkv", "Saving makes a new job; job #3 stays as it is.");
     /// A loaded job writes into a folder the target folder tree does not have (P11.1, Q-FP2: offered, never added
-    /// silently).
-    FolderUnknown = "folder_unknown", "Loaded job's folder not in the list", Editing, Info, Toast, EVENT,
+    /// silently; a banner while the folder is the card's "Job target", the user's answer 2026-10-28).
+    FolderUnknown = "folder_unknown", "Loaded job's folder not in the list", Editing, Info, Banner, EVENT,
         desktop false, critical false, ("The job's folder is not in the target folders", "/media/New");
     /// The other notes about loading jobs: not loaded, the link ended, tags left as they were (Q-N8: no message by
     /// default).

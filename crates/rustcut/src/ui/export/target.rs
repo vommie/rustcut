@@ -1,6 +1,8 @@
 //! The Job Finalization card's target (P11.1, user decision Q-FP2): an entry of the folder tree by id ("Next to the
 //! source" = id 0), or a loose folder: the folder of a loaded job that the tree does not have. A loose folder is
-//! offered to the tree, never added silently; it is never saved as the card's choice.
+//! offered to the tree, never added silently, and shows as the temporary entry "Job target" (the user's answer,
+//! 2026-10-28): saving without another choice keeps the job's folder; another video gives the choice from before
+//! back. It is never saved as the card's choice.
 
 use std::path::{Path, PathBuf};
 
@@ -24,7 +26,12 @@ impl Default for Target {
 pub struct TargetChoice {
     pub tree: FolderTree,
     pub target: Target,
+    /// The choice before a loaded job's folder became the target (it comes back with another video).
+    previous: FolderId,
 }
+
+/// The temporary entry of a loaded job's folder.
+pub const JOB_TARGET: &str = "Job target";
 
 /// Where a loaded job's folder was found.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,6 +48,7 @@ impl TargetChoice {
         let mut choice = Self {
             tree: tree.clone(),
             target: Target::Entry(id),
+            previous: FolderId::SOURCE,
         };
         choice.repair();
         choice
@@ -116,7 +124,7 @@ impl TargetChoice {
                     format!("{groups} › {name}")
                 }
             }
-            Target::Loose(path) => format!("{} (not in the list)", path.display()),
+            Target::Loose(_) => JOB_TARGET.to_owned(),
         }
     }
 
@@ -146,12 +154,35 @@ impl TargetChoice {
             self.target = Target::default();
             return Found::Source;
         }
+        if let Target::Entry(id) = self.target {
+            self.previous = id;
+        }
         self.target = Target::Loose(folder.to_path_buf());
         self.repair();
         if matches!(self.target, Target::Loose(_)) {
             Found::Loose
         } else {
             Found::Tree
+        }
+    }
+
+    pub const fn is_loose(&self) -> bool {
+        matches!(self.target, Target::Loose(_))
+    }
+
+    /// The loaded job's folder, while it is the target.
+    pub fn loose(&self) -> Option<&Path> {
+        match &self.target {
+            Target::Loose(path) => Some(path),
+            Target::Entry(_) => None,
+        }
+    }
+
+    /// Another video opened: a loaded job's folder gives way to the choice from before.
+    pub fn other_video(&mut self) {
+        if self.is_loose() {
+            self.target = Target::Entry(self.previous);
+            self.repair();
         }
     }
 
@@ -213,11 +244,19 @@ mod tests {
         assert_eq!(c.folder(source), Some(PathBuf::from("/media/New")));
         assert_eq!(c.saved_id(), FolderId::SOURCE, "a loose folder is not kept");
         assert_eq!((c.index(), c.labels().len()), (3, 4));
-        assert_eq!(c.label(&c.target), "/media/New (not in the list)");
+        assert_eq!(c.label(&c.target), JOB_TARGET);
         assert_eq!(c.tree.folders().len(), 2, "not added silently");
         assert_eq!(c.adopt(), Some(FolderId(4)));
         assert_eq!((c.saved_id(), c.labels().len()), (FolderId(4), 4));
         assert_eq!(c.adopt(), None);
+        // Another video: the choice from before comes back.
+        c.select_id(FolderId(3));
+        c.load(Path::new("/media/Away"), source);
+        assert!(c.is_loose());
+        c.other_video();
+        assert_eq!(c.saved_id(), FolderId(3));
+        c.other_video();
+        assert_eq!(c.saved_id(), FolderId(3), "nothing loose: nothing changes");
         // The tree learned the folder elsewhere: the loose choice becomes its entry.
         c.load(Path::new("/media/Other"), source);
         let mut t = c.tree.clone();

@@ -113,6 +113,9 @@ impl ExportState {
 
     /// Another video: the name becomes its file name, and the counter starts at 1 again (user decision Q-X4).
     pub fn file_opened(&mut self, path: &Path) {
+        if self.source.as_deref() != Some(path) {
+            self.target.other_video();
+        }
         self.source = Some(path.to_path_buf());
         self.name = path
             .file_stem()

@@ -565,13 +565,16 @@ mod tests {
         outer: 100.0,
     };
 
-    /// Top level without favorites: source 0, Clients (group 1: North 2, South 3), Drone 4; 4 places.
+    /// Favorites on 4 places: the source 0, Clients 1 (group: North 2, South 3), Drone 4 on place 2.
     fn tree() -> FolderTree {
         let mut t = FolderTree::default();
         let c = t.add_group("Clients", Spot::End).unwrap();
         t.add_folder(Path::new("/n"), Spot::Into(c)).unwrap();
         t.add_folder(Path::new("/s"), Spot::Into(c)).unwrap();
-        t.add_folder(Path::new("/d"), Spot::End).unwrap();
+        let d = t.add_folder(Path::new("/d"), Spot::End).unwrap();
+        t.put_on_place(FolderId::SOURCE, 0).unwrap();
+        t.put_on_place(c, 1).unwrap();
+        t.put_on_place(d, 2).unwrap();
         t
     }
 

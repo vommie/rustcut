@@ -1,7 +1,8 @@
 //! The folder wheel's levels (Q-FP2): a level has a fixed number of places (default 8, 4-12) or as many as it has
 //! entries ("divided"); when it has more entries than places, the last place becomes "More ...", itself a level with
-//! the rest (and so on). The first level shows the favorites on their own places; a tree without favorites shows its
-//! top level, "Next to the source" first (D-FPc).
+//! the rest (and so on). The first level shows the favorites on their own places and nothing else: a tree without
+//! favorites gives an empty first level (the wheel says how to fill it; the user's answer to D-FPc, 2026-10-28), and
+//! "Next to the source" is on the wheel only with a star.
 
 use super::tree::{FolderId, FolderTree};
 
@@ -110,10 +111,7 @@ pub fn level(tree: &FolderTree, key: &LevelKey, layout: Layout) -> Option<Level>
 fn start(tree: &FolderTree, layout: Layout) -> Vec<Slot> {
     let mut favorites = tree.favorites();
     if favorites.is_empty() {
-        let ids: Vec<FolderId> = std::iter::once(FolderId::SOURCE)
-            .chain(tree.entries.iter().map(|n| n.id))
-            .collect();
-        return layout.sequence(&ids);
+        return layout.sequence(&[]);
     }
     favorites.sort_by_key(|(_, place)| *place);
     if layout.divided {
