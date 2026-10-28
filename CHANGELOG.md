@@ -9,10 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Settings > Target Folders: "Opacity" (how much the wheel's fields cover what is behind them; 92 % by default, more
+  than before) and "Middle shows" (the pointed entry's picture, its name when it has none; or always the name) in the
+  "Folder wheel" card, which now also holds the picture and color options (0.0.82).
+- The tree rows have a drag handle: drag an entry within the tree or onto a place of the small wheel (0.0.82).
 - A loaded job whose folder is not among the target folders keeps it as the temporary entry "Job target" (first in
   the folder list): saving without choosing another folder writes there again. It gives way to your previous choice
   when you open another video, and a banner (instead of a toast) offers "Add to target folders" meanwhile (0.0.81).
-
 - Settings > Target Folders: the target folders as a tree. Groups (menu entries without a path) hold folders and other
   groups at any depth; drag an entry before, after or into a group; F2 or a double click renames it; new folders come
   from the folder dialog or are dropped from the file manager. Deleting is held (2 s); a group goes with everything in
@@ -29,18 +32,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   folded). Typing searches every level and shows each hit's group; a folder that does not exist yet has a warning
   mark. Up/Down, Left/Right (fold), Enter and Escape work in the list (0.0.79).
 - The folder wheel: hold the middle mouse button over the video (a ring fills for 250 ms) or press F anywhere, and a
-  wheel of your target folders opens in the middle of the video, sized to the window (40 % of its shorter side).
+  wheel of your target folders opens in the middle of the video, sized to the window.
   Point at a folder and let go to choose it; rest on a group (its field fills) or push past its edge to open it; the
   middle goes one level up after the same rest, and letting go there cancels. Let go over a group and the wheel stays
   for clicks. Opened with F, A/D or Left/Right turn it, W/Up or Enter opens a group, S/Down goes back, Enter chooses,
   F again goes up (and closes at the start), Escape closes. Its first level shows your favorites on their places
-  (without favorites it is empty and says how to add them, 0.0.81; "Next to the source" is on it only with a star);
+  (without favorites its middle leads to the settings, 0.0.81; "Next to the source" is on it only with a star);
   crowded levels end with "More ...". Choosing never saves the job. Settings > Target Folders has its options, the
   key is in Settings > Hotkeys ("Open the folder wheel") (0.0.80).
 - How the folder pictures and colors show in the wheel and the lists (shapes, color mode) (0.0.78).
 
 ### Changed
 
+- The folder wheel is no longer limited to the video: "Automatic" grows from 40 % of the window's shorter side in a
+  large window to 90 % in a small one, Small/Medium/Large are 40/60/80 %; it always stays inside the window (0.0.82).
+- A wheel without favorites shows a settings symbol in its middle instead of a text; resting there, clicking it or
+  Enter opens Settings > Target Folders (0.0.82).
+- Opened with F, the wheel follows the mouse as soon as it moves (0.0.82).
 - The target folders are now a folder tree (the first step of the new target folder picker): your folders move into
   it in their order, without groups or favorites. `config.toml` is migrated to version 8 (`folder-tree`) and
   `ui-state.toml` to version 2 (`target-folder-id`, the chosen folder is kept by an id); both files are backed up
@@ -53,6 +61,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Settings > Target Folders no longer shows an empty frame between the tree and the next card (0.0.82).
 - Settings > Export & Naming no longer checks every target folder on the window's thread while it draws the list;
   the check runs in the background (0.0.77).
 

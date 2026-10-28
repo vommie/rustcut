@@ -89,7 +89,7 @@ export component PlayerView inherits Rectangle {
             }
             // The folder wheel: holding the middle button (P11.5); its pointer is relative to the video's center.
             if event.button == PointerEventButton.middle && event.kind == PointerEventKind.down {
-                FolderWheel.pressed(self.mouse-x - self.width / 2, self.mouse-y - self.height / 2);
+                FolderWheel.pressed(self.mouse-x - self.width / 2 - FolderWheel.shift-x, self.mouse-y - self.height / 2 - FolderWheel.shift-y);
                 return;
             }
             if event.button == PointerEventButton.middle && event.kind == PointerEventKind.up {
@@ -97,7 +97,7 @@ export component PlayerView inherits Rectangle {
                 return;
             }
             if event.kind == PointerEventKind.move && FolderWheel.tracking {
-                FolderWheel.moved(self.mouse-x - self.width / 2, self.mouse-y - self.height / 2);
+                FolderWheel.moved(self.mouse-x - self.width / 2 - FolderWheel.shift-x, self.mouse-y - self.height / 2 - FolderWheel.shift-y);
                 return;
             }
             if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {

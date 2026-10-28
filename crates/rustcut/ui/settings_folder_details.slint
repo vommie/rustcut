@@ -337,8 +337,8 @@ export component FolderDetails inherits VerticalLayout {
         }
 
         Text {
-            text: FolderTreeUi.details.place >= 0 ? "Place " + (FolderTreeUi.details.place + 1) + "; click another place to move it"
-                : "Click a place to put it there";
+            text: FolderTreeUi.details.place >= 0 ? "Place " + (FolderTreeUi.details.place + 1) + ": click or drag onto another place"
+                : "Click a place, or drag an entry from the tree onto it";
             color: Theme.text-muted;
             font-size: 11px;
             vertical-alignment: center;

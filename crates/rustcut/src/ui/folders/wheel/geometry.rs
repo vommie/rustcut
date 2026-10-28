@@ -18,13 +18,22 @@ pub const MIN_DIAMETER: f32 = 300.0;
 /// The share of the window a wheel never exceeds.
 const MAX_SHARE: f32 = 0.94;
 
-/// The wheel's diameter in a main window of `width` x `height` (logical pixels).
+/// Automatic: 40 % of the shorter side from this size on (a large window) ...
+const AUTO_LARGE: f32 = 1200.0;
+/// ... growing to 90 % at this size and below (a small window: the wheel may cover the panels, not only the video).
+const AUTO_SMALL: f32 = 600.0;
+
+/// The wheel's diameter in a main window of `width` x `height` (logical pixels); it is not bound to the video's area.
 pub fn diameter(size: WheelSize, width: f32, height: f32) -> f32 {
     let short = width.min(height).max(1.0);
     let share = match size {
-        WheelSize::Automatic | WheelSize::Medium => 0.4,
-        WheelSize::Small => 0.3,
-        WheelSize::Large => 0.55,
+        WheelSize::Automatic => {
+            let small = ((AUTO_LARGE - short) / (AUTO_LARGE - AUTO_SMALL)).clamp(0.0, 1.0);
+            0.5f32.mul_add(small, 0.4)
+        }
+        WheelSize::Small => 0.4,
+        WheelSize::Medium => 0.6,
+        WheelSize::Large => 0.8,
     };
     let wanted = (short * share).max(MIN_DIAMETER);
     wanted.min(short * MAX_SHARE)
@@ -110,4 +119,31 @@ pub fn group_mark(c: f32, outer: f32, index: usize, n: usize) -> String {
         mid - step / 2.0 + 0.12,
         mid + step / 2.0 - 0.12,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_wheel_grows_in_small_windows() {
+        let auto = |w, h| diameter(WheelSize::Automatic, w, h);
+        assert!((auto(3840.0, 2160.0) - 864.0).abs() < 0.5, "40 % of a large window");
+        assert!((auto(1066.0, 600.0) - 540.0).abs() < 0.5, "90 % of a small one");
+        assert!((auto(1280.0, 900.0) - 0.65 * 900.0).abs() < 0.5, "in between");
+        assert!(
+            (auto(400.0, 300.0) - 300.0 * MAX_SHARE).abs() < 0.5,
+            "never beyond the window"
+        );
+        assert!(
+            (diameter(WheelSize::Large, 1066.0, 625.0) - 500.0).abs() < 0.5,
+            "Large: 80 %"
+        );
+        assert!((diameter(WheelSize::Small, 3840.0, 2160.0) - 864.0).abs() < 0.5);
+        assert!(diameter(WheelSize::Small, 1000.0, 700.0) >= MIN_DIAMETER);
+        let (inner, outer) = radii(500.0);
+        assert!(inner < outer && outer < 250.0);
+        assert!(segment(100.0, 30.0, 90.0, 0, 8).starts_with('M'));
+        assert!(fill(100.0, 30.0, 90.0, 0, 8, 0.0).is_empty());
+    }
 }
