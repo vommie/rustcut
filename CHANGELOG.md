@@ -20,6 +20,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   places: a click or dragging an entry from the tree onto a place puts it there, the small "×" on a place frees it. In a
   narrow Settings window the details stand below the tree, and the page scrolls while an entry is dragged near its top
   or bottom edge (0.0.78).
+- The Job Finalization card's target folder field shows the folder's picture and opens a searchable list: "Next to the
+  source", your favorites, the last three folders jobs were saved into, then the whole tree (folded groups stay
+  folded). Typing searches every level and shows each hit's group; a folder that does not exist yet has a warning
+  mark. Up/Down, Left/Right (fold), Enter and Escape work in the list (0.0.79).
 - The options of the coming folder wheel (mouse button, hold time, rest on a group, push through, places, size,
   labels, path, dimming, animations) and how pictures and colors show (0.0.78).
 

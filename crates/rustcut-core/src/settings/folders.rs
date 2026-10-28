@@ -148,8 +148,11 @@ mod tests {
             assert_eq!(std::fs::read_to_string(&backup).unwrap(), old, "backed up first");
             assert_eq!((value.export.target_id, value.export.counter), (id, 7), "{old}");
         }
-        let fresh: UiState = toml::from_str("version = 2\n[export]\ntarget_id = 5\nrecent_targets = [5, 0]\n").unwrap();
+        let fresh: UiState =
+            toml::from_str("version = 2\n[export]\ntarget_id = 5\nrecent_targets = [5, 0]\nlist_collapsed = [3]\n")
+                .unwrap();
         assert_eq!(fresh.export.target_id, FolderId(5));
+        assert_eq!(fresh.export.list_collapsed, [FolderId(3)]);
         assert_eq!(fresh.export.recent_targets, [FolderId(5), FolderId::SOURCE]);
         let odd: UiState = toml::from_str("version = 2\n[export]\ntarget_id = \"x\"\n").unwrap();
         assert_eq!(odd.export.target_id, FolderId::SOURCE, "unreadable = the source");

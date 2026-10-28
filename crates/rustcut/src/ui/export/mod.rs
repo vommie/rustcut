@@ -13,6 +13,8 @@ mod dialog;
 mod dialog_tests;
 mod dialog_view;
 mod editing;
+mod folder_field;
+mod folder_list;
 mod job_check;
 mod known;
 mod metadata;
@@ -47,6 +49,8 @@ use crate::app::SettingsWriter;
 use crate::ui::editing::JobEditor;
 use crate::ui::editor::Editor;
 use crate::ui::filters::FiltersBridge;
+use crate::ui::folders::pictures::Pictures;
+use crate::ui::folders::presence::FolderPresence;
 use crate::ui::jump::JumpTarget;
 use crate::ui::media_info::MediaInfoBridge;
 use crate::ui::notices::{self, Kind, Level, Notice};
@@ -57,7 +61,7 @@ use crate::ui::settings::page::Page;
 use crate::ui::tags::TagsBridge;
 use crate::{Export, MainWindow};
 
-/// The folder list of Settings > Export & Naming (its jump mark, `settings_folders.slint`).
+/// The folder tree of Settings > Target Folders (its jump mark, `settings_folder_tree.slint`).
 pub const FOLDERS_KEY: &str = "export.folders";
 
 /// The parts the export flow reads the job from.
@@ -69,6 +73,7 @@ pub struct ExportParts<'a> {
     pub render: &'a Rc<RenderSettingsBridge>,
     pub queue: &'a Rc<QueueBridge>,
     pub tags: &'a Rc<TagsBridge>,
+    pub pictures: &'a Rc<Pictures>,
 }
 
 pub struct ExportBridge {
@@ -111,6 +116,11 @@ pub struct ExportBridge {
     shown_check: RefCell<Option<bubbles::CheckBubble>>,
     /// The known-source dialog paused the video: it plays on when the dialog closes (M6.5d).
     resume_after_dialog: Cell<bool>,
+    /// The target folder list (P11.4), the folder pictures, which folders are missing and how the pickers look.
+    list: RefCell<folder_list::FolderList>,
+    pictures: Rc<Pictures>,
+    presence: Rc<FolderPresence>,
+    look: Cell<folder_field::Look>,
 }
 
 /// The key of the banner about the job problem.
@@ -167,6 +177,17 @@ impl ExportBridge {
             shown_problem: RefCell::new(None),
             shown_check: RefCell::new(None),
             resume_after_dialog: Cell::new(false),
+            list: RefCell::new(folder_list::FolderList::new(&panel.list_collapsed)),
+            pictures: Rc::clone(parts.pictures),
+            presence: Rc::default(),
+            look: Cell::new(folder_field::Look::of(settings)),
+        });
+        let weak = Rc::downgrade(&bridge);
+        parts.pictures.listen(move || {
+            if let Some(b) = weak.upgrade() {
+                b.publish();
+                b.publish_list();
+            }
         });
         connect(&bridge, window);
         save::connect_dialog(&bridge, window);
@@ -193,10 +214,12 @@ impl ExportBridge {
             self.preview_service.set_options(options);
         }
         self.auto_section.set(settings.editor.auto_section);
+        self.look.set(folder_field::Look::of(settings));
         if changed {
             self.rescan();
         }
         self.publish();
+        self.refresh_list();
     }
 
     /// Another video was opened: the name and the counter start over, the source folder may be another one.
@@ -225,6 +248,7 @@ impl ExportBridge {
     /// What `ui-state.toml` keeps of the card.
     pub fn save_into(&self, panel: &mut ExportPanelState) {
         self.state.borrow().save_into(panel);
+        panel.list_collapsed = self.list.borrow().collapsed.iter().copied().collect();
     }
 
     /// The template's facts of the job as it is set up now (for the card's file name).
@@ -320,22 +344,7 @@ impl ExportBridge {
         });
         let e = window.global::<Export<'_>>();
         e.set_has_source(st.source.is_some());
-        e.set_folders(slint::ModelRc::new(slint::VecModel::from(
-            st.folder_items()
-                .into_iter()
-                .map(Into::into)
-                .collect::<Vec<slint::SharedString>>(),
-        )));
-        e.set_folder_index(i32::try_from(st.folder_index()).unwrap_or_default());
-        e.set_folder_path(
-            folder
-                .as_deref()
-                .map_or_else(
-                    || "The folder of the source video".to_owned(),
-                    |f| f.display().to_string(),
-                )
-                .into(),
-        );
+        self.publish_field(folder.as_deref());
         e.set_name(st.name.as_str().into());
         e.set_counter_enabled(st.counter_enabled);
         e.set_counter(format!("{:02}", st.counter).into());
@@ -437,16 +446,28 @@ fn connect(bridge: &Rc<ExportBridge>, window: &MainWindow) {
             }
         }
     };
-    e.on_select_folder({
+    let list = window.global::<crate::FolderList<'_>>();
+    list.on_opened(on(|b| b.open_list()));
+    list.on_closed(on(|b| b.close_list()));
+    list.on_pick({
         let weak = Rc::downgrade(bridge);
         move |index| {
-            if let Some(b) = weak.upgrade() {
-                b.state
-                    .borrow_mut()
-                    .select_folder(usize::try_from(index).unwrap_or_default());
-                b.rescan();
+            if let (Some(b), Ok(index)) = (weak.upgrade(), usize::try_from(index)) {
+                b.list_click(index);
             }
         }
+    });
+    list.on_search({
+        let weak = Rc::downgrade(bridge);
+        move |text| {
+            if let Some(b) = weak.upgrade() {
+                b.list_search(&text);
+            }
+        }
+    });
+    list.on_key({
+        let weak = Rc::downgrade(bridge);
+        move |text| weak.upgrade().is_some_and(|b| b.list_key(&text))
     });
     e.on_edit_folders(|| {
         crate::ui::jump::go(JumpTarget::Settings {

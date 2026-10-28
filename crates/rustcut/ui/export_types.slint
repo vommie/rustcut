@@ -61,9 +61,6 @@ export struct ConflictJobView {
 export global Export {
     // The card.
     in property <bool> has-source;
-    in property <[string]> folders;
-    in property <int> folder-index;
-    in property <string> folder-path;
     in property <string> name;
     // The chosen container's extension (".mkv"), dim inside the name field (P9.7).
     in property <string> extension;
@@ -78,8 +75,7 @@ export global Export {
     in property <string> save-tooltip;
     in property <string> key-save;
 
-    callback select-folder(int);
-    // The jump to the folder list in Settings > Export & Naming.
+    // The jump to the folder tree in Settings > Target Folders (the field and its list: `FolderList`, P11.4).
     callback edit-folders();
     callback name-edited(string);
     // A typed counter ("" = no counter); false = not accepted.

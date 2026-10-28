@@ -380,6 +380,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             render: &render,
             queue: &queue,
             tags: &tags,
+            pictures: &folder_pictures,
         },
         runtime.handle().clone(),
         &loaded.settings,

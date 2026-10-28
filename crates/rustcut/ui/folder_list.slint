@@ -1,0 +1,324 @@
+// The Job Finalization card's target folder field and its list (P11.4, user decision Q-FP2): the card keeps only the
+// field (the entry's picture and name); opened, a flyout lists "Next to the source", the favorites, the last three
+// targets and the tree (folding is remembered). Typing searches every level (hits show their group); a missing folder
+// shows a warning mark. Up/Down move, Left/Right fold, Enter picks, Escape closes (src/ui/export/folder_list.rs).
+
+import { ListView } from "std-widgets.slint";
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { SearchField } from "search_field.slint";
+import { TooltipHost } from "tooltip.slint";
+import { BubbleAnchor } from "bubble.slint";
+import { Flyout } from "flyout.slint";
+import { Shortcuts } from "shortcuts.slint";
+import { FolderPicture, FolderPictureView } from "folder_picture.slint";
+
+export struct FolderListRowView {
+    heading: bool,
+    title: string,
+    depth: int,
+    group: bool,
+    // A group in the tree part (it folds there; favorites and hits only show it).
+    foldable: bool,
+    expanded: bool,
+    name: string,
+    // The groups holding a favorite, a recent target or a search hit.
+    context: string,
+    missing: bool,
+    picture: FolderPictureView,
+    // The card's target.
+    current: bool,
+}
+
+export global FolderList {
+    in-out property <bool> open;
+    // The field in window coordinates (the flyout hangs from it).
+    in-out property <length> anchor-x;
+    in-out property <length> anchor-y;
+    in-out property <length> anchor-width;
+    in-out property <length> anchor-height;
+    in property <[FolderListRowView]> rows;
+    in property <int> highlight: -1;
+    // The highlighted row's top in the list (the list scrolls to keep it in view).
+    in property <length> highlight-top;
+    // The field: the target's picture, its name and its whole path (the tooltip).
+    in property <FolderPictureView> picture;
+    in property <string> label;
+    in property <string> tooltip;
+    // The look (Settings > Target Folders): the pictures' shape, one-color pictures in the entry's color, the stripe.
+    in property <int> shape: 1;
+    in property <bool> tint: true;
+    in property <bool> stripe: true;
+    in property <string> query;
+
+    callback opened();
+    callback closed();
+    callback pick(/* row */ int);
+    callback search(string);
+    callback key(/* text */ string) -> bool;
+}
+
+/// The field in the card: looks like a choice, opens the list.
+export component FolderField inherits Rectangle {
+    in property <bool> enabled: true;
+    in property <string> bubble;
+
+    height: 24px;
+    min-width: 60px;
+    horizontal-stretch: 1;
+    border-radius: 4px;
+    background: touch.has-hover && root.enabled ? Theme.surface-hover : Theme.surface;
+    border-width: 1px;
+    border-color: FolderList.open ? Theme.primary : Theme.border;
+
+    host := TooltipHost {
+        text: FolderList.tooltip;
+    }
+
+    BubbleAnchor {
+        key: root.bubble;
+    }
+
+    HorizontalLayout {
+        padding-left: 4px;
+        padding-right: 4px;
+        spacing: 6px;
+
+        VerticalLayout {
+            alignment: center;
+
+            FolderPicture {
+                width: 16px;
+                height: 16px;
+                picture: FolderList.picture;
+                shape: FolderList.shape;
+                tint: FolderList.tint;
+            }
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: FolderList.label;
+            color: root.enabled ? Theme.text : Theme.status-deleted;
+            font-size: 12px;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        VerticalLayout {
+            alignment: center;
+
+            AppIcon {
+                icon: IconId.chevron-down;
+                size: IconSize.sm;
+                color: Theme.text-muted;
+            }
+        }
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+        clicked => {
+            host.press();
+            FolderList.anchor-x = root.absolute-position.x;
+            FolderList.anchor-y = root.absolute-position.y;
+            FolderList.anchor-width = root.width;
+            FolderList.anchor-height = root.height;
+            FolderList.opened();
+        }
+    }
+}
+
+component ListRow inherits Rectangle {
+    in property <FolderListRowView> entry;
+    in property <bool> highlighted;
+    callback clicked();
+
+    height: root.entry.heading ? 22px : 28px;
+    border-radius: 4px;
+    background: root.entry.heading ? transparent : root.highlighted ? Theme.surface-selected : touch.has-hover ? Theme.surface-hover
+        : transparent;
+
+    if root.entry.heading: Text {
+        x: 8px;
+        text: root.entry.title;
+        color: Theme.text-muted;
+        font-size: 10px;
+        font-weight: 700;
+        vertical-alignment: bottom;
+    }
+
+    // The entry's color as a stripe at the left edge.
+    if !root.entry.heading && FolderList.stripe && root.entry.picture.has-color: Rectangle {
+        x: 1px;
+        y: 5px;
+        width: 3px;
+        height: parent.height - 10px;
+        border-radius: 1.5px;
+        background: root.entry.picture.color;
+    }
+
+    if !root.entry.heading: HorizontalLayout {
+        padding-left: 8px + root.entry.depth * 16px;
+        padding-right: 8px;
+        spacing: 6px;
+
+        Rectangle {
+            width: 12px;
+
+            if root.entry.foldable: AppIcon {
+                y: (parent.height - self.height) / 2;
+                icon: root.entry.expanded ? IconId.chevron-down : IconId.chevron-right;
+                size: IconSize.xs;
+                color: Theme.text-muted;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+
+            FolderPicture {
+                width: 18px;
+                height: 18px;
+                picture: root.entry.picture;
+                shape: FolderList.shape;
+                tint: FolderList.tint;
+            }
+        }
+
+        Text {
+            text: root.entry.name;
+            color: Theme.text;
+            font-size: 12px;
+            font-weight: root.entry.current || root.entry.group ? 700 : 400;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 0;
+            max-width: self.preferred-width;
+            min-width: 30px;
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: root.entry.context;
+            color: Theme.text-muted;
+            font-size: 11px;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        if root.entry.missing: VerticalLayout {
+            alignment: center;
+
+            AppIcon {
+                icon: IconId.status-warning;
+                size: IconSize.sm;
+                color: Theme.accent;
+            }
+        }
+    }
+
+    touch := TouchArea {
+        enabled: !root.entry.heading;
+        clicked => { root.clicked(); }
+    }
+}
+
+/// The list hanging from the field.
+export component FolderListFlyout inherits Rectangle {
+    in property <length> anchor-x;
+    in property <length> anchor-y;
+    in property <length> anchor-width;
+    in property <length> anchor-height;
+
+    function close() {
+        FolderList.closed();
+        Shortcuts.release-focus();
+    }
+
+    init => {
+        search.focus();
+    }
+
+    Flyout {
+        width: parent.width;
+        height: parent.height;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        anchor-width: root.anchor-width;
+        anchor-height: root.anchor-height;
+        panel-width: keys.width;
+        panel-height: keys.height;
+        closed => { root.close(); }
+
+        keys := FocusScope {
+            x: 0;
+            y: 0;
+            width: Math.max(300px, root.anchor-width);
+            height: Math.min(420px, Math.max(160px, root.height - 40px));
+
+            // The list's keys come before the search field's.
+            capture-key-pressed(event) => {
+                if event.text == Key.Escape {
+                    root.close();
+                    return accept;
+                }
+                if (event.text == Key.LeftArrow || event.text == Key.RightArrow) && FolderList.query != "" {
+                    return reject;
+                }
+                return FolderList.key(event.text) ? accept : reject;
+            }
+
+            VerticalLayout {
+                padding: 8px;
+                spacing: 6px;
+
+                search := SearchField {
+                    field-width: keys.width - 16px;
+                    text: FolderList.query;
+                    placeholder-text: "Search all folders";
+                    enable-regex-toggle: false;
+                    enable-escape-clear: false;
+                    show-search-icon: true;
+                    clear-tooltip: "Clear the search";
+                    search-changed(text) => { FolderList.search(text); }
+                    cleared => { FolderList.search(""); }
+                }
+
+                if FolderList.rows.length == 0: Text {
+                    text: "No folder matches.";
+                    color: Theme.text-muted;
+                    font-size: 12px;
+                    horizontal-alignment: center;
+                }
+
+                list := ListView {
+                    vertical-stretch: 1;
+
+                    // Keys move the highlight: it stays in view.
+                    property <length> top: FolderList.highlight-top;
+                    changed top => {
+                        if self.top + self.content-y < 0 {
+                            self.content-y = -self.top;
+                        } else if self.top + 28px + self.content-y > self.visible-height {
+                            self.content-y = self.visible-height - self.top - 28px;
+                        }
+                    }
+
+                    for item[index] in FolderList.rows: ListRow {
+                        entry: item;
+                        highlighted: index == FolderList.highlight;
+                        clicked => { FolderList.pick(index); }
+                    }
+                }
+            }
+        }
+    }
+}
