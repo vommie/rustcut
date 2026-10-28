@@ -94,8 +94,8 @@ pub static FOLDERS: &[Card] = &[Card {
         choice!(
             "folder_wheel.middle",
             "Middle shows",
-            "What the middle shows for the folder or group under the pointer: its picture (its name when it has \
-                 none), or always its name.",
+            "What the middle shows for the folder or group under the pointer: its picture (its first letter when \
+                 it has none), or its name.",
             folder_wheel.middle,
             [(WheelMiddle::Picture, "Picture"), (WheelMiddle::Name, "Name")]
         ),

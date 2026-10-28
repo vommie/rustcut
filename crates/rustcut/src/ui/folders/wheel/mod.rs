@@ -424,8 +424,9 @@ impl WheelBridge {
                 _ => entry.map(|e| e.name().to_owned()).unwrap_or_default(),
             };
             let picture = entry.map(|e| view::picture(e, &self.pictures)).unwrap_or_default();
-            // The picture when the entry has one (the default), else its name.
-            ui.set_middle_shows_picture(w.middle == WheelMiddle::Picture && picture.has_image);
+            // The picture (the default); an entry without one shows its first letter instead, like everywhere else
+            // (the user's wish 2026-10-28). "More ..." has neither: its name.
+            ui.set_middle_shows_picture(w.middle == WheelMiddle::Picture && entry.is_some());
             ui.set_middle_picture(picture);
             ui.set_middle_name(name.into());
         }

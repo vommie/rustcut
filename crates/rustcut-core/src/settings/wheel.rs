@@ -38,7 +38,7 @@ pub enum WheelLabels {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WheelMiddle {
-    /// Its picture (its name when it has none).
+    /// Its picture (its first letter when it has none, like the lists).
     #[default]
     Picture,
     Name,
