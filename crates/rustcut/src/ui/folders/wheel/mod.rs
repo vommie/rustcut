@@ -25,6 +25,8 @@ use crate::{FolderPictureView, FolderWheel, MainWindow, Shortcuts, WheelSlotView
 
 /// How often a running hold or dwell is drawn again.
 const TICK: Duration = Duration::from_millis(16);
+/// The middle of a wheel without favorites.
+const EMPTY_HINT: &str = "No favorites yet: star folders in Settings > Target Folders";
 /// The hold ring's square (`WheelHoldRing`).
 const RING: f32 = 64.0;
 
@@ -389,15 +391,20 @@ impl WheelBridge {
         } else {
             ui.set_middle_mode(0);
             ui.set_middle_arc("".into());
-            let name = nav
-                .highlight()
-                .and_then(|i| level.slots.get(i))
-                .map(|slot| match slot {
-                    Slot::Entry(id) => tree.entry(*id).map(|e| e.name().to_owned()).unwrap_or_default(),
-                    Slot::More(ids) => format!("More ... ({})", ids.len()),
-                    Slot::Empty => String::new(),
-                })
-                .unwrap_or_default();
+            // Without favorites the first level is empty (the user's answer, 2026-10-28): the middle says why.
+            let empty = nav.depth() == 0 && level.slots.iter().all(|s| matches!(s, Slot::Empty));
+            let name = if empty {
+                EMPTY_HINT.to_owned()
+            } else {
+                nav.highlight()
+                    .and_then(|i| level.slots.get(i))
+                    .map(|slot| match slot {
+                        Slot::Entry(id) => tree.entry(*id).map(|e| e.name().to_owned()).unwrap_or_default(),
+                        Slot::More(ids) => format!("More ... ({})", ids.len()),
+                        Slot::Empty => String::new(),
+                    })
+                    .unwrap_or_default()
+            };
             ui.set_middle_name(name.into());
         }
         ui.set_breadcrumb(

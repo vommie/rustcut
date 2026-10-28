@@ -197,11 +197,17 @@ fn wheel_levels_place_entries() {
         places: 4,
         divided: false,
     };
-    // No favorites: the source and the top level.
+    // No favorites: an empty first level (the user's answer, 2026-10-28).
     let start = level(&t, &LevelKey::Start, fixed).unwrap();
-    assert_eq!(shown(&start), ["0", "1", "6", "7"]);
+    assert_eq!(shown(&start), ["-", "-", "-", "-"]);
+    t.put_on_place(id(1), 1).unwrap();
+    t.put_on_place(id(6), 2).unwrap();
+    let start = level(&t, &LevelKey::Start, fixed).unwrap();
+    assert_eq!(shown(&start), ["-", "1", "6", "-"], "the source only with a star");
     assert_eq!(start.slots.get(1).unwrap().opens(&t), Some(LevelKey::Group(id(1))));
     assert_eq!(start.slots.get(2).unwrap().opens(&t), None);
+    t.set_favorite(id(1), false, 4).unwrap();
+    t.set_favorite(id(6), false, 4).unwrap();
     let clients = level(&t, &LevelKey::Group(id(1)), fixed).unwrap();
     assert_eq!(shown(&clients), ["2", "3", "4", "-"]);
     let divided = Layout {

@@ -9,7 +9,8 @@ use rustcut_core::settings::{ColorMode, PictureShape, Settings};
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 
 use super::ExportBridge;
-use super::folder_list::{ListKey, Outcome};
+use super::folder_list::{JOB_TARGET, ListKey, Outcome};
+use super::target::JOB_TARGET as JOB_TARGET_NAME;
 use super::target::Target;
 use crate::ui::folders::view;
 use crate::{FolderList, FolderListRowView, FolderPictureView};
@@ -118,7 +119,7 @@ impl ExportBridge {
         let tree = &st.target.tree;
         let current = match st.target.target {
             Target::Entry(id) => Some(id),
-            Target::Loose(_) => None,
+            Target::Loose(_) => Some(JOB_TARGET),
         };
         let mut in_tree = false;
         let rows: Vec<FolderListRowView> = list
@@ -148,6 +149,16 @@ impl ExportBridge {
                     Section::All => "ALL FOLDERS",
                 }
                 .into(),
+                ..FolderListRowView::default()
+            },
+            ListRow::Entry { id, context, .. } if *id == JOB_TARGET => FolderListRowView {
+                name: JOB_TARGET_NAME.into(),
+                context: context.as_str().into(),
+                picture: FolderPictureView {
+                    initial: "J".into(),
+                    ..FolderPictureView::default()
+                },
+                current: current == Some(JOB_TARGET),
                 ..FolderListRowView::default()
             },
             ListRow::Entry {
@@ -180,8 +191,15 @@ impl ExportBridge {
     pub(super) fn open_list(&self) {
         {
             let st = self.state.borrow();
-            let current = st.target.saved_id();
-            self.list.borrow_mut().open(&st.target.tree, &st.recent, current);
+            let current = if st.target.is_loose() {
+                JOB_TARGET
+            } else {
+                st.target.saved_id()
+            };
+            let mut list = self.list.borrow_mut();
+            list.job_target = st.target.loose().map(|p| p.display().to_string());
+            list.open(&st.target.tree, &st.recent, current);
+            drop(list);
             let paths = st
                 .target
                 .tree
@@ -205,8 +223,12 @@ impl ExportBridge {
     }
 
     fn picked(&self, id: FolderId) {
-        tracing::info!(id = id.0, "[Export] Target folder chosen");
         self.close_list();
+        // "Job target" is the loaded job's folder: it stays.
+        if id == JOB_TARGET {
+            return;
+        }
+        tracing::info!(id = id.0, "[Export] Target folder chosen");
         self.choose_target(id);
     }
 
@@ -262,7 +284,9 @@ impl ExportBridge {
         }
         {
             let st = self.state.borrow();
-            self.list.borrow_mut().refresh(&st.target.tree, &st.recent);
+            let mut list = self.list.borrow_mut();
+            list.job_target = st.target.loose().map(|p| p.display().to_string());
+            list.refresh(&st.target.tree, &st.recent);
         }
         self.publish_list();
     }

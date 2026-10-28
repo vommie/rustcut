@@ -121,6 +121,8 @@ pub struct ExportBridge {
     pictures: Rc<Pictures>,
     presence: Rc<FolderPresence>,
     look: Cell<folder_field::Look>,
+    /// The banner about a loaded job's folder shows (it goes when the folder is no longer the target).
+    job_target_banner: Cell<bool>,
 }
 
 /// The key of the banner about the job problem.
@@ -181,6 +183,7 @@ impl ExportBridge {
             pictures: Rc::clone(parts.pictures),
             presence: Rc::default(),
             look: Cell::new(folder_field::Look::of(settings)),
+            job_target_banner: Cell::new(false),
         });
         let weak = Rc::downgrade(&bridge);
         parts.pictures.listen(move || {
@@ -345,6 +348,10 @@ impl ExportBridge {
         let e = window.global::<Export<'_>>();
         e.set_has_source(st.source.is_some());
         self.publish_field(folder.as_deref());
+        // The banner about a loaded job's folder lasts as long as that folder is the target.
+        if !st.target.is_loose() && self.job_target_banner.replace(false) {
+            notices::clear(editing::FOLDER_UNKNOWN);
+        }
         e.set_name(st.name.as_str().into());
         e.set_counter_enabled(st.counter_enabled);
         e.set_counter(format!("{:02}", st.counter).into());

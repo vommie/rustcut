@@ -1,7 +1,8 @@
 //! The Job Finalization card's folder list without Slint (P11.4, user decision Q-FP2): opened from the card's field, it
 //! shows "Next to the source", the favorites, the last three targets and the tree (folded groups are remembered); typing
 //! searches every level. The keys move a highlight over the entries (Up/Down), fold and unfold groups (Left/Right),
-//! pick (Enter) and close (Escape).
+//! pick (Enter) and close (Escape). While a loaded job's folder is the target, the temporary entry "Job target" stands
+//! first (the user's answer, 2026-10-28).
 
 use std::collections::BTreeSet;
 
@@ -28,8 +29,13 @@ pub enum ListKey {
     Escape,
 }
 
+/// The id of the temporary "Job target" row (never an id of the tree: ids are given out from 1 upwards).
+pub const JOB_TARGET: FolderId = FolderId(u32::MAX);
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FolderList {
+    /// The loaded job's folder while it is the target (its row comes first; the text is searched too).
+    pub job_target: Option<String>,
     pub open: bool,
     pub query: String,
     /// The highlighted row (an entry, never a heading).
@@ -56,6 +62,21 @@ impl FolderList {
             collapsed: &self.collapsed,
             query: &self.query,
         });
+        let query = self.query.trim().to_lowercase();
+        if let Some(path) = &self.job_target
+            && (query.is_empty() || path.to_lowercase().contains(&query) || "job target".contains(&query))
+        {
+            self.rows.insert(
+                0,
+                ListRow::Entry {
+                    id: JOB_TARGET,
+                    depth: 0,
+                    group: false,
+                    expanded: false,
+                    context: path.clone(),
+                },
+            );
+        }
         self.highlight = highlighted
             .and_then(|id| self.rows.iter().position(|r| r.id() == Some(id)))
             .or_else(|| self.first_entry());
@@ -202,6 +223,24 @@ mod tests {
         assert_eq!(l.key(&t, &[], ListKey::Escape), Outcome::Close);
         l.close();
         assert!(!l.open && l.query.is_empty());
+    }
+
+    #[test]
+    fn a_loaded_jobs_folder_stands_first() {
+        let t = tree();
+        let mut l = FolderList::new(&[]);
+        l.job_target = Some("/media/Old".into());
+        l.open(&t, &[], JOB_TARGET);
+        assert_eq!(l.rows.first().and_then(ListRow::id), Some(JOB_TARGET));
+        assert_eq!(l.highlight, Some(0));
+        assert_eq!(l.key(&t, &[], ListKey::Enter), Outcome::Pick(JOB_TARGET));
+        l.search(&t, &[], "old");
+        assert_eq!(ids(&l), [Some(u32::MAX)]);
+        l.search(&t, &[], "drone");
+        assert!(ids(&l).is_empty());
+        l.job_target = None;
+        l.search(&t, &[], "");
+        assert_eq!(l.rows.first().and_then(ListRow::id), Some(FolderId::SOURCE));
     }
 
     #[test]
