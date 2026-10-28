@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.76] - 2026-10-28
+
+The tag history follows your saved jobs: it changes only on a save and shows how long ago each tag was used; disabled
+tags look disabled.
+
 ### Changed
 
 - The tag history changes only when a job is saved: clicking a tag (in the tree or the history) no longer adds it or
@@ -1123,7 +1128,8 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.75...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.76...HEAD
+[0.0.76]: https://github.com/vommie/rustcut/compare/v0.0.75...v0.0.76
 [0.0.75]: https://github.com/vommie/rustcut/compare/v0.0.71...v0.0.75
 [0.0.71]: https://github.com/vommie/rustcut/compare/v0.0.69...v0.0.71
 [0.0.69]: https://github.com/vommie/rustcut/compare/v0.0.68...v0.0.69
