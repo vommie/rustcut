@@ -37,4 +37,4 @@ pub use ui_state::{
     TagPanelState, TimelineState, UiState, WindowState,
 };
 pub use unknown::unknown_keys;
-pub use wheel::{ColorMode, FolderWheelSettings, PictureShape, WheelButton, WheelLabels, WheelSize};
+pub use wheel::{ColorMode, FolderWheelSettings, PictureShape, WheelButton, WheelLabels, WheelMiddle, WheelSize};

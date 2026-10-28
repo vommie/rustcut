@@ -12,7 +12,7 @@ use std::rc::{Rc, Weak};
 use std::time::{Duration, Instant};
 
 use rustcut_core::folders::{FolderTree, Layout, Slot};
-use rustcut_core::settings::{ColorMode, PictureShape, Settings, WheelButton, WheelLabels};
+use rustcut_core::settings::{ColorMode, PictureShape, Settings, WheelButton, WheelLabels, WheelMiddle};
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 
 use self::nav::{Context, KeyAction, Mode, Outcome, Radii, Timing, WheelNav};
@@ -25,8 +25,6 @@ use crate::{FolderPictureView, FolderWheel, MainWindow, Shortcuts, WheelSlotView
 
 /// How often a running hold or dwell is drawn again.
 const TICK: Duration = Duration::from_millis(16);
-/// The middle of a wheel without favorites.
-const EMPTY_HINT: &str = "No favorites yet: star folders in Settings > Target Folders";
 /// The hold ring's square (`WheelHoldRing`).
 const RING: f32 = 64.0;
 
@@ -202,6 +200,14 @@ impl WheelBridge {
                 self.give_back_focus();
             }
             Outcome::Opened => tracing::debug!("[Folders] Folder wheel opened"),
+            Outcome::Settings => {
+                tracing::info!("[Folders] The empty folder wheel leads to Settings > Target Folders");
+                self.give_back_focus();
+                crate::ui::jump::go(crate::ui::jump::JumpTarget::Settings {
+                    page: crate::ui::settings::page::Page::Folders,
+                    key: crate::ui::export::FOLDERS_KEY,
+                });
+            }
             Outcome::Changed => {}
         }
         self.publish();
@@ -305,6 +311,11 @@ impl WheelBridge {
         );
         ui.set_tracking(nav.is_arming() || nav.mode() == Some(Mode::Held));
         ui.set_shown(nav.is_open());
+        if !nav.is_open() {
+            // The next wheel is measured from the video's center until its layer knows where it stands.
+            ui.set_shift_x(0.0);
+            ui.set_shift_y(0.0);
+        }
         ui.set_keys(matches!(nav.mode(), Some(Mode::Keys | Mode::Clicks)));
         if !nav.is_open() {
             return;
@@ -325,6 +336,7 @@ impl WheelBridge {
         });
         ui.set_shape(shape(w.wheel_shape));
         ui.set_tint(w.color_mode == ColorMode::BackgroundAndIcons);
+        ui.set_opacity(f32::from(w.opacity) / 100.0);
         let tree = &settings.export.folders;
         let Some(level) = nav.level() else { return };
         let n = level.slots.len();
@@ -380,31 +392,41 @@ impl WheelBridge {
             })
             .collect();
         ui.set_slots(ModelRc::new(VecModel::from(slots)));
+        let empty = nav.is_empty();
         if let Some(progress) = nav.middle(now) {
             let back = nav.depth() > 0;
-            ui.set_middle_mode(if back { 1 } else { 2 });
-            ui.set_middle_arc(if back && progress > 0.0 {
+            ui.set_middle_mode(if empty {
+                3
+            } else if back {
+                1
+            } else {
+                2
+            });
+            ui.set_middle_arc(if (back || empty) && progress > 0.0 {
                 geometry::arc(c, inner - 3.0, 0.0, progress * TAU).into()
             } else {
                 "".into()
             });
+        } else if empty {
+            // Without favorites the first level is empty: the middle is a jump to the settings (the user's wish).
+            ui.set_middle_mode(3);
+            ui.set_middle_arc("".into());
         } else {
             ui.set_middle_mode(0);
             ui.set_middle_arc("".into());
-            // Without favorites the first level is empty (the user's answer, 2026-10-28): the middle says why.
-            let empty = nav.depth() == 0 && level.slots.iter().all(|s| matches!(s, Slot::Empty));
-            let name = if empty {
-                EMPTY_HINT.to_owned()
-            } else {
-                nav.highlight()
-                    .and_then(|i| level.slots.get(i))
-                    .map(|slot| match slot {
-                        Slot::Entry(id) => tree.entry(*id).map(|e| e.name().to_owned()).unwrap_or_default(),
-                        Slot::More(ids) => format!("More ... ({})", ids.len()),
-                        Slot::Empty => String::new(),
-                    })
-                    .unwrap_or_default()
+            let pointed = nav.highlight().and_then(|i| level.slots.get(i));
+            let entry = match pointed {
+                Some(Slot::Entry(id)) => tree.entry(*id),
+                _ => None,
             };
+            let name = match pointed {
+                Some(Slot::More(ids)) => format!("More ... ({})", ids.len()),
+                _ => entry.map(|e| e.name().to_owned()).unwrap_or_default(),
+            };
+            let picture = entry.map(|e| view::picture(e, &self.pictures)).unwrap_or_default();
+            // The picture when the entry has one (the default), else its name.
+            ui.set_middle_shows_picture(w.middle == WheelMiddle::Picture && picture.has_image);
+            ui.set_middle_picture(picture);
             ui.set_middle_name(name.into());
         }
         ui.set_breadcrumb(

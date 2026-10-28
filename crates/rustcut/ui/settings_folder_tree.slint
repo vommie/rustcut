@@ -48,9 +48,28 @@ component FolderTreeRow inherits Rectangle {
     }
 
     HorizontalLayout {
-        padding-left: 4px + root.entry.depth * FolderTreeUi.indent;
+        padding-left: 2px;
         padding-right: 4px;
         spacing: 6px;
+
+        // The handle: drag the entry to another place in the tree or onto a place of the small wheel (the whole row
+        // drags too).
+        TooltipArea {
+            width: 14px;
+            text: root.entry.source ? "\"Next to the source\" stays first; click a place of the small wheel to put it there"
+                : "Drag to move it in the tree, or onto a place of the wheel beside";
+
+            if !root.entry.source: AppIcon {
+                y: (parent.height - self.height) / 2;
+                icon: IconId.drag-grip;
+                size: IconSize.sm;
+                color: Theme.status-deleted;
+            }
+        }
+
+        Rectangle {
+            width: root.entry.depth * FolderTreeUi.indent;
+        }
 
         // The fold button of a group (a folder keeps the room, so the pictures line up).
         Rectangle {
@@ -229,7 +248,7 @@ component FolderTreeList inherits VerticalLayout {
 
             // Where the dragged entry would land.
             if FolderTreeUi.dragging && FolderTreeUi.drop-shown && FolderTreeUi.drop-place < 0: Rectangle {
-                x: 8px + FolderTreeUi.drop-depth * FolderTreeUi.indent;
+                x: 28px + FolderTreeUi.drop-depth * FolderTreeUi.indent;
                 y: 1px + FolderTreeUi.drop-y + list.content-y - 1px;
                 width: parent.width - self.x - 8px;
                 height: 2px;
@@ -277,7 +296,7 @@ component FolderTreeList inherits VerticalLayout {
     }
 }
 
-export component SettingsFolderTree inherits SettingsCard {
+component FolderTreeCard inherits SettingsCard {
     title: "Target folders";
     description: "Groups hold folders and other groups; a star gives an entry its own place on the folder wheel's first level. Drag an entry before, after or into a group; F2 or a double click renames it. Deleting a group deletes everything in it.";
 
@@ -304,6 +323,16 @@ export component SettingsFolderTree inherits SettingsCard {
         FolderTreeList { }
 
         FolderDetails { }
+    }
+}
+
+/// The card with the flash of the export card's jump over it (the flash covers the card, it takes no room).
+export component SettingsFolderTree inherits Rectangle {
+    height: card.preferred-height;
+
+    card := FolderTreeCard {
+        width: parent.width;
+        height: parent.height;
     }
 
     JumpFlash {

@@ -43,8 +43,11 @@ export global FolderWheel {
     in property <length> inner;
     in property <length> outer;
     in property <[WheelSlotView]> slots;
-    // The middle: the pointed entry's name, or back/cancel (`middle-mode` 1 back, 2 cancel) with its progress arc.
+    // The middle: the pointed entry's picture or name, or back/cancel/settings (`middle-mode` 1 back, 2 cancel, 3 the
+    // empty wheel's jump to Settings > Target Folders) with its progress arc.
     in property <string> middle-name;
+    in property <FolderPictureView> middle-picture;
+    in property <bool> middle-shows-picture;
     in property <int> middle-mode;
     in property <string> middle-arc;
     in property <string> breadcrumb;
@@ -55,6 +58,12 @@ export global FolderWheel {
     in property <int> shape;
     in property <bool> tint: true;
     in property <length> font-size: 12px;
+    // How opaque the fields are (Settings > Target Folders, 0-1).
+    in property <float> opacity: 0.92;
+    // How far the wheel moved from the video's center to stay inside the window (the layer sets it; the video's
+    // pointer is measured from the wheel's own center).
+    in-out property <length> shift-x;
+    in-out property <length> shift-y;
     // The keys turn the wheel (opened by key or waiting for clicks): it takes the focus.
     in property <bool> keys;
 
@@ -103,9 +112,20 @@ export component FolderWheelLayer inherits Rectangle {
     in property <length> video-width;
     in property <length> video-height;
 
-    property <length> left: root.center-x - FolderWheel.size / 2;
-    property <length> top: root.center-y - FolderWheel.size / 2;
-    property <float> grown: FolderWheel.shown ? 1 : 0.85;
+    // Centered on the video, but always inside the window (a large wheel may cover the panels too).
+    property <length> left: Math.max(0px, Math.min(root.width - FolderWheel.size, root.center-x - FolderWheel.size / 2));
+    property <length> top: Math.max(0px, Math.min(root.height - FolderWheel.size, root.center-y - FolderWheel.size / 2));
+    property <length> shift-x: root.left - (root.center-x - FolderWheel.size / 2);
+    property <length> shift-y: root.top - (root.center-y - FolderWheel.size / 2);
+    property <length> mid-x: root.left + FolderWheel.size / 2;
+    property <length> mid-y: root.top + FolderWheel.size / 2;
+
+    init => {
+        FolderWheel.shift-x = root.shift-x;
+        FolderWheel.shift-y = root.shift-y;
+    }
+    changed shift-x => { FolderWheel.shift-x = root.shift-x; }
+    changed shift-y => { FolderWheel.shift-y = root.shift-y; }
 
     if FolderWheel.dim && FolderWheel.shown: Rectangle {
         x: root.video-x;
@@ -119,10 +139,10 @@ export component FolderWheelLayer inherits Rectangle {
     if FolderWheel.shown: TouchArea {
         pointer-event(event) => {
             if event.kind == PointerEventKind.move {
-                FolderWheel.moved(self.mouse-x - root.center-x, self.mouse-y - root.center-y);
+                FolderWheel.moved(self.mouse-x - root.mid-x, self.mouse-y - root.mid-y);
             }
         }
-        clicked => { FolderWheel.clicked(self.mouse-x - root.center-x, self.mouse-y - root.center-y); }
+        clicked => { FolderWheel.clicked(self.mouse-x - root.mid-x, self.mouse-y - root.mid-y); }
         scroll-event(event) => {
             accept
         }
@@ -136,8 +156,8 @@ export component FolderWheelLayer inherits Rectangle {
     }
 
     if FolderWheel.shown && FolderWheel.breadcrumb != "": Text {
-        x: root.center-x - self.width / 2;
-        y: root.top - self.height + FolderWheel.size * 0.03;
+        x: root.mid-x - self.width / 2;
+        y: Math.max(0px, root.top - self.height + FolderWheel.size * 0.03);
         text: FolderWheel.breadcrumb;
         color: Theme.text;
         font-size: FolderWheel.font-size;
@@ -149,7 +169,6 @@ export component FolderWheelLayer inherits Rectangle {
         y: root.top;
         width: FolderWheel.size;
         height: FolderWheel.size;
-        opacity: FolderWheel.animations ? 1 : 1;
 
         for slot in FolderWheel.slots: Rectangle {
             Path {
@@ -158,9 +177,10 @@ export component FolderWheelLayer inherits Rectangle {
                 viewbox-width: FolderWheel.size / 1px;
                 viewbox-height: FolderWheel.size / 1px;
                 commands: slot.segment;
-                fill: slot.tinted ? slot.tint.with-alpha(slot.highlighted ? 0.55 : 0.28)
-                    : slot.highlighted ? Theme.surface-selected : slot.filled ? Theme.surface-variant.with-alpha(0.94)
-                    : Theme.surface.with-alpha(0.7);
+                // The base color covers as much as the opacity says; an entry's color is mixed in (stronger when pointed).
+                fill: (slot.tinted ? slot.tint.mix(slot.highlighted ? Theme.surface-selected : Theme.surface-variant, slot.highlighted ? 0.55 : 0.3)
+                    : slot.highlighted ? Theme.surface-selected : slot.filled ? Theme.surface-variant : Theme.surface)
+                    .with-alpha(FolderWheel.opacity);
                 stroke: slot.highlighted ? Theme.primary : Theme.border;
                 stroke-width: slot.highlighted ? 2px : 1px;
             }
@@ -229,11 +249,21 @@ export component FolderWheelLayer inherits Rectangle {
             width: (FolderWheel.inner - 4px) * 2;
             height: self.width;
             border-radius: self.width / 2;
-            background: Theme.surface.with-alpha(0.92);
+            background: Theme.surface.with-alpha(FolderWheel.opacity);
             border-width: 1px;
             border-color: Theme.border;
 
-            if FolderWheel.middle-mode == 0: Text {
+            if FolderWheel.middle-mode == 0 && FolderWheel.middle-shows-picture: FolderPicture {
+                x: parent.width * 0.2;
+                y: parent.height * 0.2;
+                width: parent.width * 0.6;
+                height: self.width;
+                picture: FolderWheel.middle-picture;
+                shape: FolderWheel.shape;
+                tint: FolderWheel.tint;
+            }
+
+            if FolderWheel.middle-mode == 0 && !FolderWheel.middle-shows-picture: Text {
                 x: parent.width * 0.12;
                 width: parent.width * 0.76;
                 height: parent.height;
@@ -255,13 +285,14 @@ export component FolderWheelLayer inherits Rectangle {
                     alignment: center;
 
                     AppIcon {
-                        icon: FolderWheel.middle-mode == 1 ? IconId.wheel-back : IconId.close;
-                        size: FolderWheel.font-size * 1.5;
-                        color: Theme.text;
+                        icon: FolderWheel.middle-mode == 1 ? IconId.wheel-back : FolderWheel.middle-mode == 3 ? IconId.wheel-settings
+                            : IconId.close;
+                        size: FolderWheel.middle-mode == 3 ? FolderWheel.inner * 0.9 : FolderWheel.font-size * 1.5;
+                        color: FolderWheel.middle-mode == 3 ? Theme.primary : Theme.text;
                     }
                 }
 
-                Text {
+                if FolderWheel.middle-mode != 3: Text {
                     text: FolderWheel.middle-mode == 1 ? "Back" : "Cancel";
                     color: Theme.text-muted;
                     font-size: FolderWheel.font-size * 0.9;

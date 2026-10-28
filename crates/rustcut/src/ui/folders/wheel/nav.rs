@@ -3,7 +3,8 @@
 //! "More ...") fills it and opens it, pushing past the outer edge opens it at once, the middle goes one level up after
 //! the same dwell (once per visit), releasing over a folder picks it, over a group opens it and keeps the wheel for
 //! clicks, in the middle cancels. After a level opens, the pointer must move before a dwell or a push counts again (no
-//! falling through levels). Opened by its key, the wheel turns with the keys instead. Times are milliseconds from any
+//! falling through levels). Opened by its key, the wheel turns with the keys instead. A wheel without favorites is empty:
+//! its middle leads to Settings > Target Folders (after the dwell, a click or Enter; the user's wish 2026-10-28). Times are milliseconds from any
 //! fixed start; positions are relative to the wheel's center.
 
 use rustcut_core::folders::{FolderId, FolderTree, Layout, Level, LevelKey, Slot, level};
@@ -106,6 +107,8 @@ pub enum Outcome {
     Opened,
     Picked(FolderId),
     Closed,
+    /// The empty wheel's middle: Settings > Target Folders (the wheel closed).
+    Settings,
 }
 
 /// The tree and how levels are laid out, for the steps that open levels.
@@ -128,6 +131,8 @@ pub struct WheelNav {
     freeze: Option<(f32, f32)>,
     /// The groups of the tree when the wheel opened (their places open a level).
     groups: Vec<FolderId>,
+    /// Opened by its key: where the pointer stood (a real move hands the wheel to the pointer: clicks and dwells).
+    keys_anchor: Option<(f32, f32)>,
 }
 
 impl WheelNav {
@@ -142,6 +147,7 @@ impl WheelNav {
             pointer: (0.0, 0.0),
             freeze: None,
             groups: Vec::new(),
+            keys_anchor: None,
         }
     }
 
@@ -204,10 +210,19 @@ impl WheelNav {
         }
     }
 
-    /// The pointer is in the middle (shown as "back" or "cancel") and how far its dwell is (0..1; 0 at the start).
+    /// The first level has no entries (no favorites): the middle leads to the settings.
+    pub fn is_empty(&self) -> bool {
+        self.depth() == 0
+            && self
+                .level()
+                .is_some_and(|l| l.slots.iter().all(|s| matches!(s, Slot::Empty)))
+    }
+
+    /// The pointer is in the middle (shown as "back", "cancel" or the settings jump) and how far its dwell is (0..1; 0
+    /// where the middle only cancels).
     pub fn middle(&self, now: u64) -> Option<f32> {
         match self.dwell {
-            Dwell::Middle { since } if self.depth() > 0 => {
+            Dwell::Middle { since } if self.depth() > 0 || self.is_empty() => {
                 Some(fraction(now.saturating_sub(since), self.timing.dwell_ms))
             }
             Dwell::Middle { .. } | Dwell::MiddleDone => Some(0.0),
@@ -222,7 +237,7 @@ impl WheelNav {
             Phase::Open {
                 mode: Mode::Held | Mode::Clicks,
             } => {
-                matches!(self.dwell, Dwell::Middle { .. }) && self.depth() > 0
+                matches!(self.dwell, Dwell::Middle { .. }) && (self.depth() > 0 || self.is_empty())
                     || matches!(self.dwell, Dwell::Place { index, .. } if self.freeze.is_none() && self.opens(index))
             }
             _ => false,
@@ -273,8 +288,20 @@ impl WheelNav {
     pub fn moved(&mut self, x: f32, y: f32, now: u64, ctx: Context<'_>) -> Outcome {
         self.pointer = (x, y);
         match self.phase {
-            // Turned by keys, the pointer does nothing.
-            Phase::Idle | Phase::Open { mode: Mode::Keys } => Outcome::Nothing,
+            Phase::Idle => Outcome::Nothing,
+            // Turned by keys: the pointer takes over once it really moves.
+            Phase::Open { mode: Mode::Keys } => match self.keys_anchor {
+                None => {
+                    self.keys_anchor = Some((x, y));
+                    Outcome::Nothing
+                }
+                Some((ax, ay)) if (x - ax).hypot(y - ay) > UNFREEZE_PX => {
+                    self.phase = Phase::Open { mode: Mode::Clicks };
+                    self.freeze = None;
+                    self.point(x, y, now, ctx)
+                }
+                Some(_) => Outcome::Nothing,
+            },
             Phase::Arming { since } => {
                 if now.saturating_sub(since) >= self.timing.hold_ms {
                     self.open(Mode::Held, ctx);
@@ -294,6 +321,10 @@ impl WheelNav {
             match self.dwell {
                 Dwell::MiddleDone => {}
                 Dwell::Middle { since } => {
+                    if self.is_empty() && now.saturating_sub(since) >= self.timing.dwell_ms {
+                        self.close();
+                        return Outcome::Settings;
+                    }
                     if self.depth() > 0 && now.saturating_sub(since) >= self.timing.dwell_ms {
                         self.up(ctx);
                         // One level per visit of the middle.
@@ -376,6 +407,10 @@ impl WheelNav {
                 self.up(ctx);
                 Outcome::Changed
             }
+            None if self.is_empty() => {
+                self.close();
+                Outcome::Settings
+            }
             None => {
                 self.close();
                 Outcome::Closed
@@ -396,6 +431,7 @@ impl WheelNav {
             return self.key(KeyAction::Again, ctx);
         }
         self.open(Mode::Keys, ctx);
+        self.keys_anchor = None;
         self.highlight = self.first_filled();
         Outcome::Opened
     }
@@ -405,6 +441,10 @@ impl WheelNav {
             return Outcome::Nothing;
         }
         let current = self.highlight.unwrap_or(0);
+        if self.is_empty() && matches!(action, KeyAction::Enter | KeyAction::Open) {
+            self.close();
+            return Outcome::Settings;
+        }
         match action {
             KeyAction::Right => self.highlight = self.next_filled(current, true),
             KeyAction::Left => self.highlight = self.next_filled(current, false),
@@ -601,6 +641,32 @@ mod tests {
         assert_eq!(nav.moved(0.0, 0.0, 100, ctx(t)), Outcome::Changed);
         assert_eq!(nav.tick(250, ctx(t)), Outcome::Opened);
         nav
+    }
+
+    #[test]
+    fn the_empty_wheels_middle_leads_to_the_settings() {
+        let t = FolderTree::default();
+        let mut nav = held(&t);
+        assert!(nav.is_empty());
+        nav.moved(5.0, 0.0, 300, ctx(&t));
+        assert!(nav.middle(600).is_some_and(|p| p > 0.4));
+        assert!(nav.needs_ticks());
+        assert_eq!(nav.tick(900, ctx(&t)), Outcome::Settings);
+        assert!(!nav.is_open());
+        let mut nav = WheelNav::new(Timing::default(), RADII);
+        nav.open_by_key(ctx(&t));
+        assert_eq!(nav.highlight(), None, "nothing to point at");
+        assert_eq!(nav.key(KeyAction::Enter, ctx(&t)), Outcome::Settings);
+        nav.open_by_key(ctx(&t));
+        nav.key(KeyAction::Right, ctx(&t));
+        assert_eq!(nav.click(0.0, 0.0, ctx(&t)), Outcome::Settings);
+        // Opened by key, the pointer takes over once it moves: resting in the middle leads there too.
+        nav.open_by_key(ctx(&t));
+        assert_eq!(nav.moved(90.0, 0.0, 1_000, ctx(&t)), Outcome::Nothing, "where it stood");
+        assert_eq!(nav.moved(92.0, 0.0, 1_010, ctx(&t)), Outcome::Nothing, "a jitter");
+        assert_eq!(nav.moved(5.0, 0.0, 1_100, ctx(&t)), Outcome::Changed);
+        assert_eq!(nav.mode(), Some(Mode::Clicks));
+        assert_eq!(nav.tick(1_700, ctx(&t)), Outcome::Settings);
     }
 
     #[test]

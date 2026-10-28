@@ -162,6 +162,7 @@ folder_picture_file = { tabler = "photo-plus", doc = "Choose an own image or SVG
 folder_color = { tabler = "palette", doc = "Choose a color for a target folder entry" }
 wheel_more = { tabler = "dots", doc = "The folder wheel's \"More ...\" place" }
 wheel_back = { tabler = "arrow-back-up", doc = "The folder wheel's middle: one level up" }
+wheel_settings = { tabler = "settings-star", doc = "The empty folder wheel's middle: star folders in Settings > Target Folders" }
 target_name = { tabler = "file-pencil", doc = "File name of the job" }
 counter = { tabler = "hash", doc = "Counter in the file name" }
 auto_increment = { tabler = "sort-ascending-numbers", doc = "Raise the counter after each save" }
