@@ -3,3 +3,4 @@
 pub mod pictures;
 pub mod presence;
 pub mod view;
+pub mod wheel;

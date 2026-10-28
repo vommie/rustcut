@@ -119,6 +119,11 @@ impl Editor {
             }
             Action::Quit => window.invoke_request_quit(),
             Action::OpenSettings => window.invoke_open_settings(),
+            Action::FolderWheel => {
+                if let Some(hook) = self.folder_wheel.borrow().as_ref() {
+                    hook();
+                }
+            }
             // Keys flash the play or pause symbol when they change between paused and moving (P9.9: only keys).
             Action::TogglePause => self.with_player(|p| {
                 let moving = p.is_moving();

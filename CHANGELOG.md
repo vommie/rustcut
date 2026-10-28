@@ -24,8 +24,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   source", your favorites, the last three folders jobs were saved into, then the whole tree (folded groups stay
   folded). Typing searches every level and shows each hit's group; a folder that does not exist yet has a warning
   mark. Up/Down, Left/Right (fold), Enter and Escape work in the list (0.0.79).
-- The options of the coming folder wheel (mouse button, hold time, rest on a group, push through, places, size,
-  labels, path, dimming, animations) and how pictures and colors show (0.0.78).
+- The folder wheel: hold the middle mouse button over the video (a ring fills for 250 ms) or press F anywhere, and a
+  wheel of your target folders opens in the middle of the video, sized to the window (40 % of its shorter side).
+  Point at a folder and let go to choose it; rest on a group (its field fills) or push past its edge to open it; the
+  middle goes one level up after the same rest, and letting go there cancels. Let go over a group and the wheel stays
+  for clicks. Opened with F, A/D or Left/Right turn it, W/Up or Enter opens a group, S/Down goes back, Enter chooses,
+  F again goes up (and closes at the start), Escape closes. Its first level shows your favorites on their places;
+  crowded levels end with "More ...". Choosing never saves the job. Settings > Target Folders has its options, the
+  key is in Settings > Hotkeys ("Open the folder wheel") (0.0.80).
+- How the folder pictures and colors show in the wheel and the lists (shapes, color mode) (0.0.78).
 
 ### Changed
 
