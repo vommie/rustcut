@@ -46,6 +46,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The folder list of the Job Finalization card is as wide as its longest entry (240-460 px), no longer as wide as
+  the field, and as high as its entries up to 480 px (then it scrolls) (0.0.85).
+- The color stripe in the folder list stands right beside the picture and shows only where the picture does not show
+  the color already (own images, icons in the text color); letters and colored icons have none (0.0.85).
 - Long names in the folder wheel break at word boundaries (spaces, `_ - .`, a capital after a small letter) on at
   most two lines; the font first shrinks to 85 %, then a word that still does not fit keeps its start and end
   ("einzusamm…" over "…ordnername") instead of being broken letter by letter (0.0.84).

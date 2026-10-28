@@ -59,6 +59,43 @@ fn list_key(text: &str) -> Option<ListKey> {
     .map(|(_, l)| l)
 }
 
+/// The list's width bounds: wide enough for most names, never tied to the field (the user's wish 2026-10-28).
+const MIN_WIDTH: f32 = 240.0;
+const MAX_WIDTH: f32 = 460.0;
+
+/// The width the widest row wants: its indentation, fold mark, stripe, picture, name, groups and warning mark, plus
+/// the panel's padding and the scroll bar.
+fn panel_width(rows: &[FolderListRowView]) -> f32 {
+    // The estimate runs a little short of the real font (umlauts, bold): this much room more.
+    let width = |text: &str, font: f32| crate::ui::folders::wheel::label::width(text, font) * 1.15;
+    let widest = rows
+        .iter()
+        .map(|r| {
+            if r.heading {
+                return width(&r.title, 10.0) * 1.1 + 16.0;
+            }
+            let depth = f32::from(u16::try_from(r.depth).unwrap_or(u16::MAX));
+            let name = width(&r.name, 12.0) * if r.current || r.group { 1.08 } else { 1.0 };
+            let context = if r.context.is_empty() {
+                0.0
+            } else {
+                6.0 + width(&r.context, 11.0)
+            };
+            let missing = if r.missing { 22.0 } else { 0.0 };
+            // Padding 8 + 8, fold mark 12 + 6, stripe 3 + 3, picture 18 + 6.
+            64.0 + depth * 16.0 + name + context + missing
+        })
+        .fold(0.0_f32, f32::max);
+    // The panel's padding (8 + 8) and the scroll bar.
+    (widest + 16.0 + 14.0).clamp(MIN_WIDTH, MAX_WIDTH)
+}
+
+/// A color stripe only where the picture does not show the color: an own image, or a one-color picture drawn in the
+/// text color. A letter stands on the color and a tinted icon has it (the user's note 2026-10-28).
+const fn needs_stripe(picture: &FolderPictureView, tint: bool) -> bool {
+    picture.has_color && picture.has_image && !(picture.mono && tint)
+}
+
 /// The top of row `index` in the list (for scrolling the highlight into view).
 fn row_top(rows: &[ListRow], index: usize) -> f32 {
     rows.iter()
@@ -132,6 +169,8 @@ impl ExportBridge {
                 view
             })
             .collect();
+        ui.set_rows_height(row_top(&list.rows, list.rows.len()));
+        ui.set_panel_width(panel_width(&rows));
         ui.set_rows(ModelRc::new(VecModel::from(rows)));
         let highlight = list.highlight.and_then(|i| i32::try_from(i).ok()).unwrap_or(-1);
         ui.set_highlight(highlight);
@@ -170,6 +209,7 @@ impl ExportBridge {
             } => {
                 let entry = tree.entry(*id);
                 let path = tree.find(*id).and_then(|n| n.path.as_deref());
+                let picture = entry.map(|e| view::picture(e, &self.pictures)).unwrap_or_default();
                 FolderListRowView {
                     heading: false,
                     title: "".into(),
@@ -180,7 +220,8 @@ impl ExportBridge {
                     name: entry.map_or(SOURCE_NAME, rustcut_core::folders::EntryRef::name).into(),
                     context: context.as_str().into(),
                     missing: path.is_some_and(|p| self.presence.is_missing(p)),
-                    picture: entry.map(|e| view::picture(e, &self.pictures)).unwrap_or_default(),
+                    stripe: needs_stripe(&picture, self.look.get().tint),
+                    picture,
                     current: current == Some(*id),
                 }
             }
@@ -295,6 +336,39 @@ impl ExportBridge {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn widths_and_stripes() {
+        let row = |name: &str, context: &str| FolderListRowView {
+            name: name.into(),
+            context: context.into(),
+            ..FolderListRowView::default()
+        };
+        assert!(
+            (panel_width(&[row("a", "")]) - MIN_WIDTH).abs() < f32::EPSILON,
+            "never narrower"
+        );
+        let long = panel_width(&[row("einzusammenhängenderordnername", "Kunden › Archiv")]);
+        assert!(long > MIN_WIDTH && long <= MAX_WIDTH);
+        assert!(
+            (panel_width(&[row(&"x".repeat(200), "")]) - MAX_WIDTH).abs() < f32::EPSILON,
+            "never wider"
+        );
+        let colored = |has_image, mono| FolderPictureView {
+            has_color: true,
+            has_image,
+            mono,
+            ..FolderPictureView::default()
+        };
+        assert!(
+            !needs_stripe(&colored(false, false), true),
+            "a letter stands on its color"
+        );
+        assert!(!needs_stripe(&colored(true, true), true), "a tinted icon has its color");
+        assert!(needs_stripe(&colored(true, true), false), "an icon in the text color");
+        assert!(needs_stripe(&colored(true, false), true), "an own image");
+        assert!(!needs_stripe(&FolderPictureView::default(), true), "no color");
+    }
 
     #[test]
     fn keys_and_row_tops() {

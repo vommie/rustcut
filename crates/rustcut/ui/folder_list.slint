@@ -28,6 +28,8 @@ export struct FolderListRowView {
     picture: FolderPictureView,
     // The card's target.
     current: bool,
+    // The entry's color as a stripe beside its picture: only when the picture does not show the color itself.
+    stripe: bool,
 }
 
 export global FolderList {
@@ -41,6 +43,9 @@ export global FolderList {
     in property <int> highlight: -1;
     // The highlighted row's top in the list (the list scrolls to keep it in view).
     in property <length> highlight-top;
+    // The rows' total height and the width the longest row wants (Rust; the panel is not tied to the field's width).
+    in property <length> rows-height;
+    in property <length> panel-width: 300px;
     // The field: the target's picture, its name and its whole path (the tooltip).
     in property <FolderPictureView> picture;
     in property <string> label;
@@ -155,16 +160,6 @@ component ListRow inherits Rectangle {
         vertical-alignment: bottom;
     }
 
-    // The entry's color as a stripe at the left edge.
-    if !root.entry.heading && FolderList.stripe && root.entry.picture.has-color: Rectangle {
-        x: 1px;
-        y: 5px;
-        width: 3px;
-        height: parent.height - 10px;
-        border-radius: 1.5px;
-        background: root.entry.picture.color;
-    }
-
     if !root.entry.heading: HorizontalLayout {
         padding-left: 8px + root.entry.depth * 16px;
         padding-right: 8px;
@@ -181,15 +176,31 @@ component ListRow inherits Rectangle {
             }
         }
 
-        VerticalLayout {
-            alignment: center;
+        // The picture with the color stripe right before it (the stripe's room stays, so the rows line up).
+        HorizontalLayout {
+            spacing: 3px;
 
-            FolderPicture {
-                width: 18px;
-                height: 18px;
-                picture: root.entry.picture;
-                shape: FolderList.shape;
-                tint: FolderList.tint;
+            VerticalLayout {
+                alignment: center;
+
+                Rectangle {
+                    width: 3px;
+                    height: 16px;
+                    border-radius: 1.5px;
+                    background: root.entry.stripe && FolderList.stripe ? root.entry.picture.color : transparent;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+
+                FolderPicture {
+                    width: 18px;
+                    height: 18px;
+                    picture: root.entry.picture;
+                    shape: FolderList.shape;
+                    tint: FolderList.tint;
+                }
             }
         }
 
@@ -261,8 +272,10 @@ export component FolderListFlyout inherits Rectangle {
         keys := FocusScope {
             x: 0;
             y: 0;
-            width: Math.max(300px, root.anchor-width);
-            height: Math.min(420px, Math.max(160px, root.height - 40px));
+            // As wide as the longest row wants (Rust: between 240 and 460 px), as high as the rows up to a limit; more
+            // rows scroll.
+            width: FolderList.panel-width;
+            height: Math.min(Math.min(480px, root.height - 40px), 52px + Math.max(28px, FolderList.rows-height));
 
             // The list's keys come before the search field's.
             capture-key-pressed(event) => {
