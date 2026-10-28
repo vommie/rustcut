@@ -43,7 +43,7 @@ mod tests {
     use rustcut_core::edit::{Filter, FilterChain, FilterKind, Orientation, Section};
     use rustcut_core::job::{JOB_SPEC_VERSION, JobMetadata, TargetNaming, TargetSpec};
     use rustcut_core::render::{DEFAULT_PROFILE_ID, ProfileLibrary, RateControl, Selection};
-    use rustcut_core::settings::{ExportPanelState, ExportSettings, FilterDefaults, TagPanelState, TargetFolder};
+    use rustcut_core::settings::{ExportPanelState, ExportSettings, FilterDefaults, TagPanelState};
     use rustcut_core::time::Timestamp;
 
     use super::*;
@@ -108,10 +108,7 @@ mod tests {
         render.load(&library, &job.profile);
 
         let settings = ExportSettings {
-            target_folders: vec![TargetFolder {
-                label: "Clips".into(),
-                path: PathBuf::from("/out/clips"),
-            }],
+            folders: rustcut_core::folders::FolderTree::from_folders([("Clips", std::path::Path::new("/out/clips"))]),
             ..ExportSettings::default()
         };
         let mut export = ExportState::new(&settings, &ExportPanelState::default());

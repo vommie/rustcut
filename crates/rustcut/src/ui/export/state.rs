@@ -3,14 +3,15 @@
 
 use std::path::{Path, PathBuf};
 
+use rustcut_core::folders::FolderId;
 use rustcut_core::job::{TargetNaming, TargetSpec};
-use rustcut_core::naming::{NameContext, NameError, file_name, render_stem, same_path, used_variables};
+use rustcut_core::naming::{NameContext, NameError, file_name, render_stem, used_variables};
 use rustcut_core::render::{CodecFamily, Container, RenderProfile};
-use rustcut_core::settings::{ExportPanelState, ExportSettings, TargetFolder};
+use rustcut_core::settings::{ExportPanelState, ExportSettings};
 use rustcut_core::time::Timestamp;
 
-/// The entry for "next to the source" in the folder list (always first; user decision Q-X3).
-pub const SOURCE_FOLDER: &str = "Source folder";
+use super::target::{Found, Target, TargetChoice};
+
 /// Highest counter value.
 pub const MAX_COUNTER: u32 = 999_999;
 
@@ -43,9 +44,10 @@ pub const fn codec_label(family: CodecFamily) -> &'static str {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExportState {
-    pub folders: Vec<TargetFolder>,
-    /// `None` = the source's folder, else an index into `folders`.
-    pub folder: Option<usize>,
+    /// The folder tree and the chosen target (P11.1).
+    pub target: TargetChoice,
+    /// The targets the last jobs were saved with, newest first (the folder list's "Recent", D-FPe).
+    pub recent: Vec<FolderId>,
     pub source: Option<PathBuf>,
     pub name: String,
     pub counter_enabled: bool,
@@ -61,7 +63,7 @@ pub struct ExportState {
 /// What the card had before a job was loaded into the editor (user decision Q-Q3, "set aside").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExportDraft {
-    pub folder: Option<usize>,
+    pub target: Target,
     pub name: String,
     pub counter_enabled: bool,
     pub counter: u32,
@@ -70,10 +72,9 @@ pub struct ExportDraft {
 
 impl ExportState {
     pub fn new(settings: &ExportSettings, panel: &ExportPanelState) -> Self {
-        let folder = panel.target_folder.filter(|i| *i < settings.target_folders.len());
         Self {
-            folders: settings.target_folders.clone(),
-            folder,
+            target: TargetChoice::new(&settings.folders, panel.target_id),
+            recent: panel.recent_targets.clone(),
             source: None,
             name: String::new(),
             counter_enabled: panel.counter_enabled,
@@ -85,15 +86,13 @@ impl ExportState {
         }
     }
 
-    /// The named folders or the template changed: the selection stays on the same folder (by path) when it is still
-    /// listed, else it goes back to the source folder. `true` = the target folder or the name changed.
+    /// The folder tree or the template changed: the choice stays on its entry while it is a folder, else it goes back
+    /// to the source's folder. `true` = the target folder or the name changed.
     pub fn set_settings(&mut self, settings: &ExportSettings) -> bool {
         let mut changed = false;
-        if self.folders != settings.target_folders {
+        if self.target.tree != settings.folders {
             let before = self.target_folder();
-            self.folder =
-                crate::ui::settings::folders::follow_selection(&self.folders, &settings.target_folders, self.folder);
-            self.folders.clone_from(&settings.target_folders);
+            self.target.set_tree(&settings.folders);
             changed = self.target_folder() != before;
         }
         if self.template != settings.name_template {
@@ -104,7 +103,8 @@ impl ExportState {
     }
 
     pub fn save_into(&self, panel: &mut ExportPanelState) {
-        panel.target_folder = self.folder;
+        panel.target_id = self.target.saved_id();
+        panel.recent_targets.clone_from(&self.recent);
         panel.counter_enabled = self.counter_enabled;
         panel.counter = self.counter;
         panel.auto_increment = self.auto_increment;
@@ -124,7 +124,7 @@ impl ExportState {
 
     pub fn draft(&self) -> ExportDraft {
         ExportDraft {
-            folder: self.folder,
+            target: self.target.target.clone(),
             name: self.name.clone(),
             counter_enabled: self.counter_enabled,
             counter: self.counter,
@@ -134,27 +134,21 @@ impl ExportState {
 
     /// Puts a draft back after its video opened again (a folder that is gone falls back to the source's folder).
     pub fn put_draft(&mut self, draft: ExportDraft) {
-        self.folder = draft.folder.filter(|i| *i < self.folders.len());
+        match draft.target {
+            Target::Entry(id) => self.target.select_id(id),
+            loose @ Target::Loose(_) => self.target.target = loose,
+        }
         self.name = draft.name;
         self.counter_enabled = draft.counter_enabled;
         self.counter = draft.counter.clamp(1, MAX_COUNTER);
         self.verbatim = draft.verbatim;
     }
 
-    /// The target of a job loaded into the editor (after its source opened): its folder (added to the named folders
-    /// when it is neither the source's folder nor one of them; `true` = the list changed), and the name and counter it
-    /// was saved with, as long as the template makes the same file name from them; else the file name itself.
+    /// The target of a job loaded into the editor (after its source opened): its folder (a loose folder when it is
+    /// neither the source's folder nor in the tree: `true`, to be offered, Q-FP2), and the name and counter it was
+    /// saved with, as long as the template makes the same file name from them; else the file name itself.
     pub fn load_target(&mut self, target: &TargetSpec, facts: &JobFacts) -> bool {
-        let source_folder = self.source.as_deref().and_then(Path::parent);
-        let mut added = false;
-        self.folder = if source_folder.is_some_and(|f| same_path(f, &target.folder)) {
-            None
-        } else if let Some(i) = self.folders.iter().position(|f| same_path(&f.path, &target.folder)) {
-            Some(i)
-        } else {
-            added = self.add_folder(&target.folder);
-            self.folder
-        };
+        let added = self.target.load(&target.folder, self.source.as_deref()) == Found::Loose;
         self.verbatim = false;
         if let Some(naming) = &target.naming {
             self.name.clone_from(&naming.name);
@@ -183,56 +177,23 @@ impl ExportState {
         })
     }
 
-    /// The folder the job writes into: the chosen named folder, else the source's folder.
+    /// The folder the job writes into: the chosen folder, else the source's folder.
     pub fn target_folder(&self) -> Option<PathBuf> {
-        match self.folder {
-            Some(i) => self.folders.get(i).map(|f| f.path.clone()),
-            None => self.source.as_deref().and_then(Path::parent).map(Path::to_path_buf),
-        }
+        self.target.folder(self.source.as_deref())
     }
 
-    /// The entries of the folder list: the source folder, then the named folders.
+    /// The entries of the folder list: the source folder, then the folders of the tree.
     pub fn folder_items(&self) -> Vec<String> {
-        std::iter::once(SOURCE_FOLDER.to_owned())
-            .chain(self.folders.iter().map(|f| f.label.clone()))
-            .collect()
+        self.target.labels()
     }
 
     /// The list position of the chosen folder.
     pub fn folder_index(&self) -> usize {
-        self.folder.map_or(0, |i| i + 1)
+        self.target.index()
     }
 
     pub fn select_folder(&mut self, index: usize) {
-        self.folder = index.checked_sub(1).filter(|i| *i < self.folders.len());
-    }
-
-    /// Adds a named folder (labeled with its own name) and chooses it; a folder already in the list is only chosen.
-    /// `true` when the list changed.
-    pub fn add_folder(&mut self, path: &Path) -> bool {
-        if let Some(i) = self.folders.iter().position(|f| same_path(&f.path, path)) {
-            self.folder = Some(i);
-            return false;
-        }
-        let label = path
-            .file_name()
-            .map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
-        self.folders.push(TargetFolder {
-            label,
-            path: path.to_path_buf(),
-        });
-        self.folder = Some(self.folders.len() - 1);
-        true
-    }
-
-    /// Removes the chosen named folder from the list (the folder itself stays); the source folder is chosen.
-    pub fn remove_folder(&mut self) -> bool {
-        let Some(i) = self.folder.filter(|i| *i < self.folders.len()) else {
-            return false;
-        };
-        self.folders.remove(i);
-        self.folder = None;
-        true
+        self.target.select(index);
     }
 
     pub fn set_counter(&mut self, value: u32) {
@@ -315,6 +276,9 @@ impl ExportState {
     /// After a save with counter `used` (`None` = the one the card had): the next job gets the next number when
     /// auto-increment is on.
     pub fn saved(&mut self, used: Option<u32>) {
+        if let Target::Entry(id) = self.target.target {
+            rustcut_core::folders::remember_recent(&mut self.recent, id);
+        }
         if let Some(n) = used.or_else(|| self.active_counter()) {
             self.counter_enabled = true;
             self.counter = n;
@@ -333,14 +297,11 @@ mod tests {
 
     fn state() -> ExportState {
         let settings = ExportSettings {
-            target_folders: vec![TargetFolder {
-                label: "Clips".into(),
-                path: PathBuf::from("/out/clips"),
-            }],
+            folders: rustcut_core::folders::FolderTree::from_folders([("Clips", Path::new("/out/clips"))]),
             ..ExportSettings::default()
         };
         let panel = ExportPanelState {
-            target_folder: Some(5),
+            target_id: FolderId(5),
             counter_enabled: true,
             counter: 0,
             ..ExportPanelState::default()
@@ -391,27 +352,21 @@ mod tests {
     fn folders_names_and_counters() {
         let mut st = state();
         assert_eq!(
-            (st.folder, st.counter),
-            (None, 1),
-            "a stale index and a zero counter are repaired"
+            (st.target.target.clone(), st.counter),
+            (Target::default(), 1),
+            "a stale id and a zero counter are repaired"
         );
         assert_eq!(st.target_folder(), None, "no source yet");
         st.file_opened(Path::new("/videos/Holiday.mp4"));
         assert_eq!(st.target_folder(), Some(PathBuf::from("/videos")));
-        assert_eq!(st.folder_items(), vec![SOURCE_FOLDER, "Clips"]);
+        assert_eq!(st.folder_items(), vec![rustcut_core::folders::SOURCE_NAME, "Clips"]);
         assert_eq!(st.file(&facts()).unwrap().1, "Holiday - 01.mkv");
         st.select_folder(1);
         assert_eq!(st.target_folder(), Some(PathBuf::from("/out/clips")));
-        assert!(
-            !st.add_folder(Path::new("/out/./clips")),
-            "known folders are only chosen"
-        );
-        assert!(st.add_folder(Path::new("/media/Archive")));
-        assert_eq!((st.folder_index(), st.folders[1].label.as_str()), (2, "Archive"));
-        assert!(st.remove_folder());
-        assert_eq!((st.folder, st.folders.len()), (None, 1));
+        assert_eq!(st.folder_index(), 1);
         st.saved(None);
         assert_eq!(st.counter, 2, "auto-increment after a save");
+        assert_eq!(st.recent, [FolderId(1)], "the target joins the recent ones");
         st.saved(Some(7));
         assert_eq!(st.counter, 8, "a number chosen in the conflict dialog continues");
         st.step_counter(-20);
@@ -421,8 +376,8 @@ mod tests {
         let mut panel = ExportPanelState::default();
         st.save_into(&mut panel);
         assert_eq!(
-            (panel.target_folder, panel.counter, panel.counter_enabled),
-            (None, 1, true)
+            (panel.target_id, panel.counter, panel.counter_enabled),
+            (FolderId(1), 1, true)
         );
     }
 
@@ -447,8 +402,8 @@ mod tests {
         );
         assert!(!st.load_target(&saved, &facts()));
         assert_eq!(
-            (st.folder, st.name.as_str(), st.active_counter()),
-            (Some(0), "Beach", Some(3))
+            (st.folder_index(), st.name.as_str(), st.active_counter()),
+            (1, "Beach", Some(3))
         );
         assert_eq!(st.file(&facts()).unwrap().1, "Beach - 03.mkv");
         assert_eq!(st.naming(st.active_counter()), saved.naming);
@@ -458,12 +413,13 @@ mod tests {
         st.auto_increment = false;
         assert!(!st.load_target(&target("/videos", "Old - 07", None), &facts()));
         assert_eq!(
-            (st.folder, st.name.as_str(), st.active_counter()),
-            (None, "Old - 07", None)
+            (st.folder_index(), st.name.as_str(), st.active_counter()),
+            (0, "Old - 07", None)
         );
         assert_eq!(st.file(&facts()).unwrap().0, "Old - 07");
 
-        // A folder that is not in the list joins it; a template that cannot make the stem keeps it as it is.
+        // A folder that is not in the tree is chosen loose (and offered); a template that cannot make the stem keeps it
+        // as it is.
         st.template = "{{ name }} {{ codec }}".into();
         assert!(st.load_target(&target("/media/New", "Odd name", None), &facts()));
         assert_eq!(st.target_folder(), Some(PathBuf::from("/media/New")));

@@ -26,12 +26,12 @@ fn home() -> Option<PathBuf> {
 /// The checked path for folder `index`, or why it is refused (Linux's rules, another folder of the list).
 fn checked(settings: &Settings, index: usize, text: &str) -> Result<PathBuf, &'static str> {
     let path = folders::check_path(text, home().as_deref())?;
+    let own = settings.export.folders.entries.get(index).map(|n| n.id);
     let taken = settings
         .export
-        .target_folders
-        .iter()
-        .enumerate()
-        .any(|(i, f)| i != index && f.path == path);
+        .folders
+        .find_path(&path)
+        .is_some_and(|n| Some(n.id) != own);
     if taken {
         return Err("This folder is in the list already.");
     }
@@ -72,7 +72,7 @@ impl SettingsBridge {
             match prepared {
                 Ok(()) => {
                     let mut result = Ok(false);
-                    bridge.update(|s| result = folders::set_path(&mut s.export.target_folders, index, path.clone()));
+                    bridge.update(|s| result = folders::set_path(&mut s.export.folders, index, path.clone()));
                     match result {
                         Ok(true) => tracing::info!(folder = %path.display(), "[Settings] Target folder path changed"),
                         Ok(false) => {}
@@ -121,9 +121,10 @@ impl SettingsBridge {
             .writer
             .current()
             .export
-            .target_folders
+            .folders
+            .entries
             .get(index)
-            .map(|f| f.path.clone());
+            .and_then(|f| f.path.clone());
         let mut dialog = rfd::AsyncFileDialog::new().set_title("Choose the Target Folder");
         if let Some(start) = start.filter(|p| p.is_absolute()) {
             dialog = dialog.set_directory(start);

@@ -187,9 +187,10 @@ pub fn facts(settings: &rustcut_core::settings::Settings, paths: &rustcut_core::
         ],
         targets: settings
             .export
-            .target_folders
-            .iter()
-            .map(|f| NamedPath::new(f.label.clone(), &f.path))
+            .folders
+            .folders()
+            .into_iter()
+            .filter_map(|f| f.path.as_deref().map(|p| NamedPath::new(f.name.clone(), p)))
             .collect(),
         cache: paths.cache_dir.clone(),
         rustview_library: data_home.join("rustview"),

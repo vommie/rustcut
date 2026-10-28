@@ -125,8 +125,10 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     ] {
         redaction::learn_dir(dir);
     }
-    for folder in &loaded.settings.export.target_folders {
-        redaction::learn_dir(&folder.path);
+    for folder in loaded.settings.export.folders.folders() {
+        if let Some(path) = &folder.path {
+            redaction::learn_dir(path);
+        }
     }
     log.open_file(
         &loaded.paths.log_dir(),

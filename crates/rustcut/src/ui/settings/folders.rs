@@ -1,46 +1,30 @@
-//! The named target folders on the Export & Naming page (pure): add, label, type or pick a path, reorder, remove. The
-//! export card offers them after "Source folder" in this order (user decision Q-X3); a folder's label is what the card
-//! shows. A typed path is checked against what Linux allows (P9.7, the user's wish); a folder that does not exist yet
+//! The target folders on the Export & Naming page (pure): add, label, type or pick a path, reorder, remove. Until P11.3
+//! gives the tree its own page, this list edits the tree's top level (the export card offers every folder of the tree
+//! after "Next to the source"). A typed path is checked against what Linux allows (P9.7, the user's wish); a folder that does not exist yet
 //! is made when its path is kept (the bridge does that off the UI thread).
 
 use std::path::{Component, Path, PathBuf};
 
 use path_clean::PathClean as _;
 
-use rustcut_core::settings::TargetFolder;
+use rustcut_core::folders::{FolderId, FolderNode, FolderTree, Spot};
 
-/// Adds `path` at the end with its folder name as the label; `false` when the list has it already.
-pub fn add(folders: &mut Vec<TargetFolder>, path: &Path) -> bool {
-    if folders.iter().any(|f| f.path == path) {
-        return false;
-    }
-    folders.push(TargetFolder {
-        label: default_label(path),
-        path: path.to_path_buf(),
-    });
-    true
+/// The id of the top-level entry shown in row `index` (until P11.3 the page lists the tree's top level).
+fn row_id(tree: &FolderTree, index: usize) -> Option<FolderId> {
+    tree.entries.get(index).map(|n| n.id)
 }
 
-/// The folder's own name, or the whole path for `/`.
-pub fn default_label(path: &Path) -> String {
-    path.file_name()
-        .map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())
+/// Adds `path` at the end, named after itself; `false` when the tree has it already.
+pub fn add(tree: &mut FolderTree, path: &Path) -> bool {
+    tree.add_folder(path, Spot::End).is_ok()
 }
 
-/// A new label; an empty one is refused.
-pub fn rename(folders: &mut [TargetFolder], index: usize, label: &str) -> Result<bool, &'static str> {
-    let label = label.trim();
-    if label.is_empty() {
-        return Err("A folder needs a label.");
-    }
-    let Some(folder) = folders.get_mut(index) else {
+/// A new name; an empty one is refused.
+pub fn rename(tree: &mut FolderTree, index: usize, label: &str) -> Result<bool, &'static str> {
+    let Some(id) = row_id(tree, index) else {
         return Ok(false);
     };
-    if folder.label == label {
-        return Ok(false);
-    }
-    label.clone_into(&mut folder.label);
-    Ok(true)
+    tree.rename(id, label).map_err(|_empty| "A folder needs a label.")
 }
 
 /// The longest path Linux takes (`PATH_MAX` without the terminating NUL) and the longest name of one folder (`NAME_MAX`).
@@ -79,27 +63,19 @@ pub fn check_path(text: &str, home: Option<&Path>) -> Result<PathBuf, &'static s
     Ok(path)
 }
 
-/// The path of the folder at `index` becomes `path`; another folder of the list with that path refuses it.
-pub fn set_path(folders: &mut [TargetFolder], index: usize, path: PathBuf) -> Result<bool, &'static str> {
-    if folders.iter().enumerate().any(|(i, f)| i != index && f.path == path) {
-        return Err("This folder is in the list already.");
-    }
-    let Some(folder) = folders.get_mut(index) else {
+/// The path of the folder at `index` becomes `path`; another folder of the tree with that path refuses it.
+pub fn set_path(tree: &mut FolderTree, index: usize, path: PathBuf) -> Result<bool, &'static str> {
+    let Some(id) = row_id(tree, index) else {
         return Ok(false);
     };
-    if folder.path == path {
-        return Ok(false);
-    }
-    // A label that was the old folder's name follows the new one.
-    if folder.label == default_label(&folder.path) {
-        folder.label = default_label(&path);
-    }
-    folder.path = path;
-    Ok(true)
+    tree.set_path(id, path).map_err(|e| match e {
+        rustcut_core::folders::EditError::DuplicatePath => "This folder is in the list already.",
+        _ => "A group has no path.",
+    })
 }
 
 /// Moves the folder at `index` by `by` places (within the list).
-pub fn shift(folders: &mut [TargetFolder], index: usize, by: i32) -> bool {
+pub fn shift<T>(folders: &mut [T], index: usize, by: i32) -> bool {
     let Some(target) = index.checked_add_signed(isize::try_from(by).unwrap_or(0)) else {
         return false;
     };
@@ -118,7 +94,7 @@ pub fn shift(folders: &mut [TargetFolder], index: usize, by: i32) -> bool {
 
 /// The folder at `index` was dropped before the row `before` of the current order (the row count = the end; P9.7's
 /// drag & drop).
-pub fn drop_before(folders: &mut [TargetFolder], index: usize, before: usize) -> bool {
+pub fn drop_before<T>(folders: &mut [T], index: usize, before: usize) -> bool {
     let target = if before > index { before - 1 } else { before };
     let by = if target >= index {
         i32::try_from(target - index)
@@ -128,23 +104,19 @@ pub fn drop_before(folders: &mut [TargetFolder], index: usize, before: usize) ->
     by.is_ok_and(|by| shift(folders, index, by))
 }
 
-pub fn remove(folders: &mut Vec<TargetFolder>, index: usize) -> Option<TargetFolder> {
-    (index < folders.len()).then(|| folders.remove(index))
-}
-
-/// Where the export card's selection goes when the list changes: the same folder (by path) when it is still listed,
-/// else "Source folder" (`None`). The card's index counts the folders after "Source folder" from 0.
-pub fn follow_selection(before: &[TargetFolder], after: &[TargetFolder], selected: Option<usize>) -> Option<usize> {
-    let path: &PathBuf = &before.get(selected?)?.path;
-    after.iter().position(|f| &f.path == path)
+pub fn remove(tree: &mut FolderTree, index: usize) -> Option<FolderNode> {
+    tree.remove(row_id(tree, index)?).ok()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn paths(folders: &[TargetFolder]) -> Vec<&str> {
-        folders.iter().map(|f| f.path.to_str().unwrap()).collect()
+    fn paths(tree: &FolderTree) -> Vec<&str> {
+        tree.entries
+            .iter()
+            .map(|f| f.path.as_deref().unwrap().to_str().unwrap())
+            .collect()
     }
 
     #[test]
@@ -175,7 +147,7 @@ mod tests {
             check_path(&"/abcdefgh".repeat(512), home).is_err(),
             "a path over 4095 bytes"
         );
-        let mut folders = Vec::new();
+        let mut folders = FolderTree::default();
         assert!(add(&mut folders, Path::new("/v/clips")));
         assert!(add(&mut folders, Path::new("/v/best")));
         assert_eq!(
@@ -186,7 +158,7 @@ mod tests {
         assert_eq!(set_path(&mut folders, 1, PathBuf::from("/v/top")), Ok(false));
         assert_eq!(paths(&folders), ["/v/clips", "/v/top"]);
         assert_eq!(
-            folders.get(1).map(|f| f.label.as_str()),
+            folders.entries.get(1).map(|f| f.name.as_str()),
             Some("top"),
             "the folder's name follows"
         );
@@ -194,38 +166,35 @@ mod tests {
 
     #[test]
     fn folders_are_added_once_labeled_moved_and_removed() {
-        let mut folders = Vec::new();
+        let mut folders = FolderTree::default();
         assert!(add(&mut folders, Path::new("/v/clips")));
         assert!(add(&mut folders, Path::new("/v/best")));
         assert!(add(&mut folders, Path::new("/")));
         assert!(!add(&mut folders, Path::new("/v/clips")));
-        assert_eq!(folders.first().unwrap().label, "clips");
-        assert_eq!(folders.get(2).unwrap().label, "/");
+        assert_eq!(folders.entries.first().unwrap().name, "clips");
+        assert_eq!(folders.entries.get(2).unwrap().name, "/");
         assert_eq!(rename(&mut folders, 1, "  Best of  "), Ok(true));
-        assert_eq!(folders.get(1).unwrap().label, "Best of");
+        assert_eq!(folders.entries.get(1).unwrap().name, "Best of");
         assert!(rename(&mut folders, 1, " ").is_err());
-        assert!(shift(&mut folders, 2, -2));
+        assert!(shift(&mut folders.entries, 2, -2));
         assert_eq!(paths(&folders), ["/", "/v/clips", "/v/best"]);
-        assert!(shift(&mut folders, 0, 1));
-        assert_eq!(paths(&folders), ["/v/clips", "/", "/v/best"]);
-        assert!(!shift(&mut folders, 0, -1) && !shift(&mut folders, 2, 1) && !shift(&mut folders, 9, 1));
-        assert!(drop_before(&mut folders, 0, 3), "the first one to the end");
-        assert_eq!(paths(&folders), ["/", "/v/best", "/v/clips"]);
-        assert!(drop_before(&mut folders, 2, 0));
+        assert!(shift(&mut folders.entries, 0, 1));
         assert_eq!(paths(&folders), ["/v/clips", "/", "/v/best"]);
         assert!(
-            !drop_before(&mut folders, 1, 1) && !drop_before(&mut folders, 1, 2),
+            !shift(&mut folders.entries, 0, -1)
+                && !shift(&mut folders.entries, 2, 1)
+                && !shift(&mut folders.entries, 9, 1)
+        );
+        assert!(drop_before(&mut folders.entries, 0, 3), "the first one to the end");
+        assert_eq!(paths(&folders), ["/", "/v/best", "/v/clips"]);
+        assert!(drop_before(&mut folders.entries, 2, 0));
+        assert_eq!(paths(&folders), ["/v/clips", "/", "/v/best"]);
+        assert!(
+            !drop_before(&mut folders.entries, 1, 1) && !drop_before(&mut folders.entries, 1, 2),
             "its own place"
         );
-        let before = folders.clone();
-        assert_eq!(remove(&mut folders, 1).unwrap().path, PathBuf::from("/"));
+        assert_eq!(remove(&mut folders, 1).unwrap().path, Some(PathBuf::from("/")));
         assert_eq!(remove(&mut folders, 7), None);
-        assert_eq!(follow_selection(&before, &folders, Some(2)), Some(1));
-        assert_eq!(
-            follow_selection(&before, &folders, Some(1)),
-            None,
-            "removed: back to the source folder"
-        );
-        assert_eq!(follow_selection(&before, &folders, None), None);
+        assert_eq!(paths(&folders), ["/v/clips", "/v/best"]);
     }
 }

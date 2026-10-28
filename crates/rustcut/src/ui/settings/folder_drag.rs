@@ -73,7 +73,7 @@ impl SettingsBridge {
         let target = drag.last.filter(|f| drop && f.moves).map(|f| f.drop);
         let mut moved = false;
         if let Some(before) = target {
-            self.update(|s| moved = folders::drop_before(&mut s.export.target_folders, drag.row, before));
+            self.update(|s| moved = folders::drop_before(&mut s.export.folders.entries, drag.row, before));
         }
         tracing::debug!(dropped = drop, moved, "[Settings] Folder drag ended");
         let window: Option<SettingsWindow> = self.window.borrow().as_ref().map(ComponentHandle::clone_strong);

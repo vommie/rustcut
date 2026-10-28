@@ -4,8 +4,9 @@
 use serde::{Deserialize, Serialize};
 use serde_with::{DefaultOnError, VecSkipError, serde_as};
 
-use super::file::VersionedFile;
+use super::file::{MigrationStep, VersionedFile};
 use crate::edit::{CropAspect, FilterChain};
+use crate::folders::FolderId;
 use crate::job::{JobId, JobStateKind};
 use crate::media::CropSearch;
 use crate::render::{DEFAULT_PROBE_SECS, PROBE_SECS, RenderProfile};
@@ -116,8 +117,14 @@ impl Default for WindowState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ExportPanelState {
-    /// Index into `Settings.export.target_folders`.
-    pub target_folder: Option<usize>,
+    /// The chosen target: an entry of `Settings.export.folders` by id, 0 = next to the source (UI state version 2; before:
+    /// `target_folder`, an index into the old list).
+    #[serde_as(as = "DefaultOnError")]
+    pub target_id: FolderId,
+    /// The last targets, newest first (the folder list's "Recent", P11).
+    #[serde_as(as = "DefaultOnError")]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub recent_targets: Vec<FolderId>,
     /// The counter suffix is on and its value.
     pub counter_enabled: bool,
     pub counter: u32,
@@ -167,7 +174,8 @@ pub struct ExportPanelState {
 impl Default for ExportPanelState {
     fn default() -> Self {
         Self {
-            target_folder: None,
+            target_id: FolderId::SOURCE,
+            recent_targets: Vec::new(),
             counter_enabled: false,
             counter: 1,
             auto_increment: true,
@@ -486,7 +494,15 @@ const MAX_POSITION: i32 = 32_768;
 
 impl VersionedFile for UiState {
     const FILE_NAME: &'static str = "ui-state.toml";
-    const VERSION: u32 = 1;
+    const VERSION: u32 = 2;
+
+    fn steps() -> &'static [MigrationStep] {
+        &[MigrationStep {
+            from: 1,
+            reason: "target-folder-id",
+            apply: super::folders::migrate_target_id,
+        }]
+    }
 
     fn sanitize(&mut self) -> Vec<String> {
         let mut notes = Vec::new();

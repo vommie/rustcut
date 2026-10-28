@@ -447,7 +447,6 @@ fn dialog_sizes_round_trip_and_old_files_load() {
     .unwrap();
     let loaded = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
     assert_eq!(loaded.dialogs, DialogUiState::default());
-    assert!(!dir.path().join("b").exists(), "no migration, no backup");
 
     let mut state = UiState::default();
     state.dialogs.sizes.insert(

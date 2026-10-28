@@ -35,6 +35,7 @@ use self::page::{Page, Special};
 use self::profiles::ProfilesPage;
 use crate::app::SettingsWriter;
 use crate::app::window::to_dimension;
+use crate::ui::folders::presence::FolderPresence;
 use crate::ui::keymap::Keymap;
 use crate::ui::notices::{self, Kind, Notice};
 use crate::ui::render_settings::state::Encoders;
@@ -119,6 +120,8 @@ pub struct SettingsBridge {
     /// A target folder that is dragged (P9.7) and how far each row moves aside meanwhile.
     folder_drag: RefCell<Option<folder_drag::FolderDrag>>,
     folder_shifts: Rc<VecModel<f32>>,
+    /// Which target folders are missing (checked on the runtime, P11.1).
+    presence: Rc<FolderPresence>,
     /// The Diagnostics page's last report and whether its checks run (P9.16).
     diag: RefCell<diagnostics::DiagState>,
     /// The programs' and the RustView test's states beside their rows (0.0.67).
@@ -182,6 +185,7 @@ impl SettingsBridge {
             status: RefCell::default(),
             folder_drag: RefCell::new(None),
             folder_shifts: Rc::new(VecModel::default()),
+            presence: Rc::default(),
         });
         let this = Rc::downgrade(&bridge);
         main.on_open_settings(move || {
@@ -505,17 +509,28 @@ impl SettingsBridge {
     }
 
     fn publish_folders(&self, settings: &Settings) {
-        let rows = settings
-            .export
-            .target_folders
+        let entries = &settings.export.folders.entries;
+        let rows = entries
             .iter()
             .map(|f| FolderRowView {
-                label: f.label.as_str().into(),
-                path: f.path.display().to_string().into(),
-                missing: !f.path.is_dir(),
+                label: f.name.as_str().into(),
+                path: f
+                    .path
+                    .as_deref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_default()
+                    .into(),
+                missing: f.path.as_deref().is_some_and(|p| self.presence.is_missing(p)),
             })
             .collect();
         sync(&self.models.folders, rows);
+        let paths = entries.iter().filter_map(|f| f.path.clone()).collect();
+        let weak = Weak::clone(&self.me);
+        self.presence.refresh(&self.runtime, paths, move || {
+            if let Some(bridge) = weak.upgrade() {
+                bridge.publish_folders(&bridge.writer.current());
+            }
+        });
     }
 }
 

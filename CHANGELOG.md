@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The target folders are now a folder tree (the first step of the new target folder picker): your folders move into
+  it in their order, without groups or favorites. `config.toml` is migrated to version 8 (`folder-tree`) and
+  `ui-state.toml` to version 2 (`target-folder-id`, the chosen folder is kept by an id); both files are backed up
+  first (0.0.77).
+- "Source folder" in the Job Finalization card is now called "Next to the source" (0.0.77).
+- A loaded job whose folder is not among the target folders keeps that folder in the card ("not in the list") and a
+  message offers "Add to target folders"; the folder is no longer added silently (0.0.77).
+
+### Fixed
+
+- Settings > Export & Naming no longer checks every target folder on the window's thread while it draws the list;
+  the check runs in the background (0.0.77).
+
 ## [0.0.76] - 2026-10-28
 
 The tag history follows your saved jobs: it changes only on a save and shows how long ago each tag was used; disabled

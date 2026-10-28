@@ -216,9 +216,11 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
     if before.advanced.redact != after.advanced.redact {
         super::redaction::set_kinds(after.advanced.redact);
     }
-    if before.export.target_folders != after.export.target_folders {
-        for folder in &after.export.target_folders {
-            super::redaction::learn_dir(&folder.path);
+    if before.export.folders != after.export.folders {
+        for folder in after.export.folders.folders() {
+            if let Some(path) = &folder.path {
+                super::redaction::learn_dir(path);
+            }
         }
     }
 }

@@ -12,6 +12,7 @@ use super::dialogs::DialogSettings;
 use super::file::{MigrationStep, VersionedFile};
 use super::filters::FilterDefaults;
 use super::notices::{NoticeSettings, migrate_notice_options};
+use crate::folders::FolderTree;
 use crate::naming::DEFAULT_TEMPLATE;
 use crate::render::{DEFAULT_PROFILE_ID, RenderProfile, is_builtin_id};
 
@@ -169,18 +170,11 @@ impl Default for EditorSettings {
     }
 }
 
-/// A named target folder of the export panel.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TargetFolder {
-    pub label: String,
-    pub path: PathBuf,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ExportSettings {
-    /// Named target folders in the order of the selection list.
-    pub target_folders: Vec<TargetFolder>,
+    /// The target folder tree (settings version 8, P11; before: a list `target_folders` of `{label, path}`).
+    pub folders: FolderTree,
     /// File-name template (minijinja, see `naming`).
     pub name_template: String,
 }
@@ -188,7 +182,7 @@ pub struct ExportSettings {
 impl Default for ExportSettings {
     fn default() -> Self {
         Self {
-            target_folders: Vec::new(),
+            folders: FolderTree::default(),
             name_template: DEFAULT_TEMPLATE.into(),
         }
     }
@@ -499,7 +493,7 @@ fn migrate_metadata_warning(table: &mut toml::Table) -> Result<(), String> {
 
 impl VersionedFile for Settings {
     const FILE_NAME: &'static str = "config.toml";
-    const VERSION: u32 = 7;
+    const VERSION: u32 = 8;
 
     fn steps() -> &'static [MigrationStep] {
         &[
@@ -532,6 +526,11 @@ impl VersionedFile for Settings {
                 from: 6,
                 reason: "crop-ratios-trimmed",
                 apply: super::filters::migrate_crop_ratios,
+            },
+            MigrationStep {
+                from: 7,
+                reason: "folder-tree",
+                apply: super::folders::migrate_folder_tree,
             },
         ]
     }
@@ -643,6 +642,7 @@ impl VersionedFile for Settings {
             "render.hidden_profiles: unknown, repeated or default ids dropped",
             r.hidden_profiles != before,
         );
+        notes.extend(self.export.folders.sanitize());
         notes.extend(self.dialogs.conflict.sanitize());
         self.notices.sanitize(&mut notes);
         notes

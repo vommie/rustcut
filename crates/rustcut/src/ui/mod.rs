@@ -9,6 +9,7 @@ pub mod editing;
 pub mod editor;
 pub mod export;
 pub mod filters;
+pub mod folders;
 pub mod inspector;
 pub mod jump;
 pub mod keymap;
