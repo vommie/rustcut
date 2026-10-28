@@ -8,6 +8,7 @@ pub mod actor;
 pub mod app_identity;
 pub mod diagnostics;
 pub mod edit;
+pub mod folders;
 pub mod hashing;
 pub mod job;
 pub mod media;

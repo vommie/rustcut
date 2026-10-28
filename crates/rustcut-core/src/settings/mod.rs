@@ -5,6 +5,7 @@ mod dialog_ui;
 mod dialogs;
 mod file;
 mod filters;
+mod folders;
 mod notices;
 mod paths;
 mod schema;
@@ -28,7 +29,7 @@ pub use paths::AppPaths;
 pub use schema::{
     AdvancedSettings, AppearanceSettings, AutoSection, DesktopSettings, EditorSettings, ExportSettings,
     GeneralSettings, HashingSettings, OnJobLoad, PlayerSettings, QueueSettings, RenderSettings, RustViewSettings,
-    Settings, TargetFolder, TaskbarShows, TraySettings, WarningSettings, WhenDone, WriteTiming,
+    Settings, TaskbarShows, TraySettings, WarningSettings, WhenDone, WriteTiming,
 };
 pub use ui_state::{
     ExportPanelState, JobPanelState, LogPanelState, LogSource, ProbeState, QueuePanelState, SettingsWindowState,

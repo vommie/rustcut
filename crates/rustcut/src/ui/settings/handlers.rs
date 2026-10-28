@@ -211,7 +211,7 @@ impl SettingsBridge {
             let Some(bridge) = weak.upgrade() else { return };
             let path = folder.path().to_path_buf();
             bridge.update(|s| {
-                if folders::add(&mut s.export.target_folders, &path) {
+                if folders::add(&mut s.export.folders, &path) {
                     tracing::info!(folder = %path.display(), "[Settings] Target folder added");
                 }
             });
@@ -224,8 +224,8 @@ impl SettingsBridge {
 
     pub(super) fn remove_folder(&self, index: usize) {
         self.update(|s| {
-            if let Some(folder) = folders::remove(&mut s.export.target_folders, index) {
-                tracing::info!(folder = %folder.path.display(), "[Settings] Target folder removed from the list");
+            if let Some(folder) = folders::remove(&mut s.export.folders, index) {
+                tracing::info!(folder = %folder.name, "[Settings] Target folder removed from the list");
             }
         });
         self.publish();
@@ -233,14 +233,14 @@ impl SettingsBridge {
 
     pub(super) fn move_folder(&self, index: usize, by: i32) {
         self.update(|s| {
-            folders::shift(&mut s.export.target_folders, index, by);
+            folders::shift(&mut s.export.folders.entries, index, by);
         });
         self.publish();
     }
 
     pub(super) fn rename_folder(&self, index: usize, label: &str) -> bool {
         let mut ok = true;
-        self.update(|s| ok = folders::rename(&mut s.export.target_folders, index, label).is_ok());
+        self.update(|s| ok = folders::rename(&mut s.export.folders, index, label).is_ok());
         self.publish();
         ok
     }

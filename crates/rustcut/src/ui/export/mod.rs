@@ -19,6 +19,7 @@ mod metadata;
 mod previews;
 mod save;
 mod state;
+mod target;
 
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
@@ -36,7 +37,7 @@ pub use dialog::{
 };
 pub use known::KnownList;
 pub use metadata::{MetadataFacts, Missing, missing};
-pub use state::{ExportDraft, ExportState, JobFacts, MAX_COUNTER, SOURCE_FOLDER, codec_label};
+pub use state::{ExportDraft, ExportState, JobFacts, MAX_COUNTER, codec_label};
 
 use self::job_check::JobProblem;
 use self::metadata::MetaPending;
@@ -416,17 +417,6 @@ impl ExportBridge {
                 );
             }
             None => notices::clear(SAVE_BLOCKED),
-        }
-    }
-
-    /// Persists the target folders.
-    fn store_folders(&self) {
-        let folders = self.state.borrow().folders.clone();
-        if !self.writer.update(|s| s.export.target_folders = folders) {
-            Self::tell(
-                Notice::new(Kind::SettingsReadOnly, "The folder list is not saved")
-                    .detail("config.toml is from a newer RustCut."),
-            );
         }
     }
 }

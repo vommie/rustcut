@@ -1,5 +1,5 @@
 // Export & Naming: the named target folders of the export card (PyCutRv's folder dialog): add, label, reorder, remove
-// (held, user decision Q-Q4). "Source folder" is always the first choice of the card and is not listed here. The card's
+// (held, user decision Q-Q4). "Next to the source" is always the first choice of the card and is not listed here. The card's
 // jump button leads here (`settings:export.folders`, P9.7).
 
 import { Theme } from "styles.slint";
@@ -108,7 +108,7 @@ component FolderRow inherits Rectangle {
 
 component FoldersCard inherits SettingsCard {
     title: "Target folders";
-    description: "The folders the export card offers after \"Source folder\", in this order (drag a row to move it). The label is what the card shows.";
+    description: "The folders the export card offers after \"Next to the source\", in this order (drag a row to move it). The label is what the card shows.";
 
     if SettingsUi.folders.length > 0: list-area := Rectangle {
         height: list.preferred-height;
