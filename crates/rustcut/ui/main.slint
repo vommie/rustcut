@@ -31,6 +31,7 @@ import { ConflictJobView, ConflictOptionView, Export, PreviewView } from "export
 import { Queue, QueueColumnView, QueueRowView } from "queue_types.slint";
 import { QueueFilterFlyout } from "queue_filter.slint";
 import { FolderList, FolderListFlyout, FolderListRowView } from "folder_list.slint";
+import { FolderWheel, FolderWheelLayer, WheelHoldRing, WheelSlotView } from "folder_wheel.slint";
 import { MultiChoiceItem } from "controls_choice.slint";
 import { Job, JobLoad, JobRowView, JobSectionView, LogLineView, Logs } from "job_types.slint";
 import { ContextMenu, ContextMenuLayer, MenuItemView, MenuLevelView } from "context_menu.slint";
@@ -68,7 +69,7 @@ export {
     ConflictJobView, ConflictOptionView, PreviewView, TipRow, Tip, TipKey, TipKeys, TipPlacement, TipRect, TipSide,
     GlobalTooltip, TooltipLogic, DialogState, Queue, QueueRowView, QueueColumnView, MultiChoiceItem, TagRate, TagNodeView,
     TagColumnView, TagHistoryItemModel, TagHistoryRowModel, Job, JobRowView, JobSectionView, Logs, LogLineView, JobLoad,
-    ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderTreeUi, FolderTreeRowView, FolderList, FolderListRowView, FolderDetailsView, FolderPlaceView, FolderIconView, FolderIconRowView, FolderPictureView, RatioChipView, DiagCheckView, DiagGroupView,
+    ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderTreeUi, FolderTreeRowView, FolderList, FolderListRowView, FolderWheel, WheelSlotView, FolderDetailsView, FolderPlaceView, FolderIconView, FolderIconRowView, FolderPictureView, RatioChipView, DiagCheckView, DiagGroupView,
     ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power, AppTray, Jump, Notices,
     ToastView, BannerView, HistoryView, MessageKindView, Bubbles, BubbleView, BubbleButtonView, Problems, ColorCodec, ColorPickerWindow, TagFilterWindow, TagFilterRowView,
     TextLogic, TextSplit, DragLogic, DragState, AppMenu, MenuBarMenu, TabView
@@ -526,6 +527,26 @@ export component MainWindow inherits Window {
         visible: Notices.bell;
         x: parent.width - self.width - 8px;
         y: (root.bar-height - self.height) / 2;
+    }
+
+    // The folder wheel over the video (P11.5): centered on it, as large as the window allows.
+    if FolderWheel.shown: FolderWheelLayer {
+        x: 0;
+        y: root.bar-height;
+        width: parent.width;
+        height: parent.height - root.bar-height;
+        center-x: player.absolute-position.x - root.content-x + player.width / 2;
+        center-y: player.absolute-position.y - root.content-y + player.height / 2;
+        video-x: player.absolute-position.x - root.content-x;
+        video-y: player.absolute-position.y - root.content-y;
+        video-width: player.width;
+        video-height: player.height;
+    }
+
+    // The hold ring at the pointer while the middle button is held over the video.
+    if FolderWheel.arming: WheelHoldRing {
+        x: player.absolute-position.x + player.width / 2 + FolderWheel.ring-x - self.width / 2;
+        y: player.absolute-position.y + player.height / 2 + FolderWheel.ring-y - self.height / 2;
     }
 
     // The Job Finalization card's folder list hangs from its field (P11.4).

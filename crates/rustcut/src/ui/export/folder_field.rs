@@ -206,9 +206,15 @@ impl ExportBridge {
 
     fn picked(&self, id: FolderId) {
         tracing::info!(id = id.0, "[Export] Target folder chosen");
-        self.state.borrow_mut().target.select_id(id);
         self.close_list();
+        self.choose_target(id);
+    }
+
+    /// Another target (the list, the folder wheel); the job is not saved.
+    pub fn choose_target(&self, id: FolderId) {
+        self.state.borrow_mut().target.select_id(id);
         self.rescan();
+        self.publish();
     }
 
     pub(super) fn list_click(&self, index: usize) {

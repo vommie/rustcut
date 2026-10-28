@@ -45,6 +45,7 @@ use crate::ui::editor::Editor;
 use crate::ui::export::{ExportBridge, ExportParts};
 use crate::ui::filters::{self, FiltersBridge};
 use crate::ui::folders::pictures::Pictures;
+use crate::ui::folders::wheel::WheelBridge;
 use crate::ui::inspector::InspectorBridge;
 use crate::ui::jump::JumpBridge;
 use crate::ui::keymap::{Action, Keymap};
@@ -499,6 +500,16 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         let power = Rc::downgrade(&power);
         editor.set_escape_hook(move || power.upgrade().is_some_and(|p| p.escape()));
     }
+    // The folder wheel over the video (P11.5): its key comes through the keymap.
+    let wheel = WheelBridge::install(&main, writer.clone(), &folder_pictures, &export);
+    {
+        let wheel = Rc::downgrade(&wheel);
+        editor.set_folder_wheel_hook(move || {
+            if let Some(w) = wheel.upgrade() {
+                w.open_by_key();
+            }
+        });
+    }
     let tray = TrayBridge::install(&main, &queue, &player, &loaded.settings.desktop.tray);
     let settings_window = SettingsBridge::install(
         &main,
@@ -645,6 +656,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     drop(settings_window);
     drop(editing);
     drop(opener);
+    drop(wheel);
     drop(export);
     drop(logs);
     drop(inspector);

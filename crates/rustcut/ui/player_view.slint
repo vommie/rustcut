@@ -3,6 +3,7 @@
 // symbols (P9.9), the empty state, the non-modal error overlay with Reload (click or F5), and the hint while a file is
 // dragged over the window. The mouse wheel changes the volume (its bar shows near the bottom, player_feedback.slint).
 
+import { FolderWheel } from "folder_wheel.slint";
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Playback } from "player_types.slint";
@@ -84,6 +85,19 @@ export component PlayerView inherits Rectangle {
                 Shortcuts.release-focus();
             }
             if !Playback.has-video {
+                return;
+            }
+            // The folder wheel: holding the middle button (P11.5); its pointer is relative to the video's center.
+            if event.button == PointerEventButton.middle && event.kind == PointerEventKind.down {
+                FolderWheel.pressed(self.mouse-x - self.width / 2, self.mouse-y - self.height / 2);
+                return;
+            }
+            if event.button == PointerEventButton.middle && event.kind == PointerEventKind.up {
+                FolderWheel.released();
+                return;
+            }
+            if event.kind == PointerEventKind.move && FolderWheel.tracking {
+                FolderWheel.moved(self.mouse-x - self.width / 2, self.mouse-y - self.height / 2);
                 return;
             }
             if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {

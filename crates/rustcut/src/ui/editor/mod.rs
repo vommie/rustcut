@@ -80,6 +80,8 @@ pub struct Editor {
     tags: RefCell<Weak<TagsBridge>>,
     /// Escape goes here first (the power bridge aborts its countdown; `true` = taken).
     escape: RefCell<Option<Box<dyn Fn() -> bool>>>,
+    /// The folder wheel's key (P11.5): opens the wheel, or one level up while it is open.
+    folder_wheel: RefCell<Option<Box<dyn Fn()>>>,
     /// The player shows the probe render: the timeline, the marks and the sections wait (user decision Q-E1).
     probe_playing: Cell<bool>,
     /// Moves the playhead on while the video plays (mpv reports the position only once per video frame).
@@ -148,6 +150,7 @@ impl Editor {
             probe: RefCell::new(Weak::new()),
             tags: RefCell::new(Weak::new()),
             escape: RefCell::new(None),
+            folder_wheel: RefCell::new(None),
             probe_playing: Cell::new(false),
             glide: slint::Timer::default(),
             menu_modal: Cell::new(false),
@@ -200,6 +203,11 @@ impl Editor {
     /// Escape asks `hook` first (the countdown after the queue is done).
     pub fn set_escape_hook(&self, hook: impl Fn() -> bool + 'static) {
         *self.escape.borrow_mut() = Some(Box::new(hook));
+    }
+
+    /// Connects the folder wheel's key (P11.5).
+    pub fn set_folder_wheel_hook(&self, hook: impl Fn() + 'static) {
+        *self.folder_wheel.borrow_mut() = Some(Box::new(hook));
     }
 
     /// Connects the Tag & Rate panel: Escape cancels the editing of a job's tags.

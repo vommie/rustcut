@@ -160,6 +160,8 @@ folder_favorite = { tabler = "star", doc = "Make the entry a favorite with a pla
 folder_favorite_set = { tabler = "star", style = "filled", doc = "The entry is a favorite with a place on the folder wheel" }
 folder_picture_file = { tabler = "photo-plus", doc = "Choose an own image or SVG as the entry's picture" }
 folder_color = { tabler = "palette", doc = "Choose a color for a target folder entry" }
+wheel_more = { tabler = "dots", doc = "The folder wheel's \"More ...\" place" }
+wheel_back = { tabler = "arrow-back-up", doc = "The folder wheel's middle: one level up" }
 target_name = { tabler = "file-pencil", doc = "File name of the job" }
 counter = { tabler = "hash", doc = "Counter in the file name" }
 auto_increment = { tabler = "sort-ascending-numbers", doc = "Raise the counter after each save" }

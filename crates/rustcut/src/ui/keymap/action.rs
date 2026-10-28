@@ -43,6 +43,8 @@ pub enum Action {
     MirrorVertical,
     ResetFilters,
     ProbeRender,
+    /// Opens the folder wheel over the video; pressed again while it is open: one level up (P11.5).
+    FolderWheel,
     Rate0,
     Rate1,
     Rate2,
@@ -57,7 +59,7 @@ pub enum Action {
 }
 
 impl Action {
-    pub const ALL: [Self; 49] = [
+    pub const ALL: [Self; 50] = [
         Self::Open,
         Self::Save,
         Self::Quit,
@@ -96,6 +98,7 @@ impl Action {
         Self::MirrorVertical,
         Self::ResetFilters,
         Self::ProbeRender,
+        Self::FolderWheel,
         Self::Rate0,
         Self::Rate1,
         Self::Rate2,
@@ -150,6 +153,7 @@ impl Action {
             Self::MirrorVertical => "mirror_vertical",
             Self::ResetFilters => "reset_filters",
             Self::ProbeRender => "probe_render",
+            Self::FolderWheel => "folder_wheel",
             Self::Rate0 => "rate_0",
             Self::Rate1 => "rate_1",
             Self::Rate2 => "rate_2",
@@ -209,6 +213,7 @@ impl Action {
             Self::MirrorVertical => "Mirror top and bottom",
             Self::ResetFilters => "Reset all filters",
             Self::ProbeRender => "Probe render around the playhead",
+            Self::FolderWheel => "Open the folder wheel (again: one level up)",
             Self::Rate0 => "Rate 0",
             Self::Rate1 => "Rate 1",
             Self::Rate2 => "Rate 2",
@@ -265,6 +270,7 @@ impl Action {
             Self::RotateRight => &["R"],
             // A test render (M2.5); T is free in PyCutRv's and the NLE keys.
             Self::ProbeRender => &["T"],
+            Self::FolderWheel => &["F"],
             // The rating like RustView (user request 2026-10-27).
             Self::Rate0 => &["Control+Digit0"],
             Self::Rate1 => &["Control+Digit1"],

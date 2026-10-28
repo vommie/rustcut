@@ -46,7 +46,7 @@ pub struct HotkeysPage {
 /// The group an action is listed under.
 pub const fn group(action: Action) -> &'static str {
     match action {
-        Action::Open | Action::Save | Action::Quit | Action::OpenSettings => "File",
+        Action::Open | Action::Save | Action::Quit | Action::OpenSettings | Action::FolderWheel => "File",
         Action::TogglePause
         | Action::ShuttleReverse
         | Action::ShuttleStop
