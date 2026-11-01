@@ -20,7 +20,7 @@ use parking_lot::Mutex;
 use rustcut_core::settings::{ExportPanelState, PlayerSettings};
 use rustcut_core::time::Timestamp;
 use rustcut_player::{
-    AudioOptions, EndReason, OpenOptions, Player, PlayerError, PlayerEvent, PlayerOptions, SurfaceError, SurfaceHooks,
+    AudioOptions, EndReason, Normalization, OpenOptions, Player, PlayerError, PlayerEvent, PlayerOptions, SurfaceError, SurfaceHooks,
     VideoFilter, attach_surface,
 };
 use slint::ComponentHandle as _;
@@ -92,10 +92,7 @@ impl PlayerBridge {
             hwdec: settings.hwdec.clone(),
             autoplay: settings.auto_play,
             background: settings.background.clone(),
-            audio: AudioOptions {
-                mute_last_second: settings.mute_last_second,
-                loudnorm: settings.loudnorm_preview,
-            },
+            audio: audio_options(settings),
             volume: f64::from(export.volume),
             muted: export.muted,
             ..PlayerOptions::default()
@@ -165,12 +162,8 @@ impl PlayerBridge {
             show_symbols(&window.global::<Playback<'_>>(), settings);
         }
         self.wheel_step.set(settings.wheel_volume_step);
-        let audio = |s: &PlayerSettings| AudioOptions {
-            mute_last_second: s.mute_last_second,
-            loudnorm: s.loudnorm_preview,
-        };
-        if audio(before) != audio(settings)
-            && let Err(e) = self.player.set_audio(audio(settings))
+        if audio_options(before) != audio_options(settings)
+            && let Err(e) = self.player.set_audio(audio_options(settings))
         {
             tracing::warn!(error = %e, "[Player] The preview audio filters could not be changed");
         }
@@ -335,6 +328,8 @@ impl PlayerBridge {
         });
         let this = Rc::downgrade(self);
         playback.on_reload(with(&this, PlayerBridge::reload));
+        let this = Rc::downgrade(self);
+        playback.on_speed_reset(with(&this, PlayerBridge::normal_speed));
     }
 
     /// Mouse wheel over the video: one notch changes the volume by the configured step.
@@ -394,6 +389,8 @@ pub enum FlashKind {
     SoundOff,
     /// A rating from 0 to 5 (Ctrl+0..5).
     Rating(u8),
+    /// The normalization's keys (`Playback.flash-text`).
+    Normalization,
 }
 
 /// Which symbols over the video the settings show (each on its own, user request 2026-10-27).
@@ -402,6 +399,26 @@ fn show_symbols(playback: &Playback<'_>, settings: &PlayerSettings) {
     playback.set_show_mute_symbol(settings.flash_mute);
     playback.set_show_rating_symbol(settings.flash_rating);
     playback.set_show_volume_bar(settings.volume_bar);
+    playback.set_normalized(settings.normalization != rustcut_core::settings::Normalization::None);
+    playback.set_normalization_name(settings.normalization.title().into());
+    playback.set_normalization_back(settings.return_to().title().into());
+    playback.set_hide_pointer(settings.hide_pointer);
+    playback.set_hide_pointer_ms(i32::try_from(settings.hide_pointer_ms).unwrap_or(i32::MAX));
+    playback.set_hide_pointer_after(crate::ui::control_bar::seconds_text(settings.hide_pointer_ms).into());
+}
+
+/// The preview's audio filters from the settings.
+fn audio_options(settings: &PlayerSettings) -> AudioOptions {
+    AudioOptions {
+        mute_last_second: settings.mute_last_second,
+        normalization: match settings.normalization {
+            rustcut_core::settings::Normalization::None => Normalization::None,
+            rustcut_core::settings::Normalization::Loudness => Normalization::Loudness,
+            rustcut_core::settings::Normalization::Dynamic => Normalization::Dynamic,
+            rustcut_core::settings::Normalization::Speech => Normalization::Speech,
+            rustcut_core::settings::Normalization::Compressor => Normalization::Compressor,
+        },
+    }
 }
 
 /// Shows `kind` in the middle of the video (a new one replaces the one that shows); nothing without a video or while
@@ -411,6 +428,8 @@ pub fn flash(playback: &Playback<'_>, kind: FlashKind) {
         FlashKind::PlayPause => true,
         FlashKind::SoundOn | FlashKind::SoundOff => playback.get_show_mute_symbol(),
         FlashKind::Rating(_) => playback.get_show_rating_symbol(),
+        // The caller asked its setting.
+        FlashKind::Normalization => true,
     };
     if !wanted || !playback.get_has_video() {
         return;
@@ -420,6 +439,7 @@ pub fn flash(playback: &Playback<'_>, kind: FlashKind) {
         FlashKind::SoundOn => (1, 0),
         FlashKind::SoundOff => (2, 0),
         FlashKind::Rating(r) => (3, i32::from(r)),
+        FlashKind::Normalization => (4, 0),
     };
     playback.set_flash_kind(code);
     playback.set_flash_rating(rating);

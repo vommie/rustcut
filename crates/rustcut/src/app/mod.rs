@@ -51,6 +51,7 @@ use crate::ui::jump::JumpBridge;
 use crate::ui::keymap::{Action, Keymap};
 use crate::ui::logs::LogsBridge;
 use crate::ui::media_info::MediaInfoBridge;
+use crate::ui::control_bar::{self, ControlBar};
 use crate::ui::menu::ContextMenuBridge;
 use crate::ui::notices;
 use crate::ui::open::{FileOpener, OpenerParts};
@@ -353,6 +354,16 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &filters,
         &loaded.settings,
         &loaded.ui_state.timeline,
+    );
+    let control_bar = ControlBar::install(
+        &main,
+        control_bar::Parts {
+            writer: writer.clone(),
+            player: &player,
+            editor: &editor,
+            menu: &menu,
+            ui: &ui,
+        },
     );
     let probe = ProbeBridge::install(
         &main,
@@ -666,6 +677,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     // Stop listening now (the settings' listener holds the holder until the end of `run`).
     drop(server.borrow_mut().take());
     drop(settings_window);
+    drop(control_bar);
     drop(editing);
     drop(opener);
     drop(wheel);

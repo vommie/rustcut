@@ -376,7 +376,7 @@ mod tests {
     fn the_end_mute_follows_the_duration_and_is_set_only_on_change() {
         let audio = AudioOptions {
             mute_last_second: true,
-            loudnorm: false,
+            normalization: audio::Normalization::None,
         };
         let mut s = Session::new(PreviewQuality::High, audio);
         s.handle(Command::SurfaceReady { software: false });

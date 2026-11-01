@@ -1,0 +1,219 @@
+// The popups of the transport bar (P12 5.1, 5.4): the volume while the bar has no slider (percent, a vertical slider,
+// mute below it, where the pointer already is) and "Go to time" (type a time, Enter jumps). The layer covers the window's
+// content below the menu bar; a press outside and Escape close them.
+
+import { Theme } from "styles.slint";
+import { IconId } from "icons.slint";
+import { Playback, PlayerPopup } from "player_types.slint";
+import { Flyout } from "flyout.slint";
+import { TransportButton } from "player_transport.slint";
+import { Shortcuts } from "shortcuts.slint";
+
+/// A vertical bar for a value from 0 to 1, with the magnets of `PlayerSeekBar`; the top is 1.
+component VerticalVolume inherits Rectangle {
+    in property <float> value;
+    callback changed(/* value */ float);
+
+    property <length> knob: 10px;
+    property <length> usable: root.height - root.knob;
+    property <bool> dragging;
+    // Ctrl was held at the pointer's last event (no magnets).
+    property <bool> free;
+    property <float> drag-value;
+    property <float> shown: Math.clamp(root.dragging ? root.drag-value : root.value, 0, 1);
+
+    pure function at(y: length, free: bool) -> float {
+        let raw = Math.clamp(1 - (y - root.knob / 2) / root.usable, 0, 1);
+        let magnet = Math.round(raw / 0.25) * 0.25;
+        return !free && magnet > 0 && Math.abs(raw - magnet) <= 0.03 ? magnet : raw;
+    }
+
+    width: 24px;
+
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: root.knob / 2;
+        width: 3px;
+        height: root.usable;
+        border-radius: 1.5px;
+        background: Theme.surface-hover;
+
+        Rectangle {
+            y: parent.height * (1 - root.shown);
+            height: parent.height * root.shown;
+            border-radius: parent.border-radius;
+            background: Theme.primary;
+        }
+    }
+
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: root.usable * (1 - root.shown);
+        width: root.knob;
+        height: root.knob;
+        border-radius: self.width / 2;
+        background: touch.has-hover || root.dragging ? Theme.text : Theme.text-muted;
+    }
+
+    touch := TouchArea {
+        pointer-event(event) => {
+            root.free = event.modifiers.control;
+            if event.button != PointerEventButton.left {
+                return;
+            }
+            if event.kind == PointerEventKind.down {
+                root.dragging = true;
+                root.drag-value = root.at(self.mouse-y, root.free);
+                root.changed(root.drag-value);
+            } else if event.kind == PointerEventKind.up {
+                root.dragging = false;
+            }
+        }
+        moved => {
+            if root.dragging && self.pressed {
+                root.drag-value = root.at(self.mouse-y, root.free);
+                root.changed(root.drag-value);
+            }
+        }
+        scroll-event(event) => {
+            if event.delta-y == 0 {
+                return reject;
+            }
+            Playback.wheel(event.delta-y);
+            accept
+        }
+    }
+}
+
+export component PlayerPopups inherits Rectangle {
+    if PlayerPopup.volume-open: Flyout {
+        anchor-x: PlayerPopup.anchor-x - root.absolute-position.x;
+        anchor-y: PlayerPopup.anchor-y - root.absolute-position.y;
+        anchor-width: PlayerPopup.anchor-width;
+        anchor-height: PlayerPopup.anchor-height;
+        panel-width: 46px;
+        panel-height: 194px;
+        closed => { PlayerPopup.volume-open = false; }
+
+        TouchArea {
+            x: 0;
+            y: 0;
+            width: 46px;
+            height: 194px;
+            scroll-event(event) => {
+                if event.delta-y == 0 {
+                    return reject;
+                }
+                Playback.wheel(event.delta-y);
+                accept
+            }
+        }
+
+        Text {
+            x: 0;
+            y: 8px;
+            width: 46px;
+            height: 14px;
+            text: Playback.volume + "%";
+            color: Playback.muted ? Theme.status-deleted : Theme.text;
+            font-size: 11px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+
+        VerticalVolume {
+            x: 11px;
+            y: 26px;
+            height: 124px;
+            value: Playback.volume / 100;
+            changed(value) => { Playback.set-volume(Math.round(value * 100)); }
+        }
+
+        TransportButton {
+            x: 8px;
+            y: 156px;
+            icon: Playback.muted || Playback.volume == 0 ? IconId.volume-muted
+                : Playback.volume < 50 ? IconId.volume-low : IconId.volume;
+            tooltip: Playback.muted ? "Sound on" : "Mute";
+            shortcut: Playback.key-toggle-mute;
+            clicked => { Playback.toggle-mute(); }
+        }
+    }
+
+    if PlayerPopup.time-open: Flyout {
+        anchor-x: PlayerPopup.anchor-x - root.absolute-position.x;
+        anchor-y: PlayerPopup.anchor-y - root.absolute-position.y;
+        anchor-width: PlayerPopup.anchor-width;
+        anchor-height: PlayerPopup.anchor-height;
+        panel-width: 180px;
+        panel-height: 76px;
+        closed => {
+            PlayerPopup.time-open = false;
+            Shortcuts.release-focus();
+        }
+
+        Text {
+            x: 10px;
+            y: 8px;
+            text: "Go to time";
+            color: Theme.text-muted;
+            font-size: 11px;
+        }
+
+        field := Rectangle {
+            property <bool> invalid;
+
+            x: 10px;
+            y: 28px;
+            width: 160px;
+            height: 26px;
+            border-radius: 3px;
+            border-width: 1px;
+            border-color: self.invalid ? Theme.status-corrupt : Theme.primary;
+            background: Theme.background;
+
+            input := TextInput {
+                x: 6px;
+                width: parent.width - 12px;
+                height: parent.height;
+                single-line: true;
+                color: Theme.text;
+                font-family: "monospace";
+                font-size: 12px;
+                vertical-alignment: center;
+                selection-background-color: Theme.primary.with-alpha(0.4);
+
+                init => {
+                    self.text = Playback.position-text;
+                    self.focus();
+                    self.select-all();
+                }
+                edited => { field.invalid = false; }
+                accepted => {
+                    if Playback.go-to-time(self.text) {
+                        PlayerPopup.time-open = false;
+                        Shortcuts.release-focus();
+                    } else {
+                        field.invalid = true;
+                    }
+                }
+                key-pressed(event) => {
+                    if event.text == Key.Escape {
+                        PlayerPopup.time-open = false;
+                        Shortcuts.release-focus();
+                        return accept;
+                    }
+                    reject
+                }
+            }
+        }
+
+        Text {
+            x: 10px;
+            y: 58px;
+            text: field.invalid ? "Type a time like 1:23:45" : "Enter jumps there";
+            color: field.invalid ? Theme.status-corrupt : Theme.status-deleted;
+            font-size: 10px;
+        }
+    }
+}

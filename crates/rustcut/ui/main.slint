@@ -12,7 +12,8 @@ import { ResizerBar } from "resizer_bar.slint";
 import { Dock, DockCardView, DockGroupView, DockMetrics, DockRailItem, DockTabView, RailPeek } from "dock_types.slint";
 import { DockPeek, DockSidebar } from "dock_sidebar.slint";
 import { DockOverlay } from "dock_overlay.slint";
-import { Playback } from "player_types.slint";
+import { BarFit, Playback, PlayerPopup } from "player_types.slint";
+import { PlayerPopups } from "player_popups.slint";
 import { PlayerTransport } from "player_transport.slint";
 import { ActivityView, Status, StatusLine } from "status_line.slint";
 import { CropHistoryFlyout, CropHistoryRow, CropHistoryUi } from "crop_history.slint";
@@ -64,7 +65,7 @@ import { TextLogic, TextSplit } from "controls_text.slint";
 import { DragLogic, DragState } from "drag.slint";
 
 export {
-    Theme, IconId, Dock, DockMetrics, RailPeek, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, ActivityView,
+    Theme, IconId, Dock, DockMetrics, RailPeek, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, BarFit, PlayerPopup, Status, ActivityView,
     CropHistoryRow, CropHistoryUi, MediaInfoPanel,
     MediaInfoRow, MediaInfoSection, Shortcuts, Timeline, TimelineBlock, TimelineTick, Sections,
     SectionRowView, Filters, FilterRowView, FilterTips, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe, Export,
@@ -128,7 +129,7 @@ export component MainWindow inherits Window {
     // A modal dialog covers the window: the menu bar's keys (which Slint gives the menu before any focused element) must
     // not act on the editor behind it (found by the P8 audit: I, O and Shift+I moved the marks under the save question).
     property <bool> modal-open: FolderList.open || CropHistoryUi.open || Export.dialog-open || Export.meta-open || Power.asking || Problems.newer-open
-        || Problems.db-open || JobLoad.open;
+        || Problems.db-open || JobLoad.open || PlayerPopup.time-open;
     changed modal-open => {
         Shortcuts.modal-changed(root.modal-open);
     }
@@ -337,6 +338,10 @@ export component MainWindow inherits Window {
                 DragState.cancel();
                 return accept;
             }
+            if event.text == Key.Escape && PlayerPopup.volume-open {
+                PlayerPopup.volume-open = false;
+                return accept;
+            }
             // A filter's options menu closes (a pinned one only when no action takes Escape, P9.13).
             if event.text == Key.Escape && Filters.menu-kind != "" && !Filters.menu-pinned {
                 Filters.close-menu();
@@ -530,6 +535,13 @@ export component MainWindow inherits Window {
         visible: Notices.bell;
         x: parent.width - self.width - 8px;
         y: (root.bar-height - self.height) / 2;
+    }
+
+    PlayerPopups {
+        x: 0;
+        y: root.bar-height;
+        width: parent.width;
+        height: parent.height - root.bar-height;
     }
 
     // The folder wheel over the video (P11.5): centered on it, as large as the window allows.

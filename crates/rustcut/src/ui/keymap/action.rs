@@ -37,6 +37,8 @@ pub enum Action {
     AutoCrop,
     /// Opens the crop history's list (no key by default).
     CropHistory,
+    NormalizationToggle,
+    NormalizationNext,
     ToggleFilterPreview,
     ToggleKeepFilters,
     RotateLeft,
@@ -61,7 +63,7 @@ pub enum Action {
 }
 
 impl Action {
-    pub const ALL: [Self; 51] = [
+    pub const ALL: [Self; 53] = [
         Self::Open,
         Self::Save,
         Self::Quit,
@@ -93,6 +95,8 @@ impl Action {
         Self::QuickCrop,
         Self::AutoCrop,
         Self::CropHistory,
+        Self::NormalizationToggle,
+        Self::NormalizationNext,
         Self::ToggleFilterPreview,
         Self::ToggleKeepFilters,
         Self::RotateLeft,
@@ -149,6 +153,8 @@ impl Action {
             Self::QuickCrop => "quick_crop",
             Self::AutoCrop => "auto_crop",
             Self::CropHistory => "crop_history",
+            Self::NormalizationToggle => "normalization_toggle",
+            Self::NormalizationNext => "normalization_next",
             Self::ToggleFilterPreview => "toggle_filter_preview",
             Self::ToggleKeepFilters => "toggle_keep_filters",
             Self::RotateLeft => "rotate_left",
@@ -210,6 +216,8 @@ impl Action {
             Self::QuickCrop => "Quick crop: drag the nearest edge (again: keep it)",
             Self::AutoCrop => "Detect black borders (auto-crop)",
             Self::CropHistory => "Open the crop history",
+            Self::NormalizationToggle => "Normalization on / off",
+            Self::NormalizationNext => "Next normalization",
             Self::ToggleFilterPreview => "Show / hide the filters in the player",
             Self::ToggleKeepFilters => "Keep the filters for the next video",
             Self::RotateLeft => "Rotate left",
@@ -293,7 +301,9 @@ impl Action {
             | Self::MirrorHorizontal
             | Self::MirrorVertical
             | Self::ResetFilters
-            | Self::CropHistory => &[],
+            | Self::CropHistory
+            | Self::NormalizationToggle
+            | Self::NormalizationNext => &[],
         }
     }
 

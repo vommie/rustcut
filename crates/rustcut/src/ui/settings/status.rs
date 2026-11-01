@@ -56,7 +56,7 @@ struct Program {
     flag: &'static str,
 }
 
-const PROGRAMS: [Program; 3] = [
+const PROGRAMS: [Program; 4] = [
     Program {
         key: "advanced.ffmpeg",
         name: "ffmpeg",
@@ -72,6 +72,11 @@ const PROGRAMS: [Program; 3] = [
         name: "rustview",
         flag: "--version",
     },
+    Program {
+        key: "player.mpv",
+        name: "mpv",
+        flag: "--version",
+    },
 ];
 
 /// The program a row's value means: the typed path or command, else its name (found in PATH).
@@ -79,6 +84,7 @@ fn program(settings: &Settings, key: &str) -> Option<PathBuf> {
     let typed = match key {
         "advanced.ffmpeg" => settings.advanced.ffmpeg.clone(),
         "advanced.ffprobe" => settings.advanced.ffprobe.clone(),
+        "player.mpv" => settings.player.mpv.clone(),
         // A switched-off RustView's row shows nothing.
         "rustview.binary" if settings.rustview.enabled => settings.rustview.binary.clone(),
         _ => return None,

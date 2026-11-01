@@ -12,6 +12,7 @@ use super::dialogs::DialogSettings;
 use super::file::{MigrationStep, VersionedFile};
 use super::filters::FilterDefaults;
 use super::notices::{NoticeSettings, migrate_notice_options};
+use super::player::{MAX_HIDE_POINTER_MS, MIN_HIDE_POINTER_MS, PlayerSettings};
 use super::wheel::FolderWheelSettings;
 use crate::folders::FolderTree;
 use crate::naming::DEFAULT_TEMPLATE;
@@ -72,51 +73,6 @@ impl Default for GeneralSettings {
             single_instance: true,
             confirm_quit_while_rendering: true,
             hold_to_confirm_ms: 1_000,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct PlayerSettings {
-    /// Start playing when a video opens.
-    pub auto_play: bool,
-    /// mpv `hwdec` (`auto-copy`, `no`, `vaapi`, ...).
-    pub hwdec: String,
-    /// Background around the video (`#RRGGBB`).
-    pub background: String,
-    /// Volume change per mouse wheel step on the video, in percent.
-    pub wheel_volume_step: u8,
-    /// Mute the last second of a video while previewing (against crackling at the end).
-    pub mute_last_second: bool,
-    /// Normalize the loudness of the preview audio (`loudnorm`; the render is not affected).
-    pub loudnorm_preview: bool,
-    /// A play or pause symbol flashes over the video when a key plays or pauses it (P9.9, user decision Q-P9.9).
-    pub flash_play_pause: bool,
-    /// The pause symbol stays (faint) over the video while it is paused (P9.9).
-    pub keep_pause_symbol: bool,
-    /// The mute key shows a speaker in the middle of the video (0.0.72; older files have none: on).
-    pub flash_mute: bool,
-    /// Ctrl+0..5 show the rating's digit in the middle of the video (0.0.72; on).
-    pub flash_rating: bool,
-    /// The mouse wheel shows the volume bar near the bottom of the video (0.0.72; on).
-    pub volume_bar: bool,
-}
-
-impl Default for PlayerSettings {
-    fn default() -> Self {
-        Self {
-            auto_play: true,
-            hwdec: "auto-copy".into(),
-            background: "#444444".into(),
-            wheel_volume_step: 5,
-            mute_last_second: false,
-            loudnorm_preview: false,
-            flash_play_pause: true,
-            keep_pause_symbol: true,
-            flash_mute: true,
-            flash_rating: true,
-            volume_bar: true,
         }
     }
 }
@@ -496,7 +452,7 @@ fn migrate_metadata_warning(table: &mut toml::Table) -> Result<(), String> {
 
 impl VersionedFile for Settings {
     const FILE_NAME: &'static str = "config.toml";
-    const VERSION: u32 = 9;
+    const VERSION: u32 = 10;
 
     fn steps() -> &'static [MigrationStep] {
         &[
@@ -539,6 +495,11 @@ impl VersionedFile for Settings {
                 from: 8,
                 reason: "folder-picture-look",
                 apply: super::folders::migrate_picture_look,
+            },
+            MigrationStep {
+                from: 9,
+                reason: "normalization-choice",
+                apply: super::player::migrate_normalization,
             },
         ]
     }
@@ -591,6 +552,12 @@ impl VersionedFile for Settings {
             !(1..=25).contains(&self.player.wheel_volume_step),
         ) {
             self.player.wheel_volume_step = self.player.wheel_volume_step.clamp(1, 25);
+        }
+        if fix(
+            "player.hide_pointer_ms limited to 500-60000",
+            !(MIN_HIDE_POINTER_MS..=MAX_HIDE_POINTER_MS).contains(&self.player.hide_pointer_ms),
+        ) {
+            self.player.hide_pointer_ms = self.player.hide_pointer_ms.clamp(MIN_HIDE_POINTER_MS, MAX_HIDE_POINTER_MS);
         }
         if fix(
             "editor.seek_step_secs limited to 1-3600",

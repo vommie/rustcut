@@ -2,11 +2,13 @@
 // edited (handles, or the nearest edge in the quick crop, F4; the pointer goes to src/ui/filters/), the play and pause
 // symbols (P9.9), the empty state, the non-modal error overlay with Reload (click or F5), and the hint while a file is
 // dragged over the window. The mouse wheel changes the volume (its bar shows near the bottom, player_feedback.slint).
+// A pointer that rests over the video hides (P12 5.2), unless it is needed.
 
 import { FolderWheel } from "folder_wheel.slint";
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Playback } from "player_types.slint";
+import { Filters } from "filters_types.slint";
 import { Shortcuts } from "shortcuts.slint";
 import { CropCursor, CropOverlay, CropOverlayView, CropPills } from "crop_overlay.slint";
 import { VolumeFeedback } from "player_feedback.slint";
@@ -18,6 +20,7 @@ component PlaySymbol inherits Rectangle {
     in property <bool> play;
     in property <int> kind;
     in property <int> rating;
+    in property <string> text;
 
     width: 72px;
     height: 72px;
@@ -30,6 +33,28 @@ component PlaySymbol inherits Rectangle {
         icon: root.kind == 1 ? IconId.volume : root.kind == 2 ? IconId.volume-off : root.play ? IconId.play : IconId.pause;
         size: 36px;
         color: #ffffff;
+    }
+
+    // The normalization's key: the wave with the kind's name.
+    if root.kind == 4: VerticalLayout {
+        alignment: center;
+        spacing: 2px;
+
+        HorizontalLayout {
+            alignment: center;
+            AppIcon {
+                icon: IconId.audio-normalize;
+                size: 28px;
+                color: #ffffff;
+            }
+        }
+
+        Text {
+            text: root.text;
+            color: #ffffff;
+            font-size: 10px;
+            horizontal-alignment: center;
+        }
     }
 
     if root.kind == 3: Rectangle {
@@ -77,10 +102,47 @@ export component PlayerView inherits Rectangle {
         height: parent.height;
     }
 
-    TouchArea {
-        mouse-cursor: FolderWheel.hide-pointer ? MouseCursor.none : CropOverlay.active ? CropCursor.of(CropOverlay.handle, CropOverlay.quick) : MouseCursor.default;
+    // The pointer rests when it has not moved for the set time, over a video, with nothing that needs it: not while the
+    // crop is edited or the pipette waits, not during a press. Menus and dialogs lie over this area, so it has no hover.
+    property <bool> resting;
+    property <bool> may-rest: Playback.hide-pointer && Playback.has-video && area.has-hover && !area.pressed
+        && !CropOverlay.active && !Filters.picking && !FolderWheel.tracking;
+
+    // `restart()` alone does nothing on a stopped timer, so the timer runs whenever the pointer may rest.
+    rest-timer := Timer {
+        interval: Playback.hide-pointer-ms * 1ms;
+        running: root.may-rest && !root.resting;
+        triggered => { root.resting = true; }
+    }
+
+    function pointer-active() {
+        root.resting = false;
+        rest-timer.restart();
+    }
+
+    changed may-rest => {
+        if !self.may-rest {
+            root.resting = false;
+        }
+    }
+
+    changed resting => {
+        Playback.pointer-rest-changed(self.absolute-position.x + area.mouse-x, self.absolute-position.y + area.mouse-y);
+    }
+
+    area := TouchArea {
+        // Where the pointer last was: a repeated event (Rust, `pointer-rest-changed`) does not count as movement.
+        property <length> last-x;
+        property <length> last-y;
+
+        mouse-cursor: FolderWheel.hide-pointer || root.resting ? MouseCursor.none : CropOverlay.active ? CropCursor.of(CropOverlay.handle, CropOverlay.quick) : MouseCursor.default;
 
         pointer-event(event) => {
+            if event.kind != PointerEventKind.move || self.mouse-x != self.last-x || self.mouse-y != self.last-y {
+                self.last-x = self.mouse-x;
+                self.last-y = self.mouse-y;
+                root.pointer-active();
+            }
             if event.kind == PointerEventKind.down {
                 Shortcuts.release-focus();
             }
@@ -125,6 +187,7 @@ export component PlayerView inherits Rectangle {
             if event.delta-y == 0 {
                 return reject;
             }
+            root.pointer-active();
             Playback.wheel(event.delta-y);
             accept
         }
@@ -161,6 +224,7 @@ export component PlayerView inherits Rectangle {
         play: Playback.flash-play;
         kind: Playback.flash-kind;
         rating: Playback.flash-rating;
+        text: Playback.flash-text;
         visible: self.phase != 0 || self.opacity > 0;
         opacity: self.phase == 1 ? 1 : 0;
 

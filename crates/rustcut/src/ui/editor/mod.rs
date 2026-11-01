@@ -394,6 +394,11 @@ impl Editor {
         }
     }
 
+    /// The section around `time` for "Open section in mpv": from the list, else between the marks.
+    pub fn section_at(&self, time: Timestamp) -> Option<(Timestamp, Timestamp)> {
+        self.state.borrow().sections.section_at(time)
+    }
+
     /// Runs `f` with the player when it exists.
     fn with_player(&self, f: impl FnOnce(&Rc<PlayerBridge>)) {
         if let Some(player) = self.player.upgrade() {
@@ -448,6 +453,7 @@ impl Editor {
         playback.set_key_frame_back(label(Action::FrameBack).into());
         playback.set_key_frame_forward(label(Action::FrameForward).into());
         playback.set_key_toggle_mute(label(Action::ToggleMute).into());
+        playback.set_key_normalization(label(Action::NormalizationToggle).into());
         let sections = window.global::<Sections<'_>>();
         sections.set_key_set_start(label(Action::SetStart).into());
         sections.set_key_set_end(label(Action::SetEnd).into());

@@ -280,6 +280,10 @@ kinds! {
         critical false, ("Tagging is off", "Jobs are saved without RustView. Switched off in an earlier run.");
     LogCopied = "log_copied", "Log copied", Logs, Success, Toast, EVENT, desktop false, critical false,
         ("143 log lines copied", "");
+    TimeCopied = "time_copied", "Time copied", App, Success, Toast, EVENT, desktop false, critical false,
+        ("0:01:23.456 copied", "");
+    MpvFailed = "mpv_failed", "mpv did not start", App, Warning, Toast, EVENT, desktop false, critical false,
+        ("mpv cannot be found", "Install it with: sudo pacman -S mpv");
     ClipboardFailed = "clipboard_failed", "Clipboard unusable", Logs, Warning, Toast, EVENT, desktop false,
         critical false, ("The clipboard cannot be used", "");
     /// The queue database cannot be used (M6.5d turns it into a dialog with ways out).
