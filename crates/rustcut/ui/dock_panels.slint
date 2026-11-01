@@ -232,7 +232,7 @@ component CardStack inherits Rectangle {
     flick := Flickable {
         content-height: stack.preferred-height;
         // While rows of a card are dragged the stack does not take the gesture for scrolling (its edges scroll it).
-        interactive: !DragState.active;
+        interactive: !DragState.active && !DragState.holding;
         // An options menu of the Filters card hangs from a button in this stack: it follows the button (Q-P9n).
         changed content-y => {
             if Filters.menu-kind != "" && Filters.menu-anchor-x >= self.absolute-position.x

@@ -7,7 +7,9 @@ use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
 
 use rustcut_core::folders::Picture;
-use rustcut_core::folders::pictures::{PictureCommand, PictureHandle, PictureKind, Rgba, decode_webp, render_svg};
+use rustcut_core::folders::pictures::{
+    PictureCommand, PictureHandle, PictureKind, Rgba, decode_webp, render_svg, spoke_picture,
+};
 use slint::{Image, Rgba8Pixel, SharedPixelBuffer};
 
 include!(concat!(env!("OUT_DIR"), "/folder_icons.rs"));
@@ -38,7 +40,21 @@ pub fn icon_names() -> impl Iterator<Item = &'static str> {
 pub struct Shown {
     pub image: Image,
     pub mono: bool,
+    /// The pixels, for pictures cut to a spoke.
+    buffer: SharedPixelBuffer<Rgba8Pixel>,
 }
+
+/// A picture cut to a spoke: the picture and the spoke's size and shape.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct SpokeKey {
+    picture: Picture,
+    width: u32,
+    height: u32,
+    shape: String,
+}
+
+/// How many cut pictures stay (every size of the small and the large wheel counts; a new look makes new ones).
+const SPOKES_KEPT: usize = 96;
 
 /// Pixels made on the runtime (`SharedPixelBuffer` is `Send`, `Image` is not).
 struct Pixels {
@@ -59,6 +75,8 @@ pub struct Pictures {
     runtime: tokio::runtime::Handle,
     cache: RefCell<HashMap<Picture, Option<Shown>>>,
     pending: RefCell<HashSet<Picture>>,
+    spokes: RefCell<HashMap<SpokeKey, Image>>,
+    spokes_pending: RefCell<HashSet<SpokeKey>>,
     listeners: RefCell<Vec<Box<dyn Fn()>>>,
     /// The listeners are told once for a burst of pictures (the icon grid asks for all of them at once).
     notify_pending: Cell<bool>,
@@ -72,6 +90,8 @@ impl Pictures {
             runtime,
             cache: RefCell::default(),
             pending: RefCell::default(),
+            spokes: RefCell::default(),
+            spokes_pending: RefCell::default(),
             listeners: RefCell::default(),
             notify_pending: Cell::new(false),
         })
@@ -93,6 +113,56 @@ impl Pictures {
         }
         self.request(picture.clone());
         None
+    }
+
+    /// `picture` cut to a spoke of this size (physical pixels) and shape (SVG path commands in that box), when it is
+    /// ready; else `None` and it is made on the runtime. Only own pictures, never one-color ones.
+    pub fn spoke(&self, picture: &Picture, width: f32, height: f32, shape: String) -> Option<Image> {
+        let shown = self.image(picture).filter(|s| !s.mono)?;
+        let side = |v: f32| -> u32 { az::saturating_cast::<f32, u32>(v.ceil()).max(1) };
+        let key = SpokeKey {
+            picture: picture.clone(),
+            width: side(width),
+            height: side(height),
+            shape,
+        };
+        if let Some(found) = self.spokes.borrow().get(&key) {
+            return Some(found.clone());
+        }
+        if self.spokes_pending.borrow_mut().insert(key.clone()) {
+            self.cut(key, shown.buffer);
+        }
+        None
+    }
+
+    fn cut(&self, key: SpokeKey, buffer: SharedPixelBuffer<Rgba8Pixel>) {
+        let (width, height, shape) = (key.width, key.height, key.shape.clone());
+        let task = self.runtime.spawn_blocking(move || {
+            let rgba = Rgba {
+                width: buffer.width(),
+                height: buffer.height(),
+                pixels: buffer.as_bytes().to_vec(),
+            };
+            spoke_picture(&rgba, width, height, &shape)
+                .map(|cut| SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(&cut.pixels, cut.width, cut.height))
+        });
+        let weak = Weak::clone(&self.me);
+        let spawned = slint::spawn_local(async move {
+            let cut = task.await.ok().flatten();
+            let Some(me) = weak.upgrade() else { return };
+            me.spokes_pending.borrow_mut().remove(&key);
+            if let Some(cut) = cut {
+                let mut spokes = me.spokes.borrow_mut();
+                if spokes.len() >= SPOKES_KEPT {
+                    spokes.clear();
+                }
+                spokes.insert(key, Image::from_rgba8(cut));
+            }
+            me.notify_soon();
+        });
+        if let Err(e) = spawned {
+            tracing::error!(error = %e, "[Folders] The event loop is gone; no pictures in the spokes");
+        }
     }
 
     /// Tells the listeners after a short while (once for every picture that arrived meanwhile).
@@ -149,8 +219,9 @@ impl Pictures {
                 tracing::warn!(?picture, "[Folders] A folder picture could not be drawn");
             }
             let shown = pixels.map(|p| Shown {
-                image: Image::from_rgba8(p.buffer),
+                image: Image::from_rgba8(p.buffer.clone()),
                 mono: p.mono,
+                buffer: p.buffer,
             });
             me.cache.borrow_mut().insert(picture, shown);
             me.notify_soon();

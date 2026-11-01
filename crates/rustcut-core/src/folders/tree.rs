@@ -30,6 +30,48 @@ pub enum Picture {
     Stored(String),
 }
 
+/// What an entry shows: its first letter, a built-in icon or an own picture (the user's choice, P12 3.2).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LookKind {
+    #[default]
+    Letter,
+    Icon,
+    Own,
+}
+
+/// What makes an entry recognizable (P12 3.2): the choice beside the icon and the own picture it keeps, so a change of
+/// the choice loses nothing. "Icon" or "Own" with nothing kept shows the letter and stays what it is.
+#[serde_as]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Look {
+    #[serde_as(as = "DefaultOnError")]
+    pub kind: LookKind,
+    /// A built-in icon by its Tabler name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    /// A picture of the picture store by its hash.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
+}
+
+impl Look {
+    /// The picture the entry shows now (`None` = its first letter).
+    pub fn shown(&self) -> Option<Picture> {
+        match self.kind {
+            LookKind::Letter => None,
+            LookKind::Icon => self.icon.clone().map(Picture::Icon),
+            LookKind::Own => self.image.clone().map(Picture::Stored),
+        }
+    }
+
+    /// Nothing chosen and nothing kept (not written to the file).
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 /// The name "Next to the source" shows with (fixed: it cannot be renamed).
 pub const SOURCE_NAME: &str = "Next to the source";
 
@@ -48,8 +90,8 @@ pub struct FolderNode {
     pub path: Option<PathBuf>,
     /// A value this version cannot read counts as missing.
     #[serde_as(as = "DefaultOnError")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub picture: Option<Picture>,
+    #[serde(skip_serializing_if = "Look::is_empty")]
+    pub look: Look,
     /// `#RRGGBB`; none = the theme's colors.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
@@ -103,8 +145,8 @@ pub fn default_name(path: &Path) -> String {
 #[serde(default)]
 pub struct SourceEntry {
     #[serde_as(as = "DefaultOnError")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub picture: Option<Picture>,
+    #[serde(skip_serializing_if = "Look::is_empty")]
+    pub look: Look,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -147,11 +189,16 @@ impl<'a> EntryRef<'a> {
         }
     }
 
-    pub const fn picture(self) -> Option<&'a Picture> {
+    pub const fn look(self) -> &'a Look {
         match self {
-            Self::Source(s) => s.picture.as_ref(),
-            Self::Node(n) => n.picture.as_ref(),
+            Self::Source(s) => &s.look,
+            Self::Node(n) => &n.look,
         }
+    }
+
+    /// The picture the entry shows now (`None` = its first letter).
+    pub fn picture(self) -> Option<Picture> {
+        self.look().shown()
     }
 
     pub fn color(self) -> Option<&'a str> {
@@ -304,23 +351,11 @@ impl FolderTree {
         FolderId(highest.saturating_add(1))
     }
 
-    /// Every picture the tree uses (the picture store keeps these, P11.2).
-    pub fn pictures(&self) -> Vec<&Picture> {
-        self.source
-            .picture
-            .iter()
-            .chain(self.walk().into_iter().filter_map(|w| w.node.picture.as_ref()))
-            .collect()
-    }
-
-    /// The hashes of the stored pictures the tree uses (the picture store keeps these, removes the rest).
+    /// The hashes of the stored pictures the tree keeps, shown or not (the picture store keeps these, removes the rest).
     pub fn stored_pictures(&self) -> std::collections::HashSet<String> {
-        self.pictures()
-            .into_iter()
-            .filter_map(|p| match p {
-                Picture::Stored(hash) => Some(hash.clone()),
-                Picture::Icon(_) => None,
-            })
+        std::iter::once(&self.source.look)
+            .chain(self.walk().into_iter().map(|w| &w.node.look))
+            .filter_map(|look| look.image.clone())
             .collect()
     }
 

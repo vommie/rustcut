@@ -2,6 +2,7 @@
 // tree's shown rows, the selected entry's details, the wheel's places for its star and the built-in icons.
 
 import { FolderPictureView } from "folder_picture.slint";
+import { WheelLookView, WheelMiddleView, WheelSlotView } from "wheel_face.slint";
 
 export struct FolderTreeRowView {
     id: int,
@@ -33,20 +34,15 @@ export struct FolderDetailsView {
     // 0 none, 1 built-in icon, 2 own picture.
     picture-kind: int,
     picture: FolderPictureView,
+    // The own picture it keeps, shown or not.
+    has-own: bool,
+    own-picture: FolderPictureView,
     icon-name: string,
     has-color: bool,
     color: color,
     place: int,
     // A group: how many entries it holds (all levels).
     contents: int,
-}
-
-// One place of the wheel preview.
-export struct FolderPlaceView {
-    taken: bool,
-    mine: bool,
-    name: string,
-    picture: FolderPictureView,
 }
 
 export struct FolderIconView {
@@ -62,7 +58,26 @@ export struct FolderIconRowView {
 export global FolderTreeUi {
     in property <[FolderTreeRowView]> rows;
     in property <FolderDetailsView> details;
-    in property <[FolderPlaceView]> places;
+    // The small wheel: the real wheel at this size (`src/ui/settings/folder_tree/mini.rs`) and its scene's state.
+    in property <length> wheel-size: 240px;
+    in property <WheelLookView> wheel-look;
+    in property <[WheelSlotView]> wheel-slots;
+    in property <WheelMiddleView> wheel-middle;
+    in property <float> wheel-alpha: 1;
+    in property <float> wheel-zoom: 1;
+    in property <float> wheel-turn: 0;
+    // The X of the place under the pointer, in the wheel's square.
+    in property <bool> clear-shown;
+    in property <length> clear-x;
+    in property <length> clear-y;
+    in property <int> clear-index;
+    // The place being dragged, under the pointer (relative to the wheel's center).
+    in property <bool> ghost;
+    in property <length> ghost-x;
+    in property <length> ghost-y;
+    in property <FolderPictureView> ghost-picture;
+    // The tree card's height: the cards below it start there (the page's preview stands beside them).
+    in-out property <length> tree-height;
     in property <[FolderIconRowView]> icon-rows;
     in property <int> icons-per-row: 9;
     in property <string> icon-search;
@@ -71,11 +86,11 @@ export global FolderTreeUi {
     in property <bool> tint: true;
     // The delete button's tooltip (a group goes with its contents) and whether it can delete.
     in property <string> delete-tip;
+    // A file from the file manager is held over the window.
+    in property <bool> file-over;
     in property <bool> can-delete;
     // An entry being renamed in its row (F2 or a double click), -1 = none.
     in property <int> renaming: -1;
-    // The icon grid is shown in the details.
-    in property <bool> icons-open;
     // Dragging an entry: the line where it would land (content y, indentation in levels) or the group row that takes
     // it (-1 = none), and the dragged name.
     in property <bool> dragging;
@@ -104,6 +119,14 @@ export global FolderTreeUi {
     callback delete();
     callback key(/* text */ string) -> bool;
     callback put-on-place(/* place */ int);
+    // The pointer on the small wheel, relative to its center.
+    callback wheel-hover(length, length);
+    callback wheel-leave();
+    callback wheel-press(length, length);
+    callback wheel-move(length, length);
+    callback wheel-release();
+    callback drop-place-changed();
+    callback play-again();
     // The "x" badge of a taken place: its favorite loses the star.
     callback clear-place(/* place */ int);
     callback set-path(string) -> bool;
@@ -112,9 +135,8 @@ export global FolderTreeUi {
     callback pick-path();
     callback picture-kind(/* 0 none, 1 icon, 2 own */ int);
     callback pick-icon(/* name */ string);
-    // Shows or hides the icon grid.
-    callback toggle-icons();
     callback pick-file();
+    callback delete-image();
     callback search-icons(string);
     callback pick-color();
     callback clear-color();

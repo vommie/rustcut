@@ -5,8 +5,7 @@
 use std::path::PathBuf;
 use std::rc::Weak;
 
-use rustcut_core::folders::pictures::PictureCommand;
-use rustcut_core::folders::{EditError, FolderId, Picture, Spot};
+use rustcut_core::folders::{EditError, FolderId, Spot};
 use slint::ComponentHandle as _;
 use slint::winit_030::winit::event::WindowEvent;
 use slint::winit_030::{EventResult, WinitWindowAccessor as _};
@@ -23,13 +22,13 @@ const NEW_GROUP: &str = "New group";
 /// The color the picker starts with when the entry has none.
 const START_COLOR: &str = "#89b4fa";
 
-fn tell(title: &str, detail: &str) {
+pub(super) fn tell(title: &str, detail: &str) {
     tracing::info!(message = title, detail, "[Settings]");
     notices::post(Notice::new(Kind::FolderEdit, title).detail(detail));
 }
 
 impl SettingsBridge {
-    fn folders_changed(&self) {
+    pub(super) fn folders_changed(&self) {
         self.publish_folder_tree(&self.writer.current());
     }
 
@@ -56,10 +55,14 @@ impl SettingsBridge {
         let page = &self.folder_page;
         if page.selected.get() != id {
             page.renaming.set(None);
-            page.icons_open.set(false);
         }
         page.selected.set(id);
         self.folders_changed();
+    }
+
+    /// Selects an entry and scrolls nothing: the tree's row and the details follow.
+    pub(super) fn folder_select_entry(&self, id: FolderId) {
+        self.folder_select(Some(id));
     }
 
     fn folder_toggle(&self, id: FolderId) {
@@ -131,7 +134,7 @@ impl SettingsBridge {
         self.folders_changed();
     }
 
-    fn folder_put_on_place(&self, place: i32) {
+    pub(super) fn folder_put_on_place(&self, place: i32) {
         let (Some(id), Ok(place)) = (self.folder_page.selected.get(), u8::try_from(place)) else {
             return;
         };
@@ -164,7 +167,7 @@ impl SettingsBridge {
     }
 
     /// Adds the folders at `paths` (the dialog's or dropped ones) where new entries go; the last one is selected.
-    fn folder_add_paths(&self, paths: Vec<PathBuf>) {
+    pub(super) fn folder_add_paths(&self, paths: Vec<PathBuf>) {
         let spot = self.new_spot();
         let mut added = None;
         let mut known = Vec::new();
@@ -292,82 +295,6 @@ impl SettingsBridge {
             return false;
         }
         true
-    }
-
-    fn folder_picture_kind(&self, kind: i32) {
-        let Some(id) = self.folder_page.selected.get() else {
-            return;
-        };
-        match kind {
-            0 => {
-                self.folder_page.icons_open.set(false);
-                self.update(|s| {
-                    let _ = s.export.folders.set_picture(id, None);
-                });
-            }
-            1 => self.folder_page.icons_open.set(true),
-            _ => {
-                self.folder_page.icons_open.set(false);
-                self.folder_pick_file();
-            }
-        }
-        self.folders_changed();
-    }
-
-    fn folder_toggle_icons(&self) {
-        self.folder_page.icons_open.set(!self.folder_page.icons_open.get());
-        self.folders_changed();
-    }
-
-    fn folder_pick_icon(&self, name: &str) {
-        let Some(id) = self.folder_page.selected.get() else {
-            return;
-        };
-        self.update(|s| {
-            let _ = s.export.folders.set_picture(id, Some(Picture::Icon(name.to_owned())));
-        });
-        self.folders_changed();
-    }
-
-    /// An own image or SVG: the file dialog, then the picture store prepares it (off the UI thread).
-    fn folder_pick_file(&self) {
-        let Some(id) = self.folder_page.selected.get() else {
-            return;
-        };
-        let mut dialog = rfd::AsyncFileDialog::new().set_title("Choose a Picture").add_filter(
-            "Images and SVGs",
-            &[
-                "png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff", "ico", "qoi", "svg",
-            ],
-        );
-        if let Some(window) = self.window.borrow().as_ref() {
-            dialog = dialog.set_parent(&window.window().window_handle());
-        }
-        let picked = dialog.pick_file();
-        let store = self.pictures.store().clone();
-        let weak = Weak::clone(&self.me);
-        let spawned = slint::spawn_local(async move {
-            let Some(file) = picked.await else { return };
-            let path = file.path().to_path_buf();
-            let answer = store.request(|reply| PictureCommand::Import { path, reply }).await;
-            let Some(bridge) = weak.upgrade() else { return };
-            match answer {
-                Ok(Ok(stored)) => {
-                    bridge.update(|s| {
-                        let _ = s
-                            .export
-                            .folders
-                            .set_picture(id, Some(Picture::Stored(stored.hash.clone())));
-                    });
-                    bridge.folders_changed();
-                }
-                Ok(Err(e)) => tell("The picture was not taken", &e.to_string()),
-                Err(e) => tell("The picture was not taken", &e.to_string()),
-            }
-        });
-        if let Err(e) = spawned {
-            tracing::error!(error = %e, "[Settings] The event loop is gone; no file dialog");
-        }
     }
 
     fn folder_search_icons(&self, text: &str) {
@@ -536,28 +463,6 @@ impl SettingsBridge {
         self.folders_changed();
     }
 
-    /// Files dropped on the Settings window while the page shows: the folders among them join the tree (checked on
-    /// the runtime; files are left out).
-    fn folders_dropped(&self, paths: Vec<PathBuf>) {
-        let task = self
-            .runtime
-            .spawn_blocking(move || paths.into_iter().filter(|p| p.is_dir()).collect::<Vec<PathBuf>>());
-        let weak = Weak::clone(&self.me);
-        let spawned = slint::spawn_local(async move {
-            let (Ok(folders), Some(bridge)) = (task.await, weak.upgrade()) else {
-                return;
-            };
-            if folders.is_empty() {
-                tell("Only folders can be dropped here", "Files are not target folders.");
-            } else {
-                bridge.folder_add_paths(folders);
-            }
-        });
-        if let Err(e) = spawned {
-            tracing::error!(error = %e, "[Settings] The event loop is gone; the dropped folders are not added");
-        }
-    }
-
     fn folder_set_path(&self, text: &str) -> bool {
         self.folder_page
             .selected
@@ -637,7 +542,7 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     let t = this.clone();
     ui.on_pick_file(move || with(&t, SettingsBridge::folder_pick_file));
     let t = this.clone();
-    ui.on_toggle_icons(move || with(&t, SettingsBridge::folder_toggle_icons));
+    ui.on_delete_image(move || with(&t, SettingsBridge::folder_delete_image));
     let t = this.clone();
     ui.on_search_icons(move |text| with(&t, |b| b.folder_search_icons(&text)));
     let t = this.clone();
@@ -655,8 +560,15 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     let batch = std::cell::RefCell::new(DropBatch::default());
     window.window().on_winit_window_event(move |_, event| {
         match event {
-            WindowEvent::DroppedFile(path) => batch.borrow_mut().paths.push(path.clone()),
-            WindowEvent::HoveredFileCancelled => batch.borrow_mut().paths.clear(),
+            WindowEvent::DroppedFile(path) => {
+                with(&t, |b| b.folder_file_over(false));
+                batch.borrow_mut().paths.push(path.clone());
+            }
+            WindowEvent::HoveredFile(_) => with(&t, |b| b.folder_file_over(true)),
+            WindowEvent::HoveredFileCancelled => {
+                with(&t, |b| b.folder_file_over(false));
+                batch.borrow_mut().paths.clear();
+            }
             // The drop's files arrive one after the other; the next pointer or redraw event ends the batch.
             _ => {
                 let paths = std::mem::take(&mut batch.borrow_mut().paths);

@@ -1,17 +1,36 @@
 //! Target Folders (P11.3, user decision Q-FP2): the folder wheel's options and how both folder pickers show pictures
 //! and colors. The tree itself is the page's own editor (`folder_tree/`).
 
-use rustcut_core::settings::{ColorMode, PictureShape, Settings, WheelButton, WheelLabels, WheelMiddle, WheelSize};
+use rustcut_core::settings::{
+    ColorMode, PictureShape, Settings, SpokePictures, WheelButton, WheelLabels, WheelLevels, WheelMiddle, WheelOpening,
+    WheelSize,
+};
 
 use super::Card;
-use crate::ui::settings::field::{choice, number, switch};
+use crate::ui::settings::field::{choice, number, percent, switch};
 
 fn mouse_trigger(s: &Settings) -> bool {
     s.folder_wheel.button != WheelButton::Off
 }
 
+const fn pointer_center(s: &Settings) -> bool {
+    s.folder_wheel.pointer_center
+}
+
+fn pictures_fill(s: &Settings) -> bool {
+    s.folder_wheel.spoke_pictures == SpokePictures::Background
+}
+
+const fn video_dimmed(s: &Settings) -> bool {
+    s.folder_wheel.dim
+}
+
+const fn animated(s: &Settings) -> bool {
+    s.folder_wheel.animations
+}
+
 pub static FOLDERS: &[Card] = &[Card {
-    title: "Folder wheel",
+    title: "Opening and pointing",
     description: "A wheel of target folders over the video: hold the middle mouse button over the video, or press \
                       its key anywhere (Hotkeys). Pointing at a folder and letting go chooses it; a group opens after \
                       a short rest on it. Choosing never saves the job.",
@@ -67,6 +86,29 @@ pub static FOLDERS: &[Card] = &[Card {
             folder_wheel.divided,
             [(false, "Fixed"), (true, "Divided")]
         ),
+        switch!(
+            "folder_wheel.pointer_center",
+            "Start the pointer in the middle",
+            "Every level starts with the pointer in the wheel's middle, wherever it really is: a short move in a \
+             direction chooses that spoke. A dot shows the pointer; the real one stays where it was.",
+            folder_wheel.pointer_center
+        ),
+        percent!(
+            "folder_wheel.pointer_distance",
+            "Move to choose",
+            "How far the pointer moves until it chooses a spoke, in percent of the wheel's size.",
+            folder_wheel.pointer_distance,
+            20..=150,
+            5
+        )
+        .under(pointer_center),
+    ],
+},
+Card {
+    title: "Look",
+    description: "How the wheel looks. Lengths are percents of the wheel's size, so it looks the same at every size. \
+                  The small wheel beside these options shows every change at once.",
+    fields: &[
         choice!(
             "folder_wheel.size",
             "Size",
@@ -99,6 +141,39 @@ pub static FOLDERS: &[Card] = &[Card {
             folder_wheel.middle,
             [(WheelMiddle::Picture, "Picture"), (WheelMiddle::Name, "Name")]
         ),
+        percent!(
+            "folder_wheel.gap",
+            "Gap between spokes",
+            "How far the spokes stand apart. 0 = no gap and no line: they touch.",
+            folder_wheel.gap,
+            0..=60,
+            1
+        ),
+        percent!(
+            "folder_wheel.middle_gap",
+            "Gap around the middle",
+            "How far the spokes stand from the middle.",
+            folder_wheel.middle_gap,
+            0..=50,
+            1
+        ),
+        percent!(
+            "folder_wheel.corners",
+            "Rounded corners",
+            "How round the spokes' corners are. 0 = sharp.",
+            folder_wheel.corners,
+            0..=50,
+            1
+        ),
+        number!(
+            "folder_wheel.middle_size",
+            "Size of the middle",
+            "How large the middle is, in percent of the wheel. Larger: more room for its picture.",
+            folder_wheel.middle_size: u8,
+            24..=46,
+            1,
+            "%"
+        ),
         number!(
             "folder_wheel.opacity",
             "Opacity",
@@ -108,24 +183,25 @@ pub static FOLDERS: &[Card] = &[Card {
             5,
             "%"
         ),
-        switch!(
-            "folder_wheel.breadcrumb",
-            "Path above the wheel",
-            "Shows the groups opened so far above the wheel.",
-            folder_wheel.breadcrumb
+        choice!(
+            "folder_wheel.spoke_pictures",
+            "Own pictures",
+            "Circle: a small circle above the name. Background: the picture fills the spoke, centered, and the name \
+             stands on it. Icons and letters stay small.",
+            folder_wheel.spoke_pictures,
+            [(SpokePictures::Circle, "Circle"), (SpokePictures::Background, "Background")]
         ),
-        switch!(
-            "folder_wheel.dim",
-            "Dim the video",
-            "The video is darker behind the wheel.",
-            folder_wheel.dim
-        ),
-        switch!(
-            "folder_wheel.animations",
-            "Animations",
-            "The wheel and its levels fade and grow in.",
-            folder_wheel.animations
-        ),
+        number!(
+            "folder_wheel.picture_dim",
+            "Dim pictures",
+            "How dark a picture is behind its name; the pointed one turns bright. A folder with a color takes a light \
+             tint of it instead.",
+            folder_wheel.picture_dim: u8,
+            0..=80,
+            5,
+            "%"
+        )
+        .under(pictures_fill),
         choice!(
             "folder_wheel.wheel_shape",
             "Shape in the wheel",
@@ -148,6 +224,34 @@ pub static FOLDERS: &[Card] = &[Card {
                 (PictureShape::Square, "Square")
             ]
         ),
+        switch!(
+            "folder_wheel.breadcrumb",
+            "Path above the wheel",
+            "Shows the groups opened so far above the wheel.",
+            folder_wheel.breadcrumb
+        ),
+        switch!(
+            "folder_wheel.dim",
+            "Dim the video",
+            "The video is darker behind the wheel.",
+            folder_wheel.dim
+        ),
+        number!(
+            "folder_wheel.video_dim",
+            "How dark",
+            "How dark the video is behind the wheel.",
+            folder_wheel.video_dim: u8,
+            0..=80,
+            5,
+            "%"
+        )
+        .under(video_dimmed),
+    ],
+},
+Card {
+    title: "Colors",
+    description: "Where an entry's color shows. A picture with a color keeps the color as a border.",
+    fields: &[
         choice!(
             "folder_wheel.color_mode",
             "Color shows",
@@ -161,5 +265,68 @@ pub static FOLDERS: &[Card] = &[Card {
                 (ColorMode::Pointed, "When pointed")
             ]
         ),
+    ],
+},
+Card {
+    title: "Animations",
+    description: "The wheel never waits for an animation: it works while it moves.",
+    fields: &[
+        switch!(
+            "folder_wheel.animations",
+            "Animations",
+            "The main switch for everything below: without it the wheel simply appears.",
+            folder_wheel.animations
+        ),
+        choice!(
+            "folder_wheel.opening",
+            "Opening",
+            "How the wheel appears.",
+            folder_wheel.opening,
+            [
+                (WheelOpening::Spokes, "One spoke at a time"),
+                (WheelOpening::Fade, "Fade in"),
+                (WheelOpening::Fan, "Fan out"),
+                (WheelOpening::Spin, "Spin"),
+                (WheelOpening::Off, "Off")
+            ]
+        )
+        .under(animated),
+        choice!(
+            "folder_wheel.levels",
+            "Changing levels",
+            "How a group opens and how the wheel goes back.",
+            folder_wheel.levels,
+            [
+                (WheelLevels::Zoom, "Zoom"),
+                (WheelLevels::Spoke, "From the spoke"),
+                (WheelLevels::Turn, "Turn"),
+                (WheelLevels::Off, "Off")
+            ]
+        )
+        .under(animated),
+        number!(
+            "folder_wheel.animation_speed",
+            "Duration",
+            "How long the animations take: 50 % is twice as fast, 200 % takes twice as long.",
+            folder_wheel.animation_speed: u16,
+            50..=200,
+            10,
+            "%"
+        )
+        .under(animated),
+        switch!(
+            "folder_wheel.pulse",
+            "Current folder lights up",
+            "Once, when the wheel opens.",
+            folder_wheel.pulse
+        )
+        .under(animated),
+        switch!(
+            "folder_wheel.crossfade",
+            "Middle fades over",
+            "The middle's picture changes softly instead of at once.",
+            folder_wheel.crossfade
+        )
+        .under(animated),
     ],
 }];

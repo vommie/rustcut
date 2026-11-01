@@ -10,6 +10,7 @@ mod tests;
 pub use actor::{PictureCommand, PictureHandle, spawn_picture_store};
 pub use import::{
     MAX_INPUT, MAX_SIDE, PictureError, PictureKind, Prepared, Rgba, WEBP_QUALITY, decode_webp, prepare, render_svg,
+    spoke_picture,
 };
 pub use store::{KEEP_NEW_SECS, PictureStore, SCHEMA_VERSION, StoredPicture};
 

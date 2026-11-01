@@ -5,25 +5,27 @@
 
 mod actions;
 pub(super) mod details;
+mod mini;
 mod path;
+mod pictures;
+mod preview;
 pub(super) mod rows;
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
 use std::rc::{Rc, Weak};
 
-use rustcut_core::folders::{FolderId, FolderTree, Picture};
+use rustcut_core::folders::{FolderId, FolderTree, LookKind, Picture};
 use rustcut_core::settings::{ColorMode, PictureShape, Settings, SettingsWindowState};
 use slint::{ComponentHandle as _, Model as _, ModelRc, VecModel};
 
-use self::details::PictureChoice;
 use self::rows::{DropTarget, TreeRow};
 use super::SettingsBridge;
-use crate::ui::folders::{pictures, view};
+use crate::ui::folders::{pictures as folder_pictures, view};
 use crate::util::model::sync;
 use crate::{
-    FolderDetailsView, FolderIconRowView, FolderIconView, FolderPlaceView, FolderTreeRowView, FolderTreeUi,
-    SettingsWindow,
+    FolderDetailsView, FolderIconRowView, FolderIconView, FolderTreeRowView, FolderTreeUi, SettingsWindow,
+    WheelSlotView,
 };
 
 /// Icons per row of the details' grid.
@@ -46,10 +48,12 @@ pub(super) struct FolderPage {
     /// The rows as last shown (keys and drags work on them).
     shown: RefCell<Vec<TreeRow>>,
     icon_search: RefCell<String>,
-    icons_open: Cell<bool>,
     rows: Rc<VecModel<FolderTreeRowView>>,
-    places: Rc<VecModel<FolderPlaceView>>,
     icon_rows: Rc<VecModel<FolderIconRowView>>,
+    wheel_rows: Rc<VecModel<WheelSlotView>>,
+    wheel_hover: Cell<Option<usize>>,
+    wheel_drag: Cell<Option<mini::WheelDrag>>,
+    scene: preview::WheelScene,
 }
 
 impl FolderPage {
@@ -61,10 +65,12 @@ impl FolderPage {
             drag: RefCell::new(None),
             shown: RefCell::default(),
             icon_search: RefCell::default(),
-            icons_open: Cell::new(false),
             rows: Rc::default(),
-            places: Rc::default(),
             icon_rows: Rc::default(),
+            wheel_rows: Rc::default(),
+            wheel_hover: Cell::new(None),
+            wheel_drag: Cell::new(None),
+            scene: preview::WheelScene::default(),
         }
     }
 
@@ -77,9 +83,10 @@ impl FolderPage {
     pub(super) fn attach(&self, window: &SettingsWindow) {
         let ui = window.global::<FolderTreeUi<'_>>();
         ui.set_rows(ModelRc::from(Rc::clone(&self.rows)));
-        ui.set_places(ModelRc::from(Rc::clone(&self.places)));
+        ui.set_wheel_slots(ModelRc::from(Rc::clone(&self.wheel_rows)));
         ui.set_icon_rows(ModelRc::from(Rc::clone(&self.icon_rows)));
         ui.set_icons_per_row(i32::try_from(ICONS_PER_ROW).unwrap_or(9));
+        ui.set_wheel_size(mini::DIAMETER);
     }
 }
 
@@ -141,26 +148,12 @@ impl SettingsBridge {
         sync(&page.rows, views);
         *page.shown.borrow_mut() = shown;
         ui.set_details(self.details_view(tree, selected));
-        let places = details::places(tree, selected, settings.folder_wheel.places)
-            .into_iter()
-            .map(|p| {
-                let entry = p.occupant.and_then(|id| tree.entry(id));
-                FolderPlaceView {
-                    taken: entry.is_some(),
-                    mine: p.mine,
-                    name: entry
-                        .map(rustcut_core::folders::EntryRef::name)
-                        .unwrap_or_default()
-                        .into(),
-                    picture: entry.map(|e| view::picture(e, &self.pictures)).unwrap_or_default(),
-                }
-            })
-            .collect();
-        sync(&page.places, places);
-        // The grid shows when it was asked for ("Icon" or its button), for the selected entry only.
-        let icons = selected.is_some() && page.icons_open.get();
+        self.publish_wheel(settings);
+        // The grid shows only while "Icon" is chosen for the selected entry.
+        let icons = selected
+            .and_then(|id| tree.entry(id))
+            .is_some_and(|e| e.look().kind == LookKind::Icon);
         self.publish_icons(tree, selected, icons);
-        ui.set_icons_open(icons);
         ui.set_shape(shape_index(settings.folder_wheel.list_shape));
         ui.set_tint(settings.folder_wheel.color_mode == ColorMode::BackgroundAndIcons);
         ui.set_delete_tip(details::delete_tip(tree, selected).into());
@@ -194,12 +187,11 @@ impl SettingsBridge {
                 .unwrap_or_default()
                 .into(),
             missing: path.as_deref().is_some_and(|p| self.presence.is_missing(p)),
-            picture_kind: PictureChoice::of(entry.picture()).index(),
+            picture_kind: details::kind_index(entry.look().kind),
             picture: view::picture(entry, &self.pictures),
-            icon_name: match entry.picture() {
-                Some(Picture::Icon(name)) => name.as_str().into(),
-                _ => "".into(),
-            },
+            own_picture: details::own_view(entry, &self.pictures),
+            has_own: entry.look().image.is_some(),
+            icon_name: entry.look().icon.as_deref().unwrap_or_default().into(),
             has_color: tint.is_some(),
             color: tint.unwrap_or_default(),
             place: entry.place().map_or(-1, i32::from),
@@ -218,8 +210,9 @@ impl SettingsBridge {
         }
         let chosen = selected
             .and_then(|id| tree.entry(id))
-            .and_then(|e| e.picture().cloned());
-        let rows = details::icon_rows(pictures::icon_names(), &page.icon_search.borrow(), ICONS_PER_ROW)
+            .and_then(|e| e.look().icon.clone())
+            .map(Picture::Icon);
+        let rows = details::icon_rows(folder_pictures::icon_names(), &page.icon_search.borrow(), ICONS_PER_ROW)
             .into_iter()
             .map(|names| {
                 let icons: Vec<FolderIconView> = names
@@ -252,4 +245,5 @@ impl SettingsBridge {
 /// Connects the page's callbacks and the folders dropped from the file manager.
 pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     actions::connect(this, window);
+    mini::connect(this, &window.global::<FolderTreeUi<'_>>());
 }

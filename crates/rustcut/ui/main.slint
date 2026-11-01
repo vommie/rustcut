@@ -31,7 +31,7 @@ import { ConflictJobView, ConflictOptionView, Export, PreviewView } from "export
 import { Queue, QueueColumnView, QueueRowView } from "queue_types.slint";
 import { QueueFilterFlyout } from "queue_filter.slint";
 import { FolderList, FolderListFlyout, FolderListRowView } from "folder_list.slint";
-import { FolderWheel, FolderWheelLayer, WheelHoldRing, WheelSlotView } from "folder_wheel.slint";
+import { FolderWheel, FolderWheelLayer, WheelHoldRing, WheelLookView, WheelMiddleView, WheelSlotView } from "folder_wheel.slint";
 import { MultiChoiceItem } from "controls_choice.slint";
 import { Job, JobLoad, JobRowView, JobSectionView, LogLineView, Logs } from "job_types.slint";
 import { ContextMenu, ContextMenuLayer, MenuItemView, MenuLevelView } from "context_menu.slint";
@@ -42,7 +42,7 @@ import { ConflictDialog } from "export_dialog.slint";
 import { MetadataDialog } from "export_metadata_dialog.slint";
 import { TagColumnView, TagHistoryItemModel, TagHistoryRowModel, TagNodeView, TagRate } from "tag_types.slint";
 import { DiagCheckView, DiagGroupView, HotkeyChipView, HotkeyRowView, MessageKindView, ProfileItemView, RatioChipView, SettingCardView, SettingRowView, SettingsUi } from "settings_types.slint";
-import { FolderDetailsView, FolderIconRowView, FolderIconView, FolderPlaceView, FolderTreeRowView, FolderTreeUi } from "settings_folder_types.slint";
+import { FolderDetailsView, FolderIconRowView, FolderIconView, FolderTreeRowView, FolderTreeUi } from "settings_folder_types.slint";
 import { FolderPictureView } from "folder_picture.slint";
 import { SettingsWindow } from "settings_window.slint";
 import { ColorCodec } from "color_picker.slint";
@@ -69,7 +69,7 @@ export {
     ConflictJobView, ConflictOptionView, PreviewView, TipRow, Tip, TipKey, TipKeys, TipPlacement, TipRect, TipSide,
     GlobalTooltip, TooltipLogic, DialogState, Queue, QueueRowView, QueueColumnView, MultiChoiceItem, TagRate, TagNodeView,
     TagColumnView, TagHistoryItemModel, TagHistoryRowModel, Job, JobRowView, JobSectionView, Logs, LogLineView, JobLoad,
-    ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderTreeUi, FolderTreeRowView, FolderList, FolderListRowView, FolderWheel, WheelSlotView, FolderDetailsView, FolderPlaceView, FolderIconView, FolderIconRowView, FolderPictureView, RatioChipView, DiagCheckView, DiagGroupView,
+    ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderTreeUi, FolderTreeRowView, FolderList, FolderListRowView, FolderWheel, WheelSlotView, WheelLookView, WheelMiddleView, FolderDetailsView, FolderIconView, FolderIconRowView, FolderPictureView, RatioChipView, DiagCheckView, DiagGroupView,
     ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power, AppTray, Jump, Notices,
     ToastView, ToastTagView, BannerView, HistoryView, MessageKindView, Bubbles, BubbleView, BubbleButtonView, Problems, ColorCodec, ColorPickerWindow, TagFilterWindow, TagFilterRowView,
     TextLogic, TextSplit, DragLogic, DragState, AppMenu, MenuBarMenu, TabView

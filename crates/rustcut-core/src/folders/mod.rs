@@ -15,7 +15,8 @@ pub use edit::{EditError, Spot, is_color};
 pub use levels::{Layout, Level, LevelKey, Slot, level};
 pub use list::{ListInput, ListRow, RECENT, Section, group_path, rows};
 pub use tree::{
-    EntryRef, FolderId, FolderNode, FolderTree, MAX_PLACES, Picture, SOURCE_NAME, SourceEntry, Walked, default_name,
+    EntryRef, FolderId, FolderNode, FolderTree, Look, LookKind, MAX_PLACES, Picture, SOURCE_NAME, SourceEntry, Walked,
+    default_name,
 };
 
 /// Puts `id` in front of the recent targets (newest first, each once, at most `list::RECENT` kept besides the source).

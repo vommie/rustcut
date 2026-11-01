@@ -27,12 +27,12 @@ fn images_are_scaled_down_to_webp_with_alpha() {
     assert_eq!(prepared.kind, PictureKind::WebP);
     assert_eq!(
         (prepared.width, prepared.height),
-        (256, 128),
-        "fits 256 px, keeps the aspect"
+        (512, 256),
+        "fits 512 px, keeps the aspect"
     );
     assert!(prepared.data.starts_with(b"RIFF"));
     let back = decode_webp(&prepared.data).unwrap();
-    assert_eq!((back.width, back.height), (256, 128));
+    assert_eq!((back.width, back.height), (512, 256));
     let alpha: Vec<u8> = back.pixels.chunks(4).filter_map(|p| p.get(3).copied()).collect();
     assert!(
         alpha.iter().any(|a| *a < 10) && alpha.iter().any(|a| *a > 245),
@@ -160,4 +160,30 @@ async fn the_thread_imports_files_and_answers_in_order() {
     assert_eq!(got, Some(stored), "a new picture survives a retain");
     store.request(|reply| PictureCommand::Shutdown { reply }).await.unwrap();
     thread.join().unwrap();
+}
+
+#[test]
+fn a_picture_cut_to_a_spoke_is_centered_and_masked() {
+    // Red left, blue right: a centered cut of a wide picture shows both.
+    let width = 40_u32;
+    let pixels: Vec<u8> = (0..20 * width)
+        .flat_map(|i| {
+            if i % width < width / 2 {
+                [255, 0, 0, 255]
+            } else {
+                [0, 0, 255, 255]
+            }
+        })
+        .collect();
+    let picture = Rgba {
+        width,
+        height: 20,
+        pixels,
+    };
+    let cut = spoke_picture(&picture, 20, 20, "M 0 0 L 20 0 L 20 10 L 0 10 Z").unwrap();
+    assert_eq!((cut.width, cut.height), (20, 20));
+    let at = |x: usize, y: usize| cut.pixels.get((y * 20 + x) * 4..(y * 20 + x) * 4 + 4).unwrap().to_vec();
+    assert_eq!(at(2, 2), [255, 0, 0, 255], "left half");
+    assert_eq!(at(17, 2), [0, 0, 255, 255], "right half: centered");
+    assert_eq!(at(2, 17).get(3), Some(&0), "outside the shape");
 }

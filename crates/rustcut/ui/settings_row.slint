@@ -29,12 +29,14 @@ export component SettingsRow inherits Rectangle {
     }
 
     area := TouchArea {
-        enabled: root.option.kind == 0;
         mouse-cursor: root.option.kind == 0 && root.option.enabled ? MouseCursor.pointer : MouseCursor.default;
         clicked => {
-            keys.focus();
-            root.toggle();
+            if root.option.kind == 0 {
+                keys.focus();
+                root.toggle();
+            }
         }
+        changed has-hover => { SettingsUi.row-hover(root.option.key, self.has-hover); }
     }
 
     keys := FocusScope {

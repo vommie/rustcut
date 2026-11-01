@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::tree::{FolderId, FolderNode, FolderTree, MAX_PLACES, Picture, default_name};
+use super::tree::{FolderId, FolderNode, FolderTree, Look, LookKind, MAX_PLACES, default_name};
 
 /// Why an edit was refused (the texts are for the user).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -169,17 +169,40 @@ impl FolderTree {
         self.take(id).ok_or(EditError::Unknown)
     }
 
-    pub fn set_picture(&mut self, id: FolderId, picture: Option<Picture>) -> Result<bool, EditError> {
-        let slot = if id.is_source() {
-            &mut self.source.picture
+    fn look_mut(&mut self, id: FolderId) -> Result<&mut Look, EditError> {
+        if id.is_source() {
+            Ok(&mut self.source.look)
         } else {
-            &mut self.find_mut(id).ok_or(EditError::Unknown)?.picture
-        };
-        if *slot == picture {
-            return Ok(false);
+            Ok(&mut self.find_mut(id).ok_or(EditError::Unknown)?.look)
         }
-        *slot = picture;
-        Ok(true)
+    }
+
+    /// What the entry shows; the icon and the own picture stay kept whatever the choice is.
+    pub fn set_picture_kind(&mut self, id: FolderId, kind: LookKind) -> Result<bool, EditError> {
+        let look = self.look_mut(id)?;
+        let changed = look.kind != kind;
+        look.kind = kind;
+        Ok(changed)
+    }
+
+    /// A built-in icon: it is kept and shown.
+    pub fn set_icon(&mut self, id: FolderId, name: &str) -> Result<bool, EditError> {
+        let look = self.look_mut(id)?;
+        let changed = look.kind != LookKind::Icon || look.icon.as_deref() != Some(name);
+        look.kind = LookKind::Icon;
+        look.icon = Some(name.to_owned());
+        Ok(changed)
+    }
+
+    /// An own picture by its hash: it is kept and shown. `None` deletes it; the choice stays (the letter shows).
+    pub fn set_image(&mut self, id: FolderId, hash: Option<String>) -> Result<bool, EditError> {
+        let look = self.look_mut(id)?;
+        let changed = look.image != hash || (hash.is_some() && look.kind != LookKind::Own);
+        if hash.is_some() {
+            look.kind = LookKind::Own;
+        }
+        look.image = hash;
+        Ok(changed)
     }
 
     /// The wheel's short name; an empty text removes it (the wheel shows the name again).

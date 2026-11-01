@@ -89,10 +89,9 @@ fn edits_keep_the_rules() {
     assert_eq!(t.find(id(6)).unwrap().color.as_deref(), Some("#a0b0c0"));
     assert_eq!(t.set_color(id(6), Some("red")), Ok(true), "not a color: none");
     assert_eq!(t.find(id(6)).unwrap().color, None);
-    let icon = Some(Picture::Icon("folder".into()));
-    assert_eq!(t.set_picture(FolderId::SOURCE, icon.clone()), Ok(true));
-    assert_eq!(t.source.picture, icon);
-    assert_eq!(t.pictures().len(), 1);
+    assert_eq!(t.set_icon(FolderId::SOURCE, "folder"), Ok(true));
+    assert_eq!(t.source.look.shown(), Some(Picture::Icon("folder".into())));
+    assert_eq!(t.set_icon(FolderId::SOURCE, "folder"), Ok(false));
     // The wheel's short name (0.0.84): empty = none.
     assert_eq!(t.set_short_name(id(6), "  Crete "), Ok(true));
     assert_eq!(t.entry(id(6)).map(EntryRef::wheel_name), Some("Crete"));
@@ -179,7 +178,7 @@ fn sanitize_repairs_a_hand_edited_tree() {
 fn a_tree_survives_toml() {
     let mut t = sample();
     t.set_favorite(id(6), true, 8).unwrap();
-    t.set_picture(id(2), Some(Picture::Stored("ab12".into()))).unwrap();
+    t.set_image(id(2), Some("ab12".into())).unwrap();
     t.set_color(FolderId::SOURCE, Some("#ff0000")).unwrap();
     let text = toml::to_string(&t).unwrap();
     let back: FolderTree = toml::from_str(&text).unwrap();
@@ -187,7 +186,7 @@ fn a_tree_survives_toml() {
     // An unknown picture kind counts as none.
     let odd: FolderTree =
         toml::from_str("[[entries]]\nid = 1\nname = \"x\"\npath = \"/x\"\npicture = { video = \"1\" }\n").unwrap();
-    assert_eq!(odd.entries.first().unwrap().picture, None);
+    assert_eq!(odd.entries.first().unwrap().look.shown(), None);
 }
 
 fn shown(level: &Level) -> Vec<String> {
@@ -339,4 +338,37 @@ fn the_list_shows_source_favorites_recent_and_the_tree() {
     assert_eq!(input(&t, &collapsed, &recent, "/v/"), ["6", "7"]);
     assert_eq!(input(&t, &collapsed, &recent, "next"), ["0"]);
     assert!(input(&t, &collapsed, &recent, "zzz").is_empty());
+}
+
+#[test]
+fn a_change_of_the_picture_choice_keeps_the_icon_and_the_picture() {
+    let mut t = FolderTree::default();
+    let a = t.add_folder(Path::new("/a"), Spot::End).unwrap();
+    t.set_image(a, Some("hash".into())).unwrap();
+    t.set_icon(a, "folder").unwrap();
+    assert_eq!(t.entry(a).unwrap().picture(), Some(Picture::Icon("folder".into())));
+    t.set_picture_kind(a, LookKind::Letter).unwrap();
+    assert_eq!(t.entry(a).unwrap().picture(), None, "the letter shows");
+    assert!(t.stored_pictures().contains("hash"), "kept, so the store keeps it");
+    t.set_picture_kind(a, LookKind::Own).unwrap();
+    assert_eq!(t.entry(a).unwrap().picture(), Some(Picture::Stored("hash".into())));
+    // Deleted: the choice stays and the letter shows.
+    t.set_image(a, None).unwrap();
+    assert_eq!(t.entry(a).unwrap().look().kind, LookKind::Own);
+    assert_eq!(t.entry(a).unwrap().picture(), None);
+    assert!(t.stored_pictures().is_empty());
+    assert_eq!(t.entry(a).unwrap().look().icon.as_deref(), Some("folder"));
+}
+
+#[test]
+fn a_place_holds_what_it_leads_to() {
+    let mut t = FolderTree::default();
+    let g = t.add_group("Clients", Spot::End).unwrap();
+    let f = t.add_folder(Path::new("/a"), Spot::Into(g)).unwrap();
+    let other = t.add_folder(Path::new("/b"), Spot::End).unwrap();
+    assert!(Slot::Entry(g).holds(&t, f), "its group");
+    assert!(Slot::Entry(f).holds(&t, f));
+    assert!(!Slot::Entry(other).holds(&t, f));
+    assert!(Slot::More(vec![other, g]).holds(&t, f), "More ... with its group");
+    assert!(!Slot::Empty.holds(&t, f));
 }

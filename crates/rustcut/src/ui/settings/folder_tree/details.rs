@@ -1,31 +1,41 @@
 //! The Target Folders page's details without Slint (P11.3): what the selected entry has, the wheel's places for its
 //! star, the delete button's tooltip (a group goes with everything in it, Q-FP2) and the built-in icons for a search.
 
-use rustcut_core::folders::{FolderId, FolderTree, Picture, SOURCE_NAME};
+use rustcut_core::folders::{EntryRef, FolderId, FolderTree, LookKind, Picture, SOURCE_NAME};
 
-/// What a picture is, as the details' choice shows it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PictureChoice {
-    None,
-    Icon,
-    Own,
+use crate::FolderPictureView;
+use crate::ui::folders::pictures::Pictures;
+
+/// The details' choice as Slint counts it.
+pub const fn kind_index(kind: LookKind) -> i32 {
+    match kind {
+        LookKind::Letter => 0,
+        LookKind::Icon => 1,
+        LookKind::Own => 2,
+    }
 }
 
-impl PictureChoice {
-    pub fn of(picture: Option<&Picture>) -> Self {
-        match picture {
-            None => Self::None,
-            Some(Picture::Icon(_)) => Self::Icon,
-            Some(Picture::Stored(_)) => Self::Own,
-        }
+/// The choice for Slint's index.
+pub const fn kind_of(index: i32) -> LookKind {
+    match index {
+        1 => LookKind::Icon,
+        2 => LookKind::Own,
+        _ => LookKind::Letter,
     }
+}
 
-    pub const fn index(self) -> i32 {
-        match self {
-            Self::None => 0,
-            Self::Icon => 1,
-            Self::Own => 2,
-        }
+/// The own picture an entry keeps, shown or not.
+pub fn own_view(entry: EntryRef<'_>, pictures: &Pictures) -> FolderPictureView {
+    let shown = entry
+        .look()
+        .image
+        .clone()
+        .and_then(|hash| pictures.image(&Picture::Stored(hash)));
+    FolderPictureView {
+        has_image: shown.is_some(),
+        mono: shown.as_ref().is_some_and(|s| s.mono),
+        image: shown.map(|s| s.image).unwrap_or_default(),
+        ..FolderPictureView::default()
     }
 }
 
@@ -139,7 +149,7 @@ mod tests {
             })
         );
         assert_eq!(title(&t, FolderId::SOURCE), SOURCE_NAME);
-        assert_eq!(PictureChoice::of(Some(&Picture::Icon("x".into()))), PictureChoice::Icon);
+        assert_eq!(kind_of(kind_index(LookKind::Own)), LookKind::Own);
         let names = ["folder", "folder-open", "heart", "home"];
         assert_eq!(
             icon_rows(names.into_iter(), "", 3),

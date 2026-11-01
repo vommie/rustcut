@@ -53,6 +53,55 @@ pub(super) fn migrate_folder_tree(table: &mut toml::Table) -> Result<(), String>
     Ok(())
 }
 
+/// Version 8 -> 9 (P12 3.2): an entry's `picture` (an icon or a stored picture, nothing = the letter) becomes `look`: the
+/// choice beside what it keeps, so changing the choice no longer loses a picture.
+#[expect(clippy::unnecessary_wraps, reason = "every migration step has this signature")]
+pub(super) fn migrate_picture_look(table: &mut toml::Table) -> Result<(), String> {
+    fn convert(entry: &mut toml::Table) {
+        let Some(old) = entry.remove("picture") else {
+            return;
+        };
+        let (kind, key) = match old.as_table() {
+            Some(t) if t.contains_key("icon") => ("icon", "icon"),
+            Some(t) if t.contains_key("stored") => ("own", "stored"),
+            // Older versions read a value they did not know as no picture.
+            _ => return,
+        };
+        let Some(value) = old.get(key).and_then(toml::Value::as_str) else {
+            return;
+        };
+        let mut look = toml::Table::new();
+        look.insert("kind".into(), toml::Value::String(kind.to_owned()));
+        let field = if kind == "icon" { "icon" } else { "image" };
+        look.insert(field.into(), toml::Value::String(value.to_owned()));
+        entry.insert("look".into(), toml::Value::Table(look));
+    }
+    fn walk(entries: &mut toml::Value) {
+        for entry in entries.as_array_mut().into_iter().flatten() {
+            let Some(entry) = entry.as_table_mut() else { continue };
+            convert(entry);
+            if let Some(children) = entry.get_mut("children") {
+                walk(children);
+            }
+        }
+    }
+    let Some(folders) = table
+        .get_mut("export")
+        .and_then(toml::Value::as_table_mut)
+        .and_then(|export| export.get_mut("folders"))
+        .and_then(toml::Value::as_table_mut)
+    else {
+        return Ok(());
+    };
+    if let Some(source) = folders.get_mut("source").and_then(toml::Value::as_table_mut) {
+        convert(source);
+    }
+    if let Some(entries) = folders.get_mut("entries") {
+        walk(entries);
+    }
+    Ok(())
+}
+
 /// UI state version 1 -> 2: `export.target_folder` (an index into the old list, none = the source's folder) becomes
 /// `export.target_id` (the entry's id; 0 = "Next to the source").
 pub(super) fn migrate_target_id(table: &mut toml::Table) -> Result<(), String> {

@@ -436,6 +436,9 @@ impl SettingsBridge {
         if let Some(window) = self.window.borrow().as_ref() {
             Self::apply_look(window, after);
         }
+        if before.folder_wheel != after.folder_wheel && self.page.get() == Page::Folders {
+            self.play_scene();
+        }
         self.publish();
     }
 

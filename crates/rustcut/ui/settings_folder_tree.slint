@@ -315,6 +315,9 @@ component FolderTreeCard inherits SettingsCard {
 export component SettingsFolderTree inherits Rectangle {
     height: card.preferred-height;
 
+    init => { FolderTreeUi.tree-height = self.height; }
+    changed height => { FolderTreeUi.tree-height = self.height; }
+
     card := FolderTreeCard {
         width: parent.width;
         height: parent.height;

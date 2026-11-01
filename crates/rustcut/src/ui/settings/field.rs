@@ -15,6 +15,8 @@ pub enum Kind {
         max: i64,
         step: i64,
         unit: &'static str,
+        /// The value counts tenths: it shows and is typed with one decimal (the folder wheel's percents, P12).
+        tenths: bool,
     },
     /// Free text; `suggestions` (when any) are offered by a list beside the field (Hardware decoding, 0.0.67).
     Text {
@@ -166,6 +168,17 @@ impl Field {
         let value = match (self.kind, edit, &before) {
             (Kind::Switch, Edit::Toggle, Value::Bool(b)) => Value::Bool(!b),
             (Kind::Choice(items), Edit::Choose(index), _) if index < items.len() => Value::Index(index),
+            (
+                Kind::Number {
+                    min,
+                    max,
+                    unit,
+                    tenths: true,
+                    ..
+                },
+                Edit::Type(text),
+                _,
+            ) => Value::Number(parse_tenths(&text, min, max, unit)?),
             (Kind::Number { min, max, unit, .. }, Edit::Type(text), _) => {
                 Value::Number(parse_number(&text, min, max, unit)?)
             }
@@ -195,6 +208,29 @@ impl Field {
 }
 
 /// A typed whole number, with or without its unit (`"300 ms"`), within `min..=max`.
+/// Tenths as a text: 1.5.
+pub fn tenths_text(tenths: i64) -> String {
+    format!("{}.{}", tenths / 10, (tenths % 10).abs())
+}
+
+/// A typed number with at most one decimal, as tenths.
+fn parse_tenths(text: &str, min: i64, max: i64, unit: &str) -> Result<i64, String> {
+    let refused = || format!("Type a number from {} to {}.", tenths_text(min), tenths_text(max));
+    let trimmed = text.trim();
+    let digits = trimmed
+        .strip_suffix(unit)
+        .unwrap_or(trimmed)
+        .trim_end()
+        .replace(',', ".");
+    let value: f64 = digits.parse().map_err(|_not_a_number| refused())?;
+    let tenths: i64 = az::checked_cast((value * 10.0).round()).ok_or_else(refused)?;
+    if (min..=max).contains(&tenths) {
+        Ok(tenths)
+    } else {
+        Err(refused())
+    }
+}
+
 fn parse_number(text: &str, min: i64, max: i64, unit: &str) -> Result<i64, String> {
     let trimmed = text.trim();
     let digits = if unit.is_empty() {
@@ -239,11 +275,31 @@ macro_rules! number {
             key: $key,
             label: $label,
             help: $help,
-            kind: $crate::ui::settings::field::Kind::Number { min: $min, max: $max, step: $step, unit: $unit },
+            kind: $crate::ui::settings::field::Kind::Number { min: $min, max: $max, step: $step, unit: $unit, tenths: false },
             live: true,
             get: |s| $crate::ui::settings::field::Value::Number(i64::from(s.$($path).+)),
             set: |s, v| {
                 s.$($path).+ = <$t>::try_from(v.as_number()?).map_err(|_out_of_range| $crate::ui::settings::field::WRONG_VALUE.to_owned())?;
+                Ok(())
+            },
+            enabled: $crate::ui::settings::field::always,
+            indent: false,
+        }
+    };
+}
+
+/// A row for a value in tenths of a percent, shown with one decimal (the folder wheel's lengths).
+macro_rules! percent {
+    ($key:literal, $label:literal, $help:literal, $($path:ident).+, $min:literal..=$max:literal, $step:literal) => {
+        $crate::ui::settings::field::Field {
+            key: $key,
+            label: $label,
+            help: $help,
+            kind: $crate::ui::settings::field::Kind::Number { min: $min, max: $max, step: $step, unit: "%", tenths: true },
+            live: true,
+            get: |s| $crate::ui::settings::field::Value::Number(i64::from(s.$($path).+)),
+            set: |s, v| {
+                s.$($path).+ = u16::try_from(v.as_number()?).map_err(|_out_of_range| $crate::ui::settings::field::WRONG_VALUE.to_owned())?;
                 Ok(())
             },
             enabled: $crate::ui::settings::field::always,
@@ -301,4 +357,4 @@ macro_rules! path_field {
     };
 }
 
-pub(crate) use {choice, number, path_field, switch};
+pub(crate) use {choice, number, path_field, percent, switch};
