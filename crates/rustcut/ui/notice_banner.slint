@@ -2,13 +2,119 @@
 // be saved, the file does not play). Full width of the video, lying on it, tinted in its level's color, with the
 // symbol, the title, the detail over several lines, its buttons, "‹ 1 / 3 ›" when several hold, the time it began
 // (hh:mm:ss) and × (hidden until the state changes). It slides down like a curtain (or fades, or simply shows) and a new error lights up once.
+// It fits itself to the video's width: everything in one row while the text keeps a readable width; else the head (symbol,
+// title, pager, time, ×) with the detail and the buttons under it, the buttons one below the other when they do not fit
+// side by side; very narrow it drops the time, the detail uses the whole width and the symbol shrinks. It never takes more
+// than half of the video: a longer detail is cut and shows whole in the tooltip.
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Notices, NoticeLook } from "notice_types.slint";
 import { NoticeButton, NoticeIcon, NoticeProgress } from "notice_parts.slint";
+import { TooltipHost } from "tooltip.slint";
+
+/// What the banner's layouts need to fit.
+global BannerMetrics {
+    // The narrowest text the one-row layout accepts: below it a few words per line make the banner tall.
+    out property <length> row-text: 280px;
+    // Below this width the banner saves every pixel.
+    out property <length> compact: 380px;
+    out property <length> spacing: 10px;
+    // A line of the title.
+    out property <length> title-line: 18px;
+}
+
+/// Button `index` of the current banner.
+component BannerAction inherits VerticalLayout {
+    in property <int> index;
+    in property <color> accent;
+
+    alignment: center;
+
+    NoticeButton {
+        text: root.index == 0 ? Notices.banner.action-1 : root.index == 1 ? Notices.banner.action-2 : Notices.banner.action-3;
+        jump: root.index == 0 ? Notices.banner.jump-1 : root.index == 1 ? Notices.banner.jump-2 : Notices.banner.jump-3;
+        accent: root.accent;
+        clicked => { Notices.banner-action(root.index); }
+    }
+}
+
+/// The buttons side by side.
+component BannerActions inherits HorizontalLayout {
+    in property <color> accent;
+
+    spacing: 6px;
+
+    if Notices.banner.action-1 != "": BannerAction {
+        index: 0;
+        accent: root.accent;
+    }
+
+    if Notices.banner.action-2 != "": BannerAction {
+        index: 1;
+        accent: root.accent;
+    }
+
+    if Notices.banner.action-3 != "": BannerAction {
+        index: 2;
+        accent: root.accent;
+    }
+}
+
+/// The pager, the time and ×.
+component BannerMeta inherits HorizontalLayout {
+    in property <bool> show-time: true;
+
+    spacing: 6px;
+
+    if Notices.banner-count > 1: VerticalLayout {
+        alignment: center;
+
+        HorizontalLayout {
+            spacing: 2px;
+
+            NoticeIcon {
+                icon: IconId.chevron-left;
+                tooltip: "Previous message";
+                clicked => { Notices.page-banners(-1); }
+            }
+
+            Text {
+                text: (Notices.banner-index + 1) + " / " + Notices.banner-count;
+                color: Theme.text-muted;
+                font-size: 12px;
+                vertical-alignment: center;
+            }
+
+            NoticeIcon {
+                icon: IconId.chevron-right;
+                tooltip: "Next message";
+                clicked => { Notices.page-banners(1); }
+            }
+        }
+    }
+
+    if root.show-time && Notices.banner.time != "": Text {
+        text: Notices.banner.time;
+        color: Theme.text-muted;
+        font-size: 11px;
+        vertical-alignment: center;
+    }
+
+    VerticalLayout {
+        alignment: center;
+
+        NoticeIcon {
+            icon: IconId.close;
+            tooltip: "Hide until it changes";
+            clicked => { Notices.banner-closed(); }
+        }
+    }
+}
 
 export component NoticeBanner inherits Rectangle {
+    // The height of the video it lies on (it takes at most half of it).
+    in property <length> area-height;
     // The height it takes now (the toasts on the video move below it).
     out property <length> shown-height: root.height;
 
@@ -17,6 +123,39 @@ export component NoticeBanner inherits Rectangle {
     property <bool> fade: Notices.banner-animation == 1;
     property <int> pulse: Notices.banner-pulse;
     property <bool> lit;
+
+    property <bool> has-buttons: Notices.banner.action-1 != "";
+    // Whether the text keeps a readable width beside everything else.
+    property <bool> stacked: root.width < 12px + (IconSize.md + 8px) + BannerMetrics.row-text + 8px
+        + 2 * BannerMetrics.spacing + measured-meta.preferred-width
+        + (root.has-buttons ? measured-buttons.preferred-width + BannerMetrics.spacing : 0px);
+    property <bool> compact: root.width < BannerMetrics.compact;
+    property <length> padding-side: root.compact ? 8px : 12px;
+    property <length> symbol: root.compact ? IconSize.md : IconSize.md + 8px;
+    property <length> room: root.width - 2 * root.padding-side;
+    // The buttons do not fit side by side.
+    property <bool> one-below-other: root.has-buttons && measured-buttons.preferred-width > root.room;
+    property <length> buttons-height: !root.has-buttons || !root.stacked ? 0px
+        : root.one-below-other ? 3 * 28px : 28px;
+    // What is left for the detail in half of the video; two lines always.
+    property <length> detail-limit: Math.max(32px, Math.max(96px, root.area-height / 2) - 26px
+        - Math.max(root.title-height, root.symbol) - root.buttons-height);
+    property <length> content-width: root.width - root.padding-side - 8px;
+    property <length> gap: root.compact ? 6px : BannerMetrics.spacing;
+    // The text column's width in the head; the row shares it with the buttons.
+    property <length> head-text-width: root.content-width - root.symbol - 2 * root.gap - measured-meta.preferred-width
+        - (!root.stacked && root.has-buttons ? measured-buttons.preferred-width + root.gap : 0px);
+    property <length> detail-width: !root.stacked ? root.head-text-width
+        : root.compact ? root.content-width : root.content-width - root.symbol - BannerMetrics.spacing;
+    // A narrow head keeps the whole title: three lines, which every title fits.
+    property <length> title-height: root.stacked ? Math.min(measured-title.preferred-height, 3 * BannerMetrics.title-line)
+        : BannerMetrics.title-line;
+    property <length> detail-height: Math.min(measured-detail.preferred-height, root.detail-limit);
+    // Something does not show whole: the tooltip has it.
+    property <bool> cut: measured-detail.preferred-height > root.detail-limit
+        || (root.stacked && measured-title.preferred-height > 3 * BannerMetrics.title-line);
+    property <string> whole-text: Notices.banner.detail == "" ? Notices.banner.title
+        : Notices.banner.title + ": " + Notices.banner.detail;
 
     height: Notices.has-banner || !root.curtain ? inner.preferred-height : 0px;
     animate height { duration: root.curtain ? 220ms : 0ms; easing: ease-out; }
@@ -61,132 +200,163 @@ export component NoticeBanner inherits Rectangle {
                     Notices.banner-clicked();
                 }
             }
+            changed has-hover => {
+                if self.has-hover {
+                    host.enter();
+                } else {
+                    host.leave();
+                }
+            }
+        }
+
+        host := TooltipHost {
+            text: root.cut ? root.whole-text : "";
+        }
+
+        // Only to measure what the layouts below must make room for.
+        Rectangle {
+            visible: false;
+
+            measured-buttons := BannerActions { }
+
+            measured-meta := BannerMeta {
+                show-time: !root.compact;
+            }
+
+            // A wrapped text's height in a layout follows an older width: these two know theirs.
+            measured-title := Text {
+                width: Math.max(1px, root.head-text-width);
+                text: Notices.banner.title;
+                font-weight: 700;
+                wrap: TextWrap.word-wrap;
+            }
+
+            measured-detail := Text {
+                width: Math.max(1px, root.detail-width);
+                text: Notices.banner.detail;
+                font-size: 12px;
+                wrap: TextWrap.word-wrap;
+            }
         }
 
         // Review 35/41 (P9.2): the symbol 8 px larger, everything at the right vertically centered: the buttons, the
         // pager, the time (hh:mm:ss, like the toasts) and ×.
-        HorizontalLayout {
-            padding-left: 12px;
+        VerticalLayout {
+            padding-left: root.padding-side;
             padding-right: 8px;
             padding-top: 7px;
             padding-bottom: 7px;
-            spacing: 10px;
+            spacing: 6px;
 
-            VerticalLayout {
-                alignment: center;
+            HorizontalLayout {
+                spacing: root.gap;
 
-                AppIcon {
-                    icon: NoticeLook.icon(Notices.banner.level);
-                    size: IconSize.md + 8px;
-                    color: root.accent;
+                VerticalLayout {
+                    alignment: center;
+
+                    AppIcon {
+                        icon: NoticeLook.icon(Notices.banner.level);
+                        size: root.symbol;
+                        color: root.accent;
+                    }
+                }
+
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    spacing: 3px;
+                    alignment: center;
+
+                    Text {
+                        text: Notices.banner.title;
+                        color: Theme.text;
+                        font-weight: 700;
+                        wrap: root.stacked ? TextWrap.word-wrap : TextWrap.no-wrap;
+                        overflow: elide;
+                        min-width: 0px;
+                        height: root.title-height;
+                    }
+
+                    if !root.stacked && Notices.banner.detail != "": Text {
+                        text: Notices.banner.detail;
+                        color: Theme.text-muted;
+                        font-size: 12px;
+                        wrap: TextWrap.word-wrap;
+                        min-width: 0px;
+                        height: root.detail-height;
+                        overflow: elide;
+                    }
+
+                    if !root.stacked && Notices.banner.progress >= 0: NoticeProgress {
+                        progress: Notices.banner.progress;
+                        tint: root.accent;
+                    }
+                }
+
+                if !root.stacked && root.has-buttons: BannerActions {
+                    accent: root.accent;
+                }
+
+                BannerMeta {
+                    show-time: !root.compact;
                 }
             }
 
-            VerticalLayout {
-                horizontal-stretch: 1;
-                spacing: 3px;
-                alignment: center;
+            // The detail keeps the title's left edge while there is room for that.
+            if root.stacked && Notices.banner.detail != "": VerticalLayout {
+                padding-left: root.compact ? 0px : root.symbol + BannerMetrics.spacing;
 
                 Text {
-                    text: Notices.banner.title;
-                    color: Theme.text;
-                    font-weight: 700;
-                    overflow: elide;
-                    min-width: 0px;
-                }
-
-                if Notices.banner.detail != "": Text {
                     text: Notices.banner.detail;
                     color: Theme.text-muted;
                     font-size: 12px;
                     wrap: TextWrap.word-wrap;
                     min-width: 0px;
-                }
-
-                if Notices.banner.progress >= 0: NoticeProgress {
-                    progress: Notices.banner.progress;
-                    tint: root.accent;
+                    height: root.detail-height;
+                    overflow: elide;
                 }
             }
 
-            HorizontalLayout {
+            if root.stacked && Notices.banner.progress >= 0: NoticeProgress {
+                progress: Notices.banner.progress;
+                tint: root.accent;
+            }
+
+            if root.stacked && root.has-buttons && !root.one-below-other: HorizontalLayout {
+                alignment: end;
+
+                BannerActions {
+                    accent: root.accent;
+                }
+            }
+
+            if root.stacked && root.one-below-other: VerticalLayout {
                 spacing: 6px;
-                alignment: center;
+                alignment: start;
 
-                if Notices.banner.action-1 != "": VerticalLayout {
-                    alignment: center;
+                if Notices.banner.action-1 != "": HorizontalLayout {
+                    alignment: end;
 
-                    NoticeButton {
-                        text: Notices.banner.action-1;
-                        jump: Notices.banner.jump-1;
+                    BannerAction {
+                        index: 0;
                         accent: root.accent;
-                        clicked => { Notices.banner-action(0); }
                     }
                 }
 
-                if Notices.banner.action-2 != "": VerticalLayout {
-                    alignment: center;
+                if Notices.banner.action-2 != "": HorizontalLayout {
+                    alignment: end;
 
-                    NoticeButton {
-                        text: Notices.banner.action-2;
-                        jump: Notices.banner.jump-2;
+                    BannerAction {
+                        index: 1;
                         accent: root.accent;
-                        clicked => { Notices.banner-action(1); }
                     }
                 }
 
-                if Notices.banner.action-3 != "": VerticalLayout {
-                    alignment: center;
+                if Notices.banner.action-3 != "": HorizontalLayout {
+                    alignment: end;
 
-                    NoticeButton {
-                        text: Notices.banner.action-3;
-                        jump: Notices.banner.jump-3;
+                    BannerAction {
+                        index: 2;
                         accent: root.accent;
-                        clicked => { Notices.banner-action(2); }
-                    }
-                }
-
-                if Notices.banner-count > 1: VerticalLayout {
-                    alignment: center;
-
-                    HorizontalLayout {
-                        spacing: 2px;
-
-                        NoticeIcon {
-                            icon: IconId.chevron-left;
-                            tooltip: "Previous message";
-                            clicked => { Notices.page-banners(-1); }
-                        }
-
-                        Text {
-                            text: (Notices.banner-index + 1) + " / " + Notices.banner-count;
-                            color: Theme.text-muted;
-                            font-size: 12px;
-                            vertical-alignment: center;
-                        }
-
-                        NoticeIcon {
-                            icon: IconId.chevron-right;
-                            tooltip: "Next message";
-                            clicked => { Notices.page-banners(1); }
-                        }
-                    }
-                }
-
-                if Notices.banner.time != "": Text {
-                    text: Notices.banner.time;
-                    color: Theme.text-muted;
-                    font-size: 11px;
-                    vertical-alignment: center;
-                }
-
-                VerticalLayout {
-                    alignment: center;
-
-                    NoticeIcon {
-                        icon: IconId.close;
-                        tooltip: "Hide until it changes";
-                        clicked => { Notices.banner-closed(); }
                     }
                 }
             }

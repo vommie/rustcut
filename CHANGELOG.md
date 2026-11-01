@@ -78,6 +78,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Banners over the video fit narrow windows: instead of a few words per line and a banner that covered the status bar, the
+  buttons and the details move under the title, very narrow the time goes and the text uses the whole width. A banner
+  takes at most half of the video; what does not fit shows whole in its tooltip.
+
 - Settings > Target Folders: something dropped from the file manager is taken at once; it could wait until the next
   event in the window. A file held over an existing picture now shows "Replace".
 - Settings: a click on a row of the folder list no longer leaves the page scrolling with the pointer while no button is
