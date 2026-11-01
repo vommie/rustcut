@@ -12,31 +12,37 @@ import { Logs, LogLineView } from "job_types.slint";
 
 component LogLine inherits Rectangle {
     in property <LogLineView> line;
+    // Every row asks for the list's content width: the list takes it from the rows' minimum and scrolls sideways. The
+    // row itself stays as wide as the list, so its children set their own width.
+    in property <length> content-width;
+    // The part of the row the panel shows: the tooltip stands there, not at the row's far end.
+    in property <length> shown-x;
+    in property <length> shown-width;
 
+    min-width: root.content-width;
     height: 17px;
 
     host := TooltipHost {
+        x: root.shown-x;
+        width: root.shown-width;
         text: root.line.text;
     }
 
-    HorizontalLayout {
-        padding-left: 4px;
-        padding-right: 4px;
-        spacing: 6px;
-
-        Text {
-            horizontal-stretch: 1;
-            text: root.line.text;
-            color: root.line.level == 3 ? Theme.status-corrupt : root.line.level == 2 ? Theme.accent
-                : root.line.level == 1 ? Theme.primary : Theme.text-muted;
-            font-size: 11px;
-            font-family: "monospace";
-            vertical-alignment: center;
-            overflow: elide;
-        }
+    Text {
+        x: 4px;
+        width: root.content-width - 8px;
+        text: root.line.text;
+        color: root.line.level == 3 ? Theme.status-corrupt : root.line.level == 2 ? Theme.accent
+            : root.line.level == 1 ? Theme.primary : Theme.text-muted;
+        font-size: 11px;
+        font-family: "monospace";
+        vertical-alignment: center;
+        overflow: clip;
     }
 
     TouchArea {
+        width: root.content-width;
+
         changed has-hover => {
             if self.has-hover {
                 host.enter();
@@ -48,6 +54,21 @@ component LogLine inherits Rectangle {
 }
 
 export component LogsPanel inherits Rectangle {
+    // The content's width comes from one measured line (src/ui/logs/lines.rs picks it), with a little room for a line of
+    // about the same length that happens to be wider.
+    property <length> content-width: Math.max(list.visible-width, longest.preferred-width * 1.03 + 8px);
+
+    changed content-width => {
+        list.content-x = Math.min(0px, Math.max(list.content-x, list.visible-width - root.content-width));
+    }
+
+    longest := Text {
+        visible: false;
+        text: Logs.longest;
+        font-size: 11px;
+        font-family: "monospace";
+    }
+
     VerticalLayout {
         padding: 6px;
         spacing: 6px;
@@ -168,6 +189,9 @@ export component LogsPanel inherits Rectangle {
 
                 for line in Logs.lines: LogLine {
                     line: line;
+                    content-width: root.content-width;
+                    shown-x: -list.content-x;
+                    shown-width: list.visible-width;
                 }
             }
         }

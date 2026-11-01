@@ -92,6 +92,16 @@ const OBSERVED: [(&str, Format); 8] = [
     ("speed", Format::Double),
 ];
 
+/// Stops every event on a handle nobody reads: `Mpv::with_initializer`'s core handle only sends commands, and mpv queues
+/// each event for every handle, so that queue would fill up with seeks until mpv logs "Too many events queued". The
+/// numbers run through mpv's whole event mask; those without an event are refused, and so is the shutdown event
+/// (libmpv2's `disable_all_events` stops at the first refusal).
+pub(super) fn silence(core: &Mpv) {
+    for id in 2..64 {
+        core.disable_event(id).ok();
+    }
+}
+
 /// Asks mpv to report changes of the [`OBSERVED`] properties on `client` (its current values arrive at once).
 pub(super) fn observe(client: &Mpv) {
     for (id, (name, format)) in (1_u64..).zip(OBSERVED) {
@@ -143,6 +153,12 @@ pub(super) fn run(client: &Mpv, on_event: &dyn Fn(PlayerEvent), commands: &Sende
             Some(Ok(Event::VideoReconfig)) => PlayerEvent::VideoReconfigured,
             Some(Ok(Event::PlaybackRestart)) => PlayerEvent::PlaybackRestarted,
             Some(Ok(Event::EndFile(reason))) => PlayerEvent::Ended(EndReason::from_raw(reason)),
+            // No resync: mpv keeps the observed properties as state and reports their latest values anyway, and `on_event`
+            // never blocks, so this queue only fills if something is badly wrong. That is worth a line in the log.
+            Some(Ok(Event::QueueOverflow)) => {
+                tracing::warn!("[Player] mpv's event queue overflowed; some events were lost");
+                continue;
+            }
             Some(Ok(Event::PropertyChange { name, change, .. })) => {
                 let Some(property) = property(name, &change) else {
                     continue;
@@ -231,6 +247,20 @@ fn describe_failure(code: i32) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_silenced_handle_queues_nothing_and_the_read_one_still_gets_events() {
+        let core = Mpv::with_initializer(|_| Ok(())).unwrap();
+        let client = core.create_client(Some("reader")).unwrap();
+        silence(&core);
+        // More than the 1000 events a handle's queue holds, broadcast to every handle.
+        for _ in 0..1_100 {
+            core.command("script-message", &["hello"]).unwrap();
+        }
+        assert!(core.wait_event(0.0).is_none(), "nothing was queued on the silenced handle");
+        let first = client.wait_event(5.0);
+        assert!(matches!(first, Some(Ok(Event::ClientMessage(_)))), "{first:?}");
+    }
 
     #[test]
     fn end_reasons_map_from_libmpv() {

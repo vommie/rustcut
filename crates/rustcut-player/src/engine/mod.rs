@@ -103,6 +103,7 @@ impl Player {
     /// forward it, never block.
     pub fn new(options: &PlayerOptions, on_event: impl Fn(PlayerEvent) + Send + 'static) -> Result<Self, PlayerError> {
         let mpv = Arc::new(Mpv::with_initializer(|init| options.apply(&init))?);
+        events::silence(&mpv);
         let client = mpv.create_client(Some("rustcut_events"))?;
         client.disable_deprecated_events()?;
         log::request_log_messages(&client, options.log_level);

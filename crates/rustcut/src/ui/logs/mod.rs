@@ -17,7 +17,7 @@ use rustcut_core::settings::{LogPanelState, LogSource};
 use rustcut_core::store::LogLine;
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 
-pub use lines::{LineLevel, ShownLine, book_shown, level, messages_shown, shown, summary, to_text};
+pub use lines::{LineLevel, ShownLine, book_shown, level, longest, messages_shown, shown, summary, to_text};
 
 use crate::app::log_book::LogBook;
 use crate::ui::dispatcher::UiDispatcher;
@@ -315,6 +315,7 @@ impl LogsBridge {
         let st = self.state.borrow();
         let l = window.global::<Logs<'_>>();
         l.set_summary(summary(total, &shown).into());
+        l.set_longest(longest(&shown).into());
         l.set_follow(st.follow);
         sync(
             &self.model,

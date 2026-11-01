@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- The Logs panel scrolls sideways, so long lines can be read to their end.
+
+### Fixed
+
+- The tag filter window follows a changed "Hold for" time and the tooltip settings while it stays open.
+- The log no longer says "niceness 10 not set: Permission denied" during x265 renders: x265's workers lower their own
+  priority further, nothing was wrong.
+- mpv no longer logs "Too many events queued" after many seeks: RustCut did not read one of its two mpv event queues
+  and now switches that queue off. If the queue RustCut does read ever overflows, the log says so.
+
 ## [0.0.85] - 2026-10-28
 
 Target folders become a tree with groups, pictures, colors and favorites (Settings > Target Folders); the Job

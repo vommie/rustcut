@@ -1,6 +1,7 @@
 //! ffmpeg's process group: signals and priorities. ffmpeg runs as the leader of its own group (`process_group(0)`), so
 //! a signal to the group reaches every thread and anything it might start, and nothing reaches RustCut itself.
 
+use rustix::io::Errno;
 use rustix::process::{Pid, Signal, getpriority_process, kill_process_group, setpriority_pgrp};
 
 use super::supervise::GroupSignal;
@@ -49,10 +50,14 @@ impl ProcessGroup {
         // Lowering the niceness below our own would need privileges; a nicer RustCut keeps its value for ffmpeg too.
         let own = getpriority_process(None).unwrap_or(0);
         let nice = i32::from(priority.nice.min(19)).max(own);
-        if nice != 0
-            && let Err(e) = setpriority_pgrp(Some(self.0), nice)
-        {
-            problems.push(format!("niceness {nice} not set: {e}"));
+        if nice != 0 {
+            match setpriority_pgrp(Some(self.0), nice) {
+                Ok(()) => {}
+                // EACCES: a thread is nicer than `nice` already, and raising it back would need privileges. x265's workers
+                // make themselves 10 nicer (19 under ffmpeg's 10). The kernel still sets every other thread.
+                Err(Errno::ACCESS) => tracing::debug!(nice, "[Render] Threads that are nicer already keep their value"),
+                Err(e) => problems.push(format!("niceness {nice} not set: {e}")),
+            }
         }
         if priority.idle_io {
             let group = ioprio::Pid::from_raw(self.0.as_raw_nonzero().get());
@@ -115,5 +120,41 @@ mod tests {
         group.signal(GroupSignal::Kill).unwrap();
         assert!(!child.wait().unwrap().success());
         assert_eq!(ProcessGroup::led_by(0), None);
+    }
+
+    /// What x265's workers do: a thread of the group is nicer than the target, which the kernel answers with EACCES.
+    #[test]
+    fn a_thread_that_is_nicer_already_is_no_problem() {
+        let target = 7.max(getpriority_process(None).unwrap());
+        let script = format!("nice -n {} sleep 30 & echo $! ; exec sleep 30", target + 3 - getpriority_process(None).unwrap());
+        let mut child = std::os::unix::process::CommandExt::process_group(&mut Command::new("sh"), 0)
+            .args(["-c", &script])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut line = String::new();
+        std::io::BufRead::read_line(
+            &mut std::io::BufReader::new(child.stdout.take().unwrap()),
+            &mut line,
+        )
+        .unwrap();
+        let nicer: u32 = line.trim().parse().unwrap();
+        let group = ProcessGroup::led_by(child.id()).unwrap();
+        assert!((0..100).any(|_| {
+            std::thread::sleep(Duration::from_millis(10));
+            stat(nicer).1 == target + 3
+        }));
+
+        let problems = group.lower_priority(RenderPriority {
+            nice: u8::try_from(target).unwrap(),
+            idle_io: false,
+        });
+
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(stat(child.id()).1, target, "the others are set");
+        assert_eq!(stat(nicer).1, target + 3, "the nicer one keeps its value");
+        group.signal(GroupSignal::Kill).unwrap();
+        child.wait().unwrap();
     }
 }
