@@ -122,6 +122,9 @@ pub fn row(field: &Field, settings: &Settings, errors: &BTreeMap<String, String>
     let (checked, index, text) = match value {
         Value::Bool(b) => (b, 0, String::new()),
         Value::Index(i) => (false, i, String::new()),
+        Value::Number(n) if matches!(field.kind, Kind::Number { tenths: true, .. }) => {
+            (false, 0, super::field::tenths_text(n))
+        }
         Value::Number(n) => (false, 0, n.to_string()),
         // A text's suggestion that is typed now (past the list when it is none).
         Value::Text(t) => (false, items.iter().position(|i| *i == t).unwrap_or(items.len()), t),

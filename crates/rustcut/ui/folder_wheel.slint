@@ -1,35 +1,12 @@
 // The folder wheel (P11.5, user decision Q-FP2): a radial menu of target folders, always centered on the video. Holding
 // the middle mouse button over the video fills a ring at the pointer and opens it; its key opens it anywhere. Rust
 // (`src/ui/folders/wheel/`) does the navigation and the geometry; this file only draws what `FolderWheel` holds: the
-// places as ring segments (SVG path commands in the wheel's square), their pictures and names, the dwell fill, the
-// group marks, the middle (the pointed entry's whole name, or back/cancel with its progress) and the optional path.
+// `WheelFace` (its places, pictures and middle), the hold ring, the dimmed video and the optional path.
 
 import { Theme } from "styles.slint";
-import { AppIcon, IconId } from "icons.slint";
-import { FolderPicture, FolderPictureView } from "folder_picture.slint";
+import { WheelFace, WheelLookView, WheelMiddleView, WheelSlotView } from "wheel_face.slint";
 
-export struct WheelSlotView {
-    // Ring segment, dwell fill and group mark as path commands in the wheel's square.
-    segment: string,
-    fill: string,
-    mark: string,
-    // The label's box in the wheel's square.
-    x: length,
-    y: length,
-    w: length,
-    h: length,
-    // The label's lines ("\n" between them) and its font scale (Rust fits it to the field).
-    name: string,
-    scale: float,
-    picture: FolderPictureView,
-    filled: bool,
-    highlighted: bool,
-    // The field's tint (the entry's color, by the color mode), `tinted` = it has one.
-    tint: color,
-    tinted: bool,
-    // "More ..." (the rest of a crowded level).
-    more: bool,
-}
+export { WheelLookView, WheelMiddleView, WheelSlotView }
 
 export global FolderWheel {
     in property <bool> shown;
@@ -40,29 +17,21 @@ export global FolderWheel {
     in property <string> ring-arc;
     // The trigger is held or the wheel is open: the video's pointer moves go to Rust.
     in property <bool> tracking;
-    // The wheel's square (side) and its radii.
-    in property <length> size;
-    in property <length> inner;
-    in property <length> outer;
+    // What the wheel looks like (`wheel_face.slint`) and how far a running animation is.
+    in property <WheelLookView> look;
     in property <[WheelSlotView]> slots;
-    // The middle: the pointed entry's picture or name, or back/cancel/settings (`middle-mode` 1 back, 2 cancel, 3 the
-    // empty wheel's jump to Settings > Target Folders) with its progress arc.
-    in property <string> middle-name;
-    in property <float> middle-scale: 1;
-    in property <FolderPictureView> middle-picture;
-    in property <bool> middle-shows-picture;
-    in property <int> middle-mode;
-    in property <string> middle-arc;
+    in property <WheelMiddleView> middle;
+    in property <float> whole-alpha: 1;
+    in property <float> whole-zoom: 1;
+    in property <float> whole-turn: 0;
+    in property <bool> dot;
+    in property <length> dot-x;
+    in property <length> dot-y;
+    // The real pointer is hidden while it starts in the middle.
+    in property <bool> hide-pointer;
     in property <string> breadcrumb;
-    in property <bool> dim;
-    in property <bool> animations: true;
-    // 0 picture and name, 1 picture, 2 name.
-    in property <int> labels;
-    in property <int> shape;
-    in property <bool> tint: true;
-    in property <length> font-size: 12px;
-    // How opaque the fields are (Settings > Target Folders, 0-1).
-    in property <float> opacity: 0.92;
+    // How dark the video is behind the wheel, 0-1.
+    in property <float> dim: 0.35;
     // How far the wheel moved from the video's center to stay inside the window (the layer sets it; the video's
     // pointer is measured from the wheel's own center).
     in-out property <length> shift-x;
@@ -116,12 +85,12 @@ export component FolderWheelLayer inherits Rectangle {
     in property <length> video-height;
 
     // Centered on the video, but always inside the window (a large wheel may cover the panels too).
-    property <length> left: Math.max(0px, Math.min(root.width - FolderWheel.size, root.center-x - FolderWheel.size / 2));
-    property <length> top: Math.max(0px, Math.min(root.height - FolderWheel.size, root.center-y - FolderWheel.size / 2));
-    property <length> shift-x: root.left - (root.center-x - FolderWheel.size / 2);
-    property <length> shift-y: root.top - (root.center-y - FolderWheel.size / 2);
-    property <length> mid-x: root.left + FolderWheel.size / 2;
-    property <length> mid-y: root.top + FolderWheel.size / 2;
+    property <length> left: Math.max(0px, Math.min(root.width - FolderWheel.look.size, root.center-x - FolderWheel.look.size / 2));
+    property <length> top: Math.max(0px, Math.min(root.height - FolderWheel.look.size, root.center-y - FolderWheel.look.size / 2));
+    property <length> shift-x: root.left - (root.center-x - FolderWheel.look.size / 2);
+    property <length> shift-y: root.top - (root.center-y - FolderWheel.look.size / 2);
+    property <length> mid-x: root.left + FolderWheel.look.size / 2;
+    property <length> mid-y: root.top + FolderWheel.look.size / 2;
 
     init => {
         FolderWheel.shift-x = root.shift-x;
@@ -130,16 +99,17 @@ export component FolderWheelLayer inherits Rectangle {
     changed shift-x => { FolderWheel.shift-x = root.shift-x; }
     changed shift-y => { FolderWheel.shift-y = root.shift-y; }
 
-    if FolderWheel.dim && FolderWheel.shown: Rectangle {
+    if FolderWheel.dim > 0 && FolderWheel.shown: Rectangle {
         x: root.video-x;
         y: root.video-y;
         width: root.video-width;
         height: root.video-height;
-        background: #000000.with-alpha(0.35);
+        background: #000000.with-alpha(FolderWheel.dim);
     }
 
     // The pointer while the wheel waits for clicks or keys (while the button is held, the video keeps the pointer).
     if FolderWheel.shown: TouchArea {
+        mouse-cursor: FolderWheel.hide-pointer ? MouseCursor.none : MouseCursor.default;
         pointer-event(event) => {
             if event.kind == PointerEventKind.move {
                 FolderWheel.moved(self.mouse-x - root.mid-x, self.mouse-y - root.mid-y);
@@ -160,155 +130,24 @@ export component FolderWheelLayer inherits Rectangle {
 
     if FolderWheel.shown && FolderWheel.breadcrumb != "": Text {
         x: root.mid-x - self.width / 2;
-        y: Math.max(0px, root.top - self.height + FolderWheel.size * 0.03);
+        y: Math.max(0px, root.top - self.height + FolderWheel.look.size * 0.03);
         text: FolderWheel.breadcrumb;
         color: Theme.text;
-        font-size: FolderWheel.font-size;
+        font-size: FolderWheel.look.font-size;
         font-weight: 600;
     }
 
-    if FolderWheel.shown: Rectangle {
+    if FolderWheel.shown: WheelFace {
         x: root.left;
         y: root.top;
-        width: FolderWheel.size;
-        height: FolderWheel.size;
-
-        for slot in FolderWheel.slots: Rectangle {
-            Path {
-                width: FolderWheel.size;
-                height: FolderWheel.size;
-                viewbox-width: FolderWheel.size / 1px;
-                viewbox-height: FolderWheel.size / 1px;
-                commands: slot.segment;
-                // The base color covers as much as the opacity says; an entry's color is mixed in (stronger when pointed).
-                fill: (slot.tinted ? slot.tint.mix(slot.highlighted ? Theme.surface-selected : Theme.surface-variant, slot.highlighted ? 0.55 : 0.3)
-                    : slot.highlighted ? Theme.surface-selected : slot.filled ? Theme.surface-variant : Theme.surface)
-                    .with-alpha(FolderWheel.opacity);
-                stroke: slot.highlighted ? Theme.primary : Theme.border;
-                stroke-width: slot.highlighted ? 2px : 1px;
-            }
-
-            if slot.fill != "": Path {
-                width: FolderWheel.size;
-                height: FolderWheel.size;
-                viewbox-width: FolderWheel.size / 1px;
-                viewbox-height: FolderWheel.size / 1px;
-                commands: slot.fill;
-                fill: Theme.primary.with-alpha(0.35);
-            }
-
-            if slot.mark != "": Path {
-                width: FolderWheel.size;
-                height: FolderWheel.size;
-                viewbox-width: FolderWheel.size / 1px;
-                viewbox-height: FolderWheel.size / 1px;
-                commands: slot.mark;
-                stroke: slot.tinted ? slot.tint : Theme.text-muted;
-                stroke-width: 3px;
-            }
-
-            if slot.filled: VerticalLayout {
-                x: slot.x;
-                y: slot.y;
-                width: slot.w;
-                height: slot.h;
-                alignment: center;
-                spacing: 2px;
-
-                if FolderWheel.labels != 2 || slot.more: HorizontalLayout {
-                    alignment: center;
-
-                    if !slot.more: FolderPicture {
-                        width: FolderWheel.font-size * 2;
-                        height: self.width;
-                        picture: slot.picture;
-                        shape: FolderWheel.shape;
-                        tint: FolderWheel.tint;
-                    }
-
-                    if slot.more: AppIcon {
-                        icon: IconId.wheel-more;
-                        size: FolderWheel.font-size * 1.6;
-                        color: Theme.text;
-                    }
-                }
-
-                if FolderWheel.labels != 1 || slot.more: Text {
-                    text: slot.name;
-                    color: Theme.text;
-                    font-size: FolderWheel.font-size * slot.scale;
-                    horizontal-alignment: center;
-                    wrap: no-wrap;
-                }
-            }
-        }
-
-        // The middle.
-        Rectangle {
-            x: FolderWheel.size / 2 - FolderWheel.inner + 4px;
-            y: self.x;
-            width: (FolderWheel.inner - 4px) * 2;
-            height: self.width;
-            border-radius: self.width / 2;
-            background: Theme.surface.with-alpha(FolderWheel.opacity);
-            border-width: 1px;
-            border-color: Theme.border;
-
-            if FolderWheel.middle-mode == 0 && FolderWheel.middle-shows-picture: FolderPicture {
-                x: parent.width * 0.2;
-                y: parent.height * 0.2;
-                width: parent.width * 0.6;
-                height: self.width;
-                picture: FolderWheel.middle-picture;
-                shape: FolderWheel.shape;
-                tint: FolderWheel.tint;
-            }
-
-            if FolderWheel.middle-mode == 0 && !FolderWheel.middle-shows-picture: Text {
-                x: parent.width * 0.12;
-                width: parent.width * 0.76;
-                height: parent.height;
-                text: FolderWheel.middle-name;
-                color: Theme.text;
-                font-size: FolderWheel.font-size * FolderWheel.middle-scale;
-                font-weight: 600;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-                wrap: no-wrap;
-            }
-
-            if FolderWheel.middle-mode != 0: VerticalLayout {
-                alignment: center;
-                spacing: 2px;
-
-                HorizontalLayout {
-                    alignment: center;
-
-                    AppIcon {
-                        icon: FolderWheel.middle-mode == 1 ? IconId.wheel-back : FolderWheel.middle-mode == 3 ? IconId.wheel-settings
-                            : IconId.close;
-                        size: FolderWheel.middle-mode == 3 ? FolderWheel.inner * 0.9 : FolderWheel.font-size * 1.5;
-                        color: FolderWheel.middle-mode == 3 ? Theme.primary : Theme.text;
-                    }
-                }
-
-                if FolderWheel.middle-mode != 3: Text {
-                    text: FolderWheel.middle-mode == 1 ? "Back" : "Cancel";
-                    color: Theme.text-muted;
-                    font-size: FolderWheel.font-size * 0.9;
-                    horizontal-alignment: center;
-                }
-            }
-        }
-
-        if FolderWheel.middle-arc != "": Path {
-            width: FolderWheel.size;
-            height: FolderWheel.size;
-            viewbox-width: FolderWheel.size / 1px;
-            viewbox-height: FolderWheel.size / 1px;
-            commands: FolderWheel.middle-arc;
-            stroke: Theme.primary;
-            stroke-width: 3px;
-        }
+        look: FolderWheel.look;
+        slots: FolderWheel.slots;
+        middle: FolderWheel.middle;
+        whole-alpha: FolderWheel.whole-alpha;
+        whole-zoom: FolderWheel.whole-zoom;
+        whole-turn: FolderWheel.whole-turn;
+        dot: FolderWheel.dot;
+        dot-x: FolderWheel.dot-x;
+        dot-y: FolderWheel.dot-y;
     }
 }

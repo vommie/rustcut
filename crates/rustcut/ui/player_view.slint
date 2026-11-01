@@ -78,7 +78,7 @@ export component PlayerView inherits Rectangle {
     }
 
     TouchArea {
-        mouse-cursor: CropOverlay.active ? CropCursor.of(CropOverlay.handle, CropOverlay.quick) : MouseCursor.default;
+        mouse-cursor: FolderWheel.hide-pointer ? MouseCursor.none : CropOverlay.active ? CropCursor.of(CropOverlay.handle, CropOverlay.quick) : MouseCursor.default;
 
         pointer-event(event) => {
             if event.kind == PointerEventKind.down {

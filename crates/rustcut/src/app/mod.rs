@@ -501,7 +501,13 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         editor.set_escape_hook(move || power.upgrade().is_some_and(|p| p.escape()));
     }
     // The folder wheel over the video (P11.5): its key comes through the keymap.
-    let wheel = WheelBridge::install(&main, writer.clone(), &folder_pictures, &export);
+    let wheel = WheelBridge::install(
+        &main,
+        writer.clone(),
+        &folder_pictures,
+        &export,
+        runtime.handle().clone(),
+    );
     {
         let wheel = Rc::downgrade(&wheel);
         editor.set_folder_wheel_hook(move || {

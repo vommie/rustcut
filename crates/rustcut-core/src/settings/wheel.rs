@@ -66,6 +66,43 @@ pub enum ColorMode {
     Pointed,
 }
 
+/// How an own picture shows in a spoke (P12 3.5).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpokePictures {
+    /// A small circle above the name.
+    #[default]
+    Circle,
+    /// The picture fills the spoke, cut to its shape, the name stands on it.
+    Background,
+}
+
+/// How the wheel appears (P12 3.9).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WheelOpening {
+    Off,
+    Fade,
+    /// One spoke after the other, clockwise.
+    #[default]
+    Spokes,
+    Fan,
+    Spin,
+}
+
+/// How one level gives way to the next (P12 3.9).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WheelLevels {
+    Off,
+    /// Into the level, and out again going back.
+    #[default]
+    Zoom,
+    /// The next level grows out of the chosen spoke.
+    Spoke,
+    Turn,
+}
+
 #[serde_as]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -103,6 +140,34 @@ pub struct FolderWheelSettings {
     pub list_shape: PictureShape,
     #[serde_as(as = "DefaultOnError")]
     pub color_mode: ColorMode,
+    /// The gap between two spokes, in tenths of a percent of the wheel's diameter, like every length below (P12 3.7).
+    pub gap: u16,
+    /// The gap around the middle.
+    pub middle_gap: u16,
+    /// How round the spokes' corners are.
+    pub corners: u16,
+    /// The middle's radius in percent of the wheel's outer radius.
+    pub middle_size: u8,
+    #[serde_as(as = "DefaultOnError")]
+    pub spoke_pictures: SpokePictures,
+    /// How dark a picture without a color is behind its name, in percent.
+    pub picture_dim: u8,
+    /// How dark the video is behind the wheel, in percent (while `dim` is on).
+    pub video_dim: u8,
+    /// Every level starts with the pointer in the middle, wherever it really is (P12 3.8).
+    pub pointer_center: bool,
+    /// How far the pointer moves until it chooses a spoke (with `pointer_center`).
+    pub pointer_distance: u16,
+    #[serde_as(as = "DefaultOnError")]
+    pub opening: WheelOpening,
+    #[serde_as(as = "DefaultOnError")]
+    pub levels: WheelLevels,
+    /// How long the animations take, in percent of their normal time.
+    pub animation_speed: u16,
+    /// The current folder lights up once at the opening.
+    pub pulse: bool,
+    /// The middle's picture fades over.
+    pub crossfade: bool,
 }
 
 impl FolderWheelSettings {
@@ -110,6 +175,13 @@ impl FolderWheelSettings {
     pub const HOLD_MS: std::ops::RangeInclusive<u16> = 50..=2_000;
     pub const DWELL_MS: std::ops::RangeInclusive<u16> = 100..=3_000;
     pub const OPACITY: std::ops::RangeInclusive<u8> = 20..=100;
+    pub const GAP: std::ops::RangeInclusive<u16> = 0..=60;
+    pub const MIDDLE_GAP: std::ops::RangeInclusive<u16> = 0..=50;
+    pub const CORNERS: std::ops::RangeInclusive<u16> = 0..=50;
+    pub const MIDDLE_SIZE: std::ops::RangeInclusive<u8> = 24..=46;
+    pub const DIM: std::ops::RangeInclusive<u8> = 0..=80;
+    pub const POINTER_DISTANCE: std::ops::RangeInclusive<u16> = 20..=150;
+    pub const ANIMATION_SPEED: std::ops::RangeInclusive<u16> = 50..=200;
 }
 
 impl Default for FolderWheelSettings {
@@ -131,6 +203,20 @@ impl Default for FolderWheelSettings {
             wheel_shape: PictureShape::Round,
             list_shape: PictureShape::Rounded,
             color_mode: ColorMode::BackgroundAndIcons,
+            gap: 10,
+            middle_gap: 8,
+            corners: 0,
+            middle_size: 34,
+            spoke_pictures: SpokePictures::Circle,
+            picture_dim: 45,
+            video_dim: 35,
+            pointer_center: true,
+            pointer_distance: 60,
+            opening: WheelOpening::Spokes,
+            levels: WheelLevels::Zoom,
+            animation_speed: 100,
+            pulse: true,
+            crossfade: true,
         }
     }
 }
@@ -151,10 +237,39 @@ impl FolderWheelSettings {
             notes.push(format!("folder_wheel.opacity {} brought into range", self.opacity));
             self.opacity = self.opacity.clamp(*Self::OPACITY.start(), *Self::OPACITY.end());
         }
+        clamp_into(&mut self.gap, Self::GAP, "gap", notes);
+        clamp_into(&mut self.middle_gap, Self::MIDDLE_GAP, "middle_gap", notes);
+        clamp_into(&mut self.corners, Self::CORNERS, "corners", notes);
+        clamp_into(&mut self.middle_size, Self::MIDDLE_SIZE, "middle_size", notes);
+        clamp_into(&mut self.picture_dim, Self::DIM, "picture_dim", notes);
+        clamp_into(&mut self.video_dim, Self::DIM, "video_dim", notes);
+        clamp_into(
+            &mut self.pointer_distance,
+            Self::POINTER_DISTANCE,
+            "pointer_distance",
+            notes,
+        );
+        clamp_into(
+            &mut self.animation_speed,
+            Self::ANIMATION_SPEED,
+            "animation_speed",
+            notes,
+        );
         if !Self::DWELL_MS.contains(&self.dwell_ms) {
             notes.push(format!("folder_wheel.dwell_ms {} reset", self.dwell_ms));
             self.dwell_ms = fresh.dwell_ms;
         }
+    }
+}
+
+/// Brings a number into its range, with a note.
+fn clamp_into<T>(value: &mut T, range: std::ops::RangeInclusive<T>, name: &str, notes: &mut Vec<String>)
+where
+    T: Copy + PartialOrd + std::fmt::Display + Ord,
+{
+    if !range.contains(value) {
+        notes.push(format!("folder_wheel.{name} {value} brought into range"));
+        *value = (*value).clamp(*range.start(), *range.end());
     }
 }
 

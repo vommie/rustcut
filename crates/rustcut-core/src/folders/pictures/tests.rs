@@ -27,12 +27,12 @@ fn images_are_scaled_down_to_webp_with_alpha() {
     assert_eq!(prepared.kind, PictureKind::WebP);
     assert_eq!(
         (prepared.width, prepared.height),
-        (256, 128),
-        "fits 256 px, keeps the aspect"
+        (512, 256),
+        "fits 512 px, keeps the aspect"
     );
     assert!(prepared.data.starts_with(b"RIFF"));
     let back = decode_webp(&prepared.data).unwrap();
-    assert_eq!((back.width, back.height), (256, 128));
+    assert_eq!((back.width, back.height), (512, 256));
     let alpha: Vec<u8> = back.pixels.chunks(4).filter_map(|p| p.get(3).copied()).collect();
     assert!(
         alpha.iter().any(|a| *a < 10) && alpha.iter().any(|a| *a > 245),

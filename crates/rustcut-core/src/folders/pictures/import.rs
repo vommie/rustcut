@@ -1,12 +1,12 @@
 //! Turning a file the user picked into a stored picture (P11.2, user decision Q-FP2): an image is decoded with limits,
-//! scaled down with Lanczos3 to fit 256 px and written as WebP (quality 75, alpha kept); an SVG is read without any
+//! scaled down with Lanczos3 to fit 512 px and written as WebP (quality 75, alpha kept); an SVG is read without any
 //! external reference, written again by `usvg` (so scripts, links and unknown elements are gone) and kept only when it
 //! draws something. Pure apart from the decoders: no file access here.
 
 use image::{DynamicImage, GenericImageView as _, ImageReader, Limits, imageops::FilterType};
 
 /// The largest side of a stored image.
-pub const MAX_SIDE: u32 = 256;
+pub const MAX_SIDE: u32 = 512;
 /// WebP quality (0-100).
 pub const WEBP_QUALITY: f32 = 75.0;
 /// The largest file taken (an SVG or an image before it is scaled down).
@@ -235,6 +235,37 @@ pub fn decode_webp(data: &[u8]) -> Option<Rgba> {
         height: picture.height(),
         pixels: picture.into_raw(),
     })
+}
+
+/// A picture cut to a spoke of the folder wheel (P12 3.5): scaled to cover `width` x `height`, centered both ways, and
+/// masked by `shape` (SVG path commands in that box).
+pub fn spoke_picture(picture: &Rgba, width: u32, height: u32, shape: &str) -> Option<Rgba> {
+    let source = image::RgbaImage::from_raw(picture.width, picture.height, picture.pixels.clone())?;
+    let (w, h) = (f64::from(picture.width.max(1)), f64::from(picture.height.max(1)));
+    let scale = (f64::from(width) / w).max(f64::from(height) / h);
+    let sized = |side: f64, least: u32| az::saturating_cast::<f64, u32>(side.ceil()).max(least);
+    let (cover_w, cover_h) = (sized(w * scale, width), sized(h * scale, height));
+    let cover = image::imageops::resize(&source, cover_w, cover_h, FilterType::Triangle);
+    let left = (cover_w - width) / 2;
+    let top = (cover_h - height) / 2;
+    let svg = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" \
+         viewBox=\"0 0 {width} {height}\"><path d=\"{shape}\" fill=\"#fff\"/></svg>"
+    );
+    let mask = render_svg(svg.as_bytes(), width.max(height))?;
+    if (mask.width, mask.height) != (width, height) {
+        return None;
+    }
+    let mut pixels = Vec::with_capacity(mask.pixels.len());
+    for (y, row) in mask.pixels.chunks_exact(4 * usize::try_from(width).ok()?).enumerate() {
+        for (x, m) in row.chunks_exact(4).enumerate() {
+            let (px, py) = (u32::try_from(x).ok()? + left, u32::try_from(y).ok()? + top);
+            let [r, g, b, a] = cover.get_pixel_checked(px, py)?.0;
+            let alpha = u16::from(a) * u16::from(*m.get(3)?) / 255;
+            pixels.extend_from_slice(&[r, g, b, u8::try_from(alpha).unwrap_or(u8::MAX)]);
+        }
+    }
+    Some(Rgba { width, height, pixels })
 }
 
 /// Renders an SVG (stored or built in) to RGBA pixels fitting `side` (for the UI).

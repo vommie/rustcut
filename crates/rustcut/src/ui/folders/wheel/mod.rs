@@ -1,33 +1,42 @@
 //! The folder wheel (P11.5, user decision Q-FP2): opened by holding the middle mouse button over the video (a ring fills
 //! first) or by its key anywhere; always centered on the video. `nav.rs` is the navigation, `geometry.rs` the size and
 //! the shapes; this bridge feeds them the pointer, the keys and the time, and draws the result into `FolderWheel`.
-//! Picking a folder only sets the Job Finalization card's target (never saves).
+//! Picking a folder only sets the Job Finalization card's target (never saves). `draw.rs` makes what a wheel shows (the
+//! small wheel in Settings shares it), `anim.rs` where it stands in an animation.
 
+pub mod anim;
+pub mod draw;
 pub mod geometry;
 pub mod label;
 pub mod nav;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::f32::consts::TAU;
 use std::rc::{Rc, Weak};
 use std::time::{Duration, Instant};
 
-use rustcut_core::folders::{FolderTree, Layout, Slot};
-use rustcut_core::settings::{ColorMode, PictureShape, Settings, WheelButton, WheelLabels, WheelMiddle};
+use rustcut_core::folders::{FolderId, FolderTree, Layout};
+use rustcut_core::settings::{Settings, WheelButton, WheelLevels, WheelOpening};
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 
+use self::anim::{Pose, Run};
+use self::draw::{MiddleInput, Scene};
 use self::nav::{Context, KeyAction, Mode, Outcome, Radii, Timing, WheelNav};
 use super::pictures::Pictures;
-use super::view;
+use super::presence::FolderPresence;
 use crate::app::SettingsWriter;
 use crate::ui::export::ExportBridge;
 use crate::ui::keymap::{Action, Chord, Keymap};
-use crate::{FolderPictureView, FolderWheel, MainWindow, Shortcuts, WheelSlotView};
+use crate::util::model::sync;
+use crate::{FolderWheel, MainWindow, Shortcuts, WheelSlotView};
 
 /// How often a running hold or dwell is drawn again.
 const TICK: Duration = Duration::from_millis(16);
 /// The hold ring's square (`WheelHoldRing`).
 const RING: f32 = 64.0;
+/// How long the current folder lights up at the opening, and the middle fades over, at normal speed (ms).
+const PULSE_MS: f32 = 420.0;
+const FADE_MS: f32 = 160.0;
 
 fn timing(settings: &Settings) -> Timing {
     let w = &settings.folder_wheel;
@@ -35,6 +44,17 @@ fn timing(settings: &Settings) -> Timing {
         hold_ms: u64::from(w.hold_ms),
         dwell_ms: u64::from(w.dwell_ms),
         push: w.push,
+        center: w.pointer_center,
+    }
+}
+
+fn nav_radii(settings: &Settings, diameter: f32) -> Radii {
+    let w = &settings.folder_wheel;
+    let (inner, outer) = geometry::radii(diameter, w.middle_size);
+    Radii {
+        inner,
+        outer,
+        dead: geometry::share(diameter, w.pointer_distance),
     }
 }
 
@@ -42,14 +62,6 @@ fn layout(settings: &Settings) -> Layout {
     Layout {
         places: settings.folder_wheel.places,
         divided: settings.folder_wheel.divided,
-    }
-}
-
-const fn shape(shape: PictureShape) -> i32 {
-    match shape {
-        PictureShape::Round => 0,
-        PictureShape::Rounded => 1,
-        PictureShape::Square => 2,
     }
 }
 
@@ -94,6 +106,15 @@ pub struct WheelBridge {
     timer: slint::Timer,
     /// Where the hold started, relative to the video's center (the ring stands there).
     held_at: RefCell<(f32, f32)>,
+    /// The missing folders' check (the warning mark).
+    presence: Rc<FolderPresence>,
+    runtime: tokio::runtime::Handle,
+    /// The running animation and when it started.
+    running: Cell<Option<(Run, u64)>>,
+    /// When the wheel opened (the current folder's flash) and when the middle changed.
+    opened_at: Cell<Option<u64>>,
+    middle_at: Cell<(Option<usize>, u64)>,
+    slot_rows: Rc<VecModel<WheelSlotView>>,
 }
 
 impl WheelBridge {
@@ -102,6 +123,7 @@ impl WheelBridge {
         writer: SettingsWriter,
         pictures: &Rc<Pictures>,
         export: &Rc<ExportBridge>,
+        runtime: tokio::runtime::Handle,
     ) -> Rc<Self> {
         let settings = writer.current();
         let bridge = Rc::new(Self {
@@ -111,6 +133,7 @@ impl WheelBridge {
                 Radii {
                     inner: 50.0,
                     outer: 150.0,
+                    dead: 30.0,
                 },
             )),
             writer,
@@ -119,8 +142,15 @@ impl WheelBridge {
             started: Instant::now(),
             timer: slint::Timer::default(),
             held_at: RefCell::new((0.0, 0.0)),
+            presence: Rc::default(),
+            runtime,
+            running: Cell::new(None),
+            opened_at: Cell::new(None),
+            middle_at: Cell::new((None, 0)),
+            slot_rows: Rc::default(),
         });
         let ui = window.global::<FolderWheel<'_>>();
+        ui.set_slots(ModelRc::from(Rc::clone(&bridge.slot_rows)));
         let weak = Rc::downgrade(&bridge);
         ui.on_pressed(move |x, y| {
             if let Some(b) = weak.upgrade() {
@@ -176,19 +206,36 @@ impl WheelBridge {
     /// Runs `step` with the navigation, the tree and the layout; then acts on its outcome.
     fn step(&self, step: impl FnOnce(&mut WheelNav, Context<'_>, u64) -> Outcome) {
         let settings = self.writer.current();
-        let (inner, outer) = geometry::radii(self.diameter(&settings));
-        let outcome = {
+        let radii = nav_radii(&settings, self.diameter(&settings));
+        let current = self.current();
+        let now = self.now();
+        let (outcome, change) = {
             let mut nav = self.nav.borrow_mut();
             nav.set_timing(timing(&settings));
-            nav.set_radii(Radii { inner, outer });
+            nav.set_radii(radii);
             let ctx = Context {
                 tree: &settings.export.folders,
                 layout: layout(&settings),
+                current,
             };
-            step(&mut nav, ctx, self.now())
+            let outcome = step(&mut nav, ctx, now);
+            (outcome, nav.take_change())
         };
+        let w = &settings.folder_wheel;
+        if let Some(change) = change.filter(|_| w.animations && w.levels != WheelLevels::Off) {
+            self.running.set(Some((
+                Run::Level {
+                    kind: w.levels,
+                    back: change.back,
+                    place: change.place,
+                },
+                now,
+            )));
+        }
         match outcome {
-            Outcome::Nothing => return,
+            // A running animation still has to be drawn to its end.
+            Outcome::Nothing if !self.timer.running() => return,
+            Outcome::Nothing => {}
             Outcome::Picked(id) => {
                 tracing::info!(id = id.0, "[Folders] Target folder chosen on the wheel");
                 if let Some(export) = self.export.upgrade() {
@@ -200,7 +247,14 @@ impl WheelBridge {
                 tracing::debug!("[Folders] Folder wheel closed");
                 self.give_back_focus();
             }
-            Outcome::Opened => tracing::debug!("[Folders] Folder wheel opened"),
+            Outcome::Opened => {
+                tracing::debug!("[Folders] Folder wheel opened");
+                self.opened_at.set(Some(now));
+                self.middle_at.set((None, 0));
+                self.running
+                    .set((w.animations && w.opening != WheelOpening::Off).then_some((Run::Open(w.opening), now)));
+                self.refresh_presence(&settings);
+            }
             Outcome::Settings => {
                 tracing::info!("[Folders] The empty folder wheel leads to Settings > Target Folders");
                 self.give_back_focus();
@@ -221,9 +275,53 @@ impl WheelBridge {
         }
     }
 
-    /// A timer draws a running hold or dwell (and lets it act) while one runs.
+    /// The job's target folder.
+    fn current(&self) -> Option<FolderId> {
+        self.export.upgrade().and_then(|e| e.current_target())
+    }
+
+    /// Checks the folders on the runtime (the first wheel draws before the answer comes; then it draws again).
+    fn refresh_presence(&self, settings: &Settings) {
+        let paths = settings
+            .export
+            .folders
+            .folders()
+            .into_iter()
+            .filter_map(|f| f.path.clone())
+            .collect();
+        let weak = WHEEL.with(|w| w.borrow().clone());
+        self.presence.refresh(&self.runtime, paths, move || {
+            if let Some(b) = weak.upgrade()
+                && b.nav.borrow().is_open()
+            {
+                b.publish();
+            }
+        });
+    }
+
+    /// An animation, the current folder's flash or the middle's fade still runs.
+    fn animating(&self, settings: &Settings) -> bool {
+        let w = &settings.folder_wheel;
+        if !w.animations || !self.nav.borrow().is_open() {
+            return false;
+        }
+        let now = self.now();
+        let speed = f32::from(w.animation_speed) / 100.0;
+        let since = |at: u64| to_ms(now.saturating_sub(at));
+        let n = self.nav.borrow().level().map_or(0, |l| l.slots.len());
+        let running = self
+            .running
+            .get()
+            .is_some_and(|(run, at)| !run.is_done(since(at), w.animation_speed, n));
+        let pulse = w.pulse && self.opened_at.get().is_some_and(|at| since(at) < PULSE_MS * speed);
+        let fade = w.crossfade && since(self.middle_at.get().1) < FADE_MS * speed;
+        running || pulse || fade
+    }
+
+    /// A timer draws a running hold, dwell or animation (and lets it act) while one runs.
     fn keep_ticking(&self) {
-        let needed = self.nav.borrow().needs_ticks();
+        let settings = self.writer.current();
+        let needed = self.nav.borrow().needs_ticks() || self.animating(&settings);
         if needed && !self.timer.running() {
             let weak = WHEEL.with(|w| w.borrow().clone());
             self.timer.start(slint::TimerMode::Repeated, TICK, move || {
@@ -318,127 +416,92 @@ impl WheelBridge {
             ui.set_shift_y(0.0);
         }
         ui.set_keys(matches!(nav.mode(), Some(Mode::Keys | Mode::Clicks)));
+        let dot = nav.virtual_pointer();
+        ui.set_hide_pointer(dot.is_some());
+        ui.set_dot(dot.is_some());
+        let (dx, dy) = dot.unwrap_or_default();
+        ui.set_dot_x(dx);
+        ui.set_dot_y(dy);
         if !nav.is_open() {
             return;
         }
         let size = self.diameter(&settings);
-        let (inner, outer) = geometry::radii(size);
+        let (inner, _) = geometry::radii(size, w.middle_size);
         let c = size / 2.0;
-        ui.set_size(size);
-        ui.set_inner(inner);
-        ui.set_outer(outer);
-        let font = (size * 0.034).clamp(11.0, 22.0);
-        ui.set_font_size(font);
-        ui.set_dim(w.dim);
-        ui.set_animations(w.animations);
-        ui.set_labels(match w.labels {
-            WheelLabels::PictureAndName => 0,
-            WheelLabels::Picture => 1,
-            WheelLabels::Name => 2,
-        });
-        ui.set_shape(shape(w.wheel_shape));
-        ui.set_tint(w.color_mode == ColorMode::BackgroundAndIcons);
-        ui.set_opacity(f32::from(w.opacity) / 100.0);
+        ui.set_look(draw::look(w, size, draw::font(size)));
+        ui.set_dim(if w.dim { f32::from(w.video_dim) / 100.0 } else { 0.0 });
         let tree = &settings.export.folders;
         let Some(level) = nav.level() else { return };
         let n = level.slots.len();
-        let fill = nav.fill(now);
-        let step = TAU / f32::from(u16::try_from(n.max(1)).unwrap_or(u16::MAX));
-        let mid = f32::midpoint(inner, outer);
-        let chord = 2.0 * mid * (step / 2.0).sin();
-        let box_w = (chord - 6.0).min((outer - inner) * 1.5).max(24.0);
-        let box_h = (outer - inner) * 0.86;
-        let slots: Vec<WheelSlotView> = level
-            .slots
-            .iter()
-            .enumerate()
-            .map(|(i, slot)| {
-                let (lx, ly) = geometry::at(c, c, mid, geometry::angle(i, n));
-                let highlighted = nav.highlight() == Some(i);
-                let entry = match slot {
-                    Slot::Entry(id) => tree.entry(*id),
-                    _ => None,
-                };
-                let color = entry.and_then(|e| view::color(e.color()));
-                let tinted = color.is_some() && (w.color_mode != ColorMode::Pointed || highlighted);
-                // The wheel's name (the short one when set), broken and cut to fit the field (the user's answers).
-                let name = match slot {
-                    Slot::More(ids) => format!("More ... ({})", ids.len()),
-                    _ => entry
-                        .map(rustcut_core::folders::EntryRef::wheel_name)
-                        .unwrap_or_default()
-                        .to_owned(),
-                };
-                let label = label::fit(&name, box_w, font);
-                WheelSlotView {
-                    segment: geometry::segment(c, inner, outer, i, n).into(),
-                    fill: fill
-                        .filter(|(f, _)| *f == i)
-                        .map(|(_, p)| geometry::fill(c, inner, outer, i, n, p))
-                        .unwrap_or_default()
-                        .into(),
-                    mark: if slot.opens(tree).is_some() {
-                        geometry::group_mark(c, outer, i, n).into()
-                    } else {
-                        "".into()
-                    },
-                    x: lx - box_w / 2.0,
-                    y: ly - box_h / 2.0,
-                    w: box_w,
-                    h: box_h,
-                    name: label.text().into(),
-                    scale: label.scale,
-                    picture: entry.map_or_else(FolderPictureView::default, |e| view::picture(e, &self.pictures)),
-                    filled: !matches!(slot, Slot::Empty),
-                    highlighted,
-                    tint: color.unwrap_or_default(),
-                    tinted,
-                    more: matches!(slot, Slot::More(_)),
-                }
-            })
-            .collect();
-        ui.set_slots(ModelRc::new(VecModel::from(slots)));
+        let current = self.current();
+        let run = self.running.get().filter(|_| w.animations);
+        let since = |at: u64| to_ms(now.saturating_sub(at));
+        let speed = w.animation_speed;
+        let pose = |i: usize| run.map_or(Pose::REST, |(r, at)| r.spoke(since(at), speed, i, n));
+        let whole = run.map_or(Pose::REST, |(r, at)| r.whole(since(at), speed, n));
+        ui.set_whole_alpha(whole.alpha);
+        ui.set_whole_zoom(whole.zoom);
+        ui.set_whole_turn(whole.turn);
+        let flash = self
+            .opened_at
+            .get()
+            .filter(|_| w.animations && w.pulse)
+            .map_or(0.0, |at| anim::pulse(since(at), PULSE_MS * f32::from(speed) / 100.0));
+        let missing = |path: &std::path::Path| self.presence.is_missing(path);
+        let scale = window.window().scale_factor();
+        let scene = Scene {
+            wheel: w,
+            tree,
+            level,
+            diameter: size,
+            scale,
+            highlight: nav.highlight(),
+            current,
+            fill: nav.fill(now),
+            pictures: &self.pictures,
+            missing: &missing,
+            pose: &pose,
+            flash,
+        };
+        sync(&self.slot_rows, scene.slots());
+        let (pointed, mut since_change) = self.middle_at.get();
+        if pointed != nav.highlight() {
+            since_change = now;
+            self.middle_at.set((nav.highlight(), now));
+        }
+        let mut middle = MiddleInput {
+            wheel: w,
+            tree,
+            level,
+            diameter: size,
+            highlight: nav.highlight(),
+            current,
+            pictures: &self.pictures,
+        }
+        .view();
+        middle.fade = if w.animations && w.crossfade {
+            anim::fade(since(since_change), FADE_MS * f32::from(speed) / 100.0)
+        } else {
+            1.0
+        };
         let empty = nav.is_empty();
         if let Some(progress) = nav.middle(now) {
             let back = nav.depth() > 0;
-            ui.set_middle_mode(if empty {
+            middle.mode = if empty {
                 3
             } else if back {
                 1
             } else {
                 2
-            });
-            ui.set_middle_arc(if (back || empty) && progress > 0.0 {
-                geometry::arc(c, inner - 3.0, 0.0, progress * TAU).into()
-            } else {
-                "".into()
-            });
+            };
+            if (back || empty) && progress > 0.0 {
+                middle.arc = geometry::arc(c, inner - 3.0, 0.0, progress * TAU).into();
+            }
         } else if empty {
             // Without favorites the first level is empty: the middle is a jump to the settings (the user's wish).
-            ui.set_middle_mode(3);
-            ui.set_middle_arc("".into());
-        } else {
-            ui.set_middle_mode(0);
-            ui.set_middle_arc("".into());
-            let pointed = nav.highlight().and_then(|i| level.slots.get(i));
-            let entry = match pointed {
-                Some(Slot::Entry(id)) => tree.entry(*id),
-                _ => None,
-            };
-            let name = match pointed {
-                Some(Slot::More(ids)) => format!("More ... ({})", ids.len()),
-                _ => entry.map(|e| e.wheel_name().to_owned()).unwrap_or_default(),
-            };
-            // The middle's text is fitted like a field's (its width: three quarters of the middle).
-            let middle = label::fit(&name, (inner - 4.0) * 2.0 * 0.76, font);
-            let picture = entry.map(|e| view::picture(e, &self.pictures)).unwrap_or_default();
-            // The picture (the default); an entry without one shows its first letter instead, like everywhere else
-            // (the user's wish 2026-10-28). "More ..." has neither: its name.
-            ui.set_middle_shows_picture(w.middle == WheelMiddle::Picture && entry.is_some());
-            ui.set_middle_picture(picture);
-            ui.set_middle_name(middle.text().into());
-            ui.set_middle_scale(middle.scale);
+            middle.mode = 3;
         }
+        ui.set_middle(middle);
         ui.set_breadcrumb(
             if w.breadcrumb && nav.depth() > 0 {
                 breadcrumb(tree, &nav)
@@ -448,6 +511,11 @@ impl WheelBridge {
             .into(),
         );
     }
+}
+
+/// Milliseconds as `f32` (animations are short).
+fn to_ms(ms: u64) -> f32 {
+    f32::from(u16::try_from(ms.min(60_000)).unwrap_or(u16::MAX))
 }
 
 /// "Start › Clients › More ..." for the opened levels.

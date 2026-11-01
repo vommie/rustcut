@@ -624,3 +624,33 @@ fn a_file_without_the_new_switches_of_0_0_72_has_them_on() {
     assert!(!read.player.keep_pause_symbol);
     assert!(read.player.flash_mute && read.player.flash_rating && read.player.volume_bar);
 }
+
+#[test]
+fn version_8_pictures_become_looks() {
+    use crate::folders::{FolderId, LookKind};
+    let dir = tempfile::tempdir().unwrap();
+    let old = "version = 8\n\n[export.folders.source]\npicture = { icon = \"home\" }\n\n\
+               [[export.folders.entries]]\nid = 1\nname = \"Group\"\n\n\
+               [[export.folders.entries.children]]\nid = 2\nname = \"Pic\"\npath = \"/p\"\n\
+               picture = { stored = \"ab12\" }\n\n\
+               [[export.folders.entries]]\nid = 3\nname = \"Plain\"\npath = \"/q\"\n";
+    std::fs::write(dir.path().join(Settings::FILE_NAME), old).unwrap();
+    let backups = dir.path().join("b");
+    let settings = load::<Settings>(dir.path(), &backups).unwrap().value().clone();
+    let tree = &settings.export.folders;
+    assert_eq!(tree.source.look.kind, LookKind::Icon);
+    assert_eq!(tree.source.look.icon.as_deref(), Some("home"));
+    let pic = tree.find(FolderId(2)).unwrap();
+    assert_eq!(
+        (pic.look.kind, pic.look.image.as_deref()),
+        (LookKind::Own, Some("ab12"))
+    );
+    assert_eq!(tree.find(FolderId(3)).unwrap().look.kind, LookKind::Letter);
+    assert!(
+        std::fs::read_dir(&backups)
+            .unwrap()
+            .flatten()
+            .any(|e| std::fs::read_to_string(e.path()).is_ok_and(|t| t == old)),
+        "the old file is backed up first"
+    );
+}

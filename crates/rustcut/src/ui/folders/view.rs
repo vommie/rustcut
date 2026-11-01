@@ -33,7 +33,7 @@ pub fn ink(color: slint::Color) -> slint::Color {
 }
 
 pub fn picture(entry: EntryRef<'_>, pictures: &Pictures) -> FolderPictureView {
-    let shown = entry.picture().and_then(|p| pictures.image(p));
+    let shown = entry.picture().and_then(|p| pictures.image(&p));
     let tint = color(entry.color());
     FolderPictureView {
         has_image: shown.is_some(),

@@ -274,6 +274,14 @@ impl ExportBridge {
     }
 
     /// Another target (the list, the folder wheel); the job is not saved.
+    /// The job's target folder, when it is an entry of the tree.
+    pub fn current_target(&self) -> Option<FolderId> {
+        match self.state.borrow().target.target {
+            Target::Entry(id) => Some(id),
+            Target::Loose(_) => None,
+        }
+    }
+
     pub fn choose_target(&self, id: FolderId) {
         self.state.borrow_mut().target.select_id(id);
         self.rescan();

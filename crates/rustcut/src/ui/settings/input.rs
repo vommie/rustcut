@@ -27,6 +27,8 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     ui.on_close(move || with(&t, SettingsBridge::close));
 
     let t = this.clone();
+    ui.on_row_hover(move |key, on| with(&t, |b| b.scene_row_hover(&key, on)));
+    let t = this.clone();
     ui.on_toggle(move |key| {
         with(&t, |b| b.edit(&key, Edit::Toggle).is_ok());
     });

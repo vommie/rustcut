@@ -50,6 +50,16 @@ impl Slot {
             Self::Entry(id) => tree.find(*id).filter(|n| n.is_group()).map(|n| LevelKey::Group(n.id)),
         }
     }
+
+    /// This place leads to `id`: it is that entry, its group, or a "More ..." holding either.
+    pub fn holds(&self, tree: &FolderTree, id: FolderId) -> bool {
+        let leads = |entry: FolderId| entry == id || tree.groups_of(id).contains(&entry);
+        match self {
+            Self::Empty => false,
+            Self::Entry(entry) => leads(*entry),
+            Self::More(ids) => ids.iter().copied().any(leads),
+        }
+    }
 }
 
 /// A level's places, clockwise from the top.

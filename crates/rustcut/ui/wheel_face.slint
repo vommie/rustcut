@@ -1,0 +1,353 @@
+// A folder wheel's face (P12): the places as ring segments, their pictures and names, the marks and the middle. The main
+// window's wheel (`folder_wheel.slint`) and the small wheel in Settings draw the same thing; Rust
+// (`src/ui/folders/wheel/draw.rs`) makes the views, and every length in them follows the wheel's size.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId } from "icons.slint";
+import { FolderPicture, FolderPictureView } from "folder_picture.slint";
+
+export struct WheelSlotView {
+    // Ring segment, dwell fill, group mark and the current folder's mark as path commands in the wheel's square.
+    segment: string,
+    fill: string,
+    mark: string,
+    current: string,
+    // The label's box in the wheel's square.
+    x: length,
+    y: length,
+    w: length,
+    h: length,
+    // The label's lines ("\n" between them) and its font scale (Rust fits it to the field).
+    name: string,
+    scale: float,
+    picture: FolderPictureView,
+    filled: bool,
+    highlighted: bool,
+    // The field's tint (the entry's color, by the color mode), `tinted` = it has one.
+    tint: color,
+    tinted: bool,
+    // "More ..." (the rest of a crowded level).
+    more: bool,
+    // The picture as the spoke's background, cut to its shape, with its box.
+    has-backdrop: bool,
+    backdrop: image,
+    bx: length,
+    by: length,
+    bw: length,
+    bh: length,
+    // How strong the layer over that picture is (dark, or the color's tint).
+    shade: float,
+    // The folder is missing: a mark at the spoke's inner edge, on the axis of the name.
+    warn: bool,
+    warn-x: length,
+    warn-y: length,
+    // How far the spoke lights up (the current folder at the opening).
+    flash: float,
+    // A free place's number (the small wheel).
+    hint: string,
+    // Its place in a running animation.
+    alpha: float,
+    zoom: float,
+    turn: float,
+}
+
+export struct WheelLookView {
+    size: length,
+    inner: length,
+    outer: length,
+    // The middle's radius.
+    middle: length,
+    font-size: length,
+    // 0 picture and name, 1 picture, 2 name.
+    labels: int,
+    shape: int,
+    tint: bool,
+    // How opaque the fields are (Settings > Target Folders, 0-1).
+    opacity: float,
+    // The color ring, the line between the places (0 = none) and the marks.
+    ring: length,
+    thin: length,
+    mark: length,
+}
+
+export struct WheelMiddleView {
+    // 0 the picture or name, 1 back, 2 cancel, 3 the empty wheel's jump to Settings > Target Folders.
+    mode: int,
+    arc: string,
+    picture: FolderPictureView,
+    shows-picture: bool,
+    name: string,
+    scale: float,
+    // Nothing is pointed: the current folder, faded.
+    resting: bool,
+    // How far a new picture faded over (0-1).
+    fade: float,
+}
+
+export component WheelFace inherits Rectangle {
+    in property <WheelLookView> look;
+    in property <[WheelSlotView]> slots;
+    in property <WheelMiddleView> middle;
+    // The whole wheel's place in a running animation.
+    in property <float> whole-alpha: 1;
+    in property <float> whole-zoom: 1;
+    in property <float> whole-turn: 0;
+    // The pointer in the wheel (relative to its center) while it starts in the middle.
+    in property <bool> dot;
+    in property <length> dot-x;
+    in property <length> dot-y;
+
+    property <length> side: root.look.size;
+    // A picture that fills the middle: an own one, never an icon or a letter.
+    property <bool> fills: root.middle.picture.has-image && !root.middle.picture.mono;
+    property <bool> ringed: root.middle.picture.has-image && root.middle.picture.has-color;
+
+    width: root.side;
+    height: root.side;
+
+    Rectangle {
+        width: root.side;
+        height: root.side;
+        opacity: root.whole-alpha;
+        transform-scale: root.whole-zoom;
+        transform-rotation: root.whole-turn * 1deg;
+        transform-origin: { x: root.side / 2, y: root.side / 2 };
+
+        for slot in root.slots: Rectangle {
+            width: root.side;
+            height: root.side;
+            opacity: slot.alpha;
+            transform-scale: slot.zoom;
+            transform-rotation: slot.turn * 1deg;
+            transform-origin: { x: root.side / 2, y: root.side / 2 };
+
+            if slot.has-backdrop: Image {
+                x: slot.bx;
+                y: slot.by;
+                width: slot.bw;
+                height: slot.bh;
+                source: slot.backdrop;
+                image-fit: fill;
+            }
+
+            Path {
+                width: root.side;
+                height: root.side;
+                viewbox-width: root.side / 1px;
+                viewbox-height: root.side / 1px;
+                commands: slot.segment;
+                // The base color covers as much as the opacity says; an entry's color is mixed in (stronger when pointed).
+                // Over a picture a flat layer: dark, or with a color the color's light tint.
+                fill: slot.has-backdrop ? (slot.tinted ? slot.tint : #11111b).with-alpha(slot.shade)
+                    : (slot.tinted ? slot.tint.mix(slot.highlighted ? Theme.surface-selected : Theme.surface-variant, slot.highlighted ? 0.55 : 0.3)
+                    : slot.highlighted ? Theme.surface-selected : slot.filled ? Theme.surface-variant : Theme.surface)
+                    .with-alpha(root.look.opacity);
+                stroke: slot.highlighted ? Theme.primary : slot.has-backdrop && slot.tinted ? slot.tint : Theme.border;
+                stroke-width: slot.highlighted || (slot.has-backdrop && slot.tinted) ? root.look.ring : root.look.thin;
+            }
+
+            if slot.flash > 0: Path {
+                width: root.side;
+                height: root.side;
+                viewbox-width: root.side / 1px;
+                viewbox-height: root.side / 1px;
+                commands: slot.segment;
+                fill: Theme.primary.with-alpha(0.4 * slot.flash);
+            }
+
+            if slot.fill != "": Path {
+                width: root.side;
+                height: root.side;
+                viewbox-width: root.side / 1px;
+                viewbox-height: root.side / 1px;
+                commands: slot.fill;
+                fill: Theme.primary.with-alpha(0.35);
+            }
+
+            if slot.mark != "": Path {
+                width: root.side;
+                height: root.side;
+                viewbox-width: root.side / 1px;
+                viewbox-height: root.side / 1px;
+                commands: slot.mark;
+                stroke: slot.tinted ? slot.tint : Theme.text-muted;
+                stroke-width: root.look.mark;
+            }
+
+            // The current folder: a short arc inside the outer edge, quieter than the pointer's line.
+            if slot.current != "": Path {
+                width: root.side;
+                height: root.side;
+                viewbox-width: root.side / 1px;
+                viewbox-height: root.side / 1px;
+                commands: slot.current;
+                stroke: Theme.primary.with-alpha(0.85);
+                stroke-width: root.look.mark;
+            }
+
+            if slot.filled: VerticalLayout {
+                x: slot.x;
+                y: slot.y;
+                width: slot.w;
+                height: slot.h;
+                alignment: center;
+                spacing: 2px;
+
+                if (root.look.labels != 2 && !slot.has-backdrop) || slot.more: HorizontalLayout {
+                    alignment: center;
+
+                    if !slot.more: FolderPicture {
+                        width: root.look.font-size * 2;
+                        height: self.width;
+                        picture: slot.picture;
+                        shape: root.look.shape;
+                        tint: root.look.tint;
+                    }
+
+                    if slot.more: AppIcon {
+                        icon: IconId.wheel-more;
+                        size: root.look.font-size * 1.6;
+                        color: Theme.text;
+                    }
+                }
+
+                if root.look.labels != 1 || slot.more: Text {
+                    text: slot.name;
+                    color: slot.has-backdrop ? #ffffff : Theme.text;
+                    stroke: slot.has-backdrop ? #11111b : transparent;
+                    stroke-width: slot.has-backdrop ? root.look.ring * 1.5 : 0px;
+                    stroke-style: outside;
+                    font-size: root.look.font-size * slot.scale;
+                    horizontal-alignment: center;
+                    wrap: no-wrap;
+                }
+            }
+
+            if !slot.filled && slot.hint != "": Text {
+                x: slot.x;
+                y: slot.y;
+                width: slot.w;
+                height: slot.h;
+                text: slot.hint;
+                color: Theme.status-deleted;
+                font-size: root.look.font-size;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            if slot.warn: AppIcon {
+                x: slot.warn-x - self.size / 2;
+                y: slot.warn-y - self.size / 2;
+                icon: IconId.status-warning;
+                size: root.look.font-size;
+                color: Theme.accent;
+            }
+        }
+
+        // The middle.
+        Rectangle {
+            x: root.side / 2 - root.look.middle;
+            y: self.x;
+            width: root.look.middle * 2;
+            height: self.width;
+            border-radius: self.width / 2;
+            background: Theme.surface.with-alpha(root.look.opacity);
+            border-width: 1px;
+            border-color: Theme.border;
+
+            property <float> shown: (root.middle.resting ? 0.5 : 1) * root.middle.fade;
+
+            if root.middle.mode == 0 && root.middle.shows-picture: FolderPicture {
+                x: root.fills ? 0px : parent.width * 0.2;
+                y: self.x;
+                width: root.fills ? parent.width : parent.width * 0.6;
+                height: self.width;
+                opacity: parent.shown;
+                picture: root.middle.picture;
+                shape: root.fills ? 0 : root.look.shape;
+                tint: root.look.tint;
+            }
+
+            // A picture or icon with a color: the color is the ring on the inside (the user's rule).
+            if root.middle.mode == 0 && root.middle.shows-picture && root.ringed: Rectangle {
+                border-radius: self.width / 2;
+                border-width: root.look.ring;
+                border-color: root.middle.picture.color;
+                opacity: parent.shown;
+            }
+
+            if root.middle.mode == 0 && !root.middle.shows-picture: Text {
+                x: parent.width * 0.12;
+                width: parent.width * 0.76;
+                height: parent.height;
+                text: root.middle.name;
+                color: Theme.text;
+                opacity: parent.shown;
+                font-size: root.look.font-size * root.middle.scale;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                wrap: no-wrap;
+            }
+
+            if root.middle.mode == 0 && root.middle.resting: Text {
+                x: 0px;
+                y: parent.height * 0.76;
+                width: parent.width;
+                text: "Current";
+                color: #ffffff;
+                stroke: #11111b;
+                stroke-width: root.look.ring * 1.5;
+                stroke-style: outside;
+                font-size: root.look.font-size * 0.8;
+                font-weight: 600;
+                horizontal-alignment: center;
+            }
+
+            if root.middle.mode != 0: VerticalLayout {
+                alignment: center;
+                spacing: 2px;
+
+                HorizontalLayout {
+                    alignment: center;
+
+                    AppIcon {
+                        icon: root.middle.mode == 1 ? IconId.wheel-back : root.middle.mode == 3 ? IconId.wheel-settings
+                            : IconId.close;
+                        size: root.middle.mode == 3 ? root.look.inner * 0.9 : root.look.font-size * 1.5;
+                        color: root.middle.mode == 3 ? Theme.primary : Theme.text;
+                    }
+                }
+
+                if root.middle.mode != 3: Text {
+                    text: root.middle.mode == 1 ? "Back" : "Cancel";
+                    color: Theme.text-muted;
+                    font-size: root.look.font-size * 0.9;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+
+        if root.middle.arc != "": Path {
+            width: root.side;
+            height: root.side;
+            viewbox-width: root.side / 1px;
+            viewbox-height: root.side / 1px;
+            commands: root.middle.arc;
+            stroke: Theme.primary;
+            stroke-width: root.look.mark;
+        }
+
+        // The pointer while it starts in the middle: the real one is hidden.
+        if root.dot: Rectangle {
+            x: root.side / 2 + root.dot-x - self.width / 2;
+            y: root.side / 2 + root.dot-y - self.height / 2;
+            width: root.look.font-size * 0.7;
+            height: self.width;
+            border-radius: self.width / 2;
+            background: Theme.accent;
+            border-width: 1px;
+            border-color: #11111b;
+        }
+    }
+}

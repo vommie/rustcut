@@ -15,6 +15,8 @@ import { Jump } from "jump.slint";
 import { DragLogic, DragState } from "drag.slint";
 import { BubbleLayer } from "bubble.slint";
 import { SettingsFolderTree } from "settings_folder_tree.slint";
+import { WheelPreview } from "settings_folder_details.slint";
+import { FolderTreeUi } from "settings_folder_types.slint";
 import { SettingsCropRatios } from "settings_ratios.slint";
 import { SettingsDiagnostics } from "settings_diagnostics.slint";
 import { SettingsProfiles } from "settings_profiles.slint";
@@ -31,6 +33,9 @@ export component SettingsWindow inherits Window {
     min-height: 400px;
     background: Theme.background;
     default-font-size: Theme.font-size;
+
+    // The wheel's preview fits beside its options.
+    property <bool> preview-beside: root.width >= 860px;
 
     forward-focus: dialog-focus;
 
@@ -118,6 +123,14 @@ export component SettingsWindow inherits Window {
                 Rectangle {
                     vertical-stretch: 1;
 
+                    // The small wheel stays in view beside the wheel's options (P12): it stands at their top and stops
+                    // at the page's top while they scroll.
+                    if SettingsUi.special == 1 && root.preview-beside: WheelPreview {
+                        x: scroll.content-width - self.width - 16px;
+                        y: Math.max(8px, 32px + FolderTreeUi.tree-height + scroll.viewport-y);
+                        width: FolderTreeUi.wheel-size;
+                    }
+
                     // A list of the page is dragged (the target folders, P9.7): near the top and bottom edge the page
                     // scrolls along, faster toward the edge, and counts the scroll so the list measures again.
                     Timer {
@@ -176,9 +189,18 @@ export component SettingsWindow inherits Window {
                             // The Target Folders page shows its tree above its cards (the Folder Wheel's options).
                             if SettingsUi.special == 1: SettingsFolderTree { }
 
-                            // The Messages page shows its cards on its first tab.
+                            // In a narrow window the wheel's preview stands above its options.
+                            if SettingsUi.special == 1 && !root.preview-beside: HorizontalLayout {
+                                alignment: center;
+
+                                WheelPreview { }
+                            }
+
+                            // The Messages page shows its cards on its first tab. The Target Folders page keeps
+                            // room for the preview beside its cards.
                             if SettingsUi.special != 5: VerticalLayout {
                                 spacing: 16px;
+                                padding-right: SettingsUi.special == 1 && root.preview-beside ? FolderTreeUi.wheel-size + 16px : 0px;
 
                                 for card in SettingsUi.cards: SettingsCard {
                                     title: card.title;

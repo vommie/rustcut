@@ -133,6 +133,8 @@ export global SettingsUi {
     callback select-page(int);
     callback reset-page();
     callback toggle(/* key */ string);
+    // The pointer came to or left a row (the folder wheel's preview plays its effects).
+    callback row-hover(/* key */ string, bool);
     callback choose(/* key */ string, /* index */ int);
     // A typed value; false keeps the field open and marked (with a bubble that says why, M6.5c).
     callback type-text(/* key */ string, /* text */ string) -> bool;

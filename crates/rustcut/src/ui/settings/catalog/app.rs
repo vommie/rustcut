@@ -29,6 +29,7 @@ pub static GENERAL: &[Card] = &[
                 max: 10_000,
                 step: 100,
                 unit: "ms",
+                tenths: false,
             },
             live: true,
             get: |s| Value::Number(i64::from(s.general.hold_to_confirm_ms)),

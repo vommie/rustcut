@@ -496,7 +496,7 @@ fn migrate_metadata_warning(table: &mut toml::Table) -> Result<(), String> {
 
 impl VersionedFile for Settings {
     const FILE_NAME: &'static str = "config.toml";
-    const VERSION: u32 = 8;
+    const VERSION: u32 = 9;
 
     fn steps() -> &'static [MigrationStep] {
         &[
@@ -534,6 +534,11 @@ impl VersionedFile for Settings {
                 from: 7,
                 reason: "folder-tree",
                 apply: super::folders::migrate_folder_tree,
+            },
+            MigrationStep {
+                from: 8,
+                reason: "folder-picture-look",
+                apply: super::folders::migrate_picture_look,
             },
         ]
     }
