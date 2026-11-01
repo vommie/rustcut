@@ -75,6 +75,8 @@ export global Logs {
     // Why there is nothing (yet): "The log is stored when the render ends."
     in property <string> note;
     in property <[LogLineView]> lines;
+    // The shown line with the most characters: the only one the panel measures, to know how far it scrolls sideways.
+    in property <string> longest;
     in property <string> summary;
     in property <string> search;
     in property <bool> errors-only;

@@ -11,7 +11,7 @@ use slint::{ComponentHandle as _, ModelRc};
 use super::TagsBridge;
 use super::hidden::{Check, FilterRow};
 use crate::desktop::x11_dialog;
-use crate::{HoldConfirm, TagFilterRowView, TagFilterWindow, TooltipSettings};
+use crate::{HoldConfirm, MainWindow, TagFilterRowView, TagFilterWindow, TooltipSettings};
 
 impl TagsBridge {
     /// The panel's filter button: opens the window (or brings it to the front).
@@ -34,14 +34,7 @@ impl TagsBridge {
         }
         let filter = self.filter_window.borrow();
         let Some(window) = filter.as_ref() else { return };
-        // The main window's hold time and tooltips (each window has its own globals).
-        window
-            .global::<HoldConfirm<'_>>()
-            .set_duration(main.global::<HoldConfirm<'_>>().get_duration());
-        let tips = window.global::<TooltipSettings<'_>>();
-        let main_tips = main.global::<TooltipSettings<'_>>();
-        tips.set_enabled(main_tips.get_enabled());
-        tips.set_delay(main_tips.get_delay());
+        copy_look(window, &main);
         let (width, height) = self.state.borrow().filter_size;
         window.window().set_size(slint::LogicalSize::new(
             az::cast::<u32, f32>(width),
@@ -61,6 +54,14 @@ impl TagsBridge {
         }
         drop(filter);
         self.publish_filter();
+    }
+
+    /// The hold time or the tooltips changed in the settings: the window follows while it exists.
+    pub fn apply_look(&self) {
+        let Some(main) = self.window.upgrade() else { return };
+        if let Some(window) = self.filter_window.borrow().as_ref() {
+            copy_look(window, &main);
+        }
     }
 
     /// The window's rows, count and texts (when it is open).
@@ -118,6 +119,17 @@ impl TagsBridge {
         }
         self.publish();
     }
+}
+
+/// The main window's hold time and tooltips (each window has its own globals).
+fn copy_look(window: &TagFilterWindow, main: &MainWindow) {
+    window
+        .global::<HoldConfirm<'_>>()
+        .set_duration(main.global::<HoldConfirm<'_>>().get_duration());
+    let tips = window.global::<TooltipSettings<'_>>();
+    let main_tips = main.global::<TooltipSettings<'_>>();
+    tips.set_enabled(main_tips.get_enabled());
+    tips.set_delay(main_tips.get_delay());
 }
 
 fn row_view(row: FilterRow) -> TagFilterRowView {

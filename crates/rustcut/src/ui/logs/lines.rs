@@ -140,6 +140,14 @@ pub fn to_text(lines: &[ShownLine]) -> String {
     out
 }
 
+/// The line with the most characters: the panel measures only this one to know how far it scrolls sideways.
+pub fn longest(shown: &[ShownLine]) -> &str {
+    shown
+        .iter()
+        .max_by_key(|line| line.text.chars().count())
+        .map_or("", |line| line.text.as_str())
+}
+
 /// The panel's line under the header: what is shown of how much.
 pub fn summary(total: usize, shown: &[ShownLine]) -> String {
     let errors = shown.iter().filter(|l| l.level == LineLevel::Error).count();
@@ -275,5 +283,17 @@ mod tests {
             1,
             "the level text is searchable"
         );
+    }
+
+    #[test]
+    fn longest_counts_characters_not_bytes() {
+        let line = |text: &str| ShownLine {
+            number: 1,
+            text: text.to_owned(),
+            level: LineLevel::Info,
+        };
+        assert_eq!(longest(&[]), "");
+        assert_eq!(longest(&[line("abc"), line("abcdefgh"), line("")]), "abcdefgh");
+        assert_eq!(longest(&[line("äöü"), line("abcd")]), "abcd");
     }
 }

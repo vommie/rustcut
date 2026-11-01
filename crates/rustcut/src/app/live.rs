@@ -78,6 +78,9 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
         && let Some(main) = p.main.upgrade()
     {
         look(&main, after);
+        if let Some(tags) = p.tags.upgrade() {
+            tags.apply_look();
+        }
     }
     let steps = |s: &Settings| (s.editor.seek_step_secs, s.editor.seek_step_long_secs);
     if (before.keymap != after.keymap || steps(before) != steps(after))
