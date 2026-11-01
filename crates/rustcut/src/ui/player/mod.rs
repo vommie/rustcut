@@ -20,8 +20,8 @@ use parking_lot::Mutex;
 use rustcut_core::settings::{ExportPanelState, PlayerSettings};
 use rustcut_core::time::Timestamp;
 use rustcut_player::{
-    AudioOptions, EndReason, Normalization, OpenOptions, Player, PlayerError, PlayerEvent, PlayerOptions, SurfaceError, SurfaceHooks,
-    VideoFilter, attach_surface,
+    AudioOptions, EndReason, Normalization, OpenOptions, Player, PlayerError, PlayerEvent, PlayerOptions, SurfaceError,
+    SurfaceHooks, VideoFilter, attach_surface,
 };
 use slint::ComponentHandle as _;
 

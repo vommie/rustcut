@@ -13,6 +13,8 @@ export struct SettingRowView {
     description: string,
     checked: bool,
     items: [string],
+    // A symbol per entry of a choice (empty = none).
+    item-icons: [IconId],
     index: int,
     text: string,
     placeholder: string,

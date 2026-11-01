@@ -31,8 +31,8 @@ pub use paths::AppPaths;
 pub use player::{MAX_HIDE_POINTER_MS, MIN_HIDE_POINTER_MS, Normalization, PlayerSettings};
 pub use schema::{
     AdvancedSettings, AppearanceSettings, AutoSection, DesktopSettings, EditorSettings, ExportSettings,
-    GeneralSettings, HashingSettings, OnJobLoad, QueueSettings, RenderSettings, RustViewSettings,
-    Settings, TaskbarShows, TraySettings, WarningSettings, WhenDone, WriteTiming,
+    GeneralSettings, HashingSettings, OnJobLoad, QueueSettings, RenderSettings, RustViewSettings, Settings,
+    TaskbarShows, TraySettings, WarningSettings, WhenDone, WriteTiming,
 };
 pub use ui_state::{
     ExportPanelState, JobPanelState, LogPanelState, LogSource, ProbeState, QueuePanelState, SettingsWindowState,

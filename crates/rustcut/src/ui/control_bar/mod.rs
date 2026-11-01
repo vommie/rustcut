@@ -284,6 +284,14 @@ impl ControlBar {
     }
 }
 
+/// The kinds' symbols in the order of the menu and the Settings choice.
+pub fn normalization_icons() -> Vec<crate::icons::Icon> {
+    std::iter::once(Normalization::None)
+        .chain(Normalization::ACTIVE)
+        .map(menus::kind_icon)
+        .collect()
+}
+
 /// The text of "Hide the resting pointer" for the tooltip: `3 s`, `1.5 s`.
 pub fn seconds_text(ms: u32) -> String {
     let tenths = ms / 100;

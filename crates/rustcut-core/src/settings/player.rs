@@ -210,7 +210,10 @@ mod tests {
 
     #[test]
     fn a_newer_kind_reads_as_none() {
-        let old = format!("version = {}\n\n[player]\nnormalization = \"future\"\n", Settings::VERSION);
+        let old = format!(
+            "version = {}\n\n[player]\nnormalization = \"future\"\n",
+            Settings::VERSION
+        );
         assert_eq!(migrated(&old).0.player.normalization, Normalization::None);
     }
 

@@ -27,7 +27,7 @@ pub fn picked_kind(id: &str) -> Option<Normalization> {
         .find(|k| k.title() == title)
 }
 
-const fn kind_icon(kind: Normalization) -> Icon {
+pub const fn kind_icon(kind: Normalization) -> Icon {
     match kind {
         Normalization::None => Icon::NormalizeNone,
         Normalization::Loudness => Icon::NormalizeLoudness,
@@ -58,14 +58,18 @@ pub fn time(has_file: bool, in_section: bool) -> Vec<MenuItem> {
             .enabled(has_file)
             .tooltip("Opens the video in your mpv, paused at this time")
             .into(),
-        MenuAction::new(OPEN_SECTION, "Open section in mpv as AB-loop", Some(Icon::TimeSectionLoop))
-            .enabled(has_file && in_section)
-            .tooltip(if in_section {
-                "Opens the section around this time in your mpv, paused at its start, repeating it"
-            } else {
-                "This time is not in a section"
-            })
-            .into(),
+        MenuAction::new(
+            OPEN_SECTION,
+            "Open section in mpv as AB-loop",
+            Some(Icon::TimeSectionLoop),
+        )
+        .enabled(has_file && in_section)
+        .tooltip(if in_section {
+            "Opens the section around this time in your mpv, paused at its start, repeating it"
+        } else {
+            "This time is not in a section"
+        })
+        .into(),
         MenuItem::Separator,
         MenuAction::new(COPY_TIME, "Copy time", Some(Icon::TimeCopy))
             .enabled(has_file)
@@ -189,10 +193,14 @@ mod tests {
     #[test]
     fn the_section_entry_needs_a_section() {
         let off = time(true, false);
-        let MenuItem::Action(a) = off.get(1).unwrap() else { panic!() };
+        let MenuItem::Action(a) = off.get(1).unwrap() else {
+            panic!()
+        };
         assert!(!a.enabled);
         let on = time(true, true);
-        let MenuItem::Action(a) = on.get(1).unwrap() else { panic!() };
+        let MenuItem::Action(a) = on.get(1).unwrap() else {
+            panic!()
+        };
         assert!(a.enabled);
     }
 
@@ -202,13 +210,24 @@ mod tests {
         let all = more(base, &STATE);
         assert_eq!(
             ids(&all),
-            ["frame_back", "frame_forward", "set_start", "set_end", "add_section", "submenu", TOGGLE_POINTER]
+            [
+                "frame_back",
+                "frame_forward",
+                "set_start",
+                "set_end",
+                "add_section",
+                "submenu",
+                TOGGLE_POINTER
+            ]
         );
         let sections_only = Fit {
             frames: true,
             audio: true,
             ..base
         };
-        assert_eq!(ids(&more(sections_only, &STATE)), ["set_start", "set_end", "add_section"]);
+        assert_eq!(
+            ids(&more(sections_only, &STATE)),
+            ["set_start", "set_end", "add_section"]
+        );
     }
 }

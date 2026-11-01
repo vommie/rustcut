@@ -20,6 +20,8 @@ export component ChoiceButton inherits Rectangle {
     in property <[TipRow]> tip-rows;
     in property <bool> enabled: true;
     in property <IconId> icon: IconId.none;
+    // A symbol per entry, for the list and the button (where the same choice has them elsewhere: the normalization).
+    in property <[IconId]> item-icons;
     // The key of the bubble about this choice (`bubble.slint`; empty = none).
     in property <string> bubble;
     // Stretches over all the room it gets (the target folder, P9.7).
@@ -27,6 +29,8 @@ export component ChoiceButton inherits Rectangle {
     // Only the icon and the arrow (the crop's aspect lock in the Filters card, P9.13): the tooltip names the choice.
     in property <bool> compact;
     callback selected(int);
+
+    property <IconId> shown-icon: root.item-icons.length > root.current ? root.item-icons[root.current] : root.icon;
 
     height: 24px;
     // Stretches up to the common width; a narrow sidebar cuts the chosen text.
@@ -71,10 +75,10 @@ export component ChoiceButton inherits Rectangle {
         padding-right: 4px;
         spacing: 3px;
 
-        if root.icon != IconId.none: VerticalLayout {
+        if root.shown-icon != IconId.none: VerticalLayout {
             alignment: center;
             AppIcon {
-                icon: root.icon;
+                icon: root.shown-icon;
                 size: IconSize.sm;
                 color: root.enabled ? Theme.text-muted : Theme.status-deleted;
             }
@@ -127,6 +131,16 @@ export component ChoiceButton inherits Rectangle {
                     HorizontalLayout {
                         padding-left: 8px;
                         padding-right: 12px;
+                        spacing: 6px;
+
+                        if root.item-icons.length > index: VerticalLayout {
+                            alignment: center;
+                            AppIcon {
+                                icon: root.item-icons[index];
+                                size: IconSize.sm;
+                                color: Theme.text-muted;
+                            }
+                        }
 
                         Text {
                             text: item;

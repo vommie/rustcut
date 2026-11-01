@@ -560,7 +560,10 @@ impl VersionedFile for Settings {
             "player.hide_pointer_ms limited to 500-60000",
             !(MIN_HIDE_POINTER_MS..=MAX_HIDE_POINTER_MS).contains(&self.player.hide_pointer_ms),
         ) {
-            self.player.hide_pointer_ms = self.player.hide_pointer_ms.clamp(MIN_HIDE_POINTER_MS, MAX_HIDE_POINTER_MS);
+            self.player.hide_pointer_ms = self
+                .player
+                .hide_pointer_ms
+                .clamp(MIN_HIDE_POINTER_MS, MAX_HIDE_POINTER_MS);
         }
         if fix(
             "editor.seek_step_secs limited to 1-3600",

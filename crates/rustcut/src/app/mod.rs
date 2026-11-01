@@ -38,6 +38,7 @@ use self::services::{
 use crate::MainWindow;
 use crate::desktop::instance;
 use crate::desktop::service::spawn_desktop;
+use crate::ui::control_bar::{self, ControlBar};
 use crate::ui::dispatcher::{SlintSink, UiDispatcher};
 use crate::ui::dock::{DockBridge, PanelId, persist as dock_persist};
 use crate::ui::editing::{EditingParts, JobEditor};
@@ -51,7 +52,6 @@ use crate::ui::jump::JumpBridge;
 use crate::ui::keymap::{Action, Keymap};
 use crate::ui::logs::LogsBridge;
 use crate::ui::media_info::MediaInfoBridge;
-use crate::ui::control_bar::{self, ControlBar};
 use crate::ui::menu::ContextMenuBridge;
 use crate::ui::notices;
 use crate::ui::open::{FileOpener, OpenerParts};
