@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
-members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustcut"]
-default-members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustcut"]
+members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustcut", "crates/rustcut-thumbs", "crates/rustcut-thumbs-protocol"]
+default-members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustcut", "crates/rustcut-thumbs", "crates/rustcut-thumbs-protocol"]
 
 [workspace.package]
 # Single source of truth for the app version: the About page, the package script and the PKGBUILD read it from here.
@@ -126,6 +126,9 @@ quick_cache = "0.7"
 # sanitized by usvg and checked by resvg (the versions Slint already uses), the BLAKE3 hash names a stored picture.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "tiff", "ico", "qoi"] }
 webp = { version = "0.3", default-features = false }
+# The thumbnail helper (P12 block 6): libav with one long-lived decoder per worker, the only crate that links it.
+ffmpeg-next = "9"
+rustcut-thumbs-protocol = { path = "crates/rustcut-thumbs-protocol" }
 usvg = { version = "0.48", default-features = false, features = ["writer"] }
 resvg = { version = "0.48", default-features = false }
 blake3 = "1"
