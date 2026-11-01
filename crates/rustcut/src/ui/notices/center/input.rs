@@ -198,6 +198,8 @@ pub(super) fn connect(center: &Rc<NoticeCenter>, notices: &Notices<'_>) {
         y
     ));
     on!(on_toast_mute, |c, id: i32| c.mute(id_of(id)));
+    on!(on_toast_tag_measured, |c, text: slint::SharedString, width: f32| c
+        .tag_measured(&text, width));
     on!(on_set_expanded, |c, on: bool| {
         c.toasts.borrow_mut().set_expanded(on);
         c.publish_toasts();

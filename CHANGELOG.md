@@ -10,9 +10,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - The Logs panel scrolls sideways, so long lines can be read to their end.
+- Every dialog inside the main window can be dragged by its head or any free spot. Each opening starts centered again;
+  the place is not remembered.
+- The "Job queued" message shows the job's rating and tags. One line of tags, "+N more" for the rest; a quiet hint
+  says when a job has no rating or no tags.
+- Tags in the Tag History whose name also belongs to another shown tag show their parent, for example "Baum (Objekte)".
+  Tags hidden by the tag filter do not count, and the labels follow the filter window's check boxes at once.
+
+### Changed
+
+- "Add (n)" and "Own name" in the "Target file already exists" dialog give the name a new base for the rest of the
+  session: the next job continues with it. "Next free number" and "Overwrite" leave the name as it was. The "Own name"
+  field now holds the base name; the counter is added to it as usual.
+- The "Job queued" message cuts a long file name in the middle and shows all of it, with every tag, while the pointer
+  rests on the message.
 
 ### Fixed
 
+- "Add (n)" with a counter puts the number into the name: "Clip (1) - 01.mkv" instead of "Clip - 01 (1).mkv".
 - The tag filter window follows a changed "Hold for" time and the tooltip settings while it stays open.
 - The log no longer says "niceness 10 not set: Permission denied" during x265 renders: x265's workers lower their own
   priority further, nothing was wrong.

@@ -17,7 +17,7 @@ use super::ExportBridge;
 use super::dialog::{ConflictDialog, DialogInput, Outcome, silent_outcome};
 use super::state::JobFacts;
 use crate::ui::jump::JumpTarget;
-use crate::ui::notices::{self, Kind, Notice};
+use crate::ui::notices::{self, JobLabels, Kind, Notice};
 use crate::{Export, MainWindow};
 
 /// A job waiting for its target: everything but the target's stem and the overwrite flag.
@@ -193,6 +193,7 @@ impl ExportBridge {
         if !silent && !conflicts.needs_decision() {
             let outcome = Outcome {
                 stem: draft.stem.clone(),
+                name: None,
                 counter: None,
                 overwrite: false,
                 remove: Vec::new(),
@@ -252,11 +253,16 @@ impl ExportBridge {
         let mut spec = draft.spec;
         spec.target.stem.clone_from(&outcome.stem);
         spec.target.overwrite = outcome.overwrite;
-        if let (Some(n), Some(naming)) = (outcome.counter, spec.target.naming.as_mut()) {
-            naming.counter = Some(n);
+        if let Some(naming) = spec.target.naming.as_mut() {
+            if let Some(n) = outcome.counter {
+                naming.counter = Some(n);
+            }
+            if let Some(name) = &outcome.name {
+                naming.name.clone_from(name);
+            }
         }
         let file = file_name(&outcome.stem, draft.facts.container);
-        let counter = outcome.counter;
+        let (counter, name) = (outcome.counter, outcome.name);
         let source = spec.source.clone();
         let with_hash = spec.metadata.source_hash.is_some();
         let without_rustview = spec.metadata.without_rustview;
@@ -296,7 +302,8 @@ impl ExportBridge {
                             panel.job_saved(&tags, rating);
                         }
                     }
-                    bridge.saved(id, &file, counter);
+                    let labels = bridge.job_labels(&tags, rating);
+                    bridge.saved(id, &file, counter, name, labels);
                     // The copy is saved: the link to the loaded job ends (that job stays as it was).
                     let editing = bridge.editing.borrow().upgrade();
                     if let Some(editing) = editing.filter(|e| e.info().is_some()) {
@@ -312,10 +319,13 @@ impl ExportBridge {
         }
     }
 
-    /// The queue took the job.
-    fn saved(&self, id: JobId, file: &str, counter: Option<u32>) {
+    /// The queue took the job. A new base name from the conflict dialog stays for the session.
+    fn saved(&self, id: JobId, file: &str, counter: Option<u32>, name: Option<String>, labels: JobLabels) {
         let clear = {
             let mut st = self.state.borrow_mut();
+            if let Some(name) = name {
+                st.name = name;
+            }
             st.saved(counter);
             st.clear_sections
         };
@@ -326,7 +336,23 @@ impl ExportBridge {
         notices::clear_kind(Kind::SaveFailed);
         // "Not saved" of an earlier attempt must not stay in the status line (found in the P8b audit).
         notices::clear_kind(Kind::SaveCanceled);
-        Self::tell(Notice::new(Kind::JobQueued, format!("Job {id} queued")).detail(file));
+        Self::tell(
+            Notice::new(Kind::JobQueued, format!("Job {id} queued"))
+                .detail(file)
+                .job(labels),
+        );
+    }
+
+    /// The job's rating and tag names for its toast, the tags by name.
+    fn job_labels(&self, tags: &[u32], rating: Option<u8>) -> JobLabels {
+        let panel = self.tags.upgrade();
+        let mut names: Vec<String> = tags
+            .iter()
+            .filter_map(|id| panel.as_ref()?.tag_name(*id))
+            .map(|name| name.trim().to_owned())
+            .collect();
+        names.sort_by_key(|name| name.to_lowercase());
+        JobLabels { rating, tags: names }
     }
 
     pub(super) fn with_dialog(&self, change: impl FnOnce(&mut ConflictDialog)) {

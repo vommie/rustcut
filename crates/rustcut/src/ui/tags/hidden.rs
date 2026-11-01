@@ -126,6 +126,30 @@ impl TagPanel {
         true
     }
 
+    /// The tags of `ids` whose names also belong to another tag the filter leaves in the tree (the last tags show their
+    /// parent then; a filtered tag is no twin, user request 2026-11-01). The filter window's draft counts while it is
+    /// open, so the labels follow every check at once.
+    pub fn name_twins(&self, ids: &[u32]) -> HashSet<u32> {
+        let name_of = |id: &u32| self.tag(*id).map(|t| t.name.trim());
+        let names: HashSet<&str> = ids.iter().filter_map(name_of).collect();
+        let marks = self.filter_marks();
+        let mut shown: HashMap<&str, Vec<u32>> = HashMap::new();
+        for tag in self.tags() {
+            let name = tag.name.trim();
+            if names.contains(name) && self.visible_in(marks, tag.id) {
+                shown.entry(name).or_default().push(tag.id);
+            }
+        }
+        ids.iter()
+            .copied()
+            .filter(|id| {
+                name_of(id)
+                    .and_then(|name| shown.get(name))
+                    .is_some_and(|with_name| with_name.iter().any(|other| other != id))
+            })
+            .collect()
+    }
+
     /// Hides tag `id` with its branch, or shows it again. The branch follows as a whole: the marks below it go.
     pub fn toggle_branch(&mut self, id: u32) {
         let mut marks = std::mem::take(&mut self.marks);
@@ -324,6 +348,52 @@ mod tests {
 
     fn checks(p: &TagPanel, search: &str) -> Vec<(String, Check)> {
         p.filter_rows(search).into_iter().map(|r| (r.name, r.check)).collect()
+    }
+
+    /// Two tags "Baum" below Pflanzen and Objekte, one more at the root.
+    const TWINS: [(u32, Option<u32>, &str); 5] = [
+        (10, None, "Pflanzen"),
+        (11, Some(10), "Baum"),
+        (12, Some(5), "Objekte"),
+        (13, Some(12), "Baum"),
+        (14, None, "Wald"),
+    ];
+
+    fn twins(p: &TagPanel) -> Vec<u32> {
+        let mut ids: Vec<u32> = p.name_twins(&[11, 13, 2]).into_iter().collect();
+        ids.sort_unstable();
+        ids
+    }
+
+    #[test]
+    fn a_name_counts_twice_only_among_the_tags_the_filter_shows() {
+        let mut p = panel();
+        p.set_tree(tree(&TWINS));
+        assert_eq!(twins(&p), [11, 13], "Family has no twin");
+        p.toggle_branch(10);
+        assert_eq!(twins(&p), [11], "Pflanzen is hidden: Objekte's Baum stands alone");
+        p.toggle_branch(10);
+        p.toggle_branch(11);
+        assert_eq!(twins(&p), [11], "the same with only the tag itself hidden");
+        p.toggle_branch(13);
+        assert!(twins(&p).is_empty(), "both hidden: nothing to tell apart");
+        p.toggle_branch(5);
+        assert!(twins(&p).is_empty(), "Objekte's whole branch is hidden too");
+    }
+
+    #[test]
+    fn the_labels_follow_the_filter_windows_draft() {
+        let mut p = panel();
+        p.set_tree(tree(&TWINS));
+        p.begin_filter();
+        p.toggle_filter(10);
+        assert_eq!(twins(&p), [11], "a check counts at once");
+        p.discard_filter();
+        assert_eq!(twins(&p), [11, 13], "Escape takes it back");
+        p.begin_filter();
+        p.toggle_filter(10);
+        assert!(p.apply_filter());
+        assert_eq!(twins(&p), [11], "Apply keeps it");
     }
 
     #[test]

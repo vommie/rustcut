@@ -17,6 +17,7 @@ use super::history::History;
 use super::kind::{Kind, Level};
 use super::notice::{Action, Click, Notice};
 use super::route::{desktop_now, route};
+use super::toast_tags::{self, JobLabels};
 use super::toasts::{Added, NewToast, ToastStack};
 use super::view;
 
@@ -26,7 +27,7 @@ use crate::desktop::notify::{self, Note, Style};
 use crate::ui::dispatcher::UiDispatcher;
 use crate::ui::menu::ContextMenuBridge;
 use crate::ui::status;
-use crate::{HistoryView, MainWindow, Notices, ToastView};
+use crate::{HistoryView, MainWindow, Notices, ToastTagView, ToastView};
 
 /// How often the toasts' times are checked while any shows.
 const TICK: Duration = Duration::from_millis(100);
@@ -84,6 +85,12 @@ pub struct NoticeCenter {
     desktop_runs: RefCell<HashMap<u64, Rc<dyn Fn()>>>,
     next_desktop: Cell<u64>,
     toast_model: Rc<VecModel<ToastView>>,
+    /// The tag pills per toast (one model each: a card keeps its pills while it is published again).
+    toast_tags: RefCell<HashMap<u64, Rc<VecModel<ToastTagView>>>>,
+    /// The widths Slint measured, by tag name.
+    tag_widths: RefCell<HashMap<String, f32>>,
+    /// A new measure waits to be shown.
+    tags_waiting: Cell<bool>,
     recent_model: Rc<VecModel<HistoryView>>,
     timer: slint::Timer,
     pulse: Cell<i32>,
@@ -120,6 +127,9 @@ impl NoticeCenter {
             desktop_runs: RefCell::default(),
             next_desktop: Cell::new(0),
             toast_model: Rc::new(VecModel::default()),
+            toast_tags: RefCell::default(),
+            tag_widths: RefCell::default(),
+            tags_waiting: Cell::new(false),
             recent_model: Rc::new(VecModel::default()),
             timer: slint::Timer::default(),
             pulse: Cell::new(0),
@@ -298,6 +308,7 @@ impl NoticeCenter {
                 clickable: notice.click.is_some(),
                 time,
                 shown_for,
+                job: notice.job.clone(),
             },
             now,
         );
@@ -452,9 +463,20 @@ impl NoticeCenter {
         let rows: Vec<ToastView> = layout
             .shown
             .iter()
-            .filter_map(|s| stack.get(s.id).map(|t| view::toast(t, *s, now)))
+            .filter_map(|s| {
+                stack.get(s.id).map(|t| {
+                    let mut row = view::toast(t, *s, now);
+                    if let Some(job) = &t.job {
+                        self.show_job(&mut row, t.id, job);
+                    }
+                    row
+                })
+            })
             .collect();
         crate::util::model::sync_keyed(&self.toast_model, rows, |r| r.id);
+        self.toast_tags
+            .borrow_mut()
+            .retain(|id, _| layout.shown.iter().any(|s| s.id == *id));
         let n = window.global::<Notices<'_>>();
         n.set_position(view::position(settings.toasts.position));
         n.set_stacking(view::stacking(settings.toasts.stacking));
@@ -469,6 +491,33 @@ impl NoticeCenter {
         if let Some(summary) = &layout.summary {
             n.set_summary_text(view::summary(summary).into());
             n.set_summary_level(summary.level.index());
+        }
+    }
+
+    /// A saved job's rating and tags on its card.
+    fn show_job(&self, row: &mut ToastView, id: u64, job: &JobLabels) {
+        let place = toast_tags::place(job, &self.tag_widths.borrow());
+        let mut models = self.toast_tags.borrow_mut();
+        let model = models.entry(id).or_default();
+        crate::util::model::sync(model, place.pills.iter().map(view::tag_view).collect());
+        view::job(row, job, &place, ModelRc::from(Rc::clone(model)));
+    }
+
+    /// Slint measured a tag's pill: the pills are placed again when that changes anything. Later, not here: Slint
+    /// measures while it makes the pills, and a row changed at that moment keeps its old values.
+    fn tag_measured(&self, text: &str, width: f32) {
+        if !width.is_finite() || width <= 0.0 {
+            return;
+        }
+        let old = self.tag_widths.borrow_mut().insert(text.to_owned(), width);
+        if old.is_none_or(|w| (w - width).abs() > f32::EPSILON) && !self.tags_waiting.replace(true) {
+            let me = Weak::clone(&self.me);
+            slint::Timer::single_shot(Duration::ZERO, move || {
+                if let Some(center) = me.upgrade() {
+                    center.tags_waiting.set(false);
+                    center.publish_toasts();
+                }
+            });
         }
     }
 

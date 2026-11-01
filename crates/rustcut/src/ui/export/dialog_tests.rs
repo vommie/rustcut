@@ -101,7 +101,10 @@ fn an_existing_file_offers_the_free_names_first_then_the_own_name_and_overwrite(
         "what the choice does, not the counter (review 50 #9)"
     );
     assert_eq!(d.outcome().unwrap().counter, Some(3));
-    assert_eq!(d.options[1].file, "Clip - 01 (1).mkv");
+    assert_eq!(
+        d.options[1].file, "Clip (1) - 01.mkv",
+        "the number belongs to the base name, before the counter (user request 2026-11-01)"
+    );
     assert_eq!(d.confirm_text(), "Save", "the chosen row shows the file name");
     assert!(!d.options[2].enabled, "the typed name starts as the taken one");
     assert_eq!(
@@ -116,17 +119,12 @@ fn an_existing_file_offers_the_free_names_first_then_the_own_name_and_overwrite(
         "every way out on the first tab, the others below the primary ones"
     );
     assert!(d.options_of(Tab::Similar).is_empty());
-    d.type_name("Clip - 02");
-    assert_eq!(
-        (d.options[2].detail_name.as_str(), d.options[2].detail.as_str()),
-        ("Clip - 02.mkv", "already exists.")
-    );
     d.type_name("Holiday");
     d.set_tab(Tab::Similar);
     d.select(2);
     assert_eq!(
         (d.outcome().unwrap().stem, d.tab),
-        ("Holiday".to_owned(), Tab::Decision),
+        ("Holiday - 01".to_owned(), Tab::Decision),
         "a picked choice shows its tab"
     );
     d.step(1);
@@ -324,6 +322,80 @@ fn the_files_dialog_opens_on_the_similar_files_when_the_target_is_free() {
     );
     let taken = dialog(&st, exists(), Vec::new()).browsing();
     assert_eq!((taken.tab, taken.target_count()), (Tab::Decision, 1));
+}
+
+#[test]
+fn a_new_base_name_stays_for_the_session_but_a_number_or_overwrite_keep_the_old_one() {
+    let saved = |choice: Choice, typed: &str| {
+        let mut st = export(true);
+        let mut d = dialog(&st, exists(), Vec::new());
+        assert_eq!(d.typed, "Clip", "the field holds the base name, not the stem");
+        d.type_name(typed);
+        d.select(d.options.iter().position(|o| o.choice == choice).unwrap());
+        let outcome = d.outcome().unwrap();
+        let stem = outcome.stem.clone();
+        if let Some(name) = outcome.name {
+            st.name = name;
+        }
+        st.saved(outcome.counter);
+        (stem, st.name.clone(), st.file(&facts()).unwrap().1)
+    };
+    let row = |stem: &str, name: &str, next: &str| (stem.to_owned(), name.to_owned(), next.to_owned());
+    assert_eq!(
+        saved(Choice::Variant, ""),
+        row("Clip (1) - 01", "Clip (1)", "Clip (1) - 02.mkv")
+    );
+    assert_eq!(
+        saved(Choice::Rename, "Beach"),
+        row("Beach - 01", "Beach", "Beach - 02.mkv")
+    );
+    assert_eq!(saved(Choice::NextNumber, ""), row("Clip - 03", "Clip", "Clip - 04.mkv"));
+    assert_eq!(saved(Choice::Overwrite, ""), row("Clip - 01", "Clip", "Clip - 02.mkv"));
+}
+
+#[test]
+fn the_queued_ways_keep_the_base_name() {
+    let st = export(true);
+    let queued = QueuedTarget {
+        id: JobId(4),
+        target: PathBuf::from("/out/Clip - 01.mkv"),
+        state: JobStateKind::Waiting,
+    };
+    let conflicts = Conflicts {
+        queued: vec![queued.clone()],
+        ..Conflicts::default()
+    };
+    let d = dialog(&st, conflicts, vec![queued]);
+    for choice in [Choice::KeepName, Choice::RemoveQueued] {
+        let option = d.options.iter().find(|o| o.choice == choice).unwrap();
+        assert_eq!(option.outcome.as_ref().unwrap().name, None);
+    }
+}
+
+#[test]
+fn a_template_without_the_name_types_the_stem_and_keeps_the_base_name() {
+    let mut st = export(true);
+    st.template = "{{ source }} {{ counter }}".into();
+    let mut d = dialog(&st, exists(), Vec::new());
+    assert_eq!(d.typed, "Clip 1", "the field holds the stem");
+    let variant = d.options.iter().find(|o| o.choice == Choice::Variant).unwrap();
+    assert_eq!(variant.file, "Clip 1 (1).mkv");
+    assert_eq!(variant.outcome.as_ref().unwrap().name, None);
+    d.type_name("Beach");
+    let rename = d.options.iter().find(|o| o.choice == Choice::Rename).unwrap();
+    let outcome = rename.outcome.as_ref().unwrap();
+    assert_eq!((outcome.stem.as_str(), outcome.name.as_ref()), ("Beach", None));
+}
+
+#[test]
+fn a_verbatim_name_keeps_its_name_in_a_variant() {
+    let mut st = export(false);
+    st.name = "Clip".into();
+    st.verbatim = true;
+    let d = dialog(&st, exists(), Vec::new());
+    let variant = d.options.iter().find(|o| o.choice == Choice::Variant).unwrap();
+    assert_eq!(variant.file, "Clip (2).mkv");
+    assert_eq!(variant.outcome.as_ref().unwrap().name.as_deref(), Some("Clip (2)"));
 }
 
 #[test]

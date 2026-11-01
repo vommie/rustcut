@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use rustcut_core::folders::FolderId;
 use rustcut_core::job::{TargetNaming, TargetSpec};
-use rustcut_core::naming::{NameContext, NameError, file_name, render_stem, used_variables};
+use rustcut_core::naming::{NameContext, NameError, Namer, file_name, render_stem, used_variables};
 use rustcut_core::render::{CodecFamily, Container, RenderProfile};
 use rustcut_core::settings::{ExportPanelState, ExportSettings};
 use rustcut_core::time::Timestamp;
@@ -262,6 +262,15 @@ impl ExportState {
             return render_stem("{{ name }}", &self.context(facts, None));
         }
         render_stem(&self.template, &self.context(facts, counter))
+    }
+
+    /// What makes this job's file name from another base name (the conflict dialog's new names).
+    pub fn namer(&self, facts: &JobFacts) -> Namer {
+        if self.verbatim {
+            Namer::new("{{ name }}", self.context(facts, None))
+        } else {
+            Namer::new(self.template.as_str(), self.context(facts, self.active_counter()))
+        }
     }
 
     /// The stem and the file name of the job as it is set up now.

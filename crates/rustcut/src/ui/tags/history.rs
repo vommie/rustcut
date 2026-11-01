@@ -88,12 +88,24 @@ impl TagHistoryManager {
         }
     }
 
+    /// What a pill says: the tag's name, with its parent in brackets for a tag of `twins` below a root tag ("Baum
+    /// (Objekte)"; only here, user request 2026-11-01).
+    fn label(tag: &TagItem, all_tags_map: &HashMap<u32, TagItem>, twins: &HashSet<u32>) -> String {
+        let name = tag.name.trim();
+        let parent = tag.parent_id.and_then(|id| all_tags_map.get(&id));
+        match parent.filter(|_| twins.contains(&tag.id)) {
+            Some(parent) => format!("{name} ({})", parent.name.trim()),
+            None => name.to_owned(),
+        }
+    }
+
     /// The pills of `history` for a job that has `assigned` (RustView's flags for one selected file: an assigned tag is
-    /// bold with a check mark).
+    /// bold with a check mark); `twins` are the tags that need their parent to be told apart.
     pub fn items(
         history: &[u32],
         all_tags_map: &HashMap<u32, TagItem>,
         assigned: &HashSet<u32>,
+        twins: &HashSet<u32>,
     ) -> Vec<TagHistoryItem> {
         history
             .iter()
@@ -101,10 +113,11 @@ impl TagHistoryManager {
                 let tag = all_tags_map.get(&tag_id)?;
                 let name = tag.name.trim().to_string();
                 let is_assigned = assigned.contains(&tag_id);
+                let display_text = Self::label(tag, all_tags_map, twins);
                 Some(TagHistoryItem {
                     id: tag_id,
-                    width: TagHistoryLayoutEngine::estimate_stable_pill_width(&name, is_assigned),
-                    display_text: name.clone(),
+                    width: TagHistoryLayoutEngine::estimate_stable_pill_width(&display_text, is_assigned),
+                    display_text,
                     name,
                     is_assigned,
                     is_partial: false,
@@ -235,7 +248,7 @@ mod tests {
     #[test]
     fn items_mark_assigned_tags_and_rows_wrap() {
         let tags = map();
-        let items = TagHistoryManager::items(&[3, 99, 4], &tags, &[4].into_iter().collect());
+        let items = TagHistoryManager::items(&[3, 99, 4], &tags, &[4].into_iter().collect(), &HashSet::new());
         assert_eq!(
             items.iter().map(|i| i.id).collect::<Vec<_>>(),
             [3, 4],
@@ -249,5 +262,19 @@ mod tests {
         let (rows, height) = TagHistoryLayoutEngine::pack_into_rows(items, 0.0);
         assert_eq!((rows.len(), height), (2, 52.0), "at least 80 px wide: one pill per row");
         assert!(TagHistoryLayoutEngine::pack_into_rows(Vec::new(), 100.0).0.is_empty());
+    }
+
+    #[test]
+    fn a_twin_shows_its_parent_unless_that_is_the_root() {
+        let tags = map();
+        let twins: HashSet<u32> = [3, 4].into_iter().collect();
+        let items = TagHistoryManager::items(&[3, 4, 2], &tags, &HashSet::new(), &twins);
+        let labels: Vec<&str> = items.iter().map(|i| i.display_text.as_str()).collect();
+        assert_eq!(labels, ["Dunes (Beach)", "Anna", "Beach"]);
+        assert_eq!(items[0].name, "Dunes", "the tag's own name stays");
+        assert!(
+            (items[0].width - (13.0 * 5.8 + 10.0)).abs() < 1e-3,
+            "the estimate fits the label"
+        );
     }
 }

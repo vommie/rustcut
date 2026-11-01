@@ -8,8 +8,9 @@ use super::banners::Banner;
 use super::history::Entry;
 use super::notice::Label;
 use super::route::can_mute;
+use super::toast_tags::{JobLabels, Pill, Placement};
 use super::toasts::{Shown, Summary, Timer, Toast, ToastStack};
-use crate::{BannerView, HistoryView, ToastView};
+use crate::{BannerView, HistoryView, ToastTagView, ToastView};
 
 fn action(actions: &[Label], index: usize) -> slint::SharedString {
     actions.get(index).map(|a| a.text.as_str()).unwrap_or_default().into()
@@ -50,6 +51,29 @@ pub fn toast(t: &Toast, shown: Shown, now: Instant) -> ToastView {
         mutable: can_mute(t.kind) && t.level.is_quiet(),
         leaving: t.leaving.is_some(),
         depth: i32::try_from(shown.depth).unwrap_or(0),
+        ..ToastView::default()
+    }
+}
+
+/// A saved job's rating and tags on its card; `tags` is the card's model of `tag_view`s.
+pub fn job(row: &mut ToastView, job: &JobLabels, place: &Placement, tags: slint::ModelRc<ToastTagView>) {
+    row.job = true;
+    row.rating = job.rating.map_or(-1, i32::from);
+    row.hint = job.hint().into();
+    row.tags = tags;
+    row.more = i32::try_from(place.more).unwrap_or(i32::MAX);
+    row.more_x = place.more_x;
+    row.tags_height = place.open_height;
+}
+
+pub fn tag_view(pill: &Pill) -> ToastTagView {
+    ToastTagView {
+        text: pill.text.as_str().into(),
+        width: pill.width,
+        x: pill.x,
+        in_line: pill.in_line,
+        open_x: pill.open_x,
+        open_y: pill.open_y,
     }
 }
 
