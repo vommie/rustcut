@@ -138,6 +138,7 @@ fn preview_options(settings: &Settings) -> PreviewOptions {
         },
         picture_at_percent: conflict.picture_at_percent,
         parallel: usize::from(conflict.parallel_pictures),
+        helper: rustcut_core::thumbs::helper_program(),
     }
 }
 

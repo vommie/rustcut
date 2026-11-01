@@ -49,6 +49,8 @@ export global Timeline {
     in property <bool> hover-shown;
     in property <length> hover-x;
     in property <string> hover-text;
+    // The thumbnail shows the time, so the box on the ruler steps aside.
+    in property <bool> hover-time-covered;
     // While an edge or a section is dragged: its start, end and length over it (D-P9b).
     in property <bool> readout-shown;
     in property <length> readout-x;
@@ -207,7 +209,7 @@ export component TimelineStrip inherits Rectangle {
         }
 
         // The time under the pointer, on the ruler (over the labels).
-        if Timeline.hover-shown: Rectangle {
+        if Timeline.hover-shown && !Timeline.hover-time-covered: Rectangle {
             property <length> box-width: hover-label.preferred-width + 10px;
             x: Math.clamp(Timeline.hover-x - self.box-width / 2, -TimelineMetrics.inset, root.track-width + TimelineMetrics.inset - self.box-width);
             y: 1px;

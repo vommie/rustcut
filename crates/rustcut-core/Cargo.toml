@@ -61,6 +61,10 @@ tokio = { workspace = true, features = ["test-util"] }
 ignored = ["md-5"]
 
 [[bench]]
+name = "thumb_view"
+harness = false
+
+[[bench]]
 name = "render"
 harness = false
 

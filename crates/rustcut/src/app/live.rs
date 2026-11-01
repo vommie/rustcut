@@ -46,6 +46,7 @@ pub struct Parts {
     pub env: RenderEnv,
     pub log: LevelSetter,
     pub media: Weak<MediaInfoBridge>,
+    pub thumbs: Weak<crate::ui::thumbs::ThumbsBridge>,
     pub probe: Weak<ProbeBridge>,
     pub runtime: tokio::runtime::Handle,
     /// Starts (`true`) or stops listening for a second start.
@@ -87,6 +88,11 @@ fn apply(p: &Parts, before: &Settings, after: &Settings) {
         && let Some(editor) = p.editor.upgrade()
     {
         editor.apply_settings(after);
+    }
+    if (before.thumbnails != after.thumbnails || before.render.nice != after.render.nice)
+        && let Some(thumbs) = p.thumbs.upgrade()
+    {
+        thumbs.apply_settings(&after.thumbnails, after.render.nice);
     }
     if before.player != after.player
         && let Some(player) = p.player.upgrade()

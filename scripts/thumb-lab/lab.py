@@ -3,7 +3,7 @@
 
     lab.py media                 make the long test videos and the container variants (in --dir)
     lab.py build                 compile thumblab.c into --dir
-    lab.py engines|tuning|order|edge|formats|priority|drain|load [--quick]   one group of measurements, appended to results.jsonl
+    lab.py engines|tuning|order|edge|formats|priority|drain|load|render [--quick]   one group of measurements, appended to results.jsonl
     lab.py all                   every group
     lab.py report                print the tables of results.jsonl
 
@@ -325,6 +325,25 @@ class Lab:
             alone = json.loads(subprocess.run(cmd, capture_output=True, text=True).stdout.strip().splitlines()[-1])
             self.save("load", path, "generator alone, 1 worker", {"thumbs_per_s": round(alone["thumbs"] / seconds, 1)})
 
+    def render(self):
+        """Thumbnails beside a render at the render's default niceness: which niceness keeps them ahead of it, and what is left
+        for a foreground decode (the stand-in for mpv)?"""
+        path = next(iter(self.media(["h264_1080p_1h_gop2.mp4"])), None)
+        seconds = 6 if self.quick else 12
+        encode = ["nice", "-n", "10", "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-stream_loop", "-1", "-i", str(path),
+                  "-an", "-c:v", "libx264", "-preset", "veryfast", "-f", "null", "-"]
+        for nice in (19, 9, 0):
+            render = subprocess.Popen(encode)
+            time.sleep(1)
+            cmd = ["nice", "-n", str(nice), str(self.tool), str(path), "--count", "2000", "--drain", "1", "--workers", "3", "--seconds", str(seconds + 2)]
+            generator = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
+            row = foreground_fps(path, seconds)
+            out = generator.communicate()[0].strip().splitlines()
+            row["thumbs_per_s"] = round(json.loads(out[-1])["thumbs"] / (seconds + 2), 1) if out else None
+            render.kill()
+            render.wait()
+            self.save("render", path, f"beside a render, thumbs at nice {nice}", row)
+
     # ---- media
     def make_media(self):
         base = self.dir / "h264_1080p_1h_gop10.mp4"
@@ -440,7 +459,7 @@ def main():
     elif args.command == "report":
         report(args)
     elif args.command == "all":
-        for name in ("engines", "tuning", "order", "edge", "formats", "priority", "drain", "load"):
+        for name in ("engines", "tuning", "order", "edge", "formats", "priority", "drain", "load", "render"):
             getattr(lab, name)()
     else:
         getattr(lab, args.command)()

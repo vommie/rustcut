@@ -19,7 +19,8 @@ import { ActivityView, Status, StatusLine } from "status_line.slint";
 import { CropHistoryFlyout, CropHistoryRow, CropHistoryUi } from "crop_history.slint";
 import { MediaInfoPanel, MediaInfoRow, MediaInfoSection } from "media_info_panel.slint";
 import { Shortcuts } from "shortcuts.slint";
-import { Timeline, TimelineBlock, TimelineStrip, TimelineTick } from "timeline_view.slint";
+import { Timeline, TimelineBlock, TimelineMetrics, TimelineStrip, TimelineTick } from "timeline_view.slint";
+import { ThumbPopup, ThumbStrip, Thumbs } from "thumb_popup.slint";
 import { SectionRowView, Sections } from "sections_card.slint";
 import { FilterRowView, FilterTips, Filters } from "filters_types.slint";
 import { FilterMenuFlyout } from "filters_menu.slint";
@@ -67,7 +68,7 @@ import { DragLogic, DragState } from "drag.slint";
 export {
     Theme, IconId, Dock, DockMetrics, RailPeek, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, BarFit, PlayerPopup, Status, ActivityView,
     CropHistoryRow, CropHistoryUi, MediaInfoPanel,
-    MediaInfoRow, MediaInfoSection, Shortcuts, Timeline, TimelineBlock, TimelineTick, Sections,
+    MediaInfoRow, MediaInfoSection, Shortcuts, Thumbs, Timeline, TimelineBlock, TimelineMetrics, TimelineTick, Sections,
     SectionRowView, Filters, FilterRowView, FilterTips, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe, Export,
     ConflictJobView, ConflictOptionView, PreviewView, TipRow, Tip, TipKey, TipKeys, TipPlacement, TipRect, TipSide,
     GlobalTooltip, TooltipLogic, DialogState, Queue, QueueRowView, QueueColumnView, MultiChoiceItem, TagRate, TagNodeView,
@@ -249,6 +250,8 @@ export component MainWindow inherits Window {
                     enabled: !root.modal-open && Timeline.active && Timeline.zoomed },
                 { id: "zoom_fit", title: "Fit Timeline", shortcut: Shortcuts.zoom-fit,
                     enabled: !root.modal-open && Timeline.active && Timeline.zoomed },
+                { id: "toggle_thumbnails", shortcut: Shortcuts.thumbnails, enabled: !root.modal-open,
+                    title: Thumbs.enabled ? "Hide Timeline Thumbnails" : "Show Timeline Thumbnails" },
                 { kind: 1 },
                 // Held (P9.12, review note 64).
                 { id: "reset_layout", title: "Reset Layout", hold: true,
@@ -392,6 +395,8 @@ export component MainWindow inherits Window {
                         frame: root.video-frame;
                     }
 
+                    if Thumbs.strip-shown: ThumbStrip { }
+
                     TimelineStrip { }
 
                     PlayerTransport { }
@@ -435,6 +440,13 @@ export component MainWindow inherits Window {
         y: player.absolute-position.y;
         width: player.width;
         area-height: player.height;
+    }
+
+    // The timeline's thumbnail, over the video (P12 block 6).
+    if Thumbs.shown && !root.modal-open: ThumbPopup {
+        x: center-area.absolute-position.x + Thumbs.left;
+        y: player.absolute-position.y + player.height - self.height - 4px;
+        available-height: player.height - 8px;
     }
 
     // A rail icon's group over the video while its sidebar is collapsed (P9.9, Q-P9.9), above the video's banner.

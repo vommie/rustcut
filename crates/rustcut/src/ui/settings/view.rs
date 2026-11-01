@@ -39,6 +39,8 @@ pub struct RowView {
     pub placeholder: &'static str,
     /// A number's unit, a button's text.
     pub suffix: &'static str,
+    /// A button that acts only when held.
+    pub hold: bool,
     pub enabled: bool,
     pub indent: bool,
     /// Why the last typed text was refused (the field stays marked until a value is kept).
@@ -143,6 +145,7 @@ pub fn row(field: &Field, settings: &Settings, errors: &BTreeMap<String, String>
         text,
         placeholder,
         suffix,
+        hold: field.key == "thumbnails.clear",
         enabled: (field.enabled)(settings),
         indent: field.indent,
         error: errors.get(field.key).cloned().unwrap_or_default(),

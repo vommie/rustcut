@@ -6,7 +6,9 @@ mod generator;
 mod plan;
 mod service;
 mod set;
+mod still;
 mod store;
+mod view;
 
 pub use generator::helper_program;
 pub use plan::{Grid, MIN_SPACING_MS, automatic_workers, level_order, niceness, spacing_ms};
@@ -14,6 +16,8 @@ pub use service::{
     LONG_SIDE, ThumbCommand, ThumbConfig, ThumbEvent, ThumbHandle, ThumbService, ThumbShared, ThumbVideo, spawn_thumbs,
 };
 pub use set::{Thumb, ThumbSet};
+pub use still::still;
+pub use view::{ThumbView, render};
 pub use store::{ThumbStats, ThumbStore, ThumbStoreCommand, ThumbStoreError, ThumbStoreHandle, spawn_thumb_store};
 
 #[cfg(test)]

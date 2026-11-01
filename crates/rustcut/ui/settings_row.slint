@@ -239,6 +239,7 @@ export component SettingsRow inherits Rectangle {
                     text: root.option.icon == IconId.none ? root.option.suffix : "";
                     tooltip: root.option.icon == IconId.open-external ? "Open in the file manager: " + root.option.description
                         : root.option.status == 2 ? "The test runs..." : root.option.description;
+                    hold: root.option.hold;
                     enabled: root.option.enabled && root.option.status != 2;
                     clicked => { SettingsUi.action(root.option.key); }
                 }

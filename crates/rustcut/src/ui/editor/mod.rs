@@ -57,6 +57,8 @@ struct State {
     drag: Option<Drag>,
     /// Where the pointer hovers over the timeline.
     hover: Option<f32>,
+    /// The pointer is on the ruler, not on the track.
+    hover_on_ruler: bool,
     /// The section under the pointer (drawn brighter, P9.5).
     hovered: Option<SectionId>,
     /// The pointer's shape over the timeline.
@@ -143,6 +145,7 @@ impl Editor {
                 has_video: false,
                 drag: None,
                 hover: None,
+                hover_on_ruler: false,
                 hovered: None,
                 cursor: Cursor::Default,
                 sent: None,
@@ -436,6 +439,7 @@ impl Editor {
         sc.set_zoom_in(keys(Action::ZoomIn));
         sc.set_zoom_out(keys(Action::ZoomOut));
         sc.set_zoom_fit(keys(Action::ZoomFit));
+        sc.set_thumbnails(keys(Action::ToggleThumbnails));
         sc.set_filter_preview(keys(Action::ToggleFilterPreview));
         sc.set_filter_keep(keys(Action::ToggleKeepFilters));
         sc.set_filter_reset(keys(Action::ResetFilters));

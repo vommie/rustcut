@@ -1,0 +1,114 @@
+// The timeline's thumbnails (P12 block 6, src/ui/thumbs/): the picture over the video while the pointer is on the timeline and
+// the thin strip between video and ruler with a fine line per thumbnail. Rust computes every position and size; the strip
+// is one image, so thousands of lines cost no elements.
+
+import { Theme } from "styles.slint";
+import { TimelineMetrics } from "timeline_view.slint";
+
+export global Thumbs {
+    in property <bool> enabled;
+    in property <bool> shown;
+    in property <image> picture;
+    // A field without a picture ("Empty field").
+    in property <bool> empty;
+    // The picture comes from a farther place.
+    in property <bool> dot;
+    in property <string> time;
+    in property <bool> time-below;
+    in property <bool> time-inside;
+    // From the video column's left edge.
+    in property <length> left;
+    in property <length> picture-width;
+    in property <length> picture-height;
+    in property <bool> strip-shown;
+    in property <image> strip;
+}
+
+export component ThumbPopup inherits Rectangle {
+    in property <length> available-height;
+    property <length> below: Thumbs.time-below ? 20px : 0px;
+    property <length> box-height: min(Thumbs.picture-height, root.available-height - root.below - 4px);
+
+    width: Thumbs.picture-width + 4px;
+    height: root.box-height + root.below + 4px;
+    background: Theme.surface;
+    border-color: Theme.border;
+    border-width: 1px;
+
+    if !Thumbs.empty: Image {
+        x: 2px;
+        y: 2px;
+        width: Thumbs.picture-width;
+        height: root.box-height;
+        source: Thumbs.picture;
+        image-fit: contain;
+    }
+
+    if Thumbs.empty: Text {
+        x: 2px;
+        y: 2px;
+        width: Thumbs.picture-width;
+        height: root.box-height;
+        text: "Not ready yet";
+        color: Theme.text-muted;
+        font-size: 11px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    if Thumbs.time-below: Text {
+        x: 2px;
+        y: root.box-height + 3px;
+        width: Thumbs.picture-width;
+        height: 18px;
+        text: Thumbs.time;
+        color: Theme.text;
+        font-size: 11px;
+        font-family: "monospace";
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    if Thumbs.time-inside: Rectangle {
+        property <length> box-width: inside-label.preferred-width + 10px;
+        x: (root.width - self.box-width) / 2;
+        y: root.box-height - 18px;
+        width: self.box-width;
+        height: 18px;
+        border-radius: 3px;
+        background: Theme.surface;
+
+        inside-label := Text {
+            text: Thumbs.time;
+            color: Theme.text;
+            font-size: 11px;
+            font-family: "monospace";
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+
+    if Thumbs.dot: Rectangle {
+        x: root.width - 13px;
+        y: 5px;
+        width: 8px;
+        height: 8px;
+        border-radius: 4px;
+        background: Theme.accent;
+    }
+}
+
+export component ThumbStrip inherits Rectangle {
+    height: 2px;
+    background: Theme.surface;
+
+    Image {
+        x: TimelineMetrics.inset;
+        y: 0;
+        width: root.width - 2 * TimelineMetrics.inset;
+        height: 2px;
+        source: Thumbs.strip;
+        image-fit: fill;
+        image-rendering: pixelated;
+    }
+}

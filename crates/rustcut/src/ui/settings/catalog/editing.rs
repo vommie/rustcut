@@ -190,6 +190,7 @@ pub static PLAYER: &[Card] = &[
             .under(pointer_hides),
         ],
     },
+    super::thumbnails::CARD,
     Card {
         title: "Open in mpv",
         description: "A right click on the current time opens the video in your own mpv.",

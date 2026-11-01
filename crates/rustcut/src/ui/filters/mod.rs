@@ -189,6 +189,16 @@ impl FiltersBridge {
         bridge
     }
 
+    /// See [`FiltersState::thumb_view`].
+    pub fn thumb_view(&self, show_filters: bool) -> rustcut_core::thumbs::ThumbView {
+        self.state.borrow().thumb_view(show_filters)
+    }
+
+    /// The crop is being edited on the video.
+    pub fn editing_crop(&self) -> bool {
+        self.state.borrow().crop_session().is_some()
+    }
+
     /// A video is about to open (before the player loads it): the crop session ends, the checks of the previous file
     /// stop, and the filters start over unless "keep" is on. The preview waits for the probe (it needs the rotation).
     pub fn file_opening(&self, path: &Path) {

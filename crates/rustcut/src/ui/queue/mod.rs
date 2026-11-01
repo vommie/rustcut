@@ -107,6 +107,9 @@ pub type ProfilesHook = Box<dyn Fn() -> Vec<(String, String)>>;
 /// The profile of an id ("" = the Codecs panel's current settings).
 pub type ProfileHook = Box<dyn Fn(&str) -> Option<RenderProfile>>;
 
+/// Every job's id and source.
+pub type JobsHook = Box<dyn Fn(Vec<(i64, std::path::PathBuf)>)>;
+
 /// What other parts of the app do for the queue panel.
 #[derive(Default)]
 pub struct QueueHooks {
@@ -120,6 +123,8 @@ pub struct QueueHooks {
     pub reveal: Option<Box<dyn Fn(PanelId)>>,
     /// After every refresh (the Job and Logs panels follow the current job).
     pub refreshed: Option<Box<dyn Fn()>>,
+    /// After every refresh, every job's id and source (the thumbnail cache follows them).
+    pub jobs: Option<JobsHook>,
     /// After every refresh, how busy the queue is (the power bridge and the tray).
     pub status: Vec<Box<dyn Fn(QueueStatus)>>,
     /// The last waiting job ended (finished, failed): the "when done" action follows.

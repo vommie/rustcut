@@ -20,6 +20,8 @@ pub struct UiState {
     /// The dock layout (sidebars, panel groups, tabs, splits, collapsed and maximized states). Owned and sanitized by the
     /// app's `DockLayout` model (M1.2); the core only stores it.
     pub dock: Option<toml::Table>,
+    /// The banner about the thumbnails' fallback has shown; it shows again after the helper worked in between (Q-P12e).
+    pub thumbnails_fallback_noted: bool,
     pub export: ExportPanelState,
     pub queue: QueuePanelState,
     pub timeline: TimelineState,

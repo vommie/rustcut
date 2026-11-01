@@ -301,6 +301,11 @@ impl MediaInfoBridge {
     }
 
     /// What the probe found about the open file, once it is known.
+    /// The open file.
+    pub fn current_path(&self) -> Option<std::path::PathBuf> {
+        self.state.lock().file.clone()
+    }
+
     pub fn current(&self) -> Option<Arc<MediaInfo>> {
         self.state.lock().info()
     }
