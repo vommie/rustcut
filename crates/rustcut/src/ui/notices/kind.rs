@@ -282,6 +282,10 @@ kinds! {
         ("143 log lines copied", "");
     ClipboardFailed = "clipboard_failed", "Clipboard unusable", Logs, Warning, Toast, EVENT, desktop false,
         critical false, ("The clipboard cannot be used", "");
+    TimeCopied = "time_copied", "Time copied", App, Success, Toast, EVENT, desktop false, critical false,
+        ("0:01:23.456 copied", "");
+    MpvFailed = "mpv_failed", "mpv did not start", App, Warning, Toast, EVENT, desktop false, critical false,
+        ("mpv cannot be found", "Install it with: sudo pacman -S mpv");
     /// The queue database cannot be used (M6.5d turns it into a dialog with ways out).
     DatabaseUnusable = "database_unusable", "Queue database unusable", App, Error, Dialog, FIXED_DIALOG,
         desktop true, critical true, ("The queue cannot be opened", "database disk image is malformed");

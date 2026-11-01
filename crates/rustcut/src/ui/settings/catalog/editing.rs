@@ -1,10 +1,10 @@
 //! Player, Editor & Sections and Export & Naming (the template; the target folders have their own editor).
 
 use rustcut_core::naming::{NameContext, render_stem};
-use rustcut_core::settings::{AutoSection, OnJobLoad, Settings};
+use rustcut_core::settings::{AutoSection, Normalization, OnJobLoad, Settings};
 
 use super::Card;
-use crate::ui::settings::field::{Field, Kind, Value, always, choice, number, switch};
+use crate::ui::settings::field::{Field, Kind, Value, always, choice, number, path_field, switch};
 use crate::util::hex_color;
 
 fn set_background(s: &mut Settings, v: Value) -> Result<(), String> {
@@ -128,6 +128,12 @@ pub static PLAYER: &[Card] = &[
                 player.flash_rating
             ),
             switch!(
+                "player.flash_normalization",
+                "Flash the normalization",
+                "When a key changes the normalization, its name shows briefly in the middle of the video.",
+                player.flash_normalization
+            ),
+            switch!(
                 "player.volume_bar",
                 "Show the volume bar",
                 "When the mouse wheel changes the volume, a bar with the level shows near the bottom of the video.",
@@ -145,15 +151,63 @@ pub static PLAYER: &[Card] = &[
                 "Against the crackling some videos make at their end.",
                 player.mute_last_second
             ),
-            switch!(
-                "player.loudnorm_preview",
-                "Even out the loudness",
-                "Normalizes the preview's loudness (ffmpeg's loudnorm); costs a little CPU while playing.",
-                player.loudnorm_preview
+            choice!(
+                "player.normalization",
+                "Normalization",
+                "Evens out the loudness of what you hear. You can also change it directly in the player's controls, \
+                 even while a video plays.",
+                player.normalization,
+                [
+                    (Normalization::None, "None"),
+                    (Normalization::Loudness, "Loudness"),
+                    (Normalization::Dynamic, "Dynamic"),
+                    (Normalization::Speech, "Speech"),
+                    (Normalization::Compressor, "Compressor")
+                ]
             ),
         ],
     },
+    Card {
+        title: "Pointer",
+        description: "",
+        fields: &[
+            switch!(
+                "player.hide_pointer",
+                "Hide the resting pointer",
+                "The pointer disappears when it rests over the video and comes back with the first movement. It stays \
+                 while you edit the crop or a menu is open. Also a button in the player's controls.",
+                player.hide_pointer
+            ),
+            number!(
+                "player.hide_pointer_ms",
+                "Hide it after",
+                "How long the pointer has to rest.",
+                player.hide_pointer_ms: u32,
+                500..=60_000,
+                500,
+                "ms"
+            )
+            .under(pointer_hides),
+        ],
+    },
+    Card {
+        title: "Open in mpv",
+        description: "A right click on the current time opens the video in your own mpv.",
+        fields: &[path_field!(
+            "player.mpv",
+            "Program",
+            "Optional: leave it empty when the command mpv works in a terminal. Else type another command name or the \
+             full path of the program, or choose the file.",
+            player.mpv,
+            "mpv (from PATH)",
+            folder: false
+        )],
+    },
 ];
+
+fn pointer_hides(s: &Settings) -> bool {
+    s.player.hide_pointer
+}
 
 pub static EDITOR: &[Card] = &[
     Card {

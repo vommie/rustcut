@@ -126,6 +126,15 @@ impl SectionsState {
         Some(start)
     }
 
+    /// The section around `time`: one of the list, else the range between the marks.
+    pub fn section_at(&self, time: Timestamp) -> Option<(Timestamp, Timestamp)> {
+        let listed = self.list.sections().find(|s| s.contains(time));
+        listed.map(|s| (s.start(), s.end())).or_else(|| {
+            let (start, end) = (self.start?, self.end?);
+            (start <= time && time < end).then_some((start, end))
+        })
+    }
+
     /// Whether the draft holds work that a replacement would lose (sections or marks; the start mark at 0 that every
     /// video gets is none).
     pub fn has_work(&self) -> bool {

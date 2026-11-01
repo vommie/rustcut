@@ -1,6 +1,7 @@
 //! Bridges between the services and the Slint UI.
 
 pub mod color_picker;
+pub mod control_bar;
 pub mod controls;
 pub mod dispatcher;
 pub mod dock;

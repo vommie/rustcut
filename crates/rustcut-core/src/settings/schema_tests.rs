@@ -1,5 +1,6 @@
 //! Tests of `config.toml`'s schema (defaults, tolerant reading of old and broken files, sanitizing).
 
+use super::player::PlayerSettings;
 use super::schema::*;
 use crate::render::DEFAULT_PROFILE_ID;
 use crate::settings::{LoadOutcome, VersionedFile as _, load, save};

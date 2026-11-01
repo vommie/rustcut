@@ -23,7 +23,7 @@ use std::thread::JoinHandle;
 
 use libmpv2::Mpv;
 
-pub use audio::AudioOptions;
+pub use audio::{AudioOptions, Normalization};
 use commands::{Command, Session};
 pub use events::{EndReason, PlayerEvent, Property};
 pub use options::{PlayerOptions, PreviewQuality};

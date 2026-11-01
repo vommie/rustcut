@@ -1,6 +1,28 @@
 // The player's state and actions as one global, so the video view, the transport bar, the menus and the keys share it
 // (src/ui/player/ sets the properties and handles the callbacks).
 
+/// What fits into the transport bar at its width (`src/ui/control_bar/layout.rs`).
+export struct BarFit {
+    percent: bool,
+    slider: bool,
+    total: bool,
+    frames: bool,
+    sections: bool,
+    audio: bool,
+    more: bool,
+    spare: length,
+}
+
+// The popups over the transport bar (`player_popups.slint`), anchored in window coordinates.
+export global PlayerPopup {
+    in-out property <bool> volume-open;
+    in-out property <bool> time-open;
+    in-out property <length> anchor-x;
+    in-out property <length> anchor-y;
+    in-out property <length> anchor-width;
+    in-out property <length> anchor-height;
+}
+
 export global Playback {
     // A file is open (also when it failed to play): the transport bar is usable.
     in property <bool> has-file;
@@ -10,7 +32,17 @@ export global Playback {
     // The faint pause symbol may show: paused by the user (not by a frame step, not at the end; PlaybackView).
     in property <bool> pause-symbol;
     in property <bool> muted;
+    // The preview's normalization is not "None"; the names for the tooltip and the right click's way back (P12 5.3, user
+    // decision Q-P12d).
+    in property <bool> normalized;
+    in property <string> normalization-name: "None";
+    in property <string> normalization-back: "Loudness";
+    // The resting pointer hides over the video after `hide-pointer-ms` (P12 5.2); `hide-pointer-after` for the tooltip.
+    in property <bool> hide-pointer: true;
+    in property <int> hide-pointer-ms: 3000;
+    in property <string> hide-pointer-after: "3 s";
     // The keys of the transport buttons for their tooltips (the keymap's labels, src/ui/editor/).
+    in property <string> key-normalization;
     in property <string> key-toggle-pause;
     in property <string> key-frame-back;
     in property <string> key-frame-forward;
@@ -33,9 +65,10 @@ export global Playback {
     in property <int> flash-serial;
     in property <bool> flash-play;
     // What the flash shows (one look for every key's feedback, user request 2026-10-27): 0 play/pause (`flash-play`),
-    // 1 sound on, 2 sound off (the mute key), 3 a rating (`flash-rating`, Ctrl+0..5).
+    // 1 sound on, 2 sound off (the mute key), 3 a rating (`flash-rating`, Ctrl+0..5), 4 the normalization (`flash-text`).
     in property <int> flash-kind;
     in property <int> flash-rating;
+    in property <string> flash-text;
     // Like RustView (user request 2026-10-27): the wheel over the video shows the volume bar near the bottom of the
     // video; each new serial starts it again (hold 0.75 s, fade 0.25 s).
     in property <int> volume-flash-serial;
@@ -53,4 +86,20 @@ export global Playback {
     // Mouse wheel over the video: one notch (120) changes the volume; a negative delta (wheel down) lowers it.
     callback wheel(/* delta-y */ length);
     callback reload();
+    // Back to normal speed from the J/L shuttle (a click on the speed).
+    callback speed-reset();
+    // What fits into the transport bar: its width, the width of one time, of the slash between the times.
+    pure callback bar-fit(/* width */ length, /* time */ length, /* slash */ length) -> BarFit;
+    // The normalization button's menu (window coordinates of the button), its right click, and the two keys.
+    callback normalization-menu(/* x */ length, /* y */ length, /* width */ length, /* height */ length);
+    callback normalization-toggle();
+    callback normalization-key(/* next */ bool);
+    callback toggle-hide-pointer();
+    // The pointer started or stopped resting: Slint picks a cursor only at a pointer event, so Rust repeats the last one.
+    callback pointer-rest-changed(/* window x */ length, /* window y */ length);
+    // The menu of the current time at the pointer, and "Go to time": `false` = not a time.
+    callback time-menu(/* window x */ length, /* window y */ length);
+    callback go-to-time(string) -> bool;
+    // The bar's "..." menu with what does not fit (window coordinates of the button).
+    callback more-menu(/* x */ length, /* y */ length, /* width */ length, /* height */ length, /* fit */ BarFit);
 }

@@ -3,6 +3,7 @@
 // targets and the tree (folding is remembered). Typing searches every level (hits show their group); a missing folder
 // shows a warning mark. Up/Down move, Left/Right fold, Enter picks, Escape closes (src/ui/export/folder_list.rs).
 
+import { DropChevron } from "controls_drop_chevron.slint";
 import { ListView } from "std-widgets.slint";
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
@@ -110,14 +111,8 @@ export component FolderField inherits Rectangle {
             overflow: elide;
         }
 
-        VerticalLayout {
-            alignment: center;
-
-            AppIcon {
-                icon: IconId.chevron-down;
-                size: IconSize.sm;
-                color: Theme.text-muted;
-            }
+        DropChevron {
+            size: IconSize.sm;
         }
     }
 

@@ -277,3 +277,15 @@ bell = { tabler = "bell", doc = "The history bell in the menu bar" }
 notice_mute = { tabler = "bell-off", doc = "Don't show this kind of message again" }
 chevron_left = { tabler = "chevron-left", doc = "Previous page (toast and banner pager)" }
 log_messages = { tabler = "message-dots", doc = "Logs panel: the messages of this session" }
+audio_normalize = { tabler = "wave-sine", doc = "The player's audio normalization: the menu of kinds" }
+pointer_hide = { tabler = "pointer-off", doc = "The resting pointer hides over the video" }
+pointer_keep = { tabler = "pointer", doc = "The pointer stays over the video" }
+bar_more = { tabler = "dots", doc = "The control bar's menu: what does not fit beside the video" }
+time_copy = { tabler = "copy", doc = "Copy the current time" }
+time_go_to = { tabler = "clock-search", doc = "Type a time and jump to it" }
+time_section_loop = { tabler = "repeat", doc = "Open the section in mpv as an A-B loop" }
+normalize_none = { tabler = "circle-off", doc = "Normalization: none" }
+normalize_loudness = { tabler = "arrow-autofit-height", doc = "Normalization: everything about equally loud" }
+normalize_dynamic = { tabler = "activity", doc = "Normalization: evens out slowly" }
+normalize_speech = { custom = "speak-line.svg", doc = "Normalization: made for speech (Remix Icon speak-line)" }
+normalize_compressor = { tabler = "fold", doc = "Normalization: pushes down the loud parts" }

@@ -131,6 +131,7 @@ export component SettingsRow inherits Rectangle {
                 if root.option.kind == 1 && !root.option.segmented: ChoiceButton {
                     width: ControlMetrics.field-max-width;
                     items: root.option.items;
+                    item-icons: root.option.item-icons;
                     current: root.option.index;
                     enabled: root.option.enabled;
                     selected(index) => { SettingsUi.choose(root.option.key, index); }

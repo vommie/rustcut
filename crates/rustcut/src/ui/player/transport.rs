@@ -148,6 +148,15 @@ impl PlayerBridge {
         Some(next != 0)
     }
 
+    /// Back to normal speed: forward at 1x, also out of the emulated reverse.
+    pub(super) fn normal_speed(&self) {
+        self.state.lock().user_playback();
+        if self.end_reverse() {
+            self.command(|p| p.set_paused(false));
+        }
+        self.command(|p| p.set_speed(1.0));
+    }
+
     fn start_reverse(self: &Rc<Self>, rate: i8, now: Instant) {
         self.command(|p| p.set_paused(true));
         self.command(|p| p.set_speed(1.0));

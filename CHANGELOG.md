@@ -9,6 +9,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Player controls: an audio normalization button with a menu: None, Loudness, Dynamic, Speech and Compressor. It works while
+  a video plays, a right click switches it off, and another brings the last kind back. It changes only what you hear in
+  RustCut, never the rendered file. Settings > Player has the same choice, and Settings > Hotkeys two keys for it (none by
+  default); a key shows the kind over the video (a switch in Settings > Player).
+- Player controls: a button hides the pointer when it rests over the video (on by default), also while paused; the first
+  movement brings it back. It stays while you edit the crop, the pipette waits or a menu is open. The time is in Settings >
+  Player (default 3000 ms).
+- A right click on the current time opens a menu: "Open in mpv here" (your own mpv, paused at this time, with your own
+  configuration; RustCut pauses), "Open section in mpv as AB-loop", "Copy time" and "Go to time..." (type a time, Enter jumps
+  there). Settings > Player can name another mpv program.
+- Narrow player controls: the bar now fits every width. First the percent goes, then the slider: the speaker opens a
+  vertical volume popup with the percent and mute. Then the total time goes (it shows in the time's tooltip), and at the
+  end a "..." menu takes the section buttons, the frame steps, the normalization and the pointer button. The current time
+  no longer disappears.
+- The mouse wheel over the speaker and the volume slider changes the volume, a right click on the speaker mutes, and the
+  speaker shows a low volume.
+- A click on the speed beside the time (J/L) returns to normal speed.
 - Status bar: while auto-crop runs, a segment between the message and the decoder shows a throbber with "Waiting for
   Auto-Crop (ffmpeg)... 3/8" and an × that cancels. The result stays there for 5 seconds (an error for 10; the time stands
   while the pointer rests on it), then the segment goes. Settings > Messages can send the result elsewhere.
@@ -54,6 +71,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Tags hidden by the tag filter do not count, and the labels follow the filter window's check boxes at once.
 
 ### Changed
+
+- Settings: "Even out the loudness" became the choice "Normalization". An old setting is taken over (on = Loudness); the
+  settings file is backed up first (migration `normalization-choice`, settings version 10).
+- Buttons that unfold something (choices, the folder field, the normalization) end in a thin line before the chevron.
 
 - Auto-crop's result now shows in the status bar instead of a toast. "No black borders found" is a warning now.
 - Folder wheel: a picture now fills the whole middle. With a color, the ring on its inside is that color (0.4 % of the

@@ -14,6 +14,9 @@ export component PlayerSeekBar inherits Rectangle {
     in property <float> snap-range: 0;
     // `final` is false while dragging, true when the button is released.
     callback changed(/* value */ float, /* final */ bool);
+    // The wheel over the bar calls `scrolled`; without `wheel` it goes on to what scrolls around the bar.
+    in property <bool> wheel;
+    callback scrolled(/* delta-y */ length);
 
     property <bool> dragging;
     // Ctrl was held at the pointer's last event (no magnets).
@@ -89,6 +92,14 @@ export component PlayerSeekBar inherits Rectangle {
                 root.drag-value = root.at(self.mouse-x, root.free);
                 root.changed(root.drag-value, false);
             }
+        }
+
+        scroll-event(event) => {
+            if !root.wheel || event.delta-y == 0 {
+                return reject;
+            }
+            root.scrolled(event.delta-y);
+            accept
         }
     }
 }

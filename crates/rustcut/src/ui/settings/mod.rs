@@ -547,6 +547,13 @@ fn row_view(r: &view::RowView) -> SettingRowView {
         items: ModelRc::new(VecModel::from(
             r.items.iter().map(|i| SharedString::from(*i)).collect::<Vec<_>>(),
         )),
+        item_icons: ModelRc::new(VecModel::from(
+            r.item_icons
+                .iter()
+                .copied()
+                .map(crate::icons::Icon::to_slint)
+                .collect::<Vec<_>>(),
+        )),
         index: i32::try_from(r.index).unwrap_or(0),
         text: r.text.as_str().into(),
         placeholder: r.placeholder.into(),

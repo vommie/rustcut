@@ -45,6 +45,8 @@ pub struct RowView {
     pub error: String,
     /// A button's symbol instead of its text (the Open buttons: another program opens the folder).
     pub icon: Option<Icon>,
+    /// A symbol per entry of a choice (the normalization: the same as in the player's menu).
+    pub item_icons: Vec<Icon>,
     /// Whether the program or connection of the row works (a symbol beside the control, words under the row).
     pub status: RowStatus,
 }
@@ -145,6 +147,11 @@ pub fn row(field: &Field, settings: &Settings, errors: &BTreeMap<String, String>
         indent: field.indent,
         error: errors.get(field.key).cloned().unwrap_or_default(),
         icon: (kind == RowKind::Button && field.key.starts_with("open.")).then_some(Icon::OpenExternal),
+        item_icons: if field.key == "player.normalization" {
+            crate::ui::control_bar::normalization_icons()
+        } else {
+            Vec::new()
+        },
         status: ctx.status(field.key),
     }
 }

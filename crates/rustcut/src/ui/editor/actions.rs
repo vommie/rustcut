@@ -158,6 +158,8 @@ impl Editor {
                 crate::ui::player::flash(&playback, if muted { FlashKind::SoundOff } else { FlashKind::SoundOn });
             }
             Action::Reload => playback.invoke_reload(),
+            Action::NormalizationToggle => playback.invoke_normalization_key(false),
+            Action::NormalizationNext => playback.invoke_normalization_key(true),
             Action::Rate0 | Action::Rate1 | Action::Rate2 | Action::Rate3 | Action::Rate4 | Action::Rate5 => {
                 let rating = match action {
                     Action::Rate0 => 0,

@@ -8,6 +8,7 @@ mod filters;
 mod folders;
 mod notices;
 mod paths;
+mod player;
 mod schema;
 #[cfg(test)]
 mod schema_tests;
@@ -27,10 +28,11 @@ pub use notices::{
     ToastStacking,
 };
 pub use paths::AppPaths;
+pub use player::{MAX_HIDE_POINTER_MS, MIN_HIDE_POINTER_MS, Normalization, PlayerSettings};
 pub use schema::{
     AdvancedSettings, AppearanceSettings, AutoSection, DesktopSettings, EditorSettings, ExportSettings,
-    GeneralSettings, HashingSettings, OnJobLoad, PlayerSettings, QueueSettings, RenderSettings, RustViewSettings,
-    Settings, TaskbarShows, TraySettings, WarningSettings, WhenDone, WriteTiming,
+    GeneralSettings, HashingSettings, OnJobLoad, QueueSettings, RenderSettings, RustViewSettings, Settings,
+    TaskbarShows, TraySettings, WarningSettings, WhenDone, WriteTiming,
 };
 pub use ui_state::{
     ExportPanelState, JobPanelState, LogPanelState, LogSource, ProbeState, QueuePanelState, SettingsWindowState,

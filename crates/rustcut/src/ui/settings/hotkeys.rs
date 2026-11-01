@@ -58,6 +58,8 @@ pub const fn group(action: Action) -> &'static str {
         | Action::SeekBackLong
         | Action::SeekForwardLong
         | Action::ToggleMute
+        | Action::NormalizationToggle
+        | Action::NormalizationNext
         | Action::Reload => "Playback",
         Action::PreviousCut
         | Action::NextCut

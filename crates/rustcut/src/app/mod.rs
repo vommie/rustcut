@@ -38,6 +38,7 @@ use self::services::{
 use crate::MainWindow;
 use crate::desktop::instance;
 use crate::desktop::service::spawn_desktop;
+use crate::ui::control_bar::{self, ControlBar};
 use crate::ui::dispatcher::{SlintSink, UiDispatcher};
 use crate::ui::dock::{DockBridge, PanelId, persist as dock_persist};
 use crate::ui::editing::{EditingParts, JobEditor};
@@ -354,6 +355,16 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &loaded.settings,
         &loaded.ui_state.timeline,
     );
+    let control_bar = ControlBar::install(
+        &main,
+        control_bar::Parts {
+            writer: writer.clone(),
+            player: &player,
+            editor: &editor,
+            menu: &menu,
+            ui: &ui,
+        },
+    );
     let probe = ProbeBridge::install(
         &main,
         runtime.handle().clone(),
@@ -666,6 +677,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     // Stop listening now (the settings' listener holds the holder until the end of `run`).
     drop(server.borrow_mut().take());
     drop(settings_window);
+    drop(control_bar);
     drop(editing);
     drop(opener);
     drop(wheel);
