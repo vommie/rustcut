@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use super::bubbles::Area;
 use super::kind::{Kind, Level};
+use super::toast_tags::JobLabels;
 use crate::ui::jump::JumpTarget;
 
 /// A button of a toast, banner or bubble (UI thread).
@@ -96,6 +97,8 @@ pub struct Notice {
     pub anchor: Option<Anchor>,
     /// A bubble waits this long for the next change of its key (an input check while typing).
     pub grace: Duration,
+    /// The saved job's rating and tags: a toast shows them under its file name.
+    pub job: Option<JobLabels>,
 }
 
 impl Notice {
@@ -115,6 +118,7 @@ impl Notice {
             desktop_secs: None,
             anchor: None,
             grace: Duration::ZERO,
+            job: None,
         }
     }
 
@@ -133,6 +137,13 @@ impl Notice {
     #[must_use]
     pub const fn grace(mut self, grace: Duration) -> Self {
         self.grace = grace;
+        self
+    }
+
+    /// The saved job's rating and tags.
+    #[must_use]
+    pub fn job(mut self, job: JobLabels) -> Self {
+        self.job = Some(job);
         self
     }
 

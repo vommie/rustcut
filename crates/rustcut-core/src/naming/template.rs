@@ -68,6 +68,42 @@ pub fn render_stem(template: &str, ctx: &NameContext) -> Result<String, NameErro
     sanitize_stem(&raw)
 }
 
+/// Makes stems from base names: one template and one job's variables, with only `name` changing (the conflict dialog
+/// tries names; a new name goes in front of what the template adds, "Clip (1) - 01").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Namer {
+    template: String,
+    context: NameContext,
+}
+
+impl Namer {
+    pub fn new(template: impl Into<String>, context: NameContext) -> Self {
+        Self {
+            template: template.into(),
+            context,
+        }
+    }
+
+    /// The base name it starts from.
+    pub fn name(&self) -> &str {
+        &self.context.name
+    }
+
+    /// The stem with base name `name`.
+    pub fn stem(&self, name: &str) -> Result<String, NameError> {
+        let context = NameContext {
+            name: name.trim().to_owned(),
+            ..self.context.clone()
+        };
+        render_stem(&self.template, &context)
+    }
+
+    /// Whether the template shows the base name at all (else a new name cannot change the file name).
+    pub fn uses_name(&self) -> bool {
+        used_variables(&self.template).is_ok_and(|v| v.iter().any(|n| n == "name"))
+    }
+}
+
 /// The top-level variables a template reads (for the settings page and its validation).
 pub fn used_variables(template: &str) -> Result<Vec<String>, NameError> {
     let t = ENGINE
@@ -117,6 +153,15 @@ mod tests {
         let t = "{{ date }} {{ source | lower }} [{{ codec }}] {{ counter | pad(3) }}";
         assert_eq!(render_stem(t, &ctx(Some(7))).unwrap(), "2026-10-23 vid_0001 [AV1] 007");
         assert_eq!(used_variables(t).unwrap(), vec!["codec", "counter", "date", "source"]);
+    }
+
+    #[test]
+    fn a_namer_changes_only_the_base_name() {
+        let namer = Namer::new(DEFAULT_TEMPLATE, ctx(Some(1)));
+        assert_eq!(namer.name(), "Holiday");
+        assert_eq!(namer.stem(" Holiday (1) ").unwrap(), "Holiday (1) - 01");
+        assert!(namer.uses_name());
+        assert!(!Namer::new("{{ source }} - {{ counter }}", ctx(Some(1))).uses_name());
     }
 
     #[test]

@@ -13,8 +13,8 @@ use std::path::{Path, PathBuf};
 use rustcut_core::job::JobId;
 use rustcut_core::media::is_video_file;
 use rustcut_core::naming::{
-    Conflicts, FolderScan, MAX_SIMILAR, QueuedTarget, SeriesFile, Taken, TypedNameError, file_name, free_variant,
-    next_free_counter_except, same_path, series, typed_stem,
+    Conflicts, FolderScan, FreeName, MAX_SIMILAR, Namer, QueuedTarget, SeriesFile, Taken, TypedNameError, file_name,
+    free_variant, next_free_counter_except, same_path, series, typed_name,
 };
 use rustcut_core::render::Container;
 use rustcut_core::settings::{ConflictDialogSettings, ConflictPreselect};
@@ -83,6 +83,9 @@ pub struct KnownFile {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Outcome {
     pub stem: String,
+    /// The new base name: "Add (n)" and a typed name keep it for the rest of the session (user request 2026-11-01), the
+    /// next number and the ways that keep the taken name do not.
+    pub name: Option<String>,
     /// The counter value the name uses when the choice set it.
     pub counter: Option<u32>,
     pub overwrite: bool,
@@ -124,6 +127,8 @@ pub struct ConflictDialog {
     pub known: Option<KnownFiles>,
     /// The free name listed first: the next number, or "(n)" (no counter, or chosen in the settings).
     primary_free: Choice,
+    /// Makes the file name of a new base name.
+    namer: Namer,
     container: Container,
     scan: FolderScan,
     queue: Vec<QueuedTarget>,
@@ -169,6 +174,7 @@ impl ConflictDialog {
         } else {
             Vec::new()
         };
+        let namer = input.export.namer(input.facts);
         let mut dialog = Self {
             folder: input.folder.to_path_buf(),
             file,
@@ -176,12 +182,14 @@ impl ConflictDialog {
             options: Vec::new(),
             selected: 0,
             tab: Tab::Decision,
-            typed: input.stem.to_owned(),
+            // The field holds what it changes: the base name, or the whole stem when the template shows no name.
+            typed: if namer.uses_name() { namer.name() } else { input.stem }.to_owned(),
             series,
             others,
             browse: false,
             known: None,
             primary_free: Choice::NextNumber,
+            namer,
             container,
             scan: input.scan,
             queue: input.queue,
@@ -265,26 +273,28 @@ impl ConflictDialog {
                 destructive: false,
                 outcome: found.map(|(n, stem)| Outcome {
                     stem,
+                    name: None,
                     counter: Some(n),
                     overwrite: false,
                     remove: Vec::new(),
                 }),
             }
         });
-        let found = free_variant(stem, self.container, &taken);
+        let found = free_variant(&self.namer, self.container, &taken);
         let variant = DialogOption {
             choice: Choice::Variant,
             title: "Add \"(n)\"".to_owned(),
             file: found
-                .as_deref()
-                .map(|s| file_name(s, self.container))
+                .as_ref()
+                .map(|f| file_name(&f.stem, self.container))
                 .unwrap_or_default(),
             detail: "Keeps the name and adds the next free number in brackets.".to_owned(),
             enabled: found.is_some(),
             detail_name: String::new(),
             destructive: false,
-            outcome: found.map(|stem| Outcome {
+            outcome: found.map(|FreeName { stem, name }| Outcome {
                 stem,
+                name,
                 counter: None,
                 overwrite: false,
                 remove: Vec::new(),
@@ -320,6 +330,7 @@ impl ConflictDialog {
         let queued = self.conflicts.queued.len();
         let same = Outcome {
             stem: stem.to_owned(),
+            name: None,
             counter: None,
             overwrite: true,
             remove: Vec::new(),
@@ -481,19 +492,20 @@ impl ConflictDialog {
     }
 
     fn update_rename(&mut self) {
-        let result = typed_stem(&self.typed, self.container, &self.taken());
+        let result = typed_name(&self.typed, &self.namer, self.container, &self.taken());
         let container = self.container;
         let Some(option) = self.options.iter_mut().find(|o| o.choice == Choice::Rename) else {
             return;
         };
         match result {
-            Ok(stem) => {
+            Ok(FreeName { stem, name }) => {
                 option.file = file_name(&stem, container);
                 option.detail_name.clear();
                 "Free.".clone_into(&mut option.detail);
                 option.enabled = true;
                 option.outcome = Some(Outcome {
                     stem,
+                    name,
                     counter: None,
                     overwrite: false,
                     remove: Vec::new(),

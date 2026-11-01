@@ -327,7 +327,7 @@ impl TagPanel {
 
     pub fn history_items(&self) -> Vec<TagHistoryItem> {
         let assigned: HashSet<u32> = self.choice().tags.iter().copied().collect();
-        TagHistoryManager::items(&self.history, &self.by_id, &assigned)
+        TagHistoryManager::items(&self.history, &self.by_id, &assigned, &self.name_twins(&self.history))
     }
 
     /// Tags of the choice that a hidden branch keeps out of the tree (they are still assigned).

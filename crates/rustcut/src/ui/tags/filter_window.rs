@@ -94,10 +94,11 @@ impl TagsBridge {
         self.state.borrow_mut().discard_filter();
     }
 
-    /// A change of the window's draft (the panel shows it only after Apply).
+    /// A change of the window's draft: the tree shows it only after Apply, the last tags' labels at once.
     fn filter_changed(&self, change: impl FnOnce(&mut super::TagPanel)) {
         change(&mut self.state.borrow_mut());
         self.publish_filter();
+        self.publish_history();
     }
 
     /// Apply (`true`) or Escape and × (`false`): the draft becomes the panel's or is dropped, and the window closes.

@@ -1,7 +1,8 @@
 // The frame of RustCut's modal dialogs (user request with M5.4) and their head (P9.3): a centered card the user resizes
-// at its edges and corners; its size stays the same whatever the dialog shows (tabs never change it) and is kept per dialog in
-// ui-state.toml (`DialogState`, src/app/dialogs.rs). The dialog lays its content out from the top; height it does not
-// need stays free at the bottom of its content area.
+// at its edges and corners and drags by any free spot; its size stays the same whatever the dialog shows (tabs never
+// change it) and is kept per dialog in ui-state.toml (`DialogState`, src/app/dialogs.rs). Its place is kept by nothing:
+// the dialogs are made anew at each opening, so each starts centered (user request 2026-11-01). The dialog lays its
+// content out from the top; height it does not need stays free at the bottom of its content area.
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
@@ -61,8 +62,9 @@ component ResizeGrip inherits TouchArea {
 
 /// The dialog card, centered in `area-width` x `area-height`. `stored-width`/`stored-height` (bound to `DialogState`)
 /// hold the user's size, 0 = `default-width`/`default-height`; the frame never gets smaller than `least-width`/`least-height`
-/// or larger than the area. Dragging an edge resizes both sides alike, so the card stays centered and the edge follows
-/// the pointer.
+/// or larger than the area. Dragging an edge resizes both sides alike, so the card stays where it is and the edge follows
+/// the pointer. A drag on a free spot moves the card; its head and some of its width stay inside the area, also when the
+/// window gets smaller.
 export component DialogFrame inherits Rectangle {
     in property <length> area-width;
     in property <length> area-height;
@@ -78,11 +80,21 @@ export component DialogFrame inherits Rectangle {
     property <length> start-w;
     property <length> start-h;
     property <length> grip: 6px;
+    // How far the card was dragged from the center, and what stays inside the area.
+    property <length> moved-x;
+    property <length> moved-y;
+    property <length> press-moved-x;
+    property <length> press-moved-y;
+    property <length> press-x;
+    property <length> press-y;
+    property <length> keep-width: 80px;
+    property <length> head-height: 56px;
 
     width: Math.min(root.max-w, Math.max(root.least-width, root.stored-width > 0 ? root.stored-width : root.default-width));
     height: Math.min(root.max-h, Math.max(root.least-height, root.stored-height > 0 ? root.stored-height : root.default-height));
-    x: (root.area-width - self.width) / 2;
-    y: (root.area-height - self.height) / 2;
+    x: Math.max(root.keep-width - self.width,
+        Math.min(root.area-width - root.keep-width, (root.area-width - self.width) / 2 + root.moved-x));
+    y: Math.max(0px, Math.min(root.area-height - root.head-height, (root.area-height - self.height) / 2 + root.moved-y));
     border-radius: 8px;
     background: Theme.surface-variant;
     border-width: 1px;
@@ -100,6 +112,26 @@ export component DialogFrame inherits Rectangle {
         }
         if sy != 0 {
             root.stored-height = Math.min(root.max-h, Math.max(root.least-height, root.start-h + sy * 2 * dy));
+        }
+    }
+
+    // Under the content: its controls keep the pointer, the head and every free spot move the card. The positions are
+    // window coordinates, because the area moves with the card.
+    TouchArea {
+        mouse-cursor: self.pressed ? MouseCursor.grabbing : self.mouse-y < root.head-height ? MouseCursor.move : MouseCursor.default;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                root.press-x = self.absolute-position.x + self.mouse-x;
+                root.press-y = self.absolute-position.y + self.mouse-y;
+                root.press-moved-x = root.moved-x;
+                root.press-moved-y = root.moved-y;
+            }
+        }
+        moved => {
+            if self.pressed {
+                root.moved-x = root.press-moved-x + self.absolute-position.x + self.mouse-x - root.press-x;
+                root.moved-y = root.press-moved-y + self.absolute-position.y + self.mouse-y - root.press-y;
+            }
         }
     }
 

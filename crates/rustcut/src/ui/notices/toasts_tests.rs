@@ -16,6 +16,7 @@ fn toast(kind: Kind, level: Level, title: &str, secs: Option<u64>) -> NewToast {
         clickable: false,
         time: "12:00:00".into(),
         shown_for: secs.map(Duration::from_secs),
+        job: None,
     }
 }
 

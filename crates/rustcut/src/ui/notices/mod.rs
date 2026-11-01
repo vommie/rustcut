@@ -11,6 +11,7 @@ mod history;
 mod kind;
 mod notice;
 mod route;
+mod toast_tags;
 mod toasts;
 mod view;
 
@@ -23,6 +24,7 @@ pub use history::Entry;
 pub use kind::{Group, Kind, KindInfo, Level};
 pub use notice::Notice;
 pub use route::{Route, can_mute, desktop_of, place_of, route, set_desktop, set_place};
+pub use toast_tags::JobLabels;
 
 use crate::MainWindow;
 

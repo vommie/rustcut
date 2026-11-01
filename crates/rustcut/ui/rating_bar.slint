@@ -11,6 +11,8 @@ export component RatingButton inherits Rectangle {
     // An owner whose own touch area lies over the button passes its pointer state (the last saved job's rating).
     in property <bool> outer-hover;
     in property <bool> outer-pressed;
+    // Only shows a rating (the saved job's toast): it looks chosen and takes no pointer.
+    in property <bool> display-only;
     callback clicked();
 
     // Dark with the rating's color as its border; hovered or chosen it is filled with the color and the digit turns
@@ -31,7 +33,7 @@ export component RatingButton inherits Rectangle {
     opacity: root.is-enabled ? 1.0 : 0.38;
 
     touch := TouchArea {
-        enabled: root.is-enabled;
+        enabled: root.is-enabled && !root.display-only;
         mouse-cursor: root.is-enabled ? pointer : default;
         clicked => { root.clicked(); }
     }

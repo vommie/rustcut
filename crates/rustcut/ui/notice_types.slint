@@ -5,6 +5,16 @@
 import { Theme } from "styles.slint";
 import { IconId } from "icons.slint";
 
+// A tag pill of a saved job's toast at its places: in the one line and with all pills open (src/ui/notices/toast_tags.rs).
+export struct ToastTagView {
+    text: string,
+    width: length,
+    x: length,
+    in-line: bool,
+    open-x: length,
+    open-y: length,
+}
+
 export struct ToastView {
     id: int,
     level: int,
@@ -37,6 +47,15 @@ export struct ToastView {
     leaving: bool,
     // The deck: 0 in front, 1.. behind it.
     depth: int,
+    // A saved job: its file name cut in the middle, its rating (-1 none), what it does not have, and the tag pills: those
+    // that do not fit the line (`more`, "+N more" at `more-x`) show while the pointer rests on the card.
+    job: bool,
+    rating: int,
+    hint: string,
+    tags: [ToastTagView],
+    more: int,
+    more-x: length,
+    tags-height: length,
 }
 
 export struct BannerView {
@@ -102,6 +121,8 @@ export global Notices {
     // A right click: the context menu at a window position.
     callback toast-menu(int, length, length);
     callback toast-mute(int);
+    // Slint measured a saved job's tag pill (text, its natural width).
+    callback toast-tag-measured(string, length);
     callback set-expanded(bool);
     callback page-toasts(int);
 

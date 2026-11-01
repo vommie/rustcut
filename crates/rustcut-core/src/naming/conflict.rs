@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use super::{NameError, file_name, next_free_variant, same_path, sanitize_stem};
+use super::{NameError, Namer, file_name, next_free_variant, same_path, sanitize_stem};
 use crate::job::{JobId, JobStateKind};
 use crate::render::Container;
 use crate::settings::WarningSettings;
@@ -244,21 +244,57 @@ pub fn next_free_counter_except(
         .and_then(Result::ok)
 }
 
-/// The free `Name (n)` variant of `stem`.
-pub fn free_variant(stem: &str, container: Container, taken: &Taken<'_>) -> Option<String> {
-    next_free_variant(stem, |candidate| !taken.stem_free(candidate, container))
+/// A free file name the conflict dialog found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FreeName {
+    pub stem: String,
+    /// The base name that makes it; `None` when the template does not show the name and only this file's stem differs.
+    pub name: Option<String>,
 }
 
-/// A name typed in the conflict dialog: its stem, or why it cannot be used.
-pub fn typed_stem(text: &str, container: Container, taken: &Taken<'_>) -> Result<String, TypedNameError> {
+/// The first free `Name (n)`. The number belongs to the base name, so it stands before what the template adds ("Clip (1)
+/// - 01"); a template without the name gets it behind the stem.
+pub fn free_variant(namer: &Namer, container: Container, taken: &Taken<'_>) -> Option<FreeName> {
+    if !namer.uses_name() {
+        let stem = namer.stem(namer.name()).ok()?;
+        let free = next_free_variant(&stem, |candidate| !taken.stem_free(candidate, container))?;
+        return Some(FreeName { stem: free, name: None });
+    }
+    let is_free = |name: &str| namer.stem(name).is_ok_and(|stem| taken.stem_free(&stem, container));
+    let name = next_free_variant(namer.name(), |candidate| !is_free(candidate))?;
+    Some(FreeName {
+        stem: namer.stem(&name).ok()?,
+        name: Some(name),
+    })
+}
+
+/// A name typed in the conflict dialog: a new base name (the template makes the stem), or the stem itself when the
+/// template does not show the name; or why it cannot be used.
+pub fn typed_name(
+    text: &str,
+    namer: &Namer,
+    container: Container,
+    taken: &Taken<'_>,
+) -> Result<FreeName, TypedNameError> {
     let raw = text.trim();
     // A typed extension of the container is dropped (people type "Clip.mkv").
     let raw = raw.strip_suffix(&format!(".{}", container.extension())).unwrap_or(raw);
-    let stem = sanitize_stem(raw).map_err(TypedNameError::Invalid)?;
-    if taken.stem_free(&stem, container) {
-        Ok(stem)
+    let typed = sanitize_stem(raw).map_err(TypedNameError::Invalid)?;
+    let free = if namer.uses_name() {
+        FreeName {
+            stem: namer.stem(&typed).map_err(TypedNameError::Invalid)?,
+            name: Some(typed),
+        }
     } else {
-        Err(TypedNameError::Taken(file_name(&stem, container)))
+        FreeName {
+            stem: typed,
+            name: None,
+        }
+    };
+    if taken.stem_free(&free.stem, container) {
+        Ok(free)
+    } else {
+        Err(TypedNameError::Taken(file_name(&free.stem, container)))
     }
 }
 
@@ -272,6 +308,7 @@ pub enum TypedNameError {
 
 #[cfg(test)]
 mod tests {
+    use super::super::{DEFAULT_TEMPLATE, NameContext};
     use super::*;
 
     fn scan(names: &[&str]) -> FolderScan {
@@ -368,19 +405,6 @@ mod tests {
             "02 is on the drive, 03 queued"
         );
         assert_eq!(
-            free_variant("Clip - 01", Container::Mkv, &taken).as_deref(),
-            Some("Clip - 01 (2)")
-        );
-        assert_eq!(typed_stem(" New.mkv ", Container::Mkv, &taken), Ok("New".into()));
-        assert_eq!(
-            typed_stem("Clip - 02", Container::Mkv, &taken),
-            Err(TypedNameError::Taken("Clip - 02.mkv".into()))
-        );
-        assert!(matches!(
-            typed_stem("  ", Container::Mkv, &taken),
-            Err(TypedNameError::Invalid(_))
-        ));
-        assert_eq!(
             next_free_counter(1, Container::Mkv, &taken, |_| Err(NameError::Empty)),
             None
         );
@@ -388,6 +412,78 @@ mod tests {
             next_free_counter_except(1, Container::Mkv, &taken, &[4, 5, 7], stem_for),
             Some((6, "Clip - 06".into())),
             "04 and 05 exist in other formats"
+        );
+    }
+
+    fn namer(template: &str, name: &str) -> Namer {
+        Namer::new(
+            template,
+            NameContext {
+                name: name.into(),
+                source: "VID".into(),
+                counter: Some(1),
+                ..NameContext::default()
+            },
+        )
+    }
+
+    fn free(stem: &str, name: Option<&str>) -> FreeName {
+        FreeName {
+            stem: stem.into(),
+            name: name.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn the_number_of_a_variant_goes_into_the_base_name() {
+        let folder = scan(&["Clip - 01.mkv", "Clip (1) - 01.mkv", "Clip - 01 (1).mkv"]);
+        let taken = Taken {
+            folder: Path::new("/out"),
+            scan: &folder,
+            queue: &[],
+        };
+        assert_eq!(
+            free_variant(&namer(DEFAULT_TEMPLATE, "Clip"), Container::Mkv, &taken),
+            Some(free("Clip (2) - 01", Some("Clip (2)"))),
+            "before the counter, not behind it"
+        );
+        assert_eq!(
+            free_variant(&namer(DEFAULT_TEMPLATE, "Clip (4)"), Container::Mkv, &taken),
+            Some(free("Clip (5) - 01", Some("Clip (5)"))),
+            "a name with a number goes on counting"
+        );
+        assert_eq!(
+            free_variant(&namer("{{ source }} {{ counter }}", "Clip"), Container::Mkv, &taken),
+            Some(free("VID 1 (1)", None)),
+            "a template without the name: behind the stem, and no new base name"
+        );
+    }
+
+    #[test]
+    fn a_typed_name_is_a_base_name() {
+        let folder = scan(&["Clip - 01.mkv"]);
+        let taken = Taken {
+            folder: Path::new("/out"),
+            scan: &folder,
+            queue: &[],
+        };
+        let namer_ = namer(DEFAULT_TEMPLATE, "Old");
+        assert_eq!(
+            typed_name(" New.mkv ", &namer_, Container::Mkv, &taken),
+            Ok(free("New - 01", Some("New")))
+        );
+        assert_eq!(
+            typed_name("Clip", &namer_, Container::Mkv, &taken),
+            Err(TypedNameError::Taken("Clip - 01.mkv".into()))
+        );
+        assert!(matches!(
+            typed_name("  ", &namer_, Container::Mkv, &taken),
+            Err(TypedNameError::Invalid(_))
+        ));
+        assert_eq!(
+            typed_name("New", &namer("{{ source }}", "Old"), Container::Mkv, &taken),
+            Ok(free("New", None)),
+            "a template without the name: the text is the stem"
         );
     }
 

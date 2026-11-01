@@ -9,6 +9,7 @@ use rustcut_core::settings::{ToastOrder, ToastSettings, ToastStacking};
 
 use super::kind::{Kind, Level};
 use super::notice::Label;
+use super::toast_tags::JobLabels;
 
 /// How long a closed card fades out before it is removed (the Slint side animates it).
 pub const LEAVE: Duration = Duration::from_millis(220);
@@ -51,6 +52,8 @@ pub struct Toast {
     /// Counts the times its time started again (the line under it starts over).
     pub restarts: u32,
     pub leaving: Option<Instant>,
+    /// A saved job's rating and tags.
+    pub job: Option<JobLabels>,
 }
 
 /// A card to add.
@@ -67,6 +70,7 @@ pub struct NewToast {
     pub time: String,
     /// `None` = stays until closed.
     pub shown_for: Option<Duration>,
+    pub job: Option<JobLabels>,
 }
 
 /// What [`ToastStack::add`] did.
@@ -171,6 +175,7 @@ impl ToastStack {
                 actions: new.actions,
                 clickable: new.clickable,
                 time: new.time,
+                job: new.job,
             };
             return Added::Updated(toast.id);
         }
@@ -213,6 +218,7 @@ impl ToastStack {
             timer,
             restarts: 0,
             leaving: None,
+            job: new.job,
         });
         Added::New(id)
     }

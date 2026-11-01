@@ -1,13 +1,16 @@
 // The toasts (M6.5, user decisions Q-N8): cards that come in from the side of their position, show their level's
 // color and symbol, the title and the detail (the whole text while the pointer rests on them, which also stops their
 // time), the time (hh:mm:ss, left of ×), a count for repeats, the buttons, a line with the time left, × and, for
-// hints and confirmations, "Don't show again". A click leads to the cause, a right click opens the context menu. The layer places them as the
+// hints and confirmations, "Don't show again". A saved job's card shows its file name cut in the middle (whole under the
+// pointer) and the job's rating and tags under it (questionnaire 2026-11-01-rustcut-save-toast). A click leads to the cause, a right click opens the context menu. The layer places them as the
 // settings say (six positions, five ways to stack) and never takes clicks outside the cards. Data: `Notices`.
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { Notices, NoticeLook, ToastView } from "notice_types.slint";
 import { NoticeButton, NoticeIcon, NoticeProgress } from "notice_parts.slint";
+import { MiddleText } from "controls_text.slint";
+import { RatingButton } from "rating_bar.slint";
 
 export global ToastMetrics {
     out property <length> width: 320px;
@@ -15,6 +18,38 @@ export global ToastMetrics {
     out property <length> margin: 12px;
     // How far a card behind the front one of the deck is moved.
     out property <length> deck-step: 8px;
+}
+
+// A tag of a saved job, as high as a pill of the tag history. Its natural width goes to Rust, which places the pills.
+component ToastTag inherits Rectangle {
+    in property <string> text;
+    out property <length> natural-width: measure.preferred-width + 10px;
+
+    height: 22px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: Theme.border;
+    background: Theme.surface-variant;
+    clip: true;
+
+    init => { Notices.toast-tag-measured(root.text, root.natural-width); }
+    changed natural-width => { Notices.toast-tag-measured(root.text, root.natural-width); }
+
+    measure := Text {
+        visible: false;
+        text: root.text;
+        font-size: 11px;
+    }
+
+    Text {
+        x: 5px;
+        width: parent.width - 10px;
+        text: root.text;
+        color: Theme.text;
+        font-size: 11px;
+        vertical-alignment: center;
+        overflow: elide;
+    }
 }
 
 component ToastCard inherits Rectangle {
@@ -34,6 +69,7 @@ component ToastCard inherits Rectangle {
     property <bool> go;
     property <int> timer-serial: root.toast.timer;
     property <bool> present: root.appeared && !root.toast.leaving;
+    property <bool> open: touch.has-hover;
 
     height: root.forced-height > 0 ? root.forced-height : body.preferred-height;
 
@@ -125,16 +161,24 @@ component ToastCard inherits Rectangle {
                                 text: root.toast.title;
                                 color: Theme.text;
                                 font-weight: 700;
-                                wrap: touch.has-hover ? TextWrap.word-wrap : TextWrap.no-wrap;
+                                wrap: root.open ? TextWrap.word-wrap : TextWrap.no-wrap;
                                 overflow: elide;
                                 min-width: 0px;
                             }
 
-                            if root.toast.detail != "": Text {
+                            // A saved job's file name stays one line, cut in the middle, until the pointer rests on
+                            // the card (user, 2026-11-01).
+                            if root.toast.detail != "" && root.toast.job && !root.open: MiddleText {
                                 text: root.toast.detail;
                                 color: Theme.text-muted;
                                 font-size: 12px;
-                                wrap: touch.has-hover ? TextWrap.word-wrap : TextWrap.no-wrap;
+                            }
+
+                            if root.toast.detail != "" && (!root.toast.job || root.open): Text {
+                                text: root.toast.detail;
+                                color: Theme.text-muted;
+                                font-size: 12px;
+                                wrap: root.open ? TextWrap.word-wrap : TextWrap.no-wrap;
                                 overflow: elide;
                                 min-width: 0px;
                             }
@@ -185,6 +229,57 @@ component ToastCard inherits Rectangle {
                                     tooltip: "Close";
                                     clicked => { Notices.toast-closed(root.toast.id); }
                                 }
+                            }
+                        }
+                    }
+
+                    if root.toast.job: HorizontalLayout {
+                        padding-left: 24px;
+                        spacing: 4px;
+
+                        if root.toast.rating >= 0: VerticalLayout {
+                            alignment: start;
+
+                            RatingButton {
+                                width: 22px;
+                                height: 22px;
+                                rating: root.toast.rating;
+                                is-selected: true;
+                                display-only: true;
+                            }
+                        }
+
+                        if root.toast.hint != "": VerticalLayout {
+                            alignment: start;
+
+                            Text {
+                                height: 22px;
+                                text: root.toast.hint;
+                                color: Theme.text-muted;
+                                font-size: 12px;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        if root.toast.tags.length > 0: Rectangle {
+                            horizontal-stretch: 1;
+                            height: root.open ? root.toast.tags-height : 22px;
+
+                            for tag in root.toast.tags: ToastTag {
+                                x: root.open ? tag.open-x : tag.x;
+                                y: root.open ? tag.open-y : 0px;
+                                width: tag.width;
+                                text: tag.text;
+                                opacity: root.open || tag.in-line ? 1 : 0;
+                            }
+
+                            if root.toast.more > 0 && !root.open: Text {
+                                x: root.toast.more-x;
+                                height: 22px;
+                                text: "+" + root.toast.more + " more";
+                                color: Theme.text-muted;
+                                font-size: 11px;
+                                vertical-alignment: center;
                             }
                         }
                     }
