@@ -546,7 +546,7 @@ fn follow_events(service: &ThumbService, ui: &UiDispatcher, runtime: &tokio::run
             match events.recv().await {
                 Ok(ThumbEvent::Updated) | Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
                     ui.post_latest(CoalesceKey::new("thumbs", 0), rate::PROGRESS, || {
-                        with(ThumbsBridge::updated)
+                        with(ThumbsBridge::updated);
                     });
                 }
                 Ok(ThumbEvent::HelperWorks) => ui.post(messages::helper_worked),

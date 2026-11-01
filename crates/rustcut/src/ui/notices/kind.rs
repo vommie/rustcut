@@ -174,12 +174,6 @@ kinds! {
         critical true, ("Cannot open clip.mp4", "Invalid data found when processing input");
     PlaybackFailed = "playback_failed", "File does not play", Source, Error, Banner, FIXED_BANNER, desktop true,
         critical true, ("The file cannot be played", "The video could not be decoded.");
-    /// The thumbnail helper did not start; shown once until it worked again (Q-P12e).
-    ThumbnailsFallback = "thumbnails_fallback", "Thumbnails take the slow way", App, Warning, Banner, LOUD, desktop false,
-        critical false, ("Thumbnails take the slow way", "The thumbnail helper did not start.");
-    /// `tl_thumbs.db` is larger than 4 GB at the start (Q-P12e).
-    ThumbnailCacheLarge = "thumbnail_cache_large", "Thumbnail cache is large", App, Warning, Banner, LOUD, desktop false,
-        critical false, ("The thumbnail cache is large", "It takes 4.2 GiB.");
     KnownSource = "known_source", "Source known to RustView", Source, Warning, Banner, LOUD, desktop false,
         critical false, ("RustView knows this video", "Known since 2026-10-12. 3 files in the library were made from it.");
     SectionAdded = "section_added", "Section added", Sections, Info, Status, QUIET, desktop false, critical false,
@@ -300,6 +294,12 @@ kinds! {
         critical false, ("2 jobs rescued", "The old file is kept in the backup folder.");
     ToolsMissing = "tools_missing", "ffmpeg or ffprobe missing", App, Error, Banner, FIXED_BANNER, desktop true,
         critical true, ("ffmpeg cannot be started", "No such file or directory: nothing can be rendered.");
+    /// The thumbnail helper did not start; shown once until it worked again (Q-P12e).
+    ThumbnailsFallback = "thumbnails_fallback", "Thumbnails take the slow way", App, Warning, Banner, LOUD, desktop false,
+        critical false, ("Thumbnails take the slow way", "The thumbnail helper did not start.");
+    /// `tl_thumbs.db` is larger than 4 GB at the start (Q-P12e).
+    ThumbnailCacheLarge = "thumbnail_cache_large", "Thumbnail cache is large", App, Warning, Banner, LOUD, desktop false,
+        critical false, ("The thumbnail cache is large", "It takes 4.2 GiB.");
 }
 
 impl Kind {
