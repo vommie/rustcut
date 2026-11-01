@@ -71,6 +71,7 @@ pub const fn group(action: Action) -> &'static str {
         Action::CropEdit
         | Action::QuickCrop
         | Action::AutoCrop
+        | Action::CropHistory
         | Action::ToggleFilterPreview
         | Action::ToggleKeepFilters
         | Action::RotateLeft

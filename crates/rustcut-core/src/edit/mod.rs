@@ -3,6 +3,7 @@
 
 mod chain;
 mod crop;
+mod crop_history;
 mod filter;
 mod filter_complex;
 mod lavfi;
@@ -14,6 +15,7 @@ mod section_list;
 
 pub use chain::{ChainError, FINAL_MULTIPLES, FilterChain, FilterSlot, Size, even_multiple, final_multiple};
 pub use crop::{Crop, CropAspect};
+pub use crop_history::{CropHistory, CropMemory, DEFAULT_HISTORY_LENGTH, Fit, HISTORY_LENGTHS, fit};
 pub use filter::{
     DeinterlaceRate, Deinterlacer, DeshakeCrop, DeshakeInterpolation, DeshakeParams, FieldParity, Filter, FilterKind,
     Mirror, ResizeAlgorithm, Rotation,

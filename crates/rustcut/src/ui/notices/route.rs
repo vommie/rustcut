@@ -154,7 +154,7 @@ mod tests {
         assert!(!route(Kind::JobFailed, Level::Error, &settings).muted, "an error kind");
         // A warning of a quiet kind ("only black frames") still shows.
         let warning = route(Kind::AutoCrop, Level::Warning, &settings);
-        assert!(!warning.muted && warning.place == NoticePlace::Toast);
+        assert!(!warning.muted && warning.place == NoticePlace::Activity);
         assert!(can_mute(Kind::SectionAdded) && !can_mute(Kind::JobFailed) && !can_mute(Kind::OpenFailed));
     }
 

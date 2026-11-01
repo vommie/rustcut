@@ -27,11 +27,19 @@ export component IconButton inherits Rectangle {
     // Q-P8): red until it is switched on again.
     in property <bool> alert;
     in property <length> icon-size: IconSize.md;
+    // The symbol pulses: something runs behind the button (P12 4.1), also while it is disabled.
+    in property <bool> pulse;
+    // A short glow in `flash-color`: true shows it, false fades it out (a result, P12 4.1).
+    in property <bool> flash;
+    in property <color> flash-color;
+    // Ctrl was held at the last right click (read it in `secondary-clicked`).
+    out property <bool> secondary-control;
     callback clicked();
     // A right click (the queue's filter and "when done" buttons reset with it).
     callback secondary-clicked();
 
-    property <color> content-color: !root.enabled ? Theme.status-deleted
+    property <color> content-color: root.pulse ? Theme.primary
+        : !root.enabled ? Theme.status-deleted
         : logic.progress > 0 ? HoldConfirm.color.mix(Theme.text, logic.progress)
         : root.alert ? Theme.status-corrupt
         : root.checked ? Theme.primary : Theme.text;
@@ -66,6 +74,15 @@ export component IconButton inherits Rectangle {
         }
     }
 
+    Rectangle {
+        border-radius: root.border-radius;
+        background: root.flash-color.with-alpha(0.4);
+        border-width: 1px;
+        border-color: root.flash-color;
+        opacity: root.flash ? 1 : 0;
+        animate opacity { duration: root.flash ? 0ms : 900ms; }
+    }
+
     if root.hold: HoldRing {
         progress: logic.progress;
         flash: logic.flash;
@@ -79,6 +96,7 @@ export component IconButton inherits Rectangle {
             if event.kind == PointerEventKind.down && event.button == PointerEventButton.right {
                 host.press();
                 if root.enabled {
+                    root.secondary-control = event.modifiers.control;
                     root.secondary-clicked();
                 }
             } else if event.kind == PointerEventKind.down {
@@ -104,6 +122,7 @@ export component IconButton inherits Rectangle {
         icon: root.icon;
         size: root.icon-size;
         color: root.content-color;
+        opacity: root.pulse ? 0.6 + 0.4 * Math.cos(animation-tick() / 1100ms * 360deg) : 1;
     }
 
     label := Text {

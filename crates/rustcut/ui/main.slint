@@ -14,7 +14,8 @@ import { DockPeek, DockSidebar } from "dock_sidebar.slint";
 import { DockOverlay } from "dock_overlay.slint";
 import { Playback } from "player_types.slint";
 import { PlayerTransport } from "player_transport.slint";
-import { Status, StatusLine } from "status_line.slint";
+import { ActivityView, Status, StatusLine } from "status_line.slint";
+import { CropHistoryFlyout, CropHistoryRow, CropHistoryUi } from "crop_history.slint";
 import { MediaInfoPanel, MediaInfoRow, MediaInfoSection } from "media_info_panel.slint";
 import { Shortcuts } from "shortcuts.slint";
 import { Timeline, TimelineBlock, TimelineStrip, TimelineTick } from "timeline_view.slint";
@@ -63,7 +64,8 @@ import { TextLogic, TextSplit } from "controls_text.slint";
 import { DragLogic, DragState } from "drag.slint";
 
 export {
-    Theme, IconId, Dock, DockMetrics, RailPeek, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, MediaInfoPanel,
+    Theme, IconId, Dock, DockMetrics, RailPeek, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, Status, ActivityView,
+    CropHistoryRow, CropHistoryUi, MediaInfoPanel,
     MediaInfoRow, MediaInfoSection, Shortcuts, Timeline, TimelineBlock, TimelineTick, Sections,
     SectionRowView, Filters, FilterRowView, FilterTips, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe, Export,
     ConflictJobView, ConflictOptionView, PreviewView, TipRow, Tip, TipKey, TipKeys, TipPlacement, TipRect, TipSide,
@@ -125,7 +127,7 @@ export component MainWindow inherits Window {
 
     // A modal dialog covers the window: the menu bar's keys (which Slint gives the menu before any focused element) must
     // not act on the editor behind it (found by the P8 audit: I, O and Shift+I moved the marks under the save question).
-    property <bool> modal-open: FolderList.open || Export.dialog-open || Export.meta-open || Power.asking || Problems.newer-open
+    property <bool> modal-open: FolderList.open || CropHistoryUi.open || Export.dialog-open || Export.meta-open || Power.asking || Problems.newer-open
         || Problems.db-open || JobLoad.open;
     changed modal-open => {
         Shortcuts.modal-changed(root.modal-open);
@@ -571,6 +573,18 @@ export component MainWindow inherits Window {
         anchor-y: Queue.filter-anchor-y - root.content-y;
         anchor-width: Queue.filter-anchor-width;
         anchor-height: Queue.filter-anchor-height;
+    }
+
+    // The crop history hangs from its button (P12 4.3).
+    if CropHistoryUi.open: CropHistoryFlyout {
+        x: 0;
+        y: root.bar-height;
+        width: parent.width;
+        height: parent.height - root.bar-height;
+        anchor-x: CropHistoryUi.anchor-x - root.content-x;
+        anchor-y: CropHistoryUi.anchor-y - root.content-y;
+        anchor-width: CropHistoryUi.anchor-width;
+        anchor-height: CropHistoryUi.anchor-height;
     }
 
     // A filter's options menu hangs beside its adjustments button (P9.13).

@@ -1,7 +1,7 @@
 //! Tests of `ui-state.toml` (round trips, tolerant reading of old and broken files, sanitizing).
 
 use super::ui_state::*;
-use crate::edit::{CropAspect, FilterChain};
+use crate::edit::{Crop, CropAspect, CropMemory, FilterChain, Size};
 use crate::settings::{VersionedFile as _, load, save};
 
 #[test]
@@ -465,4 +465,37 @@ fn dialog_sizes_round_trip_and_old_files_load() {
     std::fs::write(dir.path().join("ui-state.toml"), "version = 1\ndialogs = 3\n").unwrap();
     let read = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
     assert_eq!(read.dialogs, DialogUiState::default(), "unreadable = missing");
+}
+
+#[test]
+fn a_file_without_a_crop_history_loads_and_a_stored_one_comes_back_clean() {
+    let old: UiState = toml::from_str("version = 2\n[export]\nkeep_filters = true\n").unwrap();
+    assert!(old.export.crop_history.is_empty());
+
+    let hd = Size::new(1920, 1080);
+    let entry = |top| CropMemory {
+        frame: hd,
+        crop: Crop::new(top, 0, top, 0),
+        pinned: top == 140,
+        used: 1_793_000_000,
+        source: "clip.mkv".to_owned(),
+    };
+    let mut state = UiState::default();
+    state.export.crop_history = vec![entry(140), entry(0), entry(140), entry(70)];
+    let notes = state.sanitize();
+    assert!(notes.iter().any(|n| n.contains("crop history")), "{notes:?}");
+    assert_eq!(state.export.crop_history, [entry(140), entry(70)]);
+
+    let text = toml::to_string(&state).unwrap();
+    let back: UiState = toml::from_str(&text).unwrap();
+    assert_eq!(back.export.crop_history, state.export.crop_history);
+
+    // One entry this version cannot read costs only that entry; a broken list costs only the list.
+    let text = "version = 2\n[[export.crop_history]]\nused = 1\n[[export.crop_history]]\nframe = { width = 1920, \
+                height = 1080 }\ncrop = { top = 70, bottom = 70 }\n";
+    let some: UiState = toml::from_str(text).unwrap();
+    assert_eq!(some.export.crop_history.len(), 1);
+    let broken: UiState = toml::from_str("version = 2\n[export]\ncrop_history = 3\nkeep_filters = true\n").unwrap();
+    assert!(broken.export.crop_history.is_empty());
+    assert!(broken.export.keep_filters);
 }

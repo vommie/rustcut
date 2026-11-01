@@ -239,7 +239,11 @@ component CropMenu inherits VerticalLayout {
             IconButton {
                 icon: IconId.color-pick;
                 checked: Filters.picking;
-                enabled: Filters.has-media;
+                enabled: Filters.has-media && !Filters.auto-crop-running;
+                pulse: Filters.auto-crop-running;
+                flash: Filters.crop-flash;
+                flash-color: Filters.crop-flash-level == 1 ? Theme.status-ok
+                    : Filters.crop-flash-level == 2 ? Theme.accent : Theme.status-corrupt;
                 tooltip: "Pick a border's color: click a border in the video (auto-crop then looks for that color)";
                 clicked => { Filters.pick-border-color(); }
             }

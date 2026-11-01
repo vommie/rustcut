@@ -1,14 +1,131 @@
 // The one slim status line (CLAUDE.md rule 8): on the left the latest message with its severity, on the right facts that no
-// other place shows (how the video is decoded). Set from src/ui/status/.
+// other place shows (how the video is decoded). Between them, only while something runs, its activity segment: a
+// throbber, a text, then the result for a few seconds (P12 4.1; block 7 uses it too). Set from src/ui/status/.
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
+import { TooltipHost } from "tooltip.slint";
+import { Throbber } from "throbber.slint";
+
+/// One segment: its `level` (0 = info, 1 = success, 2 = warning, 3 = error) counts once `running` is over.
+export struct ActivityView {
+    id: int,
+    text: string,
+    level: int,
+    running: bool,
+    cancelable: bool,
+    leaving: bool,
+}
 
 export global Status {
     in property <string> message: "Ready";
     // 0 = info, 1 = success, 2 = warning, 3 = error.
     in property <int> level;
     in property <string> decoder;
+    in property <[ActivityView]> activities;
+    callback activity-hover(/* id */ int, /* on */ bool);
+    callback activity-cancel(/* id */ int);
+}
+
+component StatusSeparator inherits Rectangle {
+    width: 1px;
+
+    Rectangle {
+        y: (parent.height - self.height) / 2;
+        width: 1px;
+        height: 14px;
+        background: Theme.surface-selected;
+    }
+}
+
+/// One activity. It never gets narrower while it shows (nothing jitters when the words get shorter) and fades in and out.
+component ActivitySegment inherits Rectangle {
+    in property <ActivityView> item;
+
+    property <color> tint: root.item.running || root.item.leaving ? Theme.text
+        : root.item.level == 1 ? Theme.status-ok
+        : root.item.level == 2 ? Theme.accent
+        : root.item.level == 3 ? Theme.status-corrupt : Theme.text-muted;
+    property <length> wanted: row.preferred-width;
+    property <length> widest;
+    property <bool> shown;
+
+    init => {
+        self.widest = self.wanted;
+        self.shown = true;
+    }
+    changed wanted => {
+        if self.wanted > self.widest {
+            self.widest = self.wanted;
+        }
+    }
+
+    min-width: 48px;
+    preferred-width: root.widest;
+    max-width: root.widest;
+    horizontal-stretch: 0;
+    opacity: root.shown && !root.item.leaving ? 1 : 0;
+    animate opacity { duration: 150ms; }
+
+    host := TooltipHost {
+        text: root.item.text;
+    }
+
+    touch := TouchArea {
+        changed has-hover => {
+            Status.activity-hover(root.item.id, self.has-hover);
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+
+        row := HorizontalLayout {
+            spacing: 6px;
+
+            StatusSeparator { }
+
+            VerticalLayout {
+                alignment: center;
+
+                if root.item.running: Throbber {
+                    size: IconSize.md;
+                }
+
+                if !root.item.running: AppIcon {
+                    icon: root.item.level == 1 ? IconId.status-ok : root.item.level == 3 ? IconId.status-error
+                        : root.item.level == 2 ? IconId.status-warning : IconId.none;
+                    size: IconSize.md;
+                    color: root.tint;
+                }
+            }
+
+            Text {
+                text: root.item.text;
+                color: root.tint;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+
+            if root.item.cancelable: Rectangle {
+                width: 16px;
+
+                cancel := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => { Status.activity-cancel(root.item.id); }
+                }
+
+                AppIcon {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    icon: IconId.close;
+                    size: IconSize.sm;
+                    color: cancel.has-hover ? Theme.text : Theme.status-deleted;
+                }
+            }
+        }
+    }
 }
 
 export component StatusLine inherits Rectangle {
@@ -54,6 +171,12 @@ export component StatusLine inherits Rectangle {
             overflow: elide;
             horizontal-stretch: 1;
         }
+
+        for item in Status.activities: ActivitySegment {
+            item: item;
+        }
+
+        if Status.activities.length > 0 && Status.decoder != "": StatusSeparator { }
 
         Text {
             text: Status.decoder;

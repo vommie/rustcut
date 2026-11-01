@@ -1,5 +1,7 @@
 //! The status line's message (left part): the quiet confirmations the notice system routes there (`ui::notices`). The
-//! decoder text on the right comes from the player bridge.
+//! decoder text on the right comes from the player bridge, what runs stands between them (`activity`).
+
+pub mod activity;
 
 use slint::ComponentHandle as _;
 

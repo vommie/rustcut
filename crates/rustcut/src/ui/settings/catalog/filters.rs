@@ -131,6 +131,20 @@ pub static FILTERS: &[Card] = &[
         ],
     },
     Card {
+        title: "Crop history",
+        description: "The crops used earlier, listed by the button beside auto-crop.",
+        fields: &[number!(
+            "filters.crop_history_length",
+            "Length",
+            "How many crops the history keeps. Pinned crops stay and do not count. A shorter length drops the oldest \
+             at once.",
+            filters.crop_history_length: u8,
+            1..=50,
+            1,
+            ""
+        )],
+    },
+    Card {
         title: "Auto-crop",
         description: "How auto-crop looks for black borders. Each video starts with these; the Crop filter's menu \
                       changes them for one video.",

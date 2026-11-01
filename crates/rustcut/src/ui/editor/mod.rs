@@ -461,6 +461,7 @@ impl Editor {
                 crop_edit: label(Action::CropEdit),
                 quick_crop: label(Action::QuickCrop),
                 auto_crop: label(Action::AutoCrop),
+                crop_history: label(Action::CropHistory),
                 rotate_left: label(Action::RotateLeft),
                 rotate_right: label(Action::RotateRight),
                 mirror_horizontal: label(Action::MirrorHorizontal),

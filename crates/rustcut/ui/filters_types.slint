@@ -82,7 +82,11 @@ export global Filters {
     in property <string> crop-size;
     in property <bool> crop-editing;
     in property <bool> can-edit-crop;
+    // Auto-crop or the color it looks for is being read: its buttons wait.
     in property <bool> auto-crop-running;
+    // Their glow after a result: 1 success, 2 nothing found, 3 failed (the value stays while it fades out).
+    in property <bool> crop-flash;
+    in property <int> crop-flash-level;
     // How auto-crop searches (the Crop menu): the black limit 0..255, the sides (0 all, 1 top + bottom, 2 sides), the
     // sample points, only inside the sections.
     in property <int> search-limit: 24;
@@ -140,6 +144,7 @@ export global Filters {
     // The quick crop's key (F4 by default, user decision 2026-10-27; it was Ctrl held over the video).
     in property <string> key-quick-crop;
     in property <string> key-auto-crop;
+    in property <string> key-crop-history;
     in property <string> key-rotate-left;
     in property <string> key-rotate-right;
     in property <string> key-mirror-horizontal;
@@ -201,6 +206,8 @@ export global Filters {
     callback step-search-samples(int);
     callback set-search-sections-only(bool);
     callback pick-border-color();
+    // The right click on auto-crop: starts the pipette, or ends it while it waits for a click.
+    callback quick-pick();
     callback clear-border-color();
     callback edit-search-similarity(string) -> bool;
     callback step-search-similarity(int);

@@ -120,6 +120,17 @@ impl FiltersState {
         }
     }
 
+    /// The crop was replaced while it is edited: the ratio button starts from the new one.
+    pub(super) fn crop_replaced(&mut self) {
+        let Some(view) = self.crop_view() else { return };
+        let crop = self.crop();
+        let follows = self.crop_follows(&view, crop);
+        if let Some(s) = &mut self.crop {
+            s.placement = Placement::of(view.display_rect(crop), view.display_size(), view.pixel_width());
+            s.follows = follows;
+        }
+    }
+
     /// The ratio button: the next landscape (left click) or portrait (right click) ratio, placed like the crop the user
     /// made. `false` without a session.
     pub fn cycle_ratio(&mut self, landscape: bool) -> bool {

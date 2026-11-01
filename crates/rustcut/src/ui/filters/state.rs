@@ -93,6 +93,8 @@ pub struct FiltersState {
     /// How auto-crop searches (kept and reset with the chain).
     pub search: CropSearch,
     pub auto_crop_running: bool,
+    /// A history entry under the pointer: the video shows this crop for now (P12 4.3).
+    pub(super) history_preview: Option<Crop>,
     pub(super) crop: Option<CropSession>,
     /// The video area in logical pixels.
     view: (f32, f32),
@@ -139,6 +141,7 @@ impl FiltersState {
             interlace: InterlaceHint::None,
             search,
             auto_crop_running: false,
+            history_preview: None,
             crop: None,
             view: (0.0, 0.0),
         }
@@ -188,6 +191,7 @@ impl FiltersState {
         self.source = None;
         self.interlace = InterlaceHint::Checking;
         self.auto_crop_running = false;
+        self.history_preview = None;
         if !self.keep {
             self.chain = default_chain(&self.defaults);
             self.search = self.defaults.crop_search.sanitized();
@@ -324,6 +328,13 @@ impl FiltersState {
         self.chain.size_before(FilterKind::Crop, source.size).ok()
     }
 
+    /// The pixel aspect of the frame the crop filter gets.
+    pub fn crop_sar(&self) -> f64 {
+        self.source.map_or(1.0, |source| {
+            self.chain.sample_aspect_before(FilterKind::Crop, source.sar)
+        })
+    }
+
     /// The crop as seen in the output (after the rotations and mirrors that follow it): the card's fields.
     pub fn shown_crop(&self) -> Crop {
         self.chain.orientation_after(FilterKind::Crop).map_crop(self.crop())
@@ -333,6 +344,21 @@ impl FiltersState {
     pub fn set_crop(&mut self, crop: Crop) {
         let crop = self.crop_frame().map_or(crop, |frame| crop.clamped(frame, 2));
         self.chain.set(Filter::Crop(crop));
+    }
+
+    /// A crop chosen as a whole (the history): the crop filter switches on, and a crop being edited follows it.
+    pub fn apply_crop(&mut self, crop: Crop) {
+        self.set_crop(crop);
+        self.switch_on(FilterKind::Crop);
+        self.crop_replaced();
+    }
+
+    /// What the crop keeps as seen in the output.
+    pub fn shown_kept(&self) -> Option<String> {
+        let frame = self.crop_frame()?;
+        let shown = self.chain.orientation_after(FilterKind::Crop).size(frame);
+        let kept = self.shown_crop().kept(shown)?;
+        Some(format!("{}×{}", kept.width, kept.height))
     }
 
     /// Sets one edge as seen in the output.
@@ -474,7 +500,7 @@ impl FiltersState {
         let Some(source) = self.source else {
             return VideoFilter::default();
         };
-        let chain = if self.crop.is_some() {
+        let chain = if self.crop.is_some() || self.history_preview.is_some() {
             self.chain.for_crop_editing()
         } else if self.preview {
             self.chain.clone()

@@ -138,17 +138,23 @@ impl FiltersBridge {
         let Some(window) = self.window.upgrade() else { return };
         let st = self.state.borrow();
         let o = window.global::<CropOverlay<'_>>();
-        let (Some(session), Some(view)) = (st.crop_session(), st.crop_view()) else {
+        let session = st.crop_session();
+        let Some(view) = st
+            .crop_view()
+            .filter(|_| session.is_some() || st.history_preview.is_some())
+        else {
             o.set_active(false);
             return;
         };
         let p = view.picture();
-        let crop = st.crop();
-        let picking = session.mode == CropMode::Pick;
+        // A history entry under the pointer: its crop on the whole picture, without handles.
+        let preview = st.history_preview;
+        let crop = preview.unwrap_or_else(|| st.crop());
+        let picking = preview.is_none() && session.is_some_and(|s| s.mode == CropMode::Pick);
         // Picking shows the whole picture without handles: a click picks, it does not drag.
         let k = if picking { p } else { view.kept_rect(crop) };
         o.set_active(true);
-        o.set_quick(session.mode != CropMode::Edit);
+        o.set_quick(preview.is_some() || session.is_none_or(|s| s.mode != CropMode::Edit));
         o.set_picture_x(p.x);
         o.set_picture_y(p.y);
         o.set_picture_width(p.width);
@@ -157,8 +163,13 @@ impl FiltersBridge {
         o.set_kept_y(k.y);
         o.set_kept_width(k.width);
         o.set_kept_height(k.height);
-        o.set_handle(session.active_handle().map_or(-1, input::handle_index));
-        o.set_dragging(session.dragging());
+        o.set_handle(
+            session
+                .filter(|_| preview.is_none())
+                .and_then(super::session::CropSession::active_handle)
+                .map_or(-1, input::handle_index),
+        );
+        o.set_dragging(session.is_some_and(super::session::CropSession::dragging));
         let kept = view.shown_crop(crop).kept(view.shown_size()).filter(|_| !picking);
         o.set_size_text(
             kept.map(|s| format!("{}×{}", s.width, s.height))
@@ -167,10 +178,11 @@ impl FiltersBridge {
         );
         o.set_ratio_label(st.ratio_label().into());
         o.set_hint(
-            match session.mode {
-                CropMode::Edit => "Drag a corner, an edge or the area (Shift keeps the ratio) · Enter or a double click keeps · Esc restores",
-                CropMode::Quick => "Quick crop: drag the nearest edge or corner · Enter keeps · Esc restores",
-                CropMode::Pick => "Click a border to pick its color for auto-crop · Esc cancels",
+            match session.filter(|_| preview.is_none()).map(|s| s.mode) {
+                None => "",
+                Some(CropMode::Edit) => "Drag a corner, an edge or the area (Shift keeps the ratio) · Enter or a double click keeps · Esc restores",
+                Some(CropMode::Quick) => "Quick crop: drag the nearest edge or corner · Enter keeps · Esc restores",
+                Some(CropMode::Pick) => "Click a border to pick its color for auto-crop · Esc cancels",
             }
             .into(),
         );
