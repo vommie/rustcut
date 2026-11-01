@@ -19,7 +19,7 @@ depends=(
   'wayland' 'libglvnd' 'dbus'
   'hicolor-icon-theme'
 )
-makedepends=('cargo')
+makedepends=('cargo' 'clang')
 optdepends=(
   'rustview: Tag & Rate, tags and ratings of the rendered clips (package from github.com/vommie/rustview releases)'
   'xdg-desktop-portal: file and folder dialogs'
@@ -48,7 +48,7 @@ build() {
   export RUSTUP_TOOLCHAIN=stable
   export CARGO_TARGET_DIR=target
   _rustflags
-  cargo build --frozen --release -p rustcut --no-default-features
+  cargo build --frozen --release -p rustcut -p rustcut-thumbs --no-default-features
 }
 
 # Only with `build-package.sh --check`: the golden tests need the PyCutRv test media (see CLAUDE.md).
@@ -63,6 +63,7 @@ check() {
 package() {
   cd "$pkgname-$pkgver"
   install -Dm755 "target/release/$pkgname" "$pkgdir/usr/bin/$pkgname"
+  install -Dm755 "target/release/$pkgname-thumbs" "$pkgdir/usr/lib/$pkgname/$pkgname-thumbs"
   install -Dm644 "packaging/io.github.vommie.rustcut.desktop" "$pkgdir/usr/share/applications/io.github.vommie.rustcut.desktop"
   sed -e "s/@VERSION@/$pkgver/" -e "s/@DATE@/$(date -u +%F -d "@${SOURCE_DATE_EPOCH:-$(date +%s)}")/" \
     "packaging/io.github.vommie.rustcut.metainfo.xml" > "$srcdir/io.github.vommie.rustcut.metainfo.xml"

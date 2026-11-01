@@ -173,6 +173,17 @@ impl QueueBridge {
         if let Some(hook) = self.hooks.borrow().refreshed.as_ref() {
             hook();
         }
+        if let Some(hook) = self.hooks.borrow().jobs.as_ref() {
+            let jobs = self
+                .shared
+                .lock()
+                .view
+                .rows
+                .iter()
+                .map(|row| (row.id.0, row.source.clone()))
+                .collect();
+            hook(jobs);
+        }
         let (done, status, ended_jobs) = {
             let mut shared = self.shared.lock();
             (

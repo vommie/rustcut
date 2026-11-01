@@ -51,6 +51,8 @@ pub struct PreviewOptions {
     pub picture_at_percent: u8,
     /// Files read at the same time (at least 1).
     pub parallel: usize,
+    /// The thumbnail helper, the fast way to the picture; without it ffmpeg makes it.
+    pub helper: Option<PathBuf>,
 }
 
 impl Default for PreviewOptions {
@@ -59,6 +61,7 @@ impl Default for PreviewOptions {
             programs: PreviewPrograms::default(),
             picture_at_percent: 10,
             parallel: DEFAULT_PARALLEL,
+            helper: None,
         }
     }
 }
@@ -347,10 +350,16 @@ async fn read(path: &Path, key: &Key, options: &PreviewOptions) -> Preview {
         return preview;
     };
     // The video a player shows, never cover art.
-    let Some((stream, _)) = info.primary_video() else {
+    let Some((stream, video)) = info.primary_video() else {
         return preview;
     };
     let (index, at) = (stream.index, picture_time(info.duration(), options.picture_at_percent));
+    if let Some(helper) = &options.helper
+        && let Some(thumbnail) = helper_picture(helper, path, at, video.rotation).await
+    {
+        preview.thumbnail = Some(thumbnail);
+        return preview;
+    }
     let ffmpeg = programs.ffmpeg.as_deref().unwrap_or_else(|| Path::new("ffmpeg"));
     // The keyframe alone first; an exact decode for a stream without marked keyframes; the start of a file whose
     // duration is wrong (the place may lie past its last frame).
@@ -373,6 +382,33 @@ async fn read(path: &Path, key: &Key, options: &PreviewOptions) -> Preview {
         }
     }
     preview
+}
+
+/// The picture through the thumbnail helper, centered on a transparent [`THUMB_WIDTH`] x [`THUMB_HEIGHT`] like ffmpeg's.
+async fn helper_picture(helper: &Path, path: &Path, at: Timestamp, rotation: u16) -> Option<Thumbnail> {
+    let ms = u64::try_from(at.as_micros() / 1000).ok()?;
+    let picture = crate::thumbs::still(helper, path, ms, rotation, THUMB_WIDTH).await?;
+    let picture = image::DynamicImage::ImageRgb8(picture).into_rgba8();
+    let (width, height) = picture.dimensions();
+    let fit = |have: u64, other: u64, limit: u32, other_limit: u32| {
+        let scaled = have.saturating_mul(u64::from(other_limit)) / other.max(1);
+        u32::try_from(scaled.min(u64::from(limit))).unwrap_or(limit).max(1)
+    };
+    let (wide, high) = (u64::from(width), u64::from(height));
+    let fitted = image::imageops::thumbnail(
+        &picture,
+        fit(wide, high, THUMB_WIDTH, THUMB_HEIGHT),
+        fit(high, wide, THUMB_HEIGHT, THUMB_WIDTH),
+    );
+    let mut canvas = image::RgbaImage::new(THUMB_WIDTH, THUMB_HEIGHT);
+    let x = i64::from((THUMB_WIDTH - fitted.width().min(THUMB_WIDTH)) / 2);
+    let y = i64::from((THUMB_HEIGHT - fitted.height().min(THUMB_HEIGHT)) / 2);
+    image::imageops::overlay(&mut canvas, &fitted, x, y);
+    Some(Thumbnail {
+        width: THUMB_WIDTH,
+        height: THUMB_HEIGHT,
+        rgba: canvas.into_raw(),
+    })
 }
 
 async fn picture(ffmpeg: &Path, path: &Path, stream: u32, at: Timestamp, fast: bool) -> Result<Thumbnail, String> {

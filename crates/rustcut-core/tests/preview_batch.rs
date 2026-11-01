@@ -281,6 +281,7 @@ fn another_picture_place_is_read_again_and_fewer_turns_apply_to_new_reads() {
         programs,
         picture_at_percent: 50,
         parallel: 1,
+        helper: None,
     });
     let moved = rt.block_on(service.preview(&files[0])).unwrap();
     assert!(

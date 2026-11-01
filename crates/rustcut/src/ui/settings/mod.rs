@@ -521,6 +521,9 @@ impl SettingsBridge {
 
 impl view::Context for SettingsBridge {
     fn button_text(&self, key: &str) -> Option<String> {
+        if key == "thumbnails.clear" {
+            return Some(crate::ui::thumbs::stats_text());
+        }
         let p = &self.paths;
         let path = match key {
             "open.logs" => p.log_dir(),
@@ -558,6 +561,7 @@ fn row_view(r: &view::RowView) -> SettingRowView {
         text: r.text.as_str().into(),
         placeholder: r.placeholder.into(),
         suffix: r.suffix.into(),
+        hold: r.hold,
         segmented: r.kind == view::RowKind::Choice && crate::util::choice::segmented(&r.items),
         enabled: r.enabled,
         indent: r.indent,

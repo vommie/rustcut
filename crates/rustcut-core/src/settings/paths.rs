@@ -57,6 +57,11 @@ impl AppPaths {
         self.data_dir.join("queue.sqlite")
     }
 
+    /// The timeline thumbnails of job sources: a cache that can always be made again.
+    pub fn thumbs_database(&self) -> PathBuf {
+        self.cache_dir.join("tl_thumbs.db")
+    }
+
     pub fn config_backups(&self) -> PathBuf {
         self.config_dir.join("backups")
     }

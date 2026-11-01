@@ -32,6 +32,7 @@ pub enum Action {
     ZoomIn,
     ZoomOut,
     ZoomFit,
+    ToggleThumbnails,
     CropEdit,
     QuickCrop,
     AutoCrop,
@@ -63,7 +64,7 @@ pub enum Action {
 }
 
 impl Action {
-    pub const ALL: [Self; 53] = [
+    pub const ALL: [Self; 54] = [
         Self::Open,
         Self::Save,
         Self::Quit,
@@ -91,6 +92,7 @@ impl Action {
         Self::ZoomIn,
         Self::ZoomOut,
         Self::ZoomFit,
+        Self::ToggleThumbnails,
         Self::CropEdit,
         Self::QuickCrop,
         Self::AutoCrop,
@@ -149,6 +151,7 @@ impl Action {
             Self::ZoomIn => "zoom_in",
             Self::ZoomOut => "zoom_out",
             Self::ZoomFit => "zoom_fit",
+            Self::ToggleThumbnails => "toggle_thumbnails",
             Self::CropEdit => "crop_edit",
             Self::QuickCrop => "quick_crop",
             Self::AutoCrop => "auto_crop",
@@ -212,6 +215,7 @@ impl Action {
             Self::ZoomIn => "Zoom timeline in",
             Self::ZoomOut => "Zoom timeline out",
             Self::ZoomFit => "Fit timeline",
+            Self::ToggleThumbnails => "Show / hide the timeline thumbnails",
             Self::CropEdit => "Edit the crop on the video",
             Self::QuickCrop => "Quick crop: drag the nearest edge (again: keep it)",
             Self::AutoCrop => "Detect black borders (auto-crop)",
@@ -303,7 +307,8 @@ impl Action {
             | Self::ResetFilters
             | Self::CropHistory
             | Self::NormalizationToggle
-            | Self::NormalizationNext => &[],
+            | Self::NormalizationNext
+            | Self::ToggleThumbnails => &[],
         }
     }
 

@@ -14,7 +14,7 @@ next job](docs/screenshots/main.png)
 frame](docs/screenshots/crop.png)
 
 The screenshots come from the test environment and are retaken with one command: `scripts/readme-shots.sh` (after
-`cargo build -p rustcut`).
+`cargo build -p rustcut -p rustcut-thumbs`).
 
 ## Install (Arch Linux, Manjaro)
 

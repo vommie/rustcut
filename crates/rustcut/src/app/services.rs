@@ -10,6 +10,9 @@ use rustcut_core::render::{HardwareContext, RenderEnv};
 use rustcut_core::rustview::{SyncCommand, SyncService};
 use rustcut_core::settings::{AppPaths, Settings};
 use rustcut_core::store::{Problem, Store, StoreCommand, StoreHandle, spawn_store};
+use rustcut_core::thumbs::{
+    ThumbCommand, ThumbHandle, ThumbStore, ThumbStoreCommand, ThumbStoreHandle, spawn_thumb_store,
+};
 
 use super::{AppError, Cli, persistence};
 use crate::MainWindow;
@@ -82,6 +85,36 @@ pub(super) fn listen(
             tracing::warn!(error = %e, "[Instance] Not listening for a second start; it opens its own window");
             None
         }
+    }
+}
+
+/// Opens the thumbnail cache and starts its thread. A cache that cannot be used stays alone: this run keeps it in memory.
+pub(super) fn open_thumb_store(paths: &AppPaths) -> (ThumbStoreHandle, Option<std::thread::JoinHandle<()>>) {
+    let store = ThumbStore::open(&paths.thumbs_database(), &paths.data_backups()).or_else(|e| {
+        tracing::warn!(error = %e, "[Thumbs] The thumbnail cache cannot be used; this run keeps it in memory");
+        ThumbStore::open_in_memory()
+    });
+    match store.map(|store| spawn_thumb_store(store).map_err(Into::into)) {
+        Ok(Ok((handle, thread))) => (handle, Some(thread)),
+        Ok(Err(e)) | Err(e) => {
+            let e: rustcut_core::thumbs::ThumbStoreError = e;
+            tracing::warn!(error = %e, "[Thumbs] Thumbnails are not cached in this run");
+            (ThumbStoreHandle::closed(), None)
+        }
+    }
+}
+
+pub(super) fn stop_thumbs(
+    service: &ThumbHandle,
+    store: &ThumbStoreHandle,
+    thread: Option<std::thread::JoinHandle<()>>,
+) {
+    let _ = service.blocking_request(|reply| ThumbCommand::Shutdown { reply });
+    let _ = store.blocking_request(|reply| ThumbStoreCommand::Shutdown { reply });
+    if let Some(thread) = thread
+        && thread.join().is_err()
+    {
+        tracing::warn!("[App] The thumbnail cache's thread ended with a panic");
     }
 }
 

@@ -43,7 +43,7 @@ section "Build tools"
 check required cmd:rustc      rustup  "Rust compiler (see rust-version in Cargo.toml)"
 check required cmd:cargo      rustup  "Cargo"
 check required cmd:cc         gcc     "C compiler/linker for native dependencies (bundled SQLite)"
-check optional cmd:clang      clang   "only to regenerate the libmpv bindings (libmpv2-sys ships them pregenerated)"
+check required cmd:clang      clang   "the thumbnail helper's libav bindings (bindgen); also regenerates the libmpv bindings (libmpv2-sys ships them pregenerated)"
 check required cmd:pkg-config pkgconf "finds the system libraries"
 check required cmd:git        git     "source control, used to collect the package sources"
 if command -v rustc >/dev/null 2>&1; then
@@ -57,6 +57,7 @@ fi
 
 section "Libraries (build and run time)"
 check required pc:mpv             mpv              "libmpv, the player"
+check required pc:libavformat     ffmpeg           "the thumbnail helper reads video through libav"
 check required pkg:fontconfig     fontconfig       "font lookup"
 check required pkg:freetype2      freetype2        "font rendering"
 check required pkg:libxkbcommon   libxkbcommon     "keyboard handling"

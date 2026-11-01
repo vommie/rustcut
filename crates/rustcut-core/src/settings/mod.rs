@@ -12,6 +12,7 @@ mod player;
 mod schema;
 #[cfg(test)]
 mod schema_tests;
+mod thumbnails;
 mod ui_state;
 #[cfg(test)]
 mod ui_state_tests;
@@ -33,6 +34,10 @@ pub use schema::{
     AdvancedSettings, AppearanceSettings, AutoSection, DesktopSettings, EditorSettings, ExportSettings,
     GeneralSettings, HashingSettings, OnJobLoad, QueueSettings, RenderSettings, RustViewSettings, Settings,
     TaskbarShows, TraySettings, WarningSettings, WhenDone, WriteTiming,
+};
+pub use thumbnails::{
+    MAX_THUMB_DELAY_MS, MAX_THUMB_PORTRAIT_PERCENT, MAX_THUMB_WORKERS, MIN_THUMB_PORTRAIT_PERCENT, ThumbDensity,
+    ThumbLook, ThumbMissing, ThumbPlace, ThumbPortrait, ThumbProgress, ThumbZone, ThumbnailSettings,
 };
 pub use ui_state::{
     ExportPanelState, JobPanelState, LogPanelState, LogSource, ProbeState, QueuePanelState, SettingsWindowState,

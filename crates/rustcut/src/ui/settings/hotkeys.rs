@@ -69,7 +69,7 @@ pub const fn group(action: Action) -> &'static str {
         | Action::GoToEnd
         | Action::AddSection
         | Action::DeleteSection => "Sections",
-        Action::ZoomIn | Action::ZoomOut | Action::ZoomFit => "Timeline",
+        Action::ZoomIn | Action::ZoomOut | Action::ZoomFit | Action::ToggleThumbnails => "Timeline",
         Action::CropEdit
         | Action::QuickCrop
         | Action::AutoCrop

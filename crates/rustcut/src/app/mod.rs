@@ -215,8 +215,56 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         keys,
         &save_key,
     );
-    // The queue's pause is saved at once, so a crash keeps it (user decision Q-P8b).
     let ui_writer = Rc::new(persistence::UiStateWriter::start(runtime.handle(), &loaded));
+    let (thumb_store, thumb_store_thread) = services::open_thumb_store(&loaded.paths);
+    let thumb_service = rustcut_core::thumbs::spawn_thumbs(
+        runtime.handle(),
+        rustcut_core::thumbs::ThumbConfig {
+            ffmpeg: loaded
+                .settings
+                .advanced
+                .ffmpeg
+                .clone()
+                .unwrap_or_else(|| "ffmpeg".into()),
+            helper: rustcut_core::thumbs::helper_program(),
+            settings: loaded.settings.thumbnails.clone(),
+            render_nice: loaded.settings.render.nice,
+            store: thumb_store.clone(),
+        },
+    );
+    let thumbs = crate::ui::thumbs::ThumbsBridge::install(
+        &main,
+        &thumb_service,
+        loaded.settings.thumbnails.clone(),
+        writer.clone(),
+        &ui,
+        runtime.handle(),
+    );
+    crate::ui::thumbs::check_cache_size(loaded.paths.thumbs_database(), &ui, runtime.handle());
+    let fallback_noted = Rc::new(std::cell::Cell::new(loaded.ui_state.thumbnails_fallback_noted));
+    {
+        let (noted, writer) = (Rc::clone(&fallback_noted), Rc::clone(&ui_writer));
+        crate::ui::thumbs::set_fallback_memory(move |value| {
+            if let Some(value) = value {
+                noted.set(value);
+                writer.update(|s| s.thumbnails_fallback_noted = value);
+            }
+            noted.get()
+        });
+        let weak = Rc::downgrade(&thumbs);
+        queue.hooks().jobs = Some(Box::new(move |jobs| {
+            if let Some(thumbs) = weak.upgrade() {
+                thumbs.jobs_changed(jobs);
+            }
+        }));
+        let weak = Rc::downgrade(&thumbs);
+        queue.hooks().status.push(Box::new(move |status| {
+            if let Some(thumbs) = weak.upgrade() {
+                thumbs.rendering_changed(status.rendering > 0);
+            }
+        }));
+    }
+    // The queue's pause is saved at once, so a crash keeps it (user decision Q-P8b).
     {
         let writer = Rc::clone(&ui_writer);
         queue.hooks().paused_changed = Some(Box::new(move |paused| writer.update(|s| s.queue.paused = paused)));
@@ -342,6 +390,15 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             menu: &menu,
         },
     );
+    thumbs.set_filters(&filters);
+    {
+        let (thumbs, media) = (Rc::downgrade(&thumbs), Rc::downgrade(&media));
+        crate::ui::media_info::add_probe_hook(move |info| {
+            if let (Some(thumbs), Some(media)) = (thumbs.upgrade(), media.upgrade()) {
+                thumbs.probed(media.current_path(), info);
+            }
+        });
+    }
     {
         // The crop history is saved at every change, so a crash keeps it (Q-P12c).
         let writer = Rc::clone(&ui_writer);
@@ -594,6 +651,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             env: RenderEnv::new(&loaded.settings, &loaded.paths, HardwareContext::default()),
             log: log.level_setter(),
             media: Rc::downgrade(&media),
+            thumbs: Rc::downgrade(&thumbs),
             probe: Rc::downgrade(&probe),
             runtime: runtime.handle().clone(),
             instance,
@@ -667,6 +725,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     queue.save_into(&mut ui_state.queue);
     power.save_into(&mut ui_state.queue);
     ui_state.job.collapsed = inspector.collapsed();
+    ui_state.thumbnails_fallback_noted = fallback_noted.get();
     dialogs::capture(&main, &mut ui_state.dialogs);
     logs.save_into(&mut ui_state.logs);
     settings_window.save_into(&mut ui_state.settings);
@@ -695,7 +754,9 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     drop(editor);
     drop(filters);
     drop(media);
+    drop(thumbs);
     drop(main);
+    services::stop_thumbs(&thumb_service.handle, &thumb_store, thumb_store_thread);
     stop_hashing(&hashing);
     stop_sync(&sync);
     stop_queue(&queue_service);

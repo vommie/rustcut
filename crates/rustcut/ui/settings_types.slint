@@ -20,6 +20,8 @@ export struct SettingRowView {
     placeholder: string,
     // A number's unit (shown inside its field), a button's text.
     suffix: string,
+    // A button that acts only when held (it deletes something).
+    hold: bool,
     // A choice of at most three short entries, drawn side by side (`util::choice::segmented`).
     segmented: bool,
     enabled: bool,

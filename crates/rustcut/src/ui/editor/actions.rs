@@ -183,6 +183,7 @@ impl Editor {
                 self.state.borrow_mut().viewport.fit();
                 self.publish();
             }
+            Action::ToggleThumbnails => crate::ui::thumbs::toggle(),
             Action::CropEdit => self.with_filters(FiltersBridge::toggle_crop_edit),
             Action::QuickCrop => self.with_filters(FiltersBridge::toggle_quick_crop),
             Action::AutoCrop => self.with_filters(FiltersBridge::auto_crop),

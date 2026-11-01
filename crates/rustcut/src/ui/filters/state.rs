@@ -392,6 +392,31 @@ impl FiltersState {
         self.set_shown_edge(edge, value);
     }
 
+    /// How a stored thumbnail shows like the big picture: always the source's rotation, and with `show_filters` what the
+    /// preview shows of the orientation and the crop.
+    pub fn thumb_view(&self, show_filters: bool) -> rustcut_core::thumbs::ThumbView {
+        let turned =
+            rustcut_core::edit::Orientation::from_degrees_clockwise(self.source.map_or(0, |source| source.rotation));
+        if !show_filters || !self.preview {
+            return rustcut_core::thumbs::ThumbView {
+                before: turned,
+                ..Default::default()
+            };
+        }
+        let crop = self
+            .chain
+            .get(FilterKind::Crop)
+            .filter(|slot| slot.enabled)
+            .and_then(|_slot| self.crop_frame())
+            .map(|frame| (self.crop(), frame))
+            .filter(|(crop, _frame)| *crop != Crop::default());
+        rustcut_core::thumbs::ThumbView {
+            before: turned.then(self.chain.orientation_before(FilterKind::Crop)),
+            crop,
+            after: self.chain.orientation_after(FilterKind::Crop),
+        }
+    }
+
     /// The orientation's values (whether it is on or not).
     pub fn orientation(&self) -> OrientationParams {
         match self.filter(FilterKind::Orientation) {

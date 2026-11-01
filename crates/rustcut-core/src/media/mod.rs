@@ -10,7 +10,7 @@ mod formats;
 mod model;
 mod pixel;
 mod preview;
-mod probe;
+pub(crate) mod probe;
 mod summary;
 mod timing;
 

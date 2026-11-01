@@ -7,6 +7,7 @@ mod editing;
 mod filters;
 mod folders;
 mod messages;
+mod thumbnails;
 mod work;
 
 pub use self::editing::template_example;

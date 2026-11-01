@@ -189,6 +189,7 @@ impl SettingsBridge {
     pub(super) fn action(&self, key: &str) {
         match key {
             "open.logs" => self.open_folder("logs"),
+            "thumbnails.clear" => crate::ui::thumbs::clear_cache(),
             "open.config" => self.open_folder("config"),
             "open.data" => self.open_folder("data"),
             "open.cache" => self.open_folder("cache"),
