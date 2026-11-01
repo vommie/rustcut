@@ -155,6 +155,19 @@ pub async fn detect_crop(
     search: &CropSearch,
     options: &DetectOptions,
 ) -> Result<CropDetection, ProbeError> {
+    detect_crop_counted(file, frame, times, prefix, search, options, &|_| ()).await
+}
+
+/// [`detect_crop`] telling `done` how many samples are finished.
+async fn detect_crop_counted(
+    file: &Path,
+    frame: Size,
+    times: &[Timestamp],
+    prefix: &str,
+    search: &CropSearch,
+    options: &DetectOptions,
+    done: &(dyn Fn(usize) + Send + Sync),
+) -> Result<CropDetection, ProbeError> {
     let gate = Arc::new(Semaphore::new(CROP_PARALLEL));
     let mut samples = JoinSet::new();
     for at in times {
@@ -169,7 +182,10 @@ pub async fn detect_crop(
     }
     let mut boxes = Vec::with_capacity(times.len());
     let mut first_error = None;
+    let mut finished = 0;
     while let Some(joined) = samples.join_next().await {
+        finished += 1;
+        done(finished);
         match joined {
             Ok(Ok(output)) if output.status.success() => boxes.extend(parse_cropdetect(&output.stderr)),
             Ok(Ok(output)) => {
@@ -218,9 +234,39 @@ pub async fn detect_crop_retrying(
     search: &CropSearch,
     options: &DetectOptions,
 ) -> Result<CropDetection, ProbeError> {
+    detect_crop_watched(file, frame, times, prefix, search, options, &|_| ()).await
+}
+
+/// How far an auto-crop has come (the status bar's "3/8").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CropProgress {
+    pub done: usize,
+    pub total: usize,
+    /// The try (from 1).
+    pub attempt: usize,
+}
+
+/// [`detect_crop_retrying`] telling `progress` about every finished sample.
+pub async fn detect_crop_watched(
+    file: &Path,
+    frame: Size,
+    times: &[Timestamp],
+    prefix: &str,
+    search: &CropSearch,
+    options: &DetectOptions,
+    progress: &(dyn Fn(CropProgress) + Send + Sync),
+) -> Result<CropDetection, ProbeError> {
     let mut found = None;
     for (index, attempt) in search.tries().into_iter().enumerate() {
-        let result = detect_crop(file, frame, times, prefix, &attempt, options).await?;
+        let tell = |done| {
+            progress(CropProgress {
+                done,
+                total: times.len(),
+                attempt: index + 1,
+            });
+        };
+        tell(0);
+        let result = detect_crop_counted(file, frame, times, prefix, &attempt, options, &tell).await?;
         let done = result.samples_used == 0 || !result.crop.is_identity();
         tracing::debug!(
             try_number = index + 1,

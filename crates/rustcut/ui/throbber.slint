@@ -1,0 +1,19 @@
+// The throbber of what runs: the `busy` symbol turning once in 900 ms, drawn only while it is shown.
+
+import { Theme } from "styles.slint";
+import { IconId, IconRegistry, IconSize } from "icons.slint";
+
+export component Throbber inherits Rectangle {
+    in property <length> size: IconSize.md;
+
+    width: root.size;
+    height: root.size;
+
+    Image {
+        width: 100%;
+        height: 100%;
+        source: IconRegistry.source(IconId.busy);
+        colorize: Theme.primary;
+        transform-rotation: Math.mod(animation-tick() / 1ms, 900) / 900 * 360deg;
+    }
+}

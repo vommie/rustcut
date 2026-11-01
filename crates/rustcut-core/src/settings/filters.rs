@@ -4,8 +4,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::edit::{
-    DEFAULT_RATIOS, DeinterlaceRate, Deinterlacer, DeshakeParams, FieldParity, Filter, FilterChain, RatioSet,
-    ResizeAlgorithm, even_multiple, final_multiple,
+    DEFAULT_HISTORY_LENGTH, DEFAULT_RATIOS, DeinterlaceRate, Deinterlacer, DeshakeParams, FieldParity, Filter,
+    FilterChain, HISTORY_LENGTHS, RatioSet, ResizeAlgorithm, even_multiple, final_multiple,
 };
 use crate::media::CropSearch;
 
@@ -32,6 +32,8 @@ pub struct FilterDefaults {
     /// all filters (`edit::FINAL_MULTIPLES`: 0 = off, 2 = even, the default, 4, 8, 16). 0.0.51-0.0.59 had it as the
     /// crop's `crop_multiple` (moved by the migration `final-size-rule`).
     pub final_multiple: u8,
+    /// How many crops the crop history keeps, pinned ones not counted (0.0.90, P12 4.3).
+    pub crop_history_length: u8,
 }
 
 impl Default for FilterDefaults {
@@ -46,6 +48,7 @@ impl Default for FilterDefaults {
             resize_algorithm: ResizeAlgorithm::Lanczos,
             crop_ratios: DEFAULT_RATIOS.iter().map(ToString::to_string).collect(),
             final_multiple: even_multiple(),
+            crop_history_length: DEFAULT_HISTORY_LENGTH,
         }
     }
 }
@@ -62,6 +65,9 @@ impl FilterDefaults {
             deshake: self.deshake.sanitized(),
             crop_ratios: self.ratios().entries(),
             final_multiple: final_multiple(self.final_multiple),
+            crop_history_length: self
+                .crop_history_length
+                .clamp(*HISTORY_LENGTHS.start(), *HISTORY_LENGTHS.end()),
             ..self.clone()
         }
     }
@@ -175,6 +181,19 @@ mod tests {
     use crate::edit::FilterKind;
     use crate::media::CropSides;
     use crate::settings::Settings;
+
+    #[test]
+    fn the_crop_history_length_has_a_default_and_a_range() {
+        let s: Settings = toml::from_str("version = 4\n[filters]\ndeinterlacer = \"yadif\"\n").unwrap();
+        assert_eq!(s.filters.crop_history_length, 10);
+        for (stored, sane) in [(0, 1), (10, 10), (200, 50)] {
+            let filters = FilterDefaults {
+                crop_history_length: stored,
+                ..FilterDefaults::default()
+            };
+            assert_eq!(filters.sanitized().crop_history_length, sane);
+        }
+    }
 
     #[test]
     fn a_file_of_0_0_47_loads_with_the_new_defaults() {

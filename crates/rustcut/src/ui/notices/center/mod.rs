@@ -200,6 +200,14 @@ impl NoticeCenter {
                 *self.status_key.borrow_mut() = Some(bubble_key());
                 self.quiet_fresh(&notice)
             }
+            NoticePlace::Activity => {
+                status::activity::result(
+                    notice.activity.as_deref().unwrap_or_else(|| notice.kind.id()),
+                    notice.level,
+                    &notice.text(),
+                );
+                self.quiet_fresh(&notice)
+            }
             NoticePlace::Bubble | NoticePlace::Dialog | NoticePlace::Nothing => self.quiet_fresh(&notice),
         };
         if !fresh {

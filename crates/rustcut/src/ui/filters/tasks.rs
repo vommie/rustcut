@@ -1,15 +1,45 @@
 //! The picture checks on the tokio runtime: auto-crop (black borders sampled over the video) and the interlace check.
 //! Each runs as a task whose ffmpeg is killed when the task is aborted (another file, quit); the result comes back to
-//! the UI thread through `slint::spawn_local` and is dropped when another file was opened meanwhile.
+//! the UI thread through `slint::spawn_local` and is dropped when another file was opened meanwhile. Auto-crop shows in
+//! the status bar's activity segment and on its buttons (P12 4.1): the throbber with its count, the result, a glow.
 
-use std::rc::Weak;
+use std::rc::{Rc, Weak};
+use std::time::Duration;
 
 use rustcut_core::edit::{FilterKind, LavfiTarget};
-use rustcut_core::media::{crop_sample_times, detect_crop_retrying, detect_interlace, pick_color};
+use rustcut_core::media::{CropProgress, crop_sample_times, detect_crop_watched, detect_interlace, pick_color};
+use slint::ComponentHandle as _;
 
 use super::FiltersBridge;
-use super::state::{CropMode, Edge, InterlaceHint, Source};
+use super::history_view::edges_text;
+use super::state::{CropMode, InterlaceHint, Source};
+use crate::Filters;
 use crate::ui::notices::{Kind, Level, Notice};
+use crate::ui::status::activity;
+
+/// The status bar's segment of auto-crop.
+const ACTIVITY: &str = "auto-crop";
+/// The full glow on the buttons before it fades out.
+const FLASH_TIME: Duration = Duration::from_millis(120);
+
+/// How a run ended, for the buttons' glow.
+#[derive(Debug, Clone, Copy)]
+enum Outcome {
+    Cropped = 1,
+    Nothing = 2,
+    Failed = 3,
+}
+
+/// What the status bar says while the samples are read.
+fn waiting_text(progress: CropProgress) -> String {
+    let CropProgress { done, total, attempt } = progress;
+    let tries = if attempt > 1 {
+        format!(" (try {attempt})")
+    } else {
+        String::new()
+    };
+    format!("Waiting for Auto-Crop (ffmpeg)... {done}/{total}{tries}")
+}
 
 impl FiltersBridge {
     /// Starts the interlace check of the open file.
@@ -72,13 +102,91 @@ impl FiltersBridge {
         );
     }
 
+    /// Auto-crop's segment shows `text`, its buttons wait, and a run that is older is dropped from now on.
+    fn crop_work_started(&self, text: &str) {
+        self.crop_run.set(self.crop_run.get().wrapping_add(1));
+        self.state.borrow_mut().auto_crop_running = true;
+        let me = Weak::clone(&self.me);
+        let cancel: Rc<dyn Fn()> = Rc::new(move || {
+            if let Some(bridge) = me.upgrade() {
+                bridge.cancel_auto_crop();
+            }
+        });
+        activity::begin(ACTIVITY, text, Some(cancel));
+        self.publish_card();
+    }
+
+    /// Nothing runs any more; a result showing in the segment stays for its time.
+    pub(super) fn crop_work_ended(&self) {
+        self.crop_run.set(self.crop_run.get().wrapping_add(1));
+        self.state.borrow_mut().auto_crop_running = false;
+        activity::finish(ACTIVITY);
+    }
+
+    /// The segment's ×, a loaded job: ffmpeg stops, the crop stays as it is. `false` when nothing ran.
+    pub(super) fn cancel_auto_crop(&self) -> bool {
+        if !self.state.borrow().auto_crop_running {
+            return false;
+        }
+        if let Some(task) = self.crop_task.borrow_mut().take() {
+            task.abort();
+        }
+        self.crop_work_ended();
+        self.publish_card();
+        true
+    }
+
+    /// The user changed the crop while auto-crop runs: that change wins.
+    pub(super) fn user_took_over(&self) {
+        if self.cancel_auto_crop() {
+            Self::tell(
+                Notice::new(Kind::AutoCrop, "Canceled")
+                    .detail("you changed the crop")
+                    .level(Level::Info)
+                    .activity(ACTIVITY),
+            );
+        }
+    }
+
+    /// Reports a run's end: the message, the segment's end and the glow.
+    fn crop_result(&self, notice: Notice, outcome: Outcome) {
+        self.crop_work_ended();
+        self.publish_card();
+        Self::tell(notice.activity(ACTIVITY));
+        let Some(window) = self.window.upgrade() else { return };
+        let filters = window.global::<Filters<'_>>();
+        filters.set_crop_flash_level(outcome as i32);
+        filters.set_crop_flash(true);
+        let window = window.as_weak();
+        self.flash_timer
+            .start(slint::TimerMode::SingleShot, FLASH_TIME, move || {
+                if let Some(window) = window.upgrade() {
+                    window.global::<Filters<'_>>().set_crop_flash(false);
+                }
+            });
+    }
+
+    /// The right click on auto-crop: starts the pipette, or ends it while it waits for a click.
+    pub(super) fn toggle_pick(&self) {
+        let picking = self
+            .state
+            .borrow()
+            .crop_session()
+            .is_some_and(|s| s.mode == CropMode::Pick);
+        if picking {
+            self.update(|s| s.end_crop(false));
+        } else {
+            self.start_pick();
+        }
+    }
+
     /// The Crop menu's "pick the border color": the whole frame shows and the next click on the video picks.
     pub fn start_pick(&self) {
-        if self.suspended.get() {
+        if self.suspended.get() || self.state.borrow().auto_crop_running {
             return;
         }
         if self.state.borrow().crop_session().is_some() {
-            self.state.borrow_mut().end_crop(true);
+            self.end_crop(true);
         }
         if self.state.borrow_mut().begin_crop(CropMode::Pick) {
             tracing::debug!("[Filters] Picking a border color");
@@ -111,26 +219,33 @@ impl FiltersBridge {
             .upgrade()
             .map_or(rustcut_core::time::Timestamp::ZERO, |p| p.position());
         tracing::info!(x = point.0, y = point.1, at = %at, "[Filters] Border color picked at");
+        self.crop_work_started("Reading the color (ffmpeg)...");
         let options = self.detect.borrow().clone();
         let task = self
             .runtime
             .spawn(async move { pick_color(&file, at, &prefix, point, &options).await });
-        let generation = self.generation.get();
+        *self.crop_task.borrow_mut() = Some(task.abort_handle());
+        let run = self.crop_run.get();
         let bridge = Weak::clone(&self.me);
         let spawned = slint::spawn_local(async move {
             let Ok(result) = task.await else { return };
             let Some(bridge) = bridge.upgrade() else { return };
-            if bridge.generation.get() != generation {
+            if bridge.crop_run.get() != run {
                 return;
             }
             match result {
                 Ok(rgb) => {
                     tracing::info!(color = ?rgb, "[Filters] Border color");
+                    // The badge shows at once; the segment goes straight on with the search.
+                    bridge.state.borrow_mut().auto_crop_running = false;
                     bridge.update(|s| s.set_search(|search| search.color = Some(rgb)));
                     bridge.auto_crop();
                 }
                 Err(e) => {
-                    Self::tell(Notice::new(Kind::AutoCropFailed, "The color could not be read").detail(e.to_string()));
+                    bridge.crop_result(
+                        Notice::new(Kind::AutoCropFailed, "The color could not be read").detail(e.to_string()),
+                        Outcome::Failed,
+                    );
                 }
             }
         });
@@ -175,33 +290,51 @@ impl FiltersBridge {
             sides = ?search.sides,
             "[Filters] Auto-crop"
         );
-        self.state.borrow_mut().auto_crop_running = true;
-        self.publish_card();
+        let total = times.len();
+        self.crop_work_started(&waiting_text(CropProgress {
+            done: 0,
+            total,
+            attempt: 1,
+        }));
         let options = self.detect.borrow().clone();
-        let task = self
-            .runtime
-            .spawn(async move { detect_crop_retrying(&file, frame, &times, &prefix, &search, &options).await });
+        let (sender, mut progress) = tokio::sync::mpsc::unbounded_channel();
+        let task = self.runtime.spawn(async move {
+            let tell = move |update: CropProgress| {
+                // Closed only when the UI gave up on this run.
+                let _ignored = sender.send(update);
+            };
+            detect_crop_watched(&file, frame, &times, &prefix, &search, &options, &tell).await
+        });
         *self.crop_task.borrow_mut() = Some(task.abort_handle());
-        let generation = self.generation.get();
+        let run = self.crop_run.get();
         let bridge = Weak::clone(&self.me);
+        let counter = Weak::clone(&self.me);
+        let counting = slint::spawn_local(async move {
+            while let Some(update) = progress.recv().await {
+                let Some(bridge) = counter.upgrade() else { return };
+                if bridge.crop_run.get() != run {
+                    return;
+                }
+                activity::update(ACTIVITY, waiting_text(update));
+            }
+        });
+        if let Err(e) = counting {
+            tracing::warn!(error = %e, "[Filters] The event loop is gone; no auto-crop count");
+        }
         let spawned = slint::spawn_local(async move {
             let Ok(result) = task.await else { return };
             let Some(bridge) = bridge.upgrade() else { return };
-            if bridge.generation.get() != generation {
+            if bridge.crop_run.get() != run {
                 return;
             }
-            bridge.state.borrow_mut().auto_crop_running = false;
             match result {
-                Ok(found) if found.samples_used == 0 => {
-                    bridge.publish_card();
-                    Self::tell(
-                        Notice::new(Kind::AutoCrop, "Nothing to crop")
-                            .detail("Only black frames were found.")
-                            .level(Level::Warning),
-                    );
-                }
+                Ok(found) if found.samples_used == 0 => bridge.crop_result(
+                    Notice::new(Kind::AutoCrop, "Nothing to crop")
+                        .detail("Only black frames were found.")
+                        .level(Level::Warning),
+                    Outcome::Nothing,
+                ),
                 Ok(found) if found.crop.is_identity() => {
-                    bridge.publish_card();
                     let what = if found.search.color.is_some() {
                         "No borders of that color"
                     } else {
@@ -212,7 +345,10 @@ impl FiltersBridge {
                     } else {
                         String::new()
                     };
-                    Self::tell(Notice::new(Kind::AutoCrop, format!("{what} found{tries}")).level(Level::Info));
+                    bridge.crop_result(
+                        Notice::new(Kind::AutoCrop, format!("{what} found{tries}")).level(Level::Warning),
+                        Outcome::Nothing,
+                    );
                 }
                 Ok(found) => {
                     tracing::info!(crop = ?found.crop, samples = found.samples_used, "[Filters] Black borders");
@@ -220,43 +356,32 @@ impl FiltersBridge {
                         let fitted = s.fitted_crop(found.crop);
                         s.set_crop(fitted);
                         s.switch_on(FilterKind::Crop);
+                        s.crop_replaced();
                     });
-                    let shown = bridge.state.borrow().shown_crop();
-                    let parts: Vec<String> = [
-                        (Edge::Top, "top"),
-                        (Edge::Right, "right"),
-                        (Edge::Bottom, "bottom"),
-                        (Edge::Left, "left"),
-                    ]
-                    .iter()
-                    .filter_map(|(edge, name)| {
-                        let v = match edge {
-                            Edge::Top => shown.top,
-                            Edge::Right => shown.right,
-                            Edge::Bottom => shown.bottom,
-                            Edge::Left => shown.left,
-                        };
-                        (v > 0).then(|| format!("{v} {name}"))
-                    })
-                    .collect();
+                    bridge.remember_crop();
+                    let (edges, size) = {
+                        let st = bridge.state.borrow();
+                        (edges_text(st.shown_crop()), st.shown_kept().unwrap_or_default())
+                    };
                     let title = if found.search.color.is_some() {
-                        "Borders of the picked color cropped"
+                        "Cropped to the picked color"
                     } else {
-                        "Black borders cropped"
+                        "Cropped"
                     };
                     let retried = match (found.tries, found.search.color) {
                         (1, _) => String::new(),
                         (n, Some(_)) => format!(" (try {n}: tolerance {} %)", found.search.similarity),
                         (n, None) => format!(" (try {n}: black up to {})", found.search.limit),
                     };
-                    Self::tell(
-                        Notice::new(Kind::AutoCrop, title).detail(format!("{} pixels{retried}", parts.join(", "))),
+                    bridge.crop_result(
+                        Notice::new(Kind::AutoCrop, title).detail(format!("{edges} → {size}{retried}")),
+                        Outcome::Cropped,
                     );
                 }
-                Err(e) => {
-                    bridge.publish_card();
-                    Self::tell(Notice::new(Kind::AutoCropFailed, "Black borders not detected").detail(e.to_string()));
-                }
+                Err(e) => bridge.crop_result(
+                    Notice::new(Kind::AutoCropFailed, "Auto-crop failed").detail(e.to_string()),
+                    Outcome::Failed,
+                ),
             }
         });
         if let Err(e) = spawned {

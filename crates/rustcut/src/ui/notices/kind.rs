@@ -82,11 +82,13 @@ pub struct KindInfo {
     pub sample: (&'static str, &'static str),
 }
 
-use NoticePlace::{Banner, Bubble, Dialog, Nothing, Status, Toast};
+use NoticePlace::{Activity, Banner, Bubble, Dialog, Nothing, Status, Toast};
 
 const EVENT: &[NoticePlace] = &[Toast, Banner, Status, Nothing];
 const LOUD: &[NoticePlace] = &[Toast, Banner, Nothing];
 const QUIET: &[NoticePlace] = &[Status, Toast, Nothing];
+/// The result of something the status bar showed running.
+const ACTIVITY: &[NoticePlace] = &[Activity, Toast, Banner, Status, Nothing];
 const STATE: &[NoticePlace] = &[Banner, Nothing];
 const FIXED_BANNER: &[NoticePlace] = &[Banner];
 /// At the input a check is about (M6.5c); hints and warnings can be switched off.
@@ -192,10 +194,13 @@ kinds! {
     /// A filter menu's "save as default" (P9.13): Settings > Filters took its options.
     FilterDefaultsSaved = "filter_defaults_saved", "Filter defaults saved", Filters, Success, Status, QUIET,
         desktop false, critical false, ("Deshake options saved as the defaults", "");
-    AutoCrop = "auto_crop", "Black borders cropped", Filters, Success, Toast, EVENT, desktop false, critical false,
-        ("Black borders cropped", "140 pixels at the top and bottom");
-    AutoCropFailed = "auto_crop_failed", "Black border detection failed", Filters, Error, Toast, EVENT,
-        desktop true, critical false, ("Black borders not detected", "ffmpeg ended with exit code 1");
+    AutoCrop = "auto_crop", "Black borders cropped", Filters, Success, Activity, ACTIVITY, desktop false,
+        critical false, ("Cropped", "140 top, 140 bottom → 1920×800");
+    AutoCropFailed = "auto_crop_failed", "Black border detection failed", Filters, Error, Activity, ACTIVITY,
+        desktop true, critical false, ("Auto-crop failed", "ffmpeg ended with exit code 1");
+    /// A crop set from the history without opening it (its button's right click).
+    CropFromHistory = "crop_from_history", "Crop from the history", Filters, Success, Status, QUIET,
+        desktop false, critical false, ("Crop 1920×800 set from the history", "");
     /// The probe render's progress, then its result (Q-N10: toast, banner or nothing; the card always shows it).
     ProbeRender = "probe_render", "Probe render", Probe, Info, Toast, LOUD, desktop false, critical false,
         ("Probe render", "10 s around 0:06 · 42 %");

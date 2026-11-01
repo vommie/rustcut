@@ -53,6 +53,7 @@ pub const fn place_label(place: NoticePlace) -> &'static str {
         NoticePlace::Bubble => "Bubble",
         NoticePlace::Dialog => "Dialog",
         NoticePlace::Status => "Status line",
+        NoticePlace::Activity => "Status bar segment",
         NoticePlace::Nothing => "Nothing",
     }
 }
@@ -149,6 +150,7 @@ pub fn test_note(route: Route) -> String {
             NoticePlace::Toast => "Shown as a toast".to_owned(),
             NoticePlace::Banner => "Shown as a banner over the video".to_owned(),
             NoticePlace::Status => "Shown in the status line".to_owned(),
+            NoticePlace::Activity => "Shown in the status bar's segment".to_owned(),
             NoticePlace::Bubble => "Shown as a bubble (here at the test button; usually at its field)".to_owned(),
             NoticePlace::Dialog => "A dialog when it happens (a test cannot show it)".to_owned(),
             NoticePlace::Nothing => "Not shown in the window: its place is \"Nothing\"".to_owned(),

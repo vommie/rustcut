@@ -89,6 +89,11 @@ impl JumpBridge {
                 }
                 self.flash(&key);
             }
+            JumpTarget::FilterCard => {
+                if let Some(dock) = self.dock.upgrade() {
+                    dock.show_card(PanelId::Export, "filters");
+                }
+            }
             JumpTarget::Sections | JumpTarget::SectionRow(_) => {
                 if let Some(dock) = self.dock.upgrade() {
                     dock.show_card(PanelId::Export, "sections");

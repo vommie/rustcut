@@ -13,15 +13,7 @@ import { TooltipArea, TooltipHost } from "tooltip.slint";
 import { Playback } from "player_types.slint";
 import { DragArea, DragGhost, DragMotion, DragState, DropGap } from "drag.slint";
 import { FilterRowView, Filters } from "filters_types.slint";
-
-/// The width of every filter's name button (the values start on one line).
-global FilterMetrics {
-    out property <length> name-width: 84px;
-    out property <length> grip-width: 14px;
-    out property <length> spacing: 4px;
-    // The adjustments button (an `IconButton`) or the empty slot of Orientation.
-    out property <length> options-width: 26px;
-}
+import { CropEdges, CropTools, FilterMetrics } from "filters_crop.slint";
 
 /// A filter's name: the on/off button (filled, bold and outlined when on; PyCutRv). Its width is fixed, so the bold
 /// name never moves the values.
@@ -138,128 +130,6 @@ component DeinterlaceValues inherits HorizontalLayout {
 
     Rectangle {
         horizontal-stretch: 0.01;
-    }
-}
-
-/// Line 1 of Crop: edit on the video, auto-crop, and the size the crop keeps (the ratios are on the crop itself, P9.14).
-component CropTools inherits HorizontalLayout {
-    spacing: 2px;
-
-    IconButton {
-        icon: IconId.crop-edit;
-        checked: Filters.crop-editing;
-        enabled: Filters.can-edit-crop;
-        tooltip: Filters.crop-editing
-            ? "Done: keep the crop (Enter). Escape restores the crop from before."
-            : "Edit the crop on the video: drag the corners, the edges or the area (Shift keeps the ratio; the button on the crop picks one). Quicker: the Quick crop key (" + Filters.key-quick-crop + ") lets you drag the nearest edge at once; press it again or Enter to keep it.";
-        shortcut: Filters.key-crop-edit;
-        clicked => { Filters.crop-edit(); }
-    }
-
-    IconButton {
-        icon: IconId.crop-auto;
-        enabled: Filters.has-media && !Filters.auto-crop-running;
-        checked: Filters.auto-crop-running;
-        tooltip: Filters.auto-crop-running
-            ? "Looking for black borders..."
-            : "Detect the black borders at several points of the video and crop them (the options menu says how).";
-        shortcut: Filters.key-auto-crop;
-        clicked => { Filters.auto-crop(); }
-
-        // The border color auto-crop looks for, when it is not black (user review 2026-10-27).
-        if Filters.search-color-badge: Rectangle {
-            x: parent.width - self.width - 1px;
-            y: 1px;
-            width: 9px;
-            height: 9px;
-            border-radius: 4.5px;
-            border-width: 1px;
-            border-color: Theme.background;
-            background: Filters.search-color;
-        }
-    }
-
-    TooltipArea {
-        text: "What the crop keeps, as seen in the output";
-        horizontal-stretch: 1;
-        min-width: 0;
-
-        Text {
-            width: parent.width;
-            height: parent.height;
-            text: Filters.crop-size;
-            color: Theme.text-muted;
-            font-size: 11px;
-            horizontal-alignment: right;
-            vertical-alignment: center;
-            overflow: elide;
-        }
-    }
-}
-
-component CropField inherits HorizontalLayout {
-    // The crop filter is on: the wheel over the field steps at once; a click while it is off switches it on (user
-    // request 2026-10-27).
-    in property <bool> on;
-    in property <int> edge;
-    in property <IconId> icon;
-    in property <string> name;
-
-    spacing: 1px;
-
-    FieldIcon {
-        icon: root.icon;
-        tooltip: root.name + " edge as seen in the output (pixels)";
-    }
-
-    NumberField {
-        min-width: 30px;
-        text: Filters.crop-edges[root.edge];
-        tooltip: root.name + " edge in pixels (click, then the wheel: 1, Ctrl 10, Shift 100)";
-        spin: false;
-        pixel-steps: true;
-        wheel-opens: root.on;
-        opened => {
-            if !root.on {
-                Filters.switch-on("crop");
-            }
-        }
-        committed(text) => { return Filters.edit-crop(root.edge, text); }
-        stepped(steps) => { Filters.step-crop(root.edge, steps); }
-    }
-}
-
-/// Line 2 of Crop: the four edges as seen in the output.
-component CropEdges inherits HorizontalLayout {
-    in property <bool> on;
-    spacing: FilterMetrics.spacing;
-
-    CropField {
-        on: root.on;
-        edge: 0;
-        icon: IconId.edge-top;
-        name: "Top";
-    }
-
-    CropField {
-        on: root.on;
-        edge: 1;
-        icon: IconId.edge-right;
-        name: "Right";
-    }
-
-    CropField {
-        on: root.on;
-        edge: 2;
-        icon: IconId.edge-bottom;
-        name: "Bottom";
-    }
-
-    CropField {
-        on: root.on;
-        edge: 3;
-        icon: IconId.edge-left;
-        name: "Left";
     }
 }
 

@@ -332,6 +332,9 @@ impl ExportBridge {
         if clear && let Some(editor) = self.editor.upgrade() {
             editor.clear_sections();
         }
+        if let Some(filters) = self.filters.upgrade() {
+            filters.job_saved();
+        }
         notices::clear_kind(Kind::SaveRefused);
         notices::clear_kind(Kind::SaveFailed);
         // "Not saved" of an earlier attempt must not stay in the status line (found in the P8b audit).

@@ -132,6 +132,8 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
     f.on_set_only_interlaced(change(&this, FiltersState::set_only_interlaced));
     let pick = with(&this, |b, ()| b.start_pick());
     f.on_pick_border_color(move || pick(()));
+    let quick_pick = with(&this, |b, ()| b.toggle_pick());
+    f.on_quick_pick(move || quick_pick(()));
     let clear = change(&this, |s, ()| s.set_search(|search| search.color = None));
     f.on_clear_border_color(move || clear(()));
     // The color tolerance (percent) and the retries: typed or stepped, inside their ranges.
@@ -203,12 +205,14 @@ pub(super) fn connect(bridge: &Rc<FiltersBridge>, window: &MainWindow) {
         let Some(value) = number(&text, Some(0)).and_then(|v| u32::try_from(v).ok()) else {
             return false;
         };
+        bridge.user_took_over();
         bridge.update(|s| s.set_shown_edge(edge, value));
         true
     });
-    let step_crop = change(&this, |s, (edge, steps): (i32, i32)| {
+    let step_crop = with(&this, |b, (edge, steps): (i32, i32)| {
+        b.user_took_over();
         if let Some(edge) = Edge::from_index(edge) {
-            s.step_shown_edge(edge, steps);
+            b.update(|s| s.step_shown_edge(edge, steps));
         }
     });
     f.on_step_crop(move |edge, steps| step_crop((edge, steps)));
@@ -414,6 +418,7 @@ impl FiltersBridge {
         match kind {
             0 => {
                 if self.state.borrow_mut().crop_pointer_down(x, y) {
+                    self.user_took_over();
                     self.publish_overlay();
                 }
             }

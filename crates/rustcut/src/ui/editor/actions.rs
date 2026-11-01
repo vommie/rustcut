@@ -184,6 +184,7 @@ impl Editor {
             Action::CropEdit => self.with_filters(FiltersBridge::toggle_crop_edit),
             Action::QuickCrop => self.with_filters(FiltersBridge::toggle_quick_crop),
             Action::AutoCrop => self.with_filters(FiltersBridge::auto_crop),
+            Action::CropHistory => self.with_filters(FiltersBridge::open_history),
             Action::ToggleFilterPreview => self.with_filters(FiltersBridge::toggle_preview),
             Action::ToggleKeepFilters => self.with_filters(FiltersBridge::toggle_keep),
             Action::RotateLeft => self.with_filters(|f| f.turn(false)),

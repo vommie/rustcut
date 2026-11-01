@@ -19,6 +19,8 @@ pub enum JumpTarget {
     Sections,
     /// A row of the section list (saving with overlapping sections).
     SectionRow(usize),
+    /// The Filters card (the crop history's key).
+    FilterCard,
 }
 
 impl JumpTarget {
@@ -30,6 +32,7 @@ impl JumpTarget {
             Self::QueueJob(id) => format!("queue:{}", id.0),
             Self::Sections => "export:sections".to_owned(),
             Self::SectionRow(row) => format!("sections:{row}"),
+            Self::FilterCard => "export:filters".to_owned(),
         }
     }
 
@@ -41,6 +44,7 @@ impl JumpTarget {
             Self::QueueJob(id) => format!("Show job {id} in the queue"),
             Self::Sections => "Show the Sections card".to_owned(),
             Self::SectionRow(row) => format!("Show section {} in the list", row + 1),
+            Self::FilterCard => "Show the Filters card".to_owned(),
         }
     }
 }

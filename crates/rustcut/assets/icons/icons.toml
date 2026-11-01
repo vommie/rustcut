@@ -113,6 +113,7 @@ move_up = { tabler = "arrow-up", doc = "Move one place up" }
 move_down = { tabler = "arrow-down", doc = "Move one place down" }
 crop_edit = { tabler = "crop", doc = "Edit the crop on the video" }
 crop_auto = { tabler = "wand", doc = "Detect the black borders" }
+crop_history = { tabler = "history", doc = "The crops used earlier" }
 crop_aspect = { tabler = "aspect-ratio", doc = "Aspect ratio the crop keeps" }
 edge_top = { tabler = "border-top", doc = "Top edge" }
 edge_right = { tabler = "border-right", doc = "Right edge" }

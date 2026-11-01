@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::{DefaultOnError, VecSkipError, serde_as};
 
 use super::file::{MigrationStep, VersionedFile};
-use crate::edit::{CropAspect, FilterChain};
+use crate::edit::{CropAspect, CropHistory, CropMemory, FilterChain, HISTORY_LENGTHS};
 use crate::folders::FolderId;
 use crate::job::{JobId, JobStateKind};
 use crate::media::CropSearch;
@@ -168,6 +168,11 @@ pub struct ExportPanelState {
     #[serde_as(as = "DefaultOnError")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub crop_ratio: Option<String>,
+    /// The crop history, newest first (0.0.90, P12 4.3); saved at every change, an entry this version cannot read is
+    /// left out.
+    #[serde_as(as = "DefaultOnError<VecSkipError<_>>")]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub crop_history: Vec<CropMemory>,
     /// A filter's options menu stays open while the pointer works elsewhere (its pin, P9.13; 0.0.49).
     pub filter_menu_pinned: bool,
     /// Render profile of the next job (id): the profile the Render Settings panel's working copy came from.
@@ -201,6 +206,7 @@ impl Default for ExportPanelState {
             crop_search: None,
             crop_aspect: CropAspect::Free,
             crop_ratio: None,
+            crop_history: Vec::new(),
             filter_menu_pinned: false,
             profile: None,
             render: None,
@@ -540,6 +546,15 @@ impl VersionedFile for UiState {
         if self.export.volume > 100 {
             notes.push("volume limited to 100".into());
             self.export.volume = 100;
+        }
+        let stored = self.export.crop_history.len();
+        let history = CropHistory::new(
+            std::mem::take(&mut self.export.crop_history),
+            usize::from(*HISTORY_LENGTHS.end()),
+        );
+        self.export.crop_history = history.entries().to_vec();
+        if self.export.crop_history.len() != stored {
+            notes.push("crop history shortened".into());
         }
         self.queue.sanitize(&mut notes);
         let seconds = self.export.probe.seconds;

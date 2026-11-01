@@ -1,0 +1,378 @@
+// The crop history (P12 4.3, Q-P12c): the list that hangs from its button on the Crop row. src/ui/filters/history.rs fills
+// `CropHistoryUi` and answers its callbacks; rows are numbers into the rows shown, Rust keeps what each one is. A heading
+// has a `heading`; an entry shows a small drawing of the frame, the kept size, its detail, and under the pointer its
+// pin and the held ×. The pointer resting on an entry shows that crop on the video.
+
+import { Theme } from "styles.slint";
+import { IconId, IconSize } from "icons.slint";
+import { Flyout } from "flyout.slint";
+import { IconButton } from "controls.slint";
+import { TooltipHost } from "tooltip.slint";
+import { Shortcuts } from "shortcuts.slint";
+
+export struct CropHistoryRow {
+    heading: string,
+    title: string,
+    detail: string,
+    tag: string,
+    tip: string,
+    session: bool,
+    current: bool,
+    pinned: bool,
+    usable: bool,
+    frame-width: length,
+    frame-height: length,
+    kept-x: length,
+    kept-y: length,
+    kept-width: length,
+    kept-height: length,
+}
+
+export global CropHistoryUi {
+    in-out property <bool> open;
+    in-out property <length> anchor-x;
+    in-out property <length> anchor-y;
+    in-out property <length> anchor-width;
+    in-out property <length> anchor-height;
+    in property <[CropHistoryRow]> rows;
+    in property <length> rows-height;
+    in property <int> highlight: -1;
+    in property <bool> has-entry;
+    // "7 of 10": the entries that count toward the length.
+    in property <string> count;
+    in property <bool> can-clear;
+    // Pages (more than ten entries and a length above ten).
+    in property <bool> paged;
+    in property <string> page-text;
+    in property <bool> can-previous;
+    in property <bool> can-next;
+    // The history key: the button opens the list (it knows where it stands).
+    in-out property <int> request;
+
+    callback toggle();
+    callback closed();
+    // The button's right click: the newest crop that fits.
+    callback quick();
+    callback pick(/* row */ int);
+    callback hover(/* row, -1 = none */ int);
+    callback pin(/* row */ int);
+    callback remove(/* row */ int);
+    callback clear();
+    callback page(/* step */ int);
+    callback key(/* text */ string) -> bool;
+}
+
+/// The frame with the part the crop keeps.
+component MiniFrame inherits Rectangle {
+    in property <CropHistoryRow> item;
+
+    width: 48px;
+    height: 27px;
+
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: root.item.frame-width;
+        height: root.item.frame-height;
+        background: Theme.fullscreen-background;
+        border-width: 1px;
+        border-color: Theme.surface-selected;
+
+        Rectangle {
+            x: root.item.kept-x;
+            y: root.item.kept-y;
+            width: root.item.kept-width;
+            height: root.item.kept-height;
+            background: Theme.primary.with-alpha(0.4);
+            border-width: 1px;
+            border-color: Theme.primary;
+        }
+    }
+}
+
+component EntryRow inherits Rectangle {
+    in property <CropHistoryRow> item;
+    in property <int> index;
+    in property <bool> highlighted;
+
+    height: 38px;
+    border-radius: 4px;
+    background: root.highlighted || (touch.has-hover && root.item.usable) ? Theme.surface-hover
+        : root.item.current ? Theme.primary.with-alpha(0.15) : transparent;
+
+    host := TooltipHost {
+        text: root.item.tip;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: root.item.usable ? MouseCursor.pointer : MouseCursor.default;
+        clicked => {
+            if root.item.usable {
+                CropHistoryUi.pick(root.index);
+            }
+        }
+        changed has-hover => {
+            CropHistoryUi.hover(self.has-hover ? root.index : -1);
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+
+        HorizontalLayout {
+            padding-left: 4px;
+            padding-right: 4px;
+            spacing: 6px;
+            alignment: stretch;
+
+            // The dot of this session (always its width: nothing moves).
+            Rectangle {
+                width: 6px;
+
+                if root.item.session: Rectangle {
+                    y: (parent.height - self.height) / 2;
+                    width: 6px;
+                    height: 6px;
+                    border-radius: 3px;
+                    background: Theme.primary;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                opacity: root.item.usable ? 1 : 0.45;
+
+                MiniFrame {
+                    item: root.item;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 1;
+                min-width: 0;
+                opacity: root.item.usable ? 1 : 0.45;
+
+                Text {
+                    text: root.item.title;
+                    color: Theme.text;
+                    font-size: 12px;
+                    font-weight: 600;
+                    overflow: elide;
+                }
+
+                Text {
+                    text: root.item.detail;
+                    color: Theme.text-muted;
+                    font-size: 10px;
+                    overflow: elide;
+                }
+            }
+
+            if root.item.tag != "": VerticalLayout {
+                alignment: center;
+
+                Rectangle {
+                    width: tag.preferred-width + 8px;
+                    height: 16px;
+                    border-radius: 3px;
+                    border-width: 1px;
+                    border-color: Theme.surface-selected;
+
+                    tag := Text {
+                        text: root.item.tag;
+                        color: Theme.text-muted;
+                        font-size: 10px;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            // The place of the buttons stays free, so the text never jumps under the pointer.
+            HorizontalLayout {
+                width: 54px;
+                alignment: end;
+                spacing: 2px;
+
+                if touch.has-hover || root.item.pinned: VerticalLayout {
+                    alignment: center;
+
+                    IconButton {
+                        icon: root.item.pinned ? IconId.menu-pinned : IconId.menu-pin;
+                        checked: root.item.pinned;
+                        tooltip: root.item.pinned ? "Pinned: stays at the top and is never pushed out (click: unpin)"
+                            : "Pin: stays at the top and is never pushed out";
+                        clicked => { CropHistoryUi.pin(root.index); }
+                    }
+                }
+
+                if touch.has-hover: VerticalLayout {
+                    alignment: center;
+
+                    IconButton {
+                        icon: IconId.close;
+                        hold: true;
+                        tooltip: "Remove from the history";
+                        clicked => { CropHistoryUi.remove(root.index); }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component CropHistoryFlyout inherits Rectangle {
+    in property <length> anchor-x;
+    in property <length> anchor-y;
+    in property <length> anchor-width;
+    in property <length> anchor-height;
+
+    function close() {
+        CropHistoryUi.closed();
+        Shortcuts.release-focus();
+    }
+
+    init => {
+        keys.focus();
+    }
+
+    Flyout {
+        width: parent.width;
+        height: parent.height;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        anchor-width: root.anchor-width;
+        anchor-height: root.anchor-height;
+        panel-width: keys.width;
+        panel-height: keys.height;
+        closed => { root.close(); }
+
+        keys := FocusScope {
+            x: 0;
+            y: 0;
+            width: 330px;
+            height: Math.min(root.height - 40px,
+                12px + (CropHistoryUi.has-entry ? CropHistoryUi.rows-height + 32px : 52px));
+
+            key-pressed(event) => {
+                if event.text == Key.Escape {
+                    root.close();
+                    return accept;
+                }
+                return CropHistoryUi.key(event.text) ? accept : reject;
+            }
+
+            if !CropHistoryUi.has-entry: Text {
+                x: 12px;
+                y: 6px;
+                width: parent.width - 24px;
+                height: parent.height - 12px;
+                text: "No crops yet. Auto-crop, a kept edit on the video and a saved job add theirs.";
+                color: Theme.text-muted;
+                font-size: 12px;
+                wrap: word-wrap;
+                vertical-alignment: center;
+            }
+
+            if CropHistoryUi.has-entry: VerticalLayout {
+                padding: 6px;
+                spacing: 2px;
+
+                list := Flickable {
+                    vertical-stretch: 1;
+                    content-height: CropHistoryUi.rows-height;
+
+                    VerticalLayout {
+                        alignment: start;
+
+                        for row[index] in CropHistoryUi.rows: Rectangle {
+                            height: row.heading != "" ? 20px : 38px;
+
+                            if row.heading != "": Text {
+                                x: 4px;
+                                text: row.heading;
+                                color: Theme.status-deleted;
+                                font-size: 10px;
+                                font-weight: 700;
+                                vertical-alignment: center;
+                            }
+
+                            if row.heading == "": EntryRow {
+                                item: row;
+                                index: index;
+                                highlighted: index == CropHistoryUi.highlight;
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    height: 1px;
+                    background: Theme.border;
+                }
+
+                HorizontalLayout {
+                    height: 26px;
+                    spacing: 2px;
+                    alignment: stretch;
+
+                    Text {
+                        text: CropHistoryUi.count;
+                        color: Theme.status-deleted;
+                        font-size: 11px;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+
+                    if CropHistoryUi.paged: VerticalLayout {
+                        alignment: center;
+
+                        IconButton {
+                            icon: IconId.chevron-left;
+                            enabled: CropHistoryUi.can-previous;
+                            tooltip: "Previous page";
+                            clicked => { CropHistoryUi.page(-1); }
+                        }
+                    }
+
+                    if CropHistoryUi.paged: Text {
+                        width: 40px;
+                        text: CropHistoryUi.page-text;
+                        color: Theme.text-muted;
+                        font-size: 11px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    if CropHistoryUi.paged: VerticalLayout {
+                        alignment: center;
+
+                        IconButton {
+                            icon: IconId.chevron-right;
+                            enabled: CropHistoryUi.can-next;
+                            tooltip: "Next page";
+                            clicked => { CropHistoryUi.page(1); }
+                        }
+                    }
+
+                    if CropHistoryUi.paged: Rectangle {
+                        width: 8px;
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+
+                        IconButton {
+                            icon: IconId.section-delete;
+                            hold: true;
+                            enabled: CropHistoryUi.can-clear;
+                            tooltip: "Clear the history; pinned crops stay";
+                            clicked => { CropHistoryUi.clear(); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

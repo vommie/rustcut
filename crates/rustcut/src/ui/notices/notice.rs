@@ -99,6 +99,8 @@ pub struct Notice {
     pub grace: Duration,
     /// The saved job's rating and tags: a toast shows them under its file name.
     pub job: Option<JobLabels>,
+    /// The activity segment that shows it when its place is `Activity`.
+    pub activity: Option<String>,
 }
 
 impl Notice {
@@ -119,6 +121,7 @@ impl Notice {
             anchor: None,
             grace: Duration::ZERO,
             job: None,
+            activity: None,
         }
     }
 
@@ -258,6 +261,13 @@ impl Notice {
     #[must_use]
     pub const fn force_desktop(mut self) -> Self {
         self.force_desktop = true;
+        self
+    }
+
+    /// The activity segment this is the result of (place `Activity`; the kind's id without it).
+    #[must_use]
+    pub fn activity(mut self, key: impl Into<String>) -> Self {
+        self.activity = Some(key.into());
         self
     }
 

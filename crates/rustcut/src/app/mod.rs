@@ -186,6 +186,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     let menu = ContextMenuBridge::install(&main);
     crate::ui::menu::bar::install(&main);
     // Every message goes through the notice center (M6.5); what came before it is shown now.
+    crate::ui::status::activity::install(&main);
     let notice_center = notices::install(
         &main,
         notices::Parts {
@@ -340,6 +341,11 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             menu: &menu,
         },
     );
+    {
+        // The crop history is saved at every change, so a crash keeps it (Q-P12c).
+        let writer = Rc::clone(&ui_writer);
+        filters.set_history_saver(move |entries| writer.update(|s| s.export.crop_history = entries.to_vec()));
+    }
     let editor = Editor::install(
         &main,
         &player,

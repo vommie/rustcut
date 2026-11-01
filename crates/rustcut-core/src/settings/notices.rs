@@ -23,6 +23,9 @@ pub enum NoticePlace {
     Dialog,
     /// The slim status line at the bottom.
     Status,
+    /// The status bar's segment of what ran (a throbber, then this result for a few seconds; 0.0.90). Only a kind's
+    /// default so far, so no file stores it.
+    Activity,
     /// Not shown (the history still records it).
     Nothing,
 }

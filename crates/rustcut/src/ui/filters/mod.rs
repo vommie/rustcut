@@ -7,6 +7,8 @@
 //! back through `slint::spawn_local`, checked against the file they were made for.
 
 mod drag;
+mod history;
+mod history_view;
 mod input;
 mod menu;
 mod options;
@@ -54,6 +56,7 @@ pub struct FilterKeys {
     pub crop_edit: String,
     pub quick_crop: String,
     pub auto_crop: String,
+    pub crop_history: String,
     pub rotate_left: String,
     pub rotate_right: String,
     pub mirror_horizontal: String,
@@ -92,6 +95,12 @@ pub struct FiltersBridge {
     /// The filter whose options menu is open, and whether menus stay open while the pointer works elsewhere (kept).
     menu_kind: Cell<Option<FilterKind>>,
     menu_pinned: Cell<bool>,
+    /// Counts the auto-crops started: a late result of a canceled one is dropped.
+    crop_run: Cell<u64>,
+    /// Ends the glow of the auto-crop buttons.
+    flash_timer: slint::Timer,
+    /// The crop history and its list (P12 4.3).
+    history: RefCell<history::HistoryPanel>,
 }
 
 /// What the bridge needs besides the window (the app owns them).
@@ -153,6 +162,12 @@ impl FiltersBridge {
             drag_shifts: Rc::new(VecModel::default()),
             menu_kind: Cell::new(None),
             menu_pinned: Cell::new(export.filter_menu_pinned),
+            crop_run: Cell::new(0),
+            flash_timer: slint::Timer::default(),
+            history: RefCell::new(history::HistoryPanel::new(
+                export.crop_history.clone(),
+                settings.filters.sanitized().crop_history_length,
+            )),
         });
         let filters = window.global::<Filters<'_>>();
         filters.set_rows(ModelRc::from(Rc::clone(&bridge.rows)));
@@ -162,6 +177,7 @@ impl FiltersBridge {
         filters.set_interpolations(strings(["Bicubic", "Bilinear", "Linear", "None"].into_iter()));
         input::connect(&bridge, window);
         menu::connect(&bridge, window);
+        history::connect(&bridge, window);
         drag::connect(&bridge, window);
         let this = Rc::downgrade(&bridge);
         crate::ui::media_info::add_probe_hook(move |info| {
@@ -178,6 +194,8 @@ impl FiltersBridge {
     pub fn file_opening(&self, path: &Path) {
         self.generation.set(self.generation.get().wrapping_add(1));
         *self.file.borrow_mut() = Some(path.to_path_buf());
+        self.close_history();
+        self.crop_work_ended();
         for task in [&self.idet_task, &self.crop_task] {
             if let Some(task) = task.borrow_mut().take() {
                 task.abort();
@@ -228,6 +246,7 @@ impl FiltersBridge {
     /// The deinterlacer and deshake defaults changed in the Settings window: fresh chains take them.
     pub fn set_defaults(&self, defaults: rustcut_core::settings::FilterDefaults) {
         self.state.borrow_mut().set_defaults(defaults);
+        self.history_length_changed();
         // The header's final size follows the final size rule (Q-P9s).
         self.publish_card();
     }
@@ -244,6 +263,7 @@ impl FiltersBridge {
         export.crop_aspect = CropAspect::from_ratio_label(label);
         export.crop_ratio = Some(label.to_owned());
         export.filter_menu_pinned = self.menu_pinned.get();
+        export.crop_history = self.history.borrow().entries().to_vec();
     }
 
     /// Shows the keys of the filter actions in the card's tooltips.
@@ -256,6 +276,7 @@ impl FiltersBridge {
         f.set_key_crop_edit(keys.crop_edit.as_str().into());
         f.set_key_quick_crop(keys.quick_crop.as_str().into());
         f.set_key_auto_crop(keys.auto_crop.as_str().into());
+        f.set_key_crop_history(keys.crop_history.as_str().into());
         f.set_key_rotate_left(keys.rotate_left.as_str().into());
         f.set_key_rotate_right(keys.rotate_right.as_str().into());
         f.set_key_mirror_horizontal(keys.mirror_horizontal.as_str().into());
@@ -279,6 +300,7 @@ impl FiltersBridge {
     }
 
     pub fn reset(&self) {
+        self.user_took_over();
         self.update(FiltersState::reset);
         Self::tell(Notice::new(Kind::FiltersReset, "Filters reset"));
     }
@@ -305,6 +327,7 @@ impl FiltersBridge {
         match session {
             Some(CropMode::Edit) => self.end_crop(true),
             Some(CropMode::Quick | CropMode::Pick) | None => {
+                self.user_took_over();
                 // Without a video the card is closed (the state manager, M6.5e) and its key does nothing.
                 if !self.state.borrow_mut().begin_crop(CropMode::Edit) {
                     tracing::debug!("[Filters] No video: the crop is not edited");
@@ -315,7 +338,15 @@ impl FiltersBridge {
     }
 
     fn end_crop(&self, keep: bool) {
+        let edited = self
+            .state
+            .borrow()
+            .crop_session()
+            .is_some_and(|s| s.mode != CropMode::Pick);
         self.update(|s| s.end_crop(keep));
+        if keep && edited && self.state.borrow().chain().is_enabled(FilterKind::Crop) {
+            self.remember_crop();
+        }
     }
 
     /// A key while the crop is edited: Enter keeps it, Escape restores the crop from before. `true` = taken.
@@ -365,6 +396,7 @@ impl FiltersBridge {
 
     /// The chain of a job loaded into the editor, or of a draft put back (after its video opened).
     pub fn load_chain(&self, chain: rustcut_core::edit::FilterChain) {
+        self.cancel_auto_crop();
         if self.state.borrow().crop_session().is_some() {
             self.end_crop(true);
         }
