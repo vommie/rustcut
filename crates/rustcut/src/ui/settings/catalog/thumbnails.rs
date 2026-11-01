@@ -1,6 +1,8 @@
 //! Settings > Player > Timeline thumbnails (P12 block 6, user decision Q-P12e).
 
-use rustcut_core::settings::{ThumbDensity, ThumbLook, ThumbMissing, ThumbPlace, ThumbPortrait, ThumbProgress, ThumbZone};
+use rustcut_core::settings::{
+    ThumbDensity, ThumbLook, ThumbMissing, ThumbPlace, ThumbPortrait, ThumbProgress, ThumbZone,
+};
 
 use super::Card;
 use crate::ui::settings::field::{Field, choice, number, switch};

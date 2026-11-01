@@ -26,7 +26,10 @@ fn send(out: &Output, reply: &Reply, picture: &[u8]) {
     let mut stdout = out.lock();
     if write_reply(&mut *stdout, reply, picture).is_err() {
         // RustCut is gone, and so is everyone who wanted the rest.
-        #[expect(clippy::exit, reason = "a worker thread ends the whole helper; nothing here needs cleaning up")]
+        #[expect(
+            clippy::exit,
+            reason = "a worker thread ends the whole helper; nothing here needs cleaning up"
+        )]
         std::process::exit(0);
     }
 }
@@ -53,7 +56,9 @@ fn work(queue: &Queue, source: &mut Source, out: &Output) {
             Job::Key { ms } => say(out, source.keyframe(ms)),
             Job::Exact { ms } => say(out, source.exact(ms)),
             Job::Span { start_ms, targets } => {
-                let left = source.span(start_ms, &targets, &mut |outcome| say(out, outcome), &|| queue.front_waiting());
+                let left = source.span(start_ms, &targets, &mut |outcome| say(out, outcome), &|| {
+                    queue.front_waiting()
+                });
                 if let Some(&next) = left.first() {
                     queue.resume(Job::Span {
                         start_ms: next,
@@ -81,7 +86,8 @@ fn run() -> Result<(), String> {
     let seen = Arc::new(Mutex::new(HashSet::new()));
     let out: Output = Arc::new(Mutex::new(io::stdout()));
     let queue = Arc::new(Queue::default());
-    let first_source = Source::open(&path, start.long_side, start.quality, Arc::clone(&seen)).map_err(|e| e.to_string())?;
+    let first_source =
+        Source::open(&path, start.long_side, start.quality, Arc::clone(&seen)).map_err(|e| e.to_string())?;
     send(
         &out,
         &Reply::Ready {

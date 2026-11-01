@@ -64,6 +64,7 @@ echo "Building $pkg ..."
 problems=()
 content=$(bsdtar -tf "dist/$pkg")
 for want in usr/bin/rustcut \
+  usr/lib/rustcut/rustcut-thumbs \
   usr/share/applications/io.github.vommie.rustcut.desktop \
   usr/share/metainfo/io.github.vommie.rustcut.metainfo.xml \
   usr/share/icons/hicolor/scalable/apps/rustcut.svg \

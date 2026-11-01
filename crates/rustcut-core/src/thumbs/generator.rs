@@ -36,7 +36,10 @@ pub fn helper_program() -> Option<PathBuf> {
     }
     let beside = std::env::current_exe().ok()?.with_file_name("rustcut-thumbs");
     let installed = Path::new("/usr/lib/rustcut/rustcut-thumbs");
-    [beside.as_path(), installed].iter().find(|path| path.is_file()).map(|path| path.to_path_buf())
+    [beside.as_path(), installed]
+        .iter()
+        .find(|path| path.is_file())
+        .map(|path| path.to_path_buf())
 }
 
 pub(super) struct Helper {
@@ -57,22 +60,24 @@ impl Helper {
         };
         let line = serde_json::to_string(start).map_err(std::io::Error::other)?;
         writeln!(stdin, "{line}")?;
-        std::thread::Builder::new().name("rustcut-thumbs-read".into()).spawn(move || {
-            let mut input = BufReader::new(stdout);
-            loop {
-                match read_reply(&mut input) {
-                    Ok((reply, picture)) => {
-                        if arrivals.send((run, Arrived::Reply(reply, picture))).is_err() {
+        std::thread::Builder::new()
+            .name("rustcut-thumbs-read".into())
+            .spawn(move || {
+                let mut input = BufReader::new(stdout);
+                loop {
+                    match read_reply(&mut input) {
+                        Ok((reply, picture)) => {
+                            if arrivals.send((run, Arrived::Reply(reply, picture))).is_err() {
+                                return;
+                            }
+                        }
+                        Err(_closed_or_broken) => {
+                            let _ = arrivals.send((run, Arrived::Closed));
                             return;
                         }
                     }
-                    Err(_closed_or_broken) => {
-                        let _ = arrivals.send((run, Arrived::Closed));
-                        return;
-                    }
                 }
-            }
-        })?;
+            })?;
         Ok(Self { child, stdin })
     }
 
@@ -131,7 +136,12 @@ impl Fallback {
         let video = Arc::new(video);
         let tasks = (0..FALLBACK_PARALLEL)
             .map(|_| {
-                let (line, wake, video, arrivals) = (Arc::clone(&line), Arc::clone(&wake), Arc::clone(&video), arrivals.clone());
+                let (line, wake, video, arrivals) = (
+                    Arc::clone(&line),
+                    Arc::clone(&wake),
+                    Arc::clone(&video),
+                    arrivals.clone(),
+                );
                 tokio::spawn(async move {
                     loop {
                         let next = {
@@ -179,7 +189,9 @@ async fn one_picture(video: &FallbackVideo, ms: u64, fast: bool) -> Arrived {
     let missing = Arrived::Reply(Reply::Missing { target_ms: ms }, Vec::new());
     let (width, height) = fit(video.size.0, video.size.1, video.aspect, video.long_side);
     let seconds = format!("{}.{:03}", ms / 1000, ms % 1000);
-    let mut args: Vec<OsString> = ["-v", "error", "-hide_banner", "-nostats", "-nostdin"].map(Into::into).into();
+    let mut args: Vec<OsString> = ["-v", "error", "-hide_banner", "-nostats", "-nostdin"]
+        .map(Into::into)
+        .into();
     if fast {
         args.extend(["-noaccurate_seek", "-skip_frame", "nokey"].map(Into::into));
     }
@@ -197,7 +209,8 @@ async fn one_picture(video: &FallbackVideo, ms: u64, fast: bool) -> Arrived {
     }
     let quality = f32::from(video.quality.min(100));
     let rgb = output.stdout;
-    let encoded = tokio::task::spawn_blocking(move || webp::Encoder::from_rgb(&rgb, width, height).encode(quality).to_vec());
+    let encoded =
+        tokio::task::spawn_blocking(move || webp::Encoder::from_rgb(&rgb, width, height).encode(quality).to_vec());
     let Ok(webp) = encoded.await else { return missing };
     Arrived::Reply(
         Reply::Thumb {

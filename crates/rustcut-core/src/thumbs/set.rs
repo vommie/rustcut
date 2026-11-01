@@ -43,7 +43,11 @@ impl ThumbSet {
         let before = self.by_time.range(..=ms).next_back().map(|(_, thumb)| thumb);
         let after = self.by_time.range(ms..).next().map(|(_, thumb)| thumb);
         match (before, after) {
-            (Some(a), Some(b)) => Some(if ms.abs_diff(a.time_ms) <= ms.abs_diff(b.time_ms) { a } else { b }),
+            (Some(a), Some(b)) => Some(if ms.abs_diff(a.time_ms) <= ms.abs_diff(b.time_ms) {
+                a
+            } else {
+                b
+            }),
             (one, other) => one.or(other),
         }
     }

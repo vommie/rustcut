@@ -29,14 +29,17 @@ export component ThumbPopup inherits Rectangle {
     property <length> below: Thumbs.time-below ? 20px : 0px;
     property <length> box-height: min(Thumbs.picture-height, root.available-height - root.below - 4px);
 
-    width: Thumbs.picture-width + 4px;
+    // A narrow portrait picture still shows the whole time.
+    property <length> inner-width: max(Thumbs.picture-width, Thumbs.time-below ? 84px : 0px);
+
+    width: root.inner-width + 4px;
     height: root.box-height + root.below + 4px;
     background: Theme.surface;
     border-color: Theme.border;
     border-width: 1px;
 
     if !Thumbs.empty: Image {
-        x: 2px;
+        x: (root.width - Thumbs.picture-width) / 2;
         y: 2px;
         width: Thumbs.picture-width;
         height: root.box-height;
@@ -47,7 +50,7 @@ export component ThumbPopup inherits Rectangle {
     if Thumbs.empty: Text {
         x: 2px;
         y: 2px;
-        width: Thumbs.picture-width;
+        width: root.inner-width;
         height: root.box-height;
         text: "Not ready yet";
         color: Theme.text-muted;
@@ -59,7 +62,7 @@ export component ThumbPopup inherits Rectangle {
     if Thumbs.time-below: Text {
         x: 2px;
         y: root.box-height + 3px;
-        width: Thumbs.picture-width;
+        width: root.inner-width;
         height: 18px;
         text: Thumbs.time;
         color: Theme.text;

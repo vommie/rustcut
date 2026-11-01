@@ -128,7 +128,11 @@ pub fn fit(width: u32, height: u32, aspect: (i32, i32), long_side: u32) -> (u32,
     let even = |value: f64| {
         let rounded = (value * scale / 2.0).round().clamp(1.0, 8192.0);
         // The clamp keeps the value in range, so nothing is lost.
-        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "clamped to 1..=8192 above")]
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "clamped to 1..=8192 above"
+        )]
         let half = rounded as u32;
         half * 2
     };

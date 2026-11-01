@@ -56,7 +56,10 @@ fn run(path: String, jobs: Vec<Job>) -> Vec<(Reply, Vec<u8>)> {
 }
 
 fn thumbs(replies: &[(Reply, Vec<u8>)]) -> usize {
-    replies.iter().filter(|(reply, _)| matches!(reply, Reply::Thumb { .. })).count()
+    replies
+        .iter()
+        .filter(|(reply, _)| matches!(reply, Reply::Thumb { .. }))
+        .count()
 }
 
 #[test]
@@ -65,7 +68,10 @@ fn a_keyframe_comes_once_and_the_rest_is_known() {
     let replies = run(media("no_audio_h264.mp4"), jobs);
     assert_eq!(thumbs(&replies), 1, "{replies:?}");
     assert_eq!(replies.len(), 3);
-    let known = replies.iter().filter(|(reply, _)| matches!(reply, Reply::Known { time_ms: 0, .. })).count();
+    let known = replies
+        .iter()
+        .filter(|(reply, _)| matches!(reply, Reply::Known { time_ms: 0, .. }))
+        .count();
     assert_eq!(known, 2);
 }
 
@@ -101,7 +107,13 @@ fn a_span_decodes_every_target_and_the_pictures_are_webp() {
 
 #[test]
 fn exact_lands_on_the_time_in_every_codec() {
-    for name in ["hevc_10bit.mkv", "av1_svt.mkv", "vp9_opus.webm", "mpeg4_mp3.avi", "prores_422_320x180.mov"] {
+    for name in [
+        "hevc_10bit.mkv",
+        "av1_svt.mkv",
+        "vp9_opus.webm",
+        "mpeg4_mp3.avi",
+        "prores_422_320x180.mov",
+    ] {
         let replies = run(media(name), vec![Job::Exact { ms: 3000 }]);
         let [(Reply::Thumb { time_ms, .. }, _)] = replies.as_slice() else {
             panic!("{name}: {replies:?}");

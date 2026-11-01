@@ -35,7 +35,11 @@ fn oriented(image: RgbImage, orientation: Orientation) -> RgbImage {
         3 => imageops::rotate270(&image),
         _ => image,
     };
-    if mirrored { imageops::flip_horizontal(&image) } else { image }
+    if mirrored {
+        imageops::flip_horizontal(&image)
+    } else {
+        image
+    }
 }
 
 /// A length of the frame in pixels of the picture.
@@ -60,7 +64,12 @@ pub fn render(webp: &[u8], view: &ThumbView) -> Option<RgbImage> {
     let decoded = webp::Decoder::new(webp).decode()?;
     let (width, height) = (decoded.width(), decoded.height());
     let pixels: Vec<u8> = if decoded.is_alpha() {
-        decoded.as_chunks::<4>().0.iter().flat_map(|[r, g, b, _]| [*r, *g, *b]).collect()
+        decoded
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .flat_map(|[r, g, b, _]| [*r, *g, *b])
+            .collect()
     } else {
         decoded.to_vec()
     };

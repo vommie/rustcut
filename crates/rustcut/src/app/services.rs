@@ -10,7 +10,9 @@ use rustcut_core::render::{HardwareContext, RenderEnv};
 use rustcut_core::rustview::{SyncCommand, SyncService};
 use rustcut_core::settings::{AppPaths, Settings};
 use rustcut_core::store::{Problem, Store, StoreCommand, StoreHandle, spawn_store};
-use rustcut_core::thumbs::{ThumbCommand, ThumbHandle, ThumbStore, ThumbStoreCommand, ThumbStoreHandle, spawn_thumb_store};
+use rustcut_core::thumbs::{
+    ThumbCommand, ThumbHandle, ThumbStore, ThumbStoreCommand, ThumbStoreHandle, spawn_thumb_store,
+};
 
 use super::{AppError, Cli, persistence};
 use crate::MainWindow;
@@ -102,7 +104,11 @@ pub(super) fn open_thumb_store(paths: &AppPaths) -> (ThumbStoreHandle, Option<st
     }
 }
 
-pub(super) fn stop_thumbs(service: &ThumbHandle, store: &ThumbStoreHandle, thread: Option<std::thread::JoinHandle<()>>) {
+pub(super) fn stop_thumbs(
+    service: &ThumbHandle,
+    store: &ThumbStoreHandle,
+    thread: Option<std::thread::JoinHandle<()>>,
+) {
     let _ = service.blocking_request(|reply| ThumbCommand::Shutdown { reply });
     let _ = store.blocking_request(|reply| ThumbStoreCommand::Shutdown { reply });
     if let Some(thread) = thread

@@ -13,7 +13,8 @@ fn stored() -> Vec<u8> {
     let mut rgb = Vec::with_capacity(320 * 180 * 3);
     for y in 0..180_u32 {
         for x in 0..320_u32 {
-            rgb.extend_from_slice(&[(x % 256) as u8, (y % 256) as u8, ((x ^ y) % 256) as u8]);
+            let byte = |value: u32| u8::try_from(value % 256).unwrap();
+            rgb.extend_from_slice(&[byte(x), byte(y), byte(x ^ y)]);
         }
     }
     webp::Encoder::from_rgb(&rgb, 320, 180).encode(50.0).to_vec()
@@ -38,9 +39,11 @@ fn bench(c: &mut Criterion) {
         after: Orientation::MIRROR_HORIZONTAL,
     };
     c.bench_function("thumb_show_plain", |b| {
-        b.iter(|| render(black_box(&picture), &ThumbView::default()).unwrap())
+        b.iter(|| render(black_box(&picture), &ThumbView::default()).unwrap());
     });
-    c.bench_function("thumb_show_cropped_turned", |b| b.iter(|| render(black_box(&picture), &turned).unwrap()));
+    c.bench_function("thumb_show_cropped_turned", |b| {
+        b.iter(|| render(black_box(&picture), &turned).unwrap());
+    });
 }
 
 criterion_group!(benches, bench);

@@ -17,8 +17,8 @@ pub use service::{
 };
 pub use set::{Thumb, ThumbSet};
 pub use still::still;
-pub use view::{ThumbView, render};
 pub use store::{ThumbStats, ThumbStore, ThumbStoreCommand, ThumbStoreError, ThumbStoreHandle, spawn_thumb_store};
+pub use view::{ThumbView, render};
 
 #[cfg(test)]
 mod tests;

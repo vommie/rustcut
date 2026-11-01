@@ -166,7 +166,8 @@ impl ThumbStore {
 
     /// Empties everything, orphans included, and gives the space back.
     pub fn wipe(&self) -> Result<(), ThumbStoreError> {
-        self.conn.execute_batch("DELETE FROM thumbs; DELETE FROM sources; VACUUM;")?;
+        self.conn
+            .execute_batch("DELETE FROM thumbs; DELETE FROM sources; VACUUM;")?;
         Ok(())
     }
 
@@ -212,24 +213,12 @@ fn migrate(conn: &mut Connection, backups: Option<&Path>) -> Result<(), ThumbSto
 
 #[derive(Debug)]
 pub enum ThumbStoreCommand {
-    Load {
-        source: PathBuf,
-        reply: Reply<Vec<Thumb>>,
-    },
-    Put {
-        source: PathBuf,
-        thumbs: Vec<Thumb>,
-    },
-    Retain {
-        keep: HashSet<PathBuf>,
-    },
+    Load { source: PathBuf, reply: Reply<Vec<Thumb>> },
+    Put { source: PathBuf, thumbs: Vec<Thumb> },
+    Retain { keep: HashSet<PathBuf> },
     Wipe,
-    Stats {
-        reply: Reply<ThumbStats>,
-    },
-    Shutdown {
-        reply: Reply<()>,
-    },
+    Stats { reply: Reply<ThumbStats> },
+    Shutdown { reply: Reply<()> },
 }
 
 pub type ThumbStoreHandle = Handle<ThumbStoreCommand>;
@@ -334,7 +323,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("tl_thumbs.db");
         drop(ThumbStore::open(&path, dir.path()).unwrap());
-        Connection::open(&path).unwrap().pragma_update(None, "user_version", 9).unwrap();
+        Connection::open(&path)
+            .unwrap()
+            .pragma_update(None, "user_version", 9)
+            .unwrap();
         assert!(matches!(
             ThumbStore::open(&path, dir.path()),
             Err(ThumbStoreError::NewerSchema { found: 9, .. })

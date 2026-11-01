@@ -153,7 +153,9 @@ impl ThumbnailSettings {
     pub fn sanitize(&mut self) -> bool {
         let before = self.clone();
         self.delay_ms = self.delay_ms.min(MAX_THUMB_DELAY_MS);
-        self.portrait_percent = self.portrait_percent.clamp(MIN_THUMB_PORTRAIT_PERCENT, MAX_THUMB_PORTRAIT_PERCENT);
+        self.portrait_percent = self
+            .portrait_percent
+            .clamp(MIN_THUMB_PORTRAIT_PERCENT, MAX_THUMB_PORTRAIT_PERCENT);
         self.width = if self.width == 0 { 0 } else { self.width.clamp(80, 640) };
         self.workers = self.workers.min(MAX_THUMB_WORKERS);
         self.nice = self.nice.min(19);

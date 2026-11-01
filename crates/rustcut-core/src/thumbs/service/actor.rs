@@ -1,6 +1,4 @@
-//! The thumbnail service (P12 block 6): one actor that follows the open video, feeds the generator a little at a time, so
-//! the pointer and a zoom can always go first, and keeps the job sources in the cache. Keyframes come first; then the
-//! refinement decodes where a keyframe is farther away than the spacing.
+//! The service's state and what it does with commands and replies.
 
 use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -11,15 +9,14 @@ use parking_lot::Mutex;
 use rustcut_thumbs_protocol::{Job, Reply, Start};
 use tokio::sync::mpsc;
 
-use super::generator::{Arrived, Fallback, FallbackVideo, Generator, Helper};
-use super::plan::{Grid, automatic_workers, niceness};
-use super::set::{Thumb, ThumbSet};
-use super::store::{ThumbStats, ThumbStoreCommand, ThumbStoreHandle};
-use crate::actor::{EventBus, Handle, Mailbox, Reply as Answer, mailbox};
+use super::{LONG_SIDE, ThumbCommand, ThumbConfig, ThumbEvent, ThumbShared, ThumbVideo};
+use crate::actor::EventBus;
 use crate::settings::ThumbnailSettings;
+use crate::thumbs::generator::{Arrived, Fallback, FallbackVideo, Generator, Helper};
+use crate::thumbs::plan::{Grid, automatic_workers, niceness};
+use crate::thumbs::set::{Thumb, ThumbSet};
+use crate::thumbs::store::ThumbStoreCommand;
 
-/// The longer side of a stored picture, whatever size it shows at.
-pub const LONG_SIDE: u32 = 320;
 /// Near enough to count as the exact picture of a place.
 const EXACT_MS: u64 = 40;
 /// A thumbnail that takes longer than this, a few times in a row, means a slow drive.
@@ -27,113 +24,45 @@ const SLOW: Duration = Duration::from_millis(500);
 const SLOW_IN_A_ROW: u32 = 3;
 /// With nothing to do, the helper ends after this (its decoders hold memory) and comes back at the next hover.
 const IDLE_END: Duration = Duration::from_secs(30);
-const TICK: Duration = Duration::from_millis(100);
 const FLUSH_EVERY: Duration = Duration::from_secs(1);
 
-/// The video to cover (from the probe).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ThumbVideo {
-    pub path: PathBuf,
-    pub duration_ms: u64,
-    pub size: (u32, u32),
-    pub aspect: (i32, i32),
-}
-
-#[derive(Debug)]
-pub enum ThumbCommand {
-    Open(ThumbVideo),
-    Close,
-    /// The pointer is at this place: a keyframe near it goes first.
-    Hover { ms: u64 },
-    /// The pointer rests: the exact picture goes first.
-    Rest { ms: u64 },
-    /// The timeline shows this part (zoomed).
-    View { from_ms: u64, to_ms: u64 },
-    Settings { settings: ThumbnailSettings, render_nice: u8 },
-    /// A render runs or stopped running.
-    Rendering(bool),
-    /// The sources of all jobs. `removed` = jobs went away, so the cache follows.
-    Jobs { sources: HashSet<PathBuf>, removed: bool },
-    /// The user stops the generation of this video.
-    Cancel,
-    /// The cache's hold button.
-    ClearCache,
-    Stats { reply: Answer<ThumbStats> },
-    Shutdown { reply: Answer<()> },
-}
-
-pub type ThumbHandle = Handle<ThumbCommand>;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ThumbEvent {
-    /// The shared state has news (at most every 100 ms).
-    Updated,
-    /// The helper started fine.
-    HelperWorks,
-    /// The helper could not start; ffmpeg took over.
-    FallbackUsed,
-}
-
-/// What the UI reads, with a short lock.
-#[derive(Debug, Default)]
-pub struct ThumbShared {
-    pub path: Option<PathBuf>,
-    pub set: ThumbSet,
-    pub spacing_ms: u64,
-    pub duration_ms: u64,
-    /// Places answered and places planned; `running` while the plan is not through.
-    pub done: u64,
-    pub total: u64,
-    pub running: bool,
-}
-
-pub struct ThumbConfig {
-    pub ffmpeg: PathBuf,
-    pub helper: Option<PathBuf>,
-    pub settings: ThumbnailSettings,
-    pub render_nice: u8,
-    pub store: ThumbStoreHandle,
-}
-
-pub struct ThumbService {
-    pub handle: ThumbHandle,
-    pub events: Arc<EventBus<ThumbEvent>>,
-    pub shared: Arc<Mutex<ThumbShared>>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Phase {
+pub(super) enum Phase {
     Keyframes,
     Refinement,
     Done,
 }
 
-struct Actor {
-    config: ThumbConfig,
-    shared: Arc<Mutex<ThumbShared>>,
-    events: Arc<EventBus<ThumbEvent>>,
-    arrivals: mpsc::UnboundedSender<(u64, Arrived)>,
-    run: u64,
-    generator: Option<Generator>,
-    video: Option<ThumbVideo>,
-    grid: Option<Grid>,
-    phase: Phase,
-    pending: VecDeque<Job>,
-    in_flight: usize,
+pub(super) struct Actor {
+    pub(super) config: ThumbConfig,
+    pub(super) shared: Arc<Mutex<ThumbShared>>,
+    pub(super) events: Arc<EventBus<ThumbEvent>>,
+    pub(super) arrivals: mpsc::UnboundedSender<(u64, Arrived)>,
+    pub(super) run: u64,
+    pub(super) generator: Option<Generator>,
+    pub(super) video: Option<ThumbVideo>,
+    /// The open video, also while thumbnails are off: switching them on starts with it.
+    pub(super) wanted: Option<ThumbVideo>,
+    pub(super) grid: Option<Grid>,
+    pub(super) phase: Phase,
+    pub(super) pending: VecDeque<Job>,
+    pub(super) in_flight: usize,
     /// Places asked for out of line; their answers do not count for the plan.
-    asked: HashSet<u64>,
-    sources: HashSet<PathBuf>,
+    pub(super) asked: HashSet<u64>,
+    pub(super) sources: HashSet<PathBuf>,
     /// New pictures of a source with a job, on their way to the cache.
-    unsaved: Vec<Thumb>,
-    ready: bool,
-    rendering: bool,
-    helper_broken: bool,
-    crashes: u32,
-    braked: bool,
-    slow: u32,
-    last_answer: Instant,
-    last_flush: Instant,
-    dirty: bool,
+    pub(super) unsaved: Vec<Thumb>,
+    pub(super) ready: bool,
+    pub(super) rendering: bool,
+    pub(super) helper_broken: bool,
+    pub(super) crashes: u32,
+    pub(super) braked: bool,
+    pub(super) slow: u32,
+    pub(super) last_answer: Instant,
+    pub(super) last_flush: Instant,
+    /// When the open video's first plan started, for the log.
+    pub(super) opened: Instant,
+    pub(super) dirty: bool,
 }
 
 fn places(job: &Job) -> usize {
@@ -219,7 +148,11 @@ impl Actor {
         if !self.ready {
             return;
         }
-        let limit = if self.braked { 1 } else { usize::try_from(self.workers()).unwrap_or(1).saturating_mul(4) };
+        let limit = if self.braked {
+            1
+        } else {
+            usize::try_from(self.workers()).unwrap_or(1).saturating_mul(4)
+        };
         let mut jobs = Vec::new();
         while self.in_flight < limit {
             let Some(job) = self.pending.pop_front() else { break };
@@ -261,6 +194,12 @@ impl Actor {
         }
         match self.phase {
             Phase::Keyframes if !self.braked => {
+                let pictures = self.shared.lock().set.len();
+                tracing::info!(
+                    pictures,
+                    ms = self.opened.elapsed().as_millis(),
+                    "[Thumbs] Keyframes done"
+                );
                 self.phase = Phase::Refinement;
                 self.plan();
                 if self.pending.is_empty() {
@@ -275,16 +214,23 @@ impl Actor {
     }
 
     fn finish(&mut self) {
+        let pictures = self.shared.lock().set.len();
+        tracing::info!(pictures, ms = self.opened.elapsed().as_millis(), "[Thumbs] Finished");
         self.phase = Phase::Done;
         self.set_running(false);
         self.flush();
     }
 
     async fn open(&mut self, video: ThumbVideo) {
-        if self.video.as_ref().is_some_and(|known| known.path == video.path && known.duration_ms == video.duration_ms) {
+        if self
+            .video
+            .as_ref()
+            .is_some_and(|known| known.path == video.path && known.duration_ms == video.duration_ms)
+        {
             return;
         }
         self.close();
+        self.wanted = Some(video.clone());
         if !self.config.settings.enabled || video.duration_ms == 0 {
             return;
         }
@@ -292,7 +238,11 @@ impl Actor {
         let mut set = ThumbSet::default();
         if self.sources.contains(&video.path) {
             let path = video.path.clone();
-            let cached = self.config.store.request(|reply| ThumbStoreCommand::Load { source: path, reply }).await;
+            let cached = self
+                .config
+                .store
+                .request(|reply| ThumbStoreCommand::Load { source: path, reply })
+                .await;
             for thumb in cached.unwrap_or_default() {
                 set.insert(thumb);
             }
@@ -309,10 +259,15 @@ impl Actor {
                 running: true,
             };
         }
-        tracing::debug!(spacing_ms = grid.spacing_ms, places = grid.count(), "[Thumbs] Video opened");
+        tracing::debug!(
+            spacing_ms = grid.spacing_ms,
+            places = grid.count(),
+            "[Thumbs] Video opened"
+        );
         self.video = Some(video);
         self.grid = Some(grid);
         self.phase = Phase::Keyframes;
+        self.opened = Instant::now();
         self.crashes = 0;
         self.braked = false;
         self.slow = 0;
@@ -325,6 +280,7 @@ impl Actor {
         self.flush();
         self.stop();
         self.video = None;
+        self.wanted = None;
         self.grid = None;
         self.pending.clear();
         self.phase = Phase::Done;
@@ -375,7 +331,11 @@ impl Actor {
     fn thumb(&mut self, thumb: Thumb) {
         let now = Instant::now();
         if self.phase == Phase::Keyframes && !self.braked {
-            self.slow = if now.duration_since(self.last_answer) > SLOW { self.slow + 1 } else { 0 };
+            self.slow = if now.duration_since(self.last_answer) > SLOW {
+                self.slow + 1
+            } else {
+                0
+            };
             if self.slow >= SLOW_IN_A_ROW {
                 tracing::info!("[Thumbs] A slow drive: one worker and no refinement for this video");
                 self.braked = true;
@@ -386,13 +346,17 @@ impl Actor {
             }
         }
         self.last_answer = now;
+        let count = self.shared.lock().set.len() + 1;
+        if count == 1 || count == 5 {
+            tracing::info!(count, ms = self.opened.elapsed().as_millis(), "[Thumbs] First pictures");
+        }
         if self.video.as_ref().is_some_and(|video| self.keeps(&video.path)) {
             self.unsaved.push(thumb.clone());
         }
         self.shared.lock().set.insert(thumb);
     }
 
-    fn arrived(&mut self, arrived: Arrived) {
+    pub(super) fn arrived(&mut self, arrived: Arrived) {
         match arrived {
             Arrived::Reply(reply, picture) => self.reply(reply, picture),
             Arrived::Closed => self.helper_gone(),
@@ -408,6 +372,8 @@ impl Actor {
                     self.events.publish(ThumbEvent::HelperWorks);
                 }
                 self.refill();
+                // A plan the cache covered sends nothing, so no `Idle` would come.
+                self.advance();
             }
             Reply::Thumb {
                 target_ms,
@@ -470,7 +436,8 @@ impl Actor {
     }
 
     fn ask(&mut self, jobs: Vec<Job>, targets: impl IntoIterator<Item = u64>) {
-        if jobs.is_empty() {
+        // A file that crashed the helper twice stays without it.
+        if jobs.is_empty() || self.crashes > 1 {
             return;
         }
         self.start();
@@ -492,7 +459,12 @@ impl Actor {
         if self.grid.is_none() {
             return;
         }
-        let near = self.shared.lock().set.nearest(ms).is_some_and(|thumb| thumb.exact && thumb.time_ms.abs_diff(ms) <= EXACT_MS);
+        let near = self
+            .shared
+            .lock()
+            .set
+            .nearest(ms)
+            .is_some_and(|thumb| thumb.exact && thumb.time_ms.abs_diff(ms) <= EXACT_MS);
         if !near {
             self.ask(vec![Job::Exact { ms }], [ms]);
         }
@@ -501,7 +473,7 @@ impl Actor {
     fn view(&mut self, from_ms: u64, to_ms: u64) {
         let Some(grid) = self.grid else { return };
         let jobs = grid.view(from_ms, to_ms, &self.shared.lock().set);
-        if jobs.is_empty() {
+        if jobs.is_empty() || self.crashes > 1 {
             return;
         }
         self.start();
@@ -522,7 +494,15 @@ impl Actor {
         self.config.render_nice = render_nice;
         let now = self.config.settings.clone();
         if before.enabled && !now.enabled {
+            let wanted = self.wanted.clone();
             self.close();
+            self.wanted = wanted;
+            return;
+        }
+        if !before.enabled && now.enabled {
+            if let Some(video) = self.wanted.clone() {
+                self.open(video).await;
+            }
             return;
         }
         if before.density != now.density && self.video.is_some() {
@@ -560,7 +540,10 @@ impl Actor {
             if sources.is_empty() {
                 let _ = self.config.store.send(ThumbStoreCommand::Wipe);
             } else {
-                let _ = self.config.store.send(ThumbStoreCommand::Retain { keep: sources.clone() });
+                let _ = self
+                    .config
+                    .store
+                    .send(ThumbStoreCommand::Retain { keep: sources.clone() });
             }
         }
         self.sources = sources;
@@ -574,16 +557,13 @@ impl Actor {
         self.finish();
     }
 
-    async fn clear_cache(&mut self) {
-        let _ = self.config.store.send(ThumbStoreCommand::Wipe);
+    /// Empties the file. The open video keeps its pictures in memory, so the hover goes on and the file stays empty.
+    fn clear_cache(&mut self) {
         self.unsaved.clear();
-        if let Some(video) = self.video.clone() {
-            self.close();
-            self.open(video).await;
-        }
+        let _ = self.config.store.send(ThumbStoreCommand::Wipe);
     }
 
-    fn tick(&mut self) {
+    pub(super) fn tick(&mut self) {
         if self.dirty {
             self.dirty = false;
             self.events.publish(ThumbEvent::Updated);
@@ -602,7 +582,7 @@ impl Actor {
     }
 
     /// True when the actor should end.
-    async fn command(&mut self, command: ThumbCommand) -> bool {
+    pub(super) async fn command(&mut self, command: ThumbCommand) -> bool {
         match command {
             ThumbCommand::Open(video) => self.open(video).await,
             ThumbCommand::Close => self.close(),
@@ -613,9 +593,13 @@ impl Actor {
             ThumbCommand::Rendering(rendering) => self.rendering(rendering),
             ThumbCommand::Jobs { sources, removed } => self.jobs(sources, removed),
             ThumbCommand::Cancel => self.cancel(),
-            ThumbCommand::ClearCache => self.clear_cache().await,
+            ThumbCommand::ClearCache => self.clear_cache(),
             ThumbCommand::Stats { reply } => {
-                let stats = self.config.store.request(|reply| ThumbStoreCommand::Stats { reply }).await;
+                let stats = self
+                    .config
+                    .store
+                    .request(|reply| ThumbStoreCommand::Stats { reply })
+                    .await;
                 let _ = reply.send(stats.unwrap_or_default());
             }
             ThumbCommand::Shutdown { reply } => {
@@ -627,61 +611,4 @@ impl Actor {
         }
         false
     }
-}
-
-async fn run(mut actor: Actor, mut mailbox: Mailbox<ThumbCommand>, mut arrivals: mpsc::UnboundedReceiver<(u64, Arrived)>) {
-    let mut tick = tokio::time::interval(TICK);
-    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    loop {
-        tokio::select! {
-            command = mailbox.recv() => {
-                let Some(command) = command else { return };
-                if actor.command(command).await {
-                    return;
-                }
-            }
-            Some((run, arrived)) = arrivals.recv() => {
-                if run == actor.run {
-                    actor.arrived(arrived);
-                }
-            }
-            _ = tick.tick() => actor.tick(),
-        }
-    }
-}
-
-/// Starts the service on the runtime.
-pub fn spawn_thumbs(runtime: &tokio::runtime::Handle, config: ThumbConfig) -> ThumbService {
-    let (handle, mail) = mailbox();
-    let events = Arc::new(EventBus::with_capacity(64));
-    let shared = Arc::new(Mutex::new(ThumbShared::default()));
-    let (arrivals, incoming) = mpsc::unbounded_channel();
-    let now = Instant::now();
-    let actor = Actor {
-        config,
-        shared: Arc::clone(&shared),
-        events: Arc::clone(&events),
-        arrivals,
-        run: 0,
-        generator: None,
-        video: None,
-        grid: None,
-        phase: Phase::Done,
-        pending: VecDeque::new(),
-        in_flight: 0,
-        asked: HashSet::new(),
-        sources: HashSet::new(),
-        unsaved: Vec::new(),
-        ready: false,
-        rendering: false,
-        helper_broken: false,
-        crashes: 0,
-        braked: false,
-        slow: 0,
-        last_answer: now,
-        last_flush: now,
-        dirty: false,
-    };
-    runtime.spawn(run(actor, mail, incoming));
-    ThumbService { handle, events, shared }
 }

@@ -81,16 +81,31 @@ mod tests {
     #[test]
     fn portrait_keeps_the_chosen_measure() {
         let aspect = 9.0 / 16.0;
-        close(size(&settings(ThumbPortrait::SameHeight, 0), 610.0, aspect), (75.9, 135.0));
-        close(size(&settings(ThumbPortrait::SameArea, 0), 610.0, aspect), (135.0, 240.0));
-        close(size(&settings(ThumbPortrait::SameWidth, 0), 610.0, aspect), (240.0, 426.7));
+        close(
+            size(&settings(ThumbPortrait::SameHeight, 0), 610.0, aspect),
+            (75.9, 135.0),
+        );
+        close(
+            size(&settings(ThumbPortrait::SameArea, 0), 610.0, aspect),
+            (135.0, 240.0),
+        );
+        close(
+            size(&settings(ThumbPortrait::SameWidth, 0), 610.0, aspect),
+            (240.0, 426.7),
+        );
     }
 
     #[test]
     fn the_percent_adjusts_portrait_only() {
         let aspect = 9.0 / 16.0;
-        close(size(&settings(ThumbPortrait::SameHeight, 50), 610.0, aspect), (113.9, 202.5));
-        close(size(&settings(ThumbPortrait::SameHeight, 50), 610.0, WIDE), (240.0, 135.0));
+        close(
+            size(&settings(ThumbPortrait::SameHeight, 50), 610.0, aspect),
+            (113.9, 202.5),
+        );
+        close(
+            size(&settings(ThumbPortrait::SameHeight, 50), 610.0, WIDE),
+            (240.0, 135.0),
+        );
     }
 
     #[test]

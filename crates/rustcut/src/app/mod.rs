@@ -220,7 +220,12 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     let thumb_service = rustcut_core::thumbs::spawn_thumbs(
         runtime.handle(),
         rustcut_core::thumbs::ThumbConfig {
-            ffmpeg: loaded.settings.advanced.ffmpeg.clone().unwrap_or_else(|| "ffmpeg".into()),
+            ffmpeg: loaded
+                .settings
+                .advanced
+                .ffmpeg
+                .clone()
+                .unwrap_or_else(|| "ffmpeg".into()),
             helper: rustcut_core::thumbs::helper_program(),
             settings: loaded.settings.thumbnails.clone(),
             render_nice: loaded.settings.render.nice,

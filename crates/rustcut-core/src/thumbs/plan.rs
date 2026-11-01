@@ -35,7 +35,11 @@ pub fn level_order(count: usize) -> Vec<usize> {
         }
         parts *= 2;
     }
-    let rest = seen.iter().enumerate().filter(|(_, done)| !**done).map(|(index, _)| index);
+    let rest = seen
+        .iter()
+        .enumerate()
+        .filter(|(_, done)| !**done)
+        .map(|(index, _)| index);
     order.extend(rest.collect::<Vec<_>>());
     order
 }
@@ -61,7 +65,9 @@ impl Grid {
 
     fn slot(self, index: usize) -> u64 {
         let index = u64::try_from(index).unwrap_or(u64::MAX);
-        index.saturating_mul(self.spacing_ms).saturating_add(self.spacing_ms / 2)
+        index
+            .saturating_mul(self.spacing_ms)
+            .saturating_add(self.spacing_ms / 2)
     }
 
     /// First stage: a keyframe for every place not covered yet, coarse to fine.

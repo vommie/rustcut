@@ -265,10 +265,12 @@ impl FilterChain {
 
     /// The enabled orientation before `kind` (how `kind`'s frame shows the source's).
     pub fn orientation_before(&self, kind: FilterKind) -> Orientation {
-        self.before(kind).active().fold(Orientation::IDENTITY, |o, filter| match *filter {
-            Filter::Orientation(p) => o.then(p.orientation()),
-            _ => o,
-        })
+        self.before(kind)
+            .active()
+            .fold(Orientation::IDENTITY, |o, filter| match *filter {
+                Filter::Orientation(p) => o.then(p.orientation()),
+                _ => o,
+            })
     }
 
     /// The enabled orientation after `kind` (how the output shows `kind`'s frame).

@@ -4,6 +4,7 @@
 //! (0.16 to 0.26 ms, `rustcut-core/benches/thumb_view.rs`), on the UI thread, and a few recent ones are kept.
 
 pub mod geometry;
+mod messages;
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashSet, VecDeque};
@@ -25,7 +26,6 @@ use crate::app::SettingsWriter;
 
 use crate::ui::dispatcher::{CoalesceKey, UiDispatcher, rate};
 use crate::ui::filters::FiltersBridge;
-use crate::ui::notices::{self, Kind, Notice};
 use crate::ui::status::activity;
 use crate::ui::timeline::viewport::Viewport;
 use crate::{MainWindow, Theme, Thumbs, Timeline, TimelineMetrics};
@@ -39,8 +39,12 @@ const FAR_SPACINGS: u64 = 2;
 /// The status bar shows the generation once it takes longer than this.
 const ACTIVITY_AFTER: Duration = Duration::from_secs(3);
 const ACTIVITY_KEY: &str = "thumbnails";
-/// The cache's banner at the start.
-const LARGE_CACHE: u64 = 4 * 1024 * 1024 * 1024;
+/// The strip's lines stay in the background (user request, 2026-11-01).
+const STRIP_ALPHA: u8 = 140;
+/// A picture with the time under it is at least this wide (`thumb_popup.slint`).
+const TIME_WIDTH: f32 = 84.0;
+
+pub use messages::{check_cache_size, set_fallback_memory};
 
 /// The pointer on the timeline, in track pixels.
 #[derive(Debug, Clone, Copy)]
@@ -108,7 +112,9 @@ pub fn timeline_changed(hover: Option<TimelineHover>, viewport: &Viewport) {
 /// The key and the View menu.
 pub fn toggle() {
     with(|bridge| {
-        bridge.writer.update(|settings| settings.thumbnails.enabled = !settings.thumbnails.enabled);
+        bridge
+            .writer
+            .update(|settings| settings.thumbnails.enabled = !settings.thumbnails.enabled);
     });
 }
 
@@ -126,9 +132,9 @@ pub fn stats_text() -> String {
     with(|bridge| {
         let stats = bridge.stats.get();
         text = format!(
-            "Empties the cache: {} thumbnails of {} videos, {}. Hold to empty.",
-            stats.thumbs,
+            "Empties the cache of job sources (videos: {}, thumbnails: {}, size: {}).",
             stats.sources,
+            stats.thumbs,
             humansize::format_size(stats.bytes, humansize::BINARY),
         );
     });
@@ -190,7 +196,10 @@ impl ThumbsBridge {
             let (_stream, video) = info.primary_video()?;
             let duration = info.container.duration?;
             let aspect = video.sample_aspect.map_or((1, 1), |ratio| {
-                (i32::try_from(ratio.num).unwrap_or(1), i32::try_from(ratio.den).unwrap_or(1))
+                (
+                    i32::try_from(ratio.num).unwrap_or(1),
+                    i32::try_from(ratio.den).unwrap_or(1),
+                )
             });
             Some(ThumbVideo {
                 path,
@@ -293,18 +302,24 @@ impl ThumbsBridge {
         });
         if entering && delay > 0 {
             let weak = self.this.borrow().clone();
-            self.delay.start(slint::TimerMode::SingleShot, Duration::from_millis(u64::from(delay)), move || {
-                if let Some(bridge) = weak.upgrade() {
-                    bridge.place_changed();
-                }
-            });
+            self.delay.start(
+                slint::TimerMode::SingleShot,
+                Duration::from_millis(u64::from(delay)),
+                move || {
+                    if let Some(bridge) = weak.upgrade() {
+                        bridge.place_changed();
+                    }
+                },
+            );
         } else if !self.delay.running() {
             self.place_changed();
         }
     }
 
     fn inset(&self) -> f32 {
-        self.window.upgrade().map_or(0.0, |window| window.global::<TimelineMetrics<'_>>().get_inset())
+        self.window
+            .upgrade()
+            .map_or(0.0, |window| window.global::<TimelineMetrics<'_>>().get_inset())
     }
 
     fn follow_view(&self, viewport: &Viewport) {
@@ -329,12 +344,19 @@ impl ThumbsBridge {
 
     fn view(&self) -> ThumbView {
         let show_filters = self.settings.borrow().show_filters;
-        self.filters.borrow().upgrade().map_or_else(ThumbView::default, |filters| filters.thumb_view(show_filters))
+        self.filters
+            .borrow()
+            .upgrade()
+            .map_or_else(ThumbView::default, |filters| filters.thumb_view(show_filters))
     }
 
     /// Whether the moment allows a picture: the crop is edited, or the probe plays.
     fn allowed(&self, window: &MainWindow) -> bool {
-        let editing = self.filters.borrow().upgrade().is_some_and(|filters| filters.editing_crop());
+        let editing = self
+            .filters
+            .borrow()
+            .upgrade()
+            .is_some_and(|filters| filters.editing_crop());
         !editing && !window.global::<Timeline<'_>>().get_locked()
     }
 
@@ -360,7 +382,9 @@ impl ThumbsBridge {
             Some(pair) => (Some(pair.0), pair.1),
             None => (None, true),
         };
-        if far && settings.missing == ThumbMissing::Nothing || thumb.is_none() && settings.missing != ThumbMissing::EmptyField {
+        if far && settings.missing == ThumbMissing::Nothing
+            || thumb.is_none() && settings.missing != ThumbMissing::EmptyField
+        {
             self.hide();
             return;
         }
@@ -381,9 +405,16 @@ impl ThumbsBridge {
         thumbs.set_time_inside(settings.look == ThumbLook::TimeInside);
         thumbs.set_picture_width(width);
         thumbs.set_picture_height(height);
-        thumbs.set_left(geometry::left(settings.place, column, place.x, width));
+        let box_width = if settings.look == ThumbLook::TimeBelow {
+            width.max(TIME_WIDTH)
+        } else {
+            width
+        };
+        thumbs.set_left(geometry::left(settings.place, column, place.x, box_width));
         thumbs.set_shown(true);
-        window.global::<Timeline<'_>>().set_hover_time_covered(settings.look != ThumbLook::PictureOnly);
+        window
+            .global::<Timeline<'_>>()
+            .set_hover_time_covered(settings.look != ThumbLook::PictureOnly);
         self.shown.set(true);
     }
 
@@ -416,7 +447,10 @@ impl ThumbsBridge {
         let settings = self.settings.borrow();
         let viewport = self.viewport.borrow();
         let thumbs = window.global::<Thumbs<'_>>();
-        let (Some(viewport), true) = (viewport.as_ref(), settings.enabled && settings.progress == ThumbProgress::Strip) else {
+        let (Some(viewport), true) = (
+            viewport.as_ref(),
+            settings.enabled && settings.progress == ThumbProgress::Strip,
+        ) else {
             thumbs.set_strip_shown(false);
             return;
         };
@@ -432,8 +466,8 @@ impl ThumbsBridge {
             return;
         }
         let mut buffer = SharedPixelBuffer::<Rgba8Pixel>::new(width.max(1), 1);
-        let accent = window.global::<Theme<'_>>().get_accent().to_argb_u8();
-        let line = Rgba8Pixel::new(accent.red, accent.green, accent.blue, 255);
+        let color = window.global::<Theme<'_>>().get_text_muted().to_argb_u8();
+        let line = Rgba8Pixel::new(color.red, color.green, color.blue, STRIP_ALPHA);
         let pixels = buffer.make_mut_slice();
         for time in shared.set.times() {
             let x = viewport.x_of(Timestamp::from_millis(i64::try_from(time).unwrap_or(0)));
@@ -511,62 +545,14 @@ fn follow_events(service: &ThumbService, ui: &UiDispatcher, runtime: &tokio::run
         loop {
             match events.recv().await {
                 Ok(ThumbEvent::Updated) | Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                    ui.post_latest(CoalesceKey::new("thumbs", 0), rate::PROGRESS, || with(ThumbsBridge::updated));
+                    ui.post_latest(CoalesceKey::new("thumbs", 0), rate::PROGRESS, || {
+                        with(ThumbsBridge::updated)
+                    });
                 }
-                Ok(ThumbEvent::HelperWorks) => ui.post(helper_worked),
-                Ok(ThumbEvent::FallbackUsed) => ui.post(fallback_used),
+                Ok(ThumbEvent::HelperWorks) => ui.post(messages::helper_worked),
+                Ok(ThumbEvent::FallbackUsed) => ui.post(messages::fallback_used),
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
             }
-        }
-    });
-}
-
-/// `Some(value)` sets the memory; the answer is what it holds.
-type FallbackMemory = Rc<dyn Fn(Option<bool>) -> bool>;
-
-thread_local! {
-    static FALLBACK_MEMORY: RefCell<Option<FallbackMemory>> = const { RefCell::new(None) };
-}
-
-/// Connects the persistent memory of the fallback's banner: `Some(value)` sets it, the answer is the value.
-pub fn set_fallback_memory(memory: impl Fn(Option<bool>) -> bool + 'static) {
-    FALLBACK_MEMORY.set(Some(Rc::new(memory)));
-}
-
-fn fallback_memory(value: Option<bool>) -> bool {
-    FALLBACK_MEMORY.with_borrow(|memory| memory.as_ref().is_some_and(|memory| memory(value)))
-}
-
-/// The helper is back: the next failure tells again.
-fn helper_worked() {
-    if fallback_memory(None) {
-        fallback_memory(Some(false));
-    }
-}
-
-/// The banner shows once, and again only after the helper worked in between (user decision Q-P12e).
-fn fallback_used() {
-    if !fallback_memory(None) {
-        fallback_memory(Some(true));
-        notices::post(Notice::new(Kind::ThumbnailsFallback, "Thumbnails take the slow way").detail(
-            "The thumbnail helper did not start, usually because FFmpeg was updated. RustCut makes them through ffmpeg \
-             now. Update RustCut to get the fast way back.",
-        ));
-    }
-}
-
-/// The banner at the start about a large cache.
-pub fn check_cache_size(path: PathBuf, ui: &UiDispatcher, runtime: &tokio::runtime::Handle) {
-    let ui = ui.clone();
-    runtime.spawn(async move {
-        let size = tokio::fs::metadata(&path).await.map_or(0, |meta| meta.len());
-        if size > LARGE_CACHE {
-            ui.post(move || {
-                notices::post(Notice::new(Kind::ThumbnailCacheLarge, "The thumbnail cache is large").detail(format!(
-                    "It takes {}. Settings > Player can empty it, and it empties by itself with the jobs.",
-                    humansize::format_size(size, humansize::BINARY)
-                )));
-            });
         }
     });
 }

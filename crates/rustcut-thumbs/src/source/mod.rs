@@ -38,10 +38,18 @@ pub struct Source {
 }
 
 impl Source {
-    pub fn open(path: &Path, long_side: u32, quality: u8, seen: Arc<Mutex<HashSet<i64>>>) -> Result<Self, ffmpeg_next::Error> {
+    pub fn open(
+        path: &Path,
+        long_side: u32,
+        quality: u8,
+        seen: Arc<Mutex<HashSet<i64>>>,
+    ) -> Result<Self, ffmpeg_next::Error> {
         let input = format::input(path)?;
         let (stream, time_base, parameters, start) = {
-            let video = input.streams().best(Type::Video).ok_or(ffmpeg_next::Error::StreamNotFound)?;
+            let video = input
+                .streams()
+                .best(Type::Video)
+                .ok_or(ffmpeg_next::Error::StreamNotFound)?;
             let start = match video.start_time() {
                 ffmpeg_next::ffi::AV_NOPTS_VALUE => 0,
                 known => known,
@@ -79,7 +87,10 @@ impl Source {
     /// Goes to the keyframe at or before the time. The container's clock has the stream's start in it.
     fn seek(&mut self, ms: u64) -> bool {
         let start = self.start.rescale(self.time_base, rescale::TIME_BASE);
-        let target = i64::try_from(ms).unwrap_or(i64::MAX / 2000).saturating_mul(1000).saturating_add(start);
+        let target = i64::try_from(ms)
+            .unwrap_or(i64::MAX / 2000)
+            .saturating_mul(1000)
+            .saturating_add(start);
         self.decoder.flush();
         self.input.seek(target, ..target).is_ok()
     }
@@ -185,14 +196,18 @@ impl Source {
                         if next > time_ms {
                             break;
                         }
-                        emit(Outcome::Plain(Reply::Known { target_ms: next, time_ms }));
+                        emit(Outcome::Plain(Reply::Known {
+                            target_ms: next,
+                            time_ms,
+                        }));
                         remaining = tail;
                     }
                 }
                 if let Some(target_ms) = hit {
-                    if let Some(outcome) = self.picture(target_ms, time_ms, true) {
-                        emit(outcome);
-                    }
+                    emit(
+                        self.picture(target_ms, time_ms, true)
+                            .unwrap_or(Outcome::Plain(Reply::Missing { target_ms })),
+                    );
                     left = remaining;
                     if !left.is_empty() && stop() {
                         return left.to_vec();

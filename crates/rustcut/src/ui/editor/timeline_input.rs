@@ -395,12 +395,15 @@ impl Editor {
             tl.set_hover_text(text.into());
         }
         tl.set_cursor(st.cursor.number());
-        let place = st.hover.filter(|_| st.has_video).map(|x| crate::ui::thumbs::TimelineHover {
-            x: x.clamp(0.0, st.viewport.width()),
-            time: st.viewport.time_at(x.clamp(0.0, st.viewport.width())),
-            on_ruler: st.hover_on_ruler,
-            dragging: st.drag.is_some(),
-        });
+        let place = st
+            .hover
+            .filter(|_| st.has_video)
+            .map(|x| crate::ui::thumbs::TimelineHover {
+                x: x.clamp(0.0, st.viewport.width()),
+                time: st.viewport.time_at(x.clamp(0.0, st.viewport.width())),
+                on_ruler: st.hover_on_ruler,
+                dragging: st.drag.is_some(),
+            });
         crate::ui::thumbs::timeline_changed(place, &st.viewport);
     }
 }

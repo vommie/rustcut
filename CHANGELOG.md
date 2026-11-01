@@ -9,6 +9,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Timeline thumbnails: hovering the timeline shows a picture of that place, with the time under it. They are made in the
+  background the moment a video opens: 5 evenly spread within a fraction of a second, then finer and finer, and the place
+  under the pointer goes first. Where keyframes lie far apart, a second stage decodes the places in between, and when the
+  pointer rests for 0.3 s the exact picture follows. A thin strip between video and ruler shows what exists. The picture
+  shows the crop and the rotation like the big picture, also for portrait videos and in narrow windows.
+- Settings > Player > Timeline thumbnails: on or off (off makes none), where the time stands, width, portrait size, place, which
+  part of the timeline shows it, delay, while dragging, what shows without a near picture, how the progress shows, density,
+  workers, priority and quality. View > Hide Timeline Thumbnails and a key of your choice (none by default) do the same.
+- Thumbnails of videos with a job are kept in `tl_thumbs.db` in the cache folder, so a job's video shows them at once. They go
+  when the source's last job goes, and the file empties when no job is left. Settings can empty it, and a banner at the
+  start tells when it exceeds 4 GB. Videos without a job keep them only while they are open. No migration: older files read
+  the new settings as their defaults.
+- The new helper program `rustcut-thumbs` makes them with libav, so a damaged file can never take RustCut down. If it cannot
+  start (usually after an FFmpeg update), ffmpeg takes over more slowly and a banner says so once. Packages need `clang` to
+  build.
+
 - Player controls: an audio normalization button with a menu: None, Loudness, Dynamic, Speech and Compressor. It works while
   a video plays, a right click switches it off, and another brings the last kind back. It changes only what you hear in
   RustCut, never the rendered file. Settings > Player has the same choice, and Settings > Hotkeys two keys for it (none by
@@ -72,6 +88,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The conflict dialog's pictures come through the thumbnail helper, which is much faster; ffmpeg stays as the fallback.
 - Settings: "Even out the loudness" became the choice "Normalization". An old setting is taken over (on = Loudness); the
   settings file is backed up first (migration `normalization-choice`, settings version 10).
 - Buttons that unfold something (choices, the folder field, the normalization) end in a thin line before the chevron.

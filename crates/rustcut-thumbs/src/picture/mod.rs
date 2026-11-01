@@ -117,7 +117,9 @@ fn encode(rgb: &[u8], width: u32, height: u32, quality: f32) -> Option<Vec<u8>> 
     config.quality = quality;
     // Method 0: an order of magnitude faster for a few percent of size (the lab's numbers).
     config.method = 0;
-    let encoded = webp::Encoder::from_rgb(rgb, width, height).encode_advanced(&config).ok()?;
+    let encoded = webp::Encoder::from_rgb(rgb, width, height)
+        .encode_advanced(&config)
+        .ok()?;
     Some(encoded.to_vec())
 }
 
@@ -133,7 +135,11 @@ fn hdr_curve(transfer: TransferCharacteristic) -> Option<[u8; 256]> {
     for (value, entry) in (0_u8..=255).zip(table.iter_mut()) {
         let shown = (f64::from(value) / 255.0 / white).min(1.0).powf(0.9);
         // Between 0 and 255 by the min and the factor.
-        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "0.0..=255.0 here")]
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "0.0..=255.0 here"
+        )]
         let byte = (shown * 255.0).round() as u8;
         *entry = byte;
     }
