@@ -37,6 +37,8 @@ pub enum Run {
 /// A place's time after the one before it, when the spokes come one after the other.
 const STAGGER: f32 = 28.0;
 const SPOKE: f32 = 150.0;
+/// How visible a new level starts: the old one is gone at once, and from nothing the video would flash through.
+const LEVEL_ALPHA: f32 = 0.45;
 
 fn eased(t: f32) -> f32 {
     let rest = 1.0 - t.clamp(0.0, 1.0);
@@ -117,7 +119,7 @@ impl Run {
                 back: back @ true,
                 ..
             } => Pose {
-                alpha: 0.0,
+                alpha: LEVEL_ALPHA,
                 zoom: if back { 1.22 } else { 0.72 },
                 turn: 0.0,
             },
@@ -126,7 +128,7 @@ impl Run {
                 back,
                 ..
             } => Pose {
-                alpha: 0.0,
+                alpha: LEVEL_ALPHA,
                 zoom: 1.0,
                 turn: if back { 60.0 } else { -60.0 },
             },
@@ -173,7 +175,7 @@ impl Run {
                 let from = step.mul_add(-count(index), count(place) * 45.0);
                 came(
                     Pose {
-                        alpha: 0.0,
+                        alpha: LEVEL_ALPHA,
                         zoom: 0.6,
                         turn: from,
                     },

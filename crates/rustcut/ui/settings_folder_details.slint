@@ -355,6 +355,26 @@ export component FolderDetails inherits VerticalLayout {
                 }
             }
 
+            // A file held over the window would replace this picture.
+            if FolderTreeUi.file-over: Rectangle {
+                border-radius: parent.width * 0.22;
+                background: Theme.primary.with-alpha(0.35);
+                border-width: 2px;
+                border-color: Theme.primary;
+
+                Text {
+                    text: "Replace";
+                    color: #ffffff;
+                    stroke: #11111b;
+                    stroke-width: 2px;
+                    stroke-style: outside;
+                    font-size: 13px;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+
             IconButton {
                 x: parent.width - self.width + 6px;
                 y: -6px;

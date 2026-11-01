@@ -15,8 +15,8 @@ use std::f32::consts::TAU;
 use std::rc::{Rc, Weak};
 use std::time::{Duration, Instant};
 
-use rustcut_core::folders::{FolderId, FolderTree, Layout};
-use rustcut_core::settings::{Settings, WheelButton, WheelLevels, WheelOpening};
+use rustcut_core::folders::{FolderId, FolderTree, Layout, LevelKey, level};
+use rustcut_core::settings::{Settings, SpokePictures, WheelButton, WheelLevels, WheelOpening};
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 
 use self::anim::{Pose, Run};
@@ -37,6 +37,8 @@ const RING: f32 = 64.0;
 /// How long the current folder lights up at the opening, and the middle fades over, at normal speed (ms).
 const PULSE_MS: f32 = 420.0;
 const FADE_MS: f32 = 160.0;
+/// When the pictures of a wheel are first prepared after the start.
+const PREPARE_AFTER: Duration = Duration::from_millis(800);
 
 fn timing(settings: &Settings) -> Timing {
     let w = &settings.folder_wheel;
@@ -115,6 +117,8 @@ pub struct WheelBridge {
     opened_at: Cell<Option<u64>>,
     middle_at: Cell<(Option<usize>, u64)>,
     slot_rows: Rc<VecModel<WheelSlotView>>,
+    /// How often the running animation was drawn.
+    frames: Cell<u32>,
 }
 
 impl WheelBridge {
@@ -148,6 +152,7 @@ impl WheelBridge {
             opened_at: Cell::new(None),
             middle_at: Cell::new((None, 0)),
             slot_rows: Rc::default(),
+            frames: Cell::new(0),
         });
         let ui = window.global::<FolderWheel<'_>>();
         ui.set_slots(ModelRc::from(Rc::clone(&bridge.slot_rows)));
@@ -180,13 +185,55 @@ impl WheelBridge {
         WHEEL.with(|w| *w.borrow_mut() = Rc::downgrade(&bridge));
         let weak = Rc::downgrade(&bridge);
         pictures.listen(move || {
-            if let Some(b) = weak.upgrade()
-                && b.nav.borrow().is_open()
-            {
-                b.publish();
+            if let Some(b) = weak.upgrade() {
+                if b.nav.borrow().is_open() {
+                    b.publish();
+                } else {
+                    b.prepare();
+                }
+            }
+        });
+        // The window has its size by then.
+        let weak = Rc::downgrade(&bridge);
+        slint::Timer::single_shot(PREPARE_AFTER, move || {
+            if let Some(b) = weak.upgrade() {
+                b.prepare();
             }
         });
         bridge
+    }
+
+    /// Asks for the pictures of the first level while the wheel is closed, so the first opening finds them ready: a
+    /// picture that is not cut yet would show as a small circle and jump.
+    fn prepare(&self) {
+        let settings = self.writer.current();
+        let w = &settings.folder_wheel;
+        let Some(window) = self.window.upgrade() else { return };
+        if w.spoke_pictures != SpokePictures::Background {
+            return;
+        }
+        let tree = &settings.export.folders;
+        let Some(start) = level(tree, &LevelKey::Start, layout(&settings)) else {
+            return;
+        };
+        let missing = |_: &std::path::Path| false;
+        let pose = |_: usize| Pose::REST;
+        // Only what the views ask `Pictures` for counts here.
+        let _ = Scene {
+            wheel: w,
+            tree,
+            level: &start,
+            diameter: self.diameter(&settings),
+            scale: window.window().scale_factor(),
+            highlight: None,
+            current: None,
+            fill: None,
+            pictures: &self.pictures,
+            missing: &missing,
+            pose: &pose,
+            flash: 0.0,
+        }
+        .slots();
     }
 
     fn now(&self) -> u64 {
@@ -435,6 +482,13 @@ impl WheelBridge {
         let current = self.current();
         let run = self.running.get().filter(|_| w.animations);
         let since = |at: u64| to_ms(now.saturating_sub(at));
+        if let Some((r, at)) = run {
+            self.frames.set(self.frames.get().saturating_add(1));
+            if r.is_done(since(at), w.animation_speed, n) {
+                tracing::debug!(run = ?r, frames = self.frames.replace(0), ms = since(at), "[Folders] Wheel animation ended");
+                self.running.set(None);
+            }
+        }
         let speed = w.animation_speed;
         let pose = |i: usize| run.map_or(Pose::REST, |(r, at)| r.spoke(since(at), speed, i, n));
         let whole = run.map_or(Pose::REST, |(r, at)| r.whole(since(at), speed, n));
@@ -521,7 +575,7 @@ fn to_ms(ms: u64) -> f32 {
 fn breadcrumb(tree: &FolderTree, nav: &WheelNav) -> String {
     std::iter::once("Start".to_owned())
         .chain(nav.path().iter().skip(1).map(|level| match &level.key {
-            rustcut_core::folders::LevelKey::Group(id) => tree.find(*id).map(|n| n.name.clone()).unwrap_or_default(),
+            LevelKey::Group(id) => tree.find(*id).map(|n| n.name.clone()).unwrap_or_default(),
             _ => "More ...".to_owned(),
         }))
         .collect::<Vec<_>>()
