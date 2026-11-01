@@ -257,7 +257,10 @@ mod tests {
         for _ in 0..1_100 {
             core.command("script-message", &["hello"]).unwrap();
         }
-        assert!(core.wait_event(0.0).is_none(), "nothing was queued on the silenced handle");
+        assert!(
+            core.wait_event(0.0).is_none(),
+            "nothing was queued on the silenced handle"
+        );
         let first = client.wait_event(5.0);
         assert!(matches!(first, Some(Ok(Event::ClientMessage(_)))), "{first:?}");
     }

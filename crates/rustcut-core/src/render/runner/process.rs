@@ -126,7 +126,10 @@ mod tests {
     #[test]
     fn a_thread_that_is_nicer_already_is_no_problem() {
         let target = 7.max(getpriority_process(None).unwrap());
-        let script = format!("nice -n {} sleep 30 & echo $! ; exec sleep 30", target + 3 - getpriority_process(None).unwrap());
+        let script = format!(
+            "nice -n {} sleep 30 & echo $! ; exec sleep 30",
+            target + 3 - getpriority_process(None).unwrap()
+        );
         let mut child = std::os::unix::process::CommandExt::process_group(&mut Command::new("sh"), 0)
             .args(["-c", &script])
             .stdin(Stdio::null())
@@ -134,11 +137,7 @@ mod tests {
             .spawn()
             .unwrap();
         let mut line = String::new();
-        std::io::BufRead::read_line(
-            &mut std::io::BufReader::new(child.stdout.take().unwrap()),
-            &mut line,
-        )
-        .unwrap();
+        std::io::BufRead::read_line(&mut std::io::BufReader::new(child.stdout.take().unwrap()), &mut line).unwrap();
         let nicer: u32 = line.trim().parse().unwrap();
         let group = ProcessGroup::led_by(child.id()).unwrap();
         assert!((0..100).any(|_| {
