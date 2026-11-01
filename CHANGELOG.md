@@ -62,6 +62,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Settings > Target Folders: something dropped from the file manager is taken at once; it could wait until the next
+  event in the window. A file held over an existing picture now shows "Replace".
 - Settings: a click on a row of the folder list no longer leaves the page scrolling with the pointer while no button is
   held. The same could happen after a quick drag of a row in the side panels.
 - Settings > Target Folders: changing between Letter, Icon and Own no longer deletes an own picture, and the choice shows

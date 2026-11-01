@@ -75,7 +75,8 @@ pub struct Pictures {
     runtime: tokio::runtime::Handle,
     cache: RefCell<HashMap<Picture, Option<Shown>>>,
     pending: RefCell<HashSet<Picture>>,
-    spokes: RefCell<HashMap<SpokeKey, Image>>,
+    /// `None` = it could not be cut (not tried again).
+    spokes: RefCell<HashMap<SpokeKey, Option<Image>>>,
     spokes_pending: RefCell<HashSet<SpokeKey>>,
     listeners: RefCell<Vec<Box<dyn Fn()>>>,
     /// The listeners are told once for a burst of pictures (the icon grid asks for all of them at once).
@@ -127,7 +128,7 @@ impl Pictures {
             shape,
         };
         if let Some(found) = self.spokes.borrow().get(&key) {
-            return Some(found.clone());
+            return found.clone();
         }
         if self.spokes_pending.borrow_mut().insert(key.clone()) {
             self.cut(key, shown.buffer);
@@ -151,12 +152,15 @@ impl Pictures {
             let cut = task.await.ok().flatten();
             let Some(me) = weak.upgrade() else { return };
             me.spokes_pending.borrow_mut().remove(&key);
-            if let Some(cut) = cut {
+            if cut.is_none() {
+                tracing::warn!(picture = ?key.picture, "[Folders] A folder picture could not be cut to a spoke");
+            }
+            {
                 let mut spokes = me.spokes.borrow_mut();
                 if spokes.len() >= SPOKES_KEPT {
                     spokes.clear();
                 }
-                spokes.insert(key, Image::from_rgba8(cut));
+                spokes.insert(key, cut.map(Image::from_rgba8));
             }
             me.notify_soon();
         });

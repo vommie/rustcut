@@ -2,8 +2,9 @@
 //! manager), deleting (held), stars and wheel places, pictures (built-in, own file through the picture store), colors
 //! and dragging. Edits that cannot be done say why in a `folder_edit` message.
 
+use std::cell::RefCell;
 use std::path::PathBuf;
-use std::rc::Weak;
+use std::rc::{Rc, Weak};
 
 use rustcut_core::folders::{EditError, FolderId, Spot};
 use slint::ComponentHandle as _;
@@ -483,11 +484,8 @@ impl SettingsBridge {
     }
 }
 
-/// Collects the files of one drop (winit sends one event per file) and hands them over when the drop is complete.
-#[derive(Default)]
-struct DropBatch {
-    paths: Vec<PathBuf>,
-}
+/// How long a drop's files may take: winit sends one event per file, and nothing else may be needed to end the drop.
+const DROP_GATHER: std::time::Duration = std::time::Duration::from_millis(30);
 
 fn with<R: Default>(this: &Weak<SettingsBridge>, f: impl FnOnce(&SettingsBridge) -> R) -> R {
     this.upgrade().map(|b| f(&b)).unwrap_or_default()
@@ -557,29 +555,29 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     ui.on_drag_end(move |drop| with(&t, |b| b.folder_drag_end(drop)));
 
     let t = this.clone();
-    let batch = std::cell::RefCell::new(DropBatch::default());
+    let batch: Rc<RefCell<Vec<PathBuf>>> = Rc::default();
     window.window().on_winit_window_event(move |_, event| {
         match event {
             WindowEvent::DroppedFile(path) => {
                 with(&t, |b| b.folder_file_over(false));
-                batch.borrow_mut().paths.push(path.clone());
-            }
-            WindowEvent::HoveredFile(_) => with(&t, |b| b.folder_file_over(true)),
-            WindowEvent::HoveredFileCancelled => {
-                with(&t, |b| b.folder_file_over(false));
-                batch.borrow_mut().paths.clear();
-            }
-            // The drop's files arrive one after the other; the next pointer or redraw event ends the batch.
-            _ => {
-                let paths = std::mem::take(&mut batch.borrow_mut().paths);
-                if !paths.is_empty() {
-                    with(&t, |b| {
-                        if b.page.get() == crate::ui::settings::page::Page::Folders {
-                            b.folders_dropped(paths);
-                        }
+                let first = batch.borrow().is_empty();
+                batch.borrow_mut().push(path.clone());
+                if first {
+                    // The other files of this drop arrive at once; the timer ends it (no later event may ever come).
+                    let (t, batch) = (t.clone(), Rc::clone(&batch));
+                    slint::Timer::single_shot(DROP_GATHER, move || {
+                        let paths = std::mem::take(&mut *batch.borrow_mut());
+                        with(&t, |b| {
+                            if b.page.get() == crate::ui::settings::page::Page::Folders {
+                                b.folders_dropped(paths);
+                            }
+                        });
                     });
                 }
             }
+            WindowEvent::HoveredFile(_) => with(&t, |b| b.folder_file_over(true)),
+            WindowEvent::HoveredFileCancelled => with(&t, |b| b.folder_file_over(false)),
+            _ => {}
         }
         EventResult::Propagate
     });

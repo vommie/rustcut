@@ -28,6 +28,7 @@ export component SettingsRow inherits Rectangle {
         }
     }
 
+    // It wraps the row: a parent keeps its `has-hover` over its children, so the preview also knows about the controls.
     area := TouchArea {
         mouse-cursor: root.option.kind == 0 && root.option.enabled ? MouseCursor.pointer : MouseCursor.default;
         clicked => {
@@ -37,182 +38,140 @@ export component SettingsRow inherits Rectangle {
             }
         }
         changed has-hover => { SettingsUi.row-hover(root.option.key, self.has-hover); }
-    }
 
-    keys := FocusScope {
-        width: 0px;
-        height: 0px;
-        enabled: root.option.kind == 0 && root.option.enabled;
-        key-pressed(event) => {
-            if event.text == " " || event.text == "\n" {
-                root.toggle();
-                return accept;
-            }
-            return reject;
-        }
-    }
-
-    content := HorizontalLayout {
-        padding-left: 8px + root.indent;
-        padding-right: 8px;
-        padding-top: 5px;
-        padding-bottom: 5px;
-        spacing: 12px;
-
-        VerticalLayout {
-            horizontal-stretch: 1;
-            alignment: center;
-            spacing: 2px;
-
-            Text {
-                text: root.option.label;
-                color: root.option.enabled ? Theme.text : Theme.text-muted;
-                font-size: 12px;
-                wrap: word-wrap;
-            }
-
-            if root.option.description != "": Text {
-                text: root.option.description;
-                color: Theme.text-muted;
-                font-size: 11px;
-                wrap: word-wrap;
-            }
-
-            // Whether the program or the connection works (0.0.67).
-            if root.option.status-text != "" && root.option.enabled: Text {
-                text: root.option.status-text;
-                color: root.option.status == 1 ? Theme.status-ok : root.option.status == 3 ? Theme.status-corrupt : Theme.text-muted;
-                font-size: 11px;
-                wrap: word-wrap;
+        keys := FocusScope {
+            width: 0px;
+            height: 0px;
+            enabled: root.option.kind == 0 && root.option.enabled;
+            key-pressed(event) => {
+                if event.text == " " || event.text == "\n" {
+                    root.toggle();
+                    return accept;
+                }
+                return reject;
             }
         }
 
-        // The symbol of the state, left of the control: a check, a turning circle while it runs, a cross.
-        if root.option.status != 0 && root.option.enabled: VerticalLayout {
-            alignment: center;
-            horizontal-stretch: 0;
+        content := HorizontalLayout {
+            padding-left: 8px + root.indent;
+            padding-right: 8px;
+            padding-top: 5px;
+            padding-bottom: 5px;
+            spacing: 12px;
 
-            TooltipArea {
-                width: 18px;
-                height: 18px;
-                text: root.option.status-text;
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+                spacing: 2px;
 
-                if root.option.status == 2: Image {
-                    x: 1px;
-                    y: 1px;
-                    width: 16px;
-                    height: 16px;
-                    source: IconRegistry.source(IconId.busy);
-                    colorize: Theme.primary;
-                    transform-rotation: Math.mod(animation-tick() / 1ms, 900) / 900 * 360deg;
+                Text {
+                    text: root.option.label;
+                    color: root.option.enabled ? Theme.text : Theme.text-muted;
+                    font-size: 12px;
+                    wrap: word-wrap;
                 }
 
-                if root.option.status != 2: AppIcon {
-                    x: 1px;
-                    y: 1px;
-                    icon: root.option.status == 1 ? IconId.status-ok : IconId.status-problem;
-                    size: 16px;
-                    color: root.option.status == 1 ? Theme.status-ok : Theme.status-corrupt;
+                if root.option.description != "": Text {
+                    text: root.option.description;
+                    color: Theme.text-muted;
+                    font-size: 11px;
+                    wrap: word-wrap;
+                }
+
+                // Whether the program or the connection works (0.0.67).
+                if root.option.status-text != "" && root.option.enabled: Text {
+                    text: root.option.status-text;
+                    color: root.option.status == 1 ? Theme.status-ok : root.option.status == 3 ? Theme.status-corrupt : Theme.text-muted;
+                    font-size: 11px;
+                    wrap: word-wrap;
                 }
             }
-        }
 
-        VerticalLayout {
-            alignment: center;
-            horizontal-stretch: 0;
+            // The symbol of the state, left of the control: a check, a turning circle while it runs, a cross.
+            if root.option.status != 0 && root.option.enabled: VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 0;
 
-            if root.option.kind == 0: ToggleSwitch {
-                checked: root.option.checked;
-                enabled: root.option.enabled;
-                has-focus: keys.has-focus;
+                TooltipArea {
+                    width: 18px;
+                    height: 18px;
+                    text: root.option.status-text;
+
+                    if root.option.status == 2: Image {
+                        x: 1px;
+                        y: 1px;
+                        width: 16px;
+                        height: 16px;
+                        source: IconRegistry.source(IconId.busy);
+                        colorize: Theme.primary;
+                        transform-rotation: Math.mod(animation-tick() / 1ms, 900) / 900 * 360deg;
+                    }
+
+                    if root.option.status != 2: AppIcon {
+                        x: 1px;
+                        y: 1px;
+                        icon: root.option.status == 1 ? IconId.status-ok : IconId.status-problem;
+                        size: 16px;
+                        color: root.option.status == 1 ? Theme.status-ok : Theme.status-corrupt;
+                    }
+                }
             }
 
-            // Choices and numbers share one width, so the Settings' columns line up (P9.1, review note 71#1).
-            if root.option.kind == 1 && !root.option.segmented: ChoiceButton {
-                width: ControlMetrics.field-max-width;
-                items: root.option.items;
-                current: root.option.index;
-                enabled: root.option.enabled;
-                selected(index) => { SettingsUi.choose(root.option.key, index); }
-            }
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 0;
 
-            if root.option.kind == 1 && root.option.segmented: SegmentedChoice {
-                width: ControlMetrics.field-max-width;
-                items: root.option.items;
-                current: root.option.index;
-                enabled: root.option.enabled;
-                selected(index) => { SettingsUi.choose(root.option.key, index); }
-            }
-
-            if root.option.kind == 2: NumberField {
-                width: ControlMetrics.field-max-width;
-                text: root.option.text;
-                unit: root.option.suffix;
-                enabled: root.option.enabled;
-                bubble: "settings:" + root.option.key;
-                committed(text) => { return SettingsUi.type-text(root.option.key, text); }
-                stepped(steps) => { SettingsUi.step(root.option.key, steps); }
-                typed(text) => { SettingsUi.text-typed(root.option.key, text); }
-                canceled => { SettingsUi.text-canceled(root.option.key); }
-            }
-
-            // A number typed as text (an empty field or a decimal means something): drawn like a number.
-            if root.option.kind == 8: NumberField {
-                width: ControlMetrics.field-max-width;
-                spin: false;
-                text: root.option.text;
-                placeholder: root.option.placeholder;
-                unit: root.option.suffix;
-                enabled: root.option.enabled;
-                bubble: "settings:" + root.option.key;
-                committed(text) => { return SettingsUi.type-text(root.option.key, text); }
-                typed(text) => { SettingsUi.text-typed(root.option.key, text); }
-                canceled => { SettingsUi.text-canceled(root.option.key); }
-            }
-
-            if root.option.kind == 3 && root.option.items.length == 0: NumberField {
-                width: 260px;
-                text: root.option.text;
-                placeholder: root.option.placeholder;
-                enabled: root.option.enabled;
-                alignment: left;
-                bubble: "settings:" + root.option.key;
-                committed(text) => { return SettingsUi.type-text(root.option.key, text); }
-                typed(text) => { SettingsUi.text-typed(root.option.key, text); }
-                canceled => { SettingsUi.text-canceled(root.option.key); }
-            }
-
-            // A text with suggestions (Hardware decoding, 0.0.67): typed freely, or picked from the list beside it.
-            if root.option.kind == 3 && root.option.items.length > 0: HorizontalLayout {
-                spacing: 4px;
-
-                NumberField {
-                    width: 260px - 38px - 4px;
-                    text: root.option.text;
-                    placeholder: root.option.placeholder;
+                if root.option.kind == 0: ToggleSwitch {
+                    checked: root.option.checked;
                     enabled: root.option.enabled;
-                    alignment: left;
-                    bubble: "settings:" + root.option.key;
-                    committed(text) => { return SettingsUi.type-text(root.option.key, text); }
-                    typed(text) => { SettingsUi.text-typed(root.option.key, text); }
-                    canceled => { SettingsUi.text-canceled(root.option.key); }
+                    has-focus: keys.has-focus;
                 }
 
-                ChoiceButton {
-                    compact: true;
+                // Choices and numbers share one width, so the Settings' columns line up (P9.1, review note 71#1).
+                if root.option.kind == 1 && !root.option.segmented: ChoiceButton {
+                    width: ControlMetrics.field-max-width;
                     items: root.option.items;
                     current: root.option.index;
                     enabled: root.option.enabled;
-                    tooltip: "Pick a known value";
-                    selected(index) => { SettingsUi.type-text(root.option.key, root.option.items[index]); }
+                    selected(index) => { SettingsUi.choose(root.option.key, index); }
                 }
-            }
 
-            if root.option.kind == 4 || root.option.kind == 5: HorizontalLayout {
-                spacing: 4px;
+                if root.option.kind == 1 && root.option.segmented: SegmentedChoice {
+                    width: ControlMetrics.field-max-width;
+                    items: root.option.items;
+                    current: root.option.index;
+                    enabled: root.option.enabled;
+                    selected(index) => { SettingsUi.choose(root.option.key, index); }
+                }
 
-                NumberField {
-                    width: 230px;
+                if root.option.kind == 2: NumberField {
+                    width: ControlMetrics.field-max-width;
+                    text: root.option.text;
+                    unit: root.option.suffix;
+                    enabled: root.option.enabled;
+                    bubble: "settings:" + root.option.key;
+                    committed(text) => { return SettingsUi.type-text(root.option.key, text); }
+                    stepped(steps) => { SettingsUi.step(root.option.key, steps); }
+                    typed(text) => { SettingsUi.text-typed(root.option.key, text); }
+                    canceled => { SettingsUi.text-canceled(root.option.key); }
+                }
+
+                // A number typed as text (an empty field or a decimal means something): drawn like a number.
+                if root.option.kind == 8: NumberField {
+                    width: ControlMetrics.field-max-width;
+                    spin: false;
+                    text: root.option.text;
+                    placeholder: root.option.placeholder;
+                    unit: root.option.suffix;
+                    enabled: root.option.enabled;
+                    bubble: "settings:" + root.option.key;
+                    committed(text) => { return SettingsUi.type-text(root.option.key, text); }
+                    typed(text) => { SettingsUi.text-typed(root.option.key, text); }
+                    canceled => { SettingsUi.text-canceled(root.option.key); }
+                }
+
+                if root.option.kind == 3 && root.option.items.length == 0: NumberField {
+                    width: 260px;
                     text: root.option.text;
                     placeholder: root.option.placeholder;
                     enabled: root.option.enabled;
@@ -223,31 +182,73 @@ export component SettingsRow inherits Rectangle {
                     canceled => { SettingsUi.text-canceled(root.option.key); }
                 }
 
-                IconButton {
-                    icon: IconId.browse;
-                    tooltip: root.option.kind == 4 ? "Choose a folder" : "Choose a file";
-                    enabled: root.option.enabled;
-                    clicked => { SettingsUi.pick(root.option.key); }
+                // A text with suggestions (Hardware decoding, 0.0.67): typed freely, or picked from the list beside it.
+                if root.option.kind == 3 && root.option.items.length > 0: HorizontalLayout {
+                    spacing: 4px;
+
+                    NumberField {
+                        width: 260px - 38px - 4px;
+                        text: root.option.text;
+                        placeholder: root.option.placeholder;
+                        enabled: root.option.enabled;
+                        alignment: left;
+                        bubble: "settings:" + root.option.key;
+                        committed(text) => { return SettingsUi.type-text(root.option.key, text); }
+                        typed(text) => { SettingsUi.text-typed(root.option.key, text); }
+                        canceled => { SettingsUi.text-canceled(root.option.key); }
+                    }
+
+                    ChoiceButton {
+                        compact: true;
+                        items: root.option.items;
+                        current: root.option.index;
+                        enabled: root.option.enabled;
+                        tooltip: "Pick a known value";
+                        selected(index) => { SettingsUi.type-text(root.option.key, root.option.items[index]); }
+                    }
                 }
-            }
 
-            // A button; one that opens another program shows that symbol instead of its text. It waits while its
-            // test runs.
-            if root.option.kind == 6: IconButton {
-                icon: root.option.icon;
-                text: root.option.icon == IconId.none ? root.option.suffix : "";
-                tooltip: root.option.icon == IconId.open-external ? "Open in the file manager: " + root.option.description
-                    : root.option.status == 2 ? "The test runs..." : root.option.description;
-                enabled: root.option.enabled && root.option.status != 2;
-                clicked => { SettingsUi.action(root.option.key); }
-            }
+                if root.option.kind == 4 || root.option.kind == 5: HorizontalLayout {
+                    spacing: 4px;
 
-            // A color (P8): the swatch with its hex code opens the color picker over the Settings window.
-            if root.option.kind == 7: ColorSwatchButton {
-                value: ColorCodec.from-hex(root.option.text);
-                enabled: root.option.enabled;
-                tooltip: "Choose the color";
-                clicked => { SettingsUi.pick-color(root.option.key); }
+                    NumberField {
+                        width: 230px;
+                        text: root.option.text;
+                        placeholder: root.option.placeholder;
+                        enabled: root.option.enabled;
+                        alignment: left;
+                        bubble: "settings:" + root.option.key;
+                        committed(text) => { return SettingsUi.type-text(root.option.key, text); }
+                        typed(text) => { SettingsUi.text-typed(root.option.key, text); }
+                        canceled => { SettingsUi.text-canceled(root.option.key); }
+                    }
+
+                    IconButton {
+                        icon: IconId.browse;
+                        tooltip: root.option.kind == 4 ? "Choose a folder" : "Choose a file";
+                        enabled: root.option.enabled;
+                        clicked => { SettingsUi.pick(root.option.key); }
+                    }
+                }
+
+                // A button; one that opens another program shows that symbol instead of its text. It waits while its
+                // test runs.
+                if root.option.kind == 6: IconButton {
+                    icon: root.option.icon;
+                    text: root.option.icon == IconId.none ? root.option.suffix : "";
+                    tooltip: root.option.icon == IconId.open-external ? "Open in the file manager: " + root.option.description
+                        : root.option.status == 2 ? "The test runs..." : root.option.description;
+                    enabled: root.option.enabled && root.option.status != 2;
+                    clicked => { SettingsUi.action(root.option.key); }
+                }
+
+                // A color (P8): the swatch with its hex code opens the color picker over the Settings window.
+                if root.option.kind == 7: ColorSwatchButton {
+                    value: ColorCodec.from-hex(root.option.text);
+                    enabled: root.option.enabled;
+                    tooltip: "Choose the color";
+                    clicked => { SettingsUi.pick-color(root.option.key); }
+                }
             }
         }
     }
