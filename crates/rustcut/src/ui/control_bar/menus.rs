@@ -27,8 +27,18 @@ pub fn picked_kind(id: &str) -> Option<Normalization> {
         .find(|k| k.title() == title)
 }
 
+const fn kind_icon(kind: Normalization) -> Icon {
+    match kind {
+        Normalization::None => Icon::NormalizeNone,
+        Normalization::Loudness => Icon::NormalizeLoudness,
+        Normalization::Dynamic => Icon::NormalizeDynamic,
+        Normalization::Speech => Icon::NormalizeSpeech,
+        Normalization::Compressor => Icon::NormalizeCompressor,
+    }
+}
+
 fn kind_entry(kind: Normalization, current: Normalization) -> MenuItem {
-    MenuAction::new(kind_id(kind), kind.title(), None)
+    MenuAction::new(kind_id(kind), kind.title(), Some(kind_icon(kind)))
         .checked(kind == current)
         .tooltip(kind.explanation())
         .into()

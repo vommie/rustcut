@@ -8,6 +8,7 @@
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { BarFit, Playback, PlayerPopup } from "player_types.slint";
+import { DropChevron } from "controls_drop_chevron.slint";
 import { PlayerSeekBar } from "player_seek_bar.slint";
 import { TooltipHost, TipRow } from "tooltip.slint";
 import { Sections } from "sections_card.slint";
@@ -80,7 +81,7 @@ export component TransportButton inherits Rectangle {
     }
 
     AppIcon {
-        x: root.chevron ? 6px : (parent.width - self.width) / 2;
+        x: root.chevron ? 5px : (parent.width - self.width) / 2;
         y: (parent.height - self.height) / 2;
         icon: root.icon;
         size: root.icon-size;
@@ -89,12 +90,14 @@ export component TransportButton inherits Rectangle {
             : touch.has-hover ? Theme.text : Theme.text-muted;
     }
 
-    if root.chevron: AppIcon {
-        x: parent.width - self.width - 4px;
-        y: (parent.height - self.height) / 2;
+    if root.chevron: DropChevron {
+        x: 26px;
+        y: 0;
+        height: parent.height;
         icon: IconId.chevron-up;
         size: 10px;
         color: root.checked ? Theme.primary : Theme.text-muted;
+        line: root.checked ? Theme.primary.with-alpha(0.5) : Theme.text-muted.with-alpha(0.35);
     }
 }
 

@@ -499,7 +499,10 @@ impl VersionedFile for Settings {
             MigrationStep {
                 from: 9,
                 reason: "normalization-choice",
-                apply: super::player::migrate_normalization,
+                apply: |table| {
+                    super::player::migrate_normalization(table);
+                    Ok(())
+                },
             },
         ]
     }

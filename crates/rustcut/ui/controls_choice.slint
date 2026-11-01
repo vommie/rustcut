@@ -3,6 +3,7 @@
 // segmented choice for at most three short entries (decided by Rust, `util::choice::segmented`), and a choice of several
 // values (Ctrl+click, P9.6).
 
+import { DropChevron } from "controls_drop_chevron.slint";
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { TipRow, TooltipHost } from "tooltip.slint";
@@ -89,14 +90,7 @@ export component ChoiceButton inherits Rectangle {
             min-width: 16px;
         }
 
-        VerticalLayout {
-            alignment: center;
-            AppIcon {
-                icon: IconId.chevron-down;
-                size: IconSize.xs;
-                color: Theme.text-muted;
-            }
-        }
+        DropChevron { }
     }
 
     // As wide as its longest entry (never cut), at least as wide as the button.
@@ -318,14 +312,7 @@ export component MultiChoiceButton inherits Rectangle {
             min-width: 16px;
         }
 
-        VerticalLayout {
-            alignment: center;
-            AppIcon {
-                icon: IconId.chevron-down;
-                size: IconSize.xs;
-                color: Theme.text-muted;
-            }
-        }
+        DropChevron { }
     }
 
     // As wide as its longest entry, at least as wide as the button; a Ctrl+click keeps it open.

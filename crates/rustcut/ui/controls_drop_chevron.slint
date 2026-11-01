@@ -1,0 +1,28 @@
+// The end of every button that unfolds something (user decision 2026-11-01): a thin line over the button's whole height,
+// then the chevron. It goes last in the button's row, which must have no vertical padding, so the line reaches both edges.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+
+export component DropChevron inherits HorizontalLayout {
+    in property <IconId> icon: IconId.chevron-down;
+    in property <length> size: IconSize.xs;
+    in property <color> color: Theme.text-muted;
+    in property <color> line: Theme.text-muted.with-alpha(0.35);
+
+    spacing: 3px;
+
+    Rectangle {
+        width: 1px;
+        background: root.line;
+    }
+
+    VerticalLayout {
+        alignment: center;
+        AppIcon {
+            icon: root.icon;
+            size: root.size;
+            color: root.color;
+        }
+    }
+}

@@ -239,6 +239,7 @@ impl Session {
             return Vec::new();
         }
         self.af.clone_from(&chain);
+        tracing::debug!(chain = %chain, "[Player] Audio filters");
         vec![Op::Text("af", chain)]
     }
 }

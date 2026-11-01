@@ -157,16 +157,15 @@ impl PlayerSettings {
 
 /// Settings version 9 -> 10 (P12 5.3, user decision Q-P12d): the switch `player.loudnorm_preview` became the choice
 /// `player.normalization`; on means "loudness", the kind that switch always was.
-pub(super) fn migrate_normalization(table: &mut toml::Table) -> Result<(), String> {
+pub(super) fn migrate_normalization(table: &mut toml::Table) {
     let Some(player) = table.get_mut("player").and_then(toml::Value::as_table_mut) else {
-        return Ok(());
+        return;
     };
     if let Some(old) = player.remove("loudnorm_preview")
         && old.as_bool() == Some(true)
     {
         player.insert("normalization".into(), toml::Value::String("loudness".into()));
     }
-    Ok(())
 }
 
 #[cfg(test)]

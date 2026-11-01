@@ -284,3 +284,8 @@ bar_more = { tabler = "dots", doc = "The control bar's menu: what does not fit b
 time_copy = { tabler = "copy", doc = "Copy the current time" }
 time_go_to = { tabler = "clock-search", doc = "Type a time and jump to it" }
 time_section_loop = { tabler = "repeat", doc = "Open the section in mpv as an A-B loop" }
+normalize_none = { tabler = "circle-off", doc = "Normalization: none" }
+normalize_loudness = { tabler = "arrow-autofit-height", doc = "Normalization: everything about equally loud" }
+normalize_dynamic = { tabler = "activity", doc = "Normalization: evens out slowly" }
+normalize_speech = { custom = "speak-line.svg", doc = "Normalization: made for speech (Remix Icon speak-line)" }
+normalize_compressor = { tabler = "fold", doc = "Normalization: pushes down the loud parts" }

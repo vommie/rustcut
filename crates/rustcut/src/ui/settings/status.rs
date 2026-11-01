@@ -219,7 +219,7 @@ impl SettingsBridge {
     /// Looks at the programs of the page shown (RustView, Advanced & Logs) whose value was not checked yet, on the
     /// runtime; the rows say "busy" until the answers come.
     pub(super) fn check_programs(&self, page: Page, settings: &Settings) {
-        if !matches!(page, Page::RustView | Page::Advanced) {
+        if !matches!(page, Page::Player | Page::RustView | Page::Advanced) {
             return;
         }
         if let Some(connection) = self.hooks.borrow().rustview_connection.as_ref() {
@@ -303,7 +303,7 @@ mod tests {
         let mut board = Board::default();
         let mut s = Settings::default();
         let due = board.due(&s);
-        assert_eq!(due.len(), 3, "{due:?}");
+        assert_eq!(due.len(), 4, "{due:?}");
         assert!(board.due(&s).is_empty(), "checked once per value");
         assert_eq!(board.get("advanced.ffmpeg").index(), 2);
         let ffmpeg = due.first().unwrap().clone();

@@ -108,11 +108,11 @@ export component PlayerView inherits Rectangle {
     property <bool> may-rest: Playback.hide-pointer && Playback.has-video && area.has-hover && !area.pressed
         && !CropOverlay.active && !Filters.picking && !FolderWheel.tracking;
 
-    // `restart()` alone does nothing on a stopped timer, so the timer runs whenever the pointer may rest.
+    // Asked again when it fires: a `restart()` right after `may-rest` turned off can still start it.
     rest-timer := Timer {
         interval: Playback.hide-pointer-ms * 1ms;
         running: root.may-rest && !root.resting;
-        triggered => { root.resting = true; }
+        triggered => { root.resting = root.may-rest; }
     }
 
     function pointer-active() {
@@ -127,7 +127,9 @@ export component PlayerView inherits Rectangle {
     }
 
     changed resting => {
-        Playback.pointer-rest-changed(self.absolute-position.x + area.mouse-x, self.absolute-position.y + area.mouse-y);
+        if area.has-hover {
+            Playback.pointer-rest-changed(self.absolute-position.x + area.mouse-x, self.absolute-position.y + area.mouse-y);
+        }
     }
 
     area := TouchArea {

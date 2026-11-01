@@ -425,11 +425,10 @@ fn audio_options(settings: &PlayerSettings) -> AudioOptions {
 /// its setting is off (play/pause is checked by `key_flash`).
 pub fn flash(playback: &Playback<'_>, kind: FlashKind) {
     let wanted = match kind {
-        FlashKind::PlayPause => true,
+        // The caller asked their settings.
+        FlashKind::PlayPause | FlashKind::Normalization => true,
         FlashKind::SoundOn | FlashKind::SoundOff => playback.get_show_mute_symbol(),
         FlashKind::Rating(_) => playback.get_show_rating_symbol(),
-        // The caller asked its setting.
-        FlashKind::Normalization => true,
     };
     if !wanted || !playback.get_has_video() {
         return;
