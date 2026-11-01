@@ -7,6 +7,7 @@ mod actions;
 pub(super) mod details;
 mod mini;
 mod path;
+mod pictures;
 mod preview;
 pub(super) mod rows;
 
@@ -20,7 +21,7 @@ use slint::{ComponentHandle as _, Model as _, ModelRc, VecModel};
 
 use self::rows::{DropTarget, TreeRow};
 use super::SettingsBridge;
-use crate::ui::folders::{pictures, view};
+use crate::ui::folders::{pictures as folder_pictures, view};
 use crate::util::model::sync;
 use crate::{
     FolderDetailsView, FolderIconRowView, FolderIconView, FolderTreeRowView, FolderTreeUi, SettingsWindow,
@@ -211,7 +212,7 @@ impl SettingsBridge {
             .and_then(|id| tree.entry(id))
             .and_then(|e| e.look().icon.clone())
             .map(Picture::Icon);
-        let rows = details::icon_rows(pictures::icon_names(), &page.icon_search.borrow(), ICONS_PER_ROW)
+        let rows = details::icon_rows(folder_pictures::icon_names(), &page.icon_search.borrow(), ICONS_PER_ROW)
             .into_iter()
             .map(|names| {
                 let icons: Vec<FolderIconView> = names

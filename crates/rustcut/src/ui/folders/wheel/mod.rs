@@ -235,7 +235,6 @@ impl WheelBridge {
         match outcome {
             // A running animation still has to be drawn to its end.
             Outcome::Nothing if !self.timer.running() => return,
-            Outcome::Nothing => {}
             Outcome::Picked(id) => {
                 tracing::info!(id = id.0, "[Folders] Target folder chosen on the wheel");
                 if let Some(export) = self.export.upgrade() {
@@ -263,7 +262,7 @@ impl WheelBridge {
                     key: crate::ui::export::FOLDERS_KEY,
                 });
             }
-            Outcome::Changed => {}
+            Outcome::Changed | Outcome::Nothing => {}
         }
         self.publish();
         self.keep_ticking();

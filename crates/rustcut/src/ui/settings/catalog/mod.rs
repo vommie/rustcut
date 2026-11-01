@@ -102,6 +102,7 @@ mod tests {
         let mut masters = Settings::default();
         masters.desktop.tray.enabled = true;
         masters.filters.deshake.optzoom = 2;
+        masters.folder_wheel.spoke_pictures = rustcut_core::settings::SpokePictures::Background;
         for f in all() {
             let base = if (f.enabled)(&Settings::default()) {
                 Settings::default()
@@ -115,9 +116,14 @@ mod tests {
                     let Value::Index(i) = (f.get)(&s) else { panic!() };
                     Edit::Choose((i + 1) % items.len())
                 }
-                Kind::Number { min, max, .. } => {
+                Kind::Number { min, max, tenths, .. } => {
                     let Value::Number(n) = (f.get)(&s) else { panic!() };
-                    Edit::Type(if n == max { min } else { max }.to_string())
+                    let value = if n == max { min } else { max };
+                    Edit::Type(if tenths {
+                        crate::ui::settings::field::tenths_text(value)
+                    } else {
+                        value.to_string()
+                    })
                 }
                 Kind::Path { .. } => Edit::Type("/usr/bin/true".into()),
                 Kind::Amount { .. } => Edit::Type("3".into()),

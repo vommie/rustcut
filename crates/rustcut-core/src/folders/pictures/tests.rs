@@ -161,3 +161,29 @@ async fn the_thread_imports_files_and_answers_in_order() {
     store.request(|reply| PictureCommand::Shutdown { reply }).await.unwrap();
     thread.join().unwrap();
 }
+
+#[test]
+fn a_picture_cut_to_a_spoke_is_centered_and_masked() {
+    // Red left, blue right: a centered cut of a wide picture shows both.
+    let width = 40_u32;
+    let pixels: Vec<u8> = (0..20 * width)
+        .flat_map(|i| {
+            if i % width < width / 2 {
+                [255, 0, 0, 255]
+            } else {
+                [0, 0, 255, 255]
+            }
+        })
+        .collect();
+    let picture = Rgba {
+        width,
+        height: 20,
+        pixels,
+    };
+    let cut = spoke_picture(&picture, 20, 20, "M 0 0 L 20 0 L 20 10 L 0 10 Z").unwrap();
+    assert_eq!((cut.width, cut.height), (20, 20));
+    let at = |x: usize, y: usize| cut.pixels.get((y * 20 + x) * 4..(y * 20 + x) * 4 + 4).unwrap().to_vec();
+    assert_eq!(at(2, 2), [255, 0, 0, 255], "left half");
+    assert_eq!(at(17, 2), [0, 0, 255, 255], "right half: centered");
+    assert_eq!(at(2, 17).get(3), Some(&0), "outside the shape");
+}

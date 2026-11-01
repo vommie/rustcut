@@ -1,7 +1,7 @@
 //! The folder wheel's animations without Slint (P12 3.9): where the whole wheel and each spoke stand at a moment of a
 //! running animation. The wheel works while it moves: the navigation never waits for these.
 
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::PI;
 
 use rustcut_core::settings::{WheelLevels, WheelOpening};
 
@@ -167,9 +167,10 @@ impl Run {
                 back: false,
                 place: Some(place),
             } => {
-                // Every spoke comes from the angle the chosen one stood at on the level before.
+                // Every spoke comes from the angle the chosen one stood at on the level before (its place count is
+                // not kept: eight is the usual case and only the direction matters).
                 let t = elapsed / (240.0 * scale).max(1.0);
-                let from = step.mul_add(-count(index), self.chosen_angle(place));
+                let from = step.mul_add(-count(index), count(place) * 45.0);
                 came(
                     Pose {
                         alpha: 0.0,
@@ -181,11 +182,6 @@ impl Run {
             }
             _ => Pose::REST,
         }
-    }
-
-    fn chosen_angle(self, place: usize) -> f32 {
-        // The earlier level's place count is not kept: eight places is the usual case and only the direction matters.
-        count(place) * 45.0
     }
 }
 
@@ -203,11 +199,6 @@ pub fn fade(elapsed: f32, length: f32) -> f32 {
         return 1.0;
     }
     eased(elapsed / length)
-}
-
-/// Radians to degrees for a place's angle (the tests and the drawing).
-pub fn degrees(radians: f32) -> f32 {
-    radians * 360.0 / TAU
 }
 
 #[cfg(test)]
@@ -250,7 +241,7 @@ mod tests {
             run.spoke(100.0, 50, 3, 8).alpha > run.spoke(100.0, 100, 3, 8).alpha,
             "50 % is twice as fast"
         );
-        assert!(run.is_done(150.0, 50, 8) && !run.is_done(150.0, 100, 8));
+        assert!(run.is_done(180.0, 50, 8) && !run.is_done(180.0, 100, 8));
     }
 
     #[test]

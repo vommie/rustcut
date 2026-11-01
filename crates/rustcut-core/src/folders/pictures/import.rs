@@ -258,10 +258,11 @@ pub fn spoke_picture(picture: &Rgba, width: u32, height: u32, shape: &str) -> Op
     }
     let mut pixels = Vec::with_capacity(mask.pixels.len());
     for (y, row) in mask.pixels.chunks_exact(4 * usize::try_from(width).ok()?).enumerate() {
-        for (x, m) in row.chunks_exact(4).enumerate() {
+        for (x, m) in row.as_chunks::<4>().0.iter().enumerate() {
             let (px, py) = (u32::try_from(x).ok()? + left, u32::try_from(y).ok()? + top);
             let [r, g, b, a] = cover.get_pixel_checked(px, py)?.0;
-            let alpha = u16::from(a) * u16::from(*m.get(3)?) / 255;
+            let [.., mask_alpha] = *m;
+            let alpha = u16::from(a) * u16::from(mask_alpha) / 255;
             pixels.extend_from_slice(&[r, g, b, u8::try_from(alpha).unwrap_or(u8::MAX)]);
         }
     }

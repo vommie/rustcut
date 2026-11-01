@@ -55,6 +55,7 @@ pub(super) fn migrate_folder_tree(table: &mut toml::Table) -> Result<(), String>
 
 /// Version 8 -> 9 (P12 3.2): an entry's `picture` (an icon or a stored picture, nothing = the letter) becomes `look`: the
 /// choice beside what it keeps, so changing the choice no longer loses a picture.
+#[expect(clippy::unnecessary_wraps, reason = "every migration step has this signature")]
 pub(super) fn migrate_picture_look(table: &mut toml::Table) -> Result<(), String> {
     fn convert(entry: &mut toml::Table) {
         let Some(old) = entry.remove("picture") else {

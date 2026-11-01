@@ -359,3 +359,16 @@ fn a_change_of_the_picture_choice_keeps_the_icon_and_the_picture() {
     assert!(t.stored_pictures().is_empty());
     assert_eq!(t.entry(a).unwrap().look().icon.as_deref(), Some("folder"));
 }
+
+#[test]
+fn a_place_holds_what_it_leads_to() {
+    let mut t = FolderTree::default();
+    let g = t.add_group("Clients", Spot::End).unwrap();
+    let f = t.add_folder(Path::new("/a"), Spot::Into(g)).unwrap();
+    let other = t.add_folder(Path::new("/b"), Spot::End).unwrap();
+    assert!(Slot::Entry(g).holds(&t, f), "its group");
+    assert!(Slot::Entry(f).holds(&t, f));
+    assert!(!Slot::Entry(other).holds(&t, f));
+    assert!(Slot::More(vec![other, g]).holds(&t, f), "More ... with its group");
+    assert!(!Slot::Empty.holds(&t, f));
+}

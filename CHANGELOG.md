@@ -9,6 +9,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Folder wheel: own pictures can fill their spoke (Settings > Target Folders > Look > Own pictures: Background). The picture
+  is centered and cut to the spoke; without a color it is dimmed (adjustable) and turns bright under the pointer, with a
+  color it gets a border in the color and a light tint. The name stands on it with a dark outline.
+- Folder wheel: "Start the pointer in the middle" (on by default): every level starts with the pointer in the wheel's
+  middle, wherever it really is. A short move in a direction chooses that spoke (the distance is adjustable), a dot shows
+  the pointer, and the real pointer stays where it was. Turn it off in Settings > Target Folders > Opening and pointing.
+- Folder wheel: the current folder is marked when the wheel opens (a short arc, quieter than the pointer), and so is the
+  group or "More ..." that leads to it. With nothing pointed the middle shows it, faded, with "Current".
+- Folder wheel: adjustable gap between the spokes (0 = none, and no line), gap around the middle, rounded corners and size
+  of the middle, how dark the video gets, all as percents of the wheel, so it looks the same at every size. Lines and marks
+  grow with the wheel too.
+- Folder wheel: animations for the opening (one spoke at a time, fade in, fan out, spin) and for changing levels (zoom,
+  from the spoke, turn), a duration slider, the current folder lighting up once, and the middle fading over. The old
+  "Animations" switch had no effect; it now switches all of them.
+- Folder wheel: a warning mark on a folder that does not exist right now.
+- Settings > Target Folders: the small wheel is now the real wheel. Drag a place onto another: the folder moves there, or
+  the two swap, and the swap already shows before you let go. It also stays in view beside the wheel's options as a live
+  preview: every change shows at once, the animations play after a change and repeat while the pointer rests on their
+  row.
+- Settings > Target Folders: an image can be dropped from the file manager while "Own" is chosen.
+
 - The Logs panel scrolls sideways, so long lines can be read to their end.
 - Every dialog inside the main window can be dragged by its head or any free spot. Each opening starts centered again;
   the place is not remembered.
@@ -19,6 +40,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Folder wheel: a picture now fills the whole middle. With a color, the ring on its inside is that color (0.4 % of the
+  wheel, 2 px at 520 px); icons get the same ring and keep their padding. Letters and text stay as they were.
+- Folder wheel: the gap between spokes is equally wide from the inside to the outside (it used to widen outwards).
+- Opened by its key the wheel starts with nothing chosen; the first A/D starts at the current folder.
+- Settings > Target Folders: a click on a taken place of the small wheel selects that folder (swapping is dragging now).
+  The picture part shows only what belongs to the choice: the icons only with "Icon", the picture with a held X to
+  delete it under "Own", and a box to choose one instead of a file dialog at once. The collapse button is gone.
+- Settings > Target Folders: the card "Folder wheel" is split into "Opening and pointing", "Look", "Colors" and
+  "Animations".
+- New own pictures are stored at up to 512 px (256 px before). Pictures you chose earlier stay as they are; choose the file
+  again to get the sharper version.
+- **Migration:** `config.toml` version 9 (`folder-picture-look`): an entry's `picture` becomes `look` with the choice, the
+  icon and the own picture side by side. The old file is backed up first.
+
 - "Add (n)" and "Own name" in the "Target file already exists" dialog give the name a new base for the rest of the
   session: the next job continues with it. "Next free number" and "Overwrite" leave the name as it was. The "Own name"
   field now holds the base name; the counter is added to it as usual.
@@ -26,6 +61,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   rests on the message.
 
 ### Fixed
+
+- Settings: a click on a row of the folder list no longer leaves the page scrolling with the pointer while no button is
+  held. The same could happen after a quick drag of a row in the side panels.
+- Settings > Target Folders: changing between Letter, Icon and Own no longer deletes an own picture, and the choice shows
+  what was chosen.
 
 - "Add (n)" with a counter puts the number into the name: "Clip (1) - 01.mkv" instead of "Clip - 01 (1).mkv".
 - The tag filter window follows a changed "Hold for" time and the tooltip settings while it stays open.

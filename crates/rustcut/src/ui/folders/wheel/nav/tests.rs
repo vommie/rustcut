@@ -182,6 +182,7 @@ fn the_keys_turn_open_go_back_and_close() {
     nav.key(KeyAction::Back, ctx(&t));
     assert_eq!(nav.depth(), 0);
     nav.key(KeyAction::Right, ctx(&t));
+    nav.key(KeyAction::Right, ctx(&t));
     nav.key(KeyAction::Enter, ctx(&t));
     assert_eq!(nav.depth(), 1, "Enter opens a group");
     assert_eq!(
