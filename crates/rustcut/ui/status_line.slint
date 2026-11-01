@@ -38,9 +38,12 @@ component StatusSeparator inherits Rectangle {
     }
 }
 
-/// One activity. It never gets narrower while it shows (nothing jitters when the words get shorter) and fades in and out.
+/// One activity. It never gets narrower while it shows (nothing jitters when the words get shorter): its content stands
+/// at its right edge. It fades in and out. The separator on its left keeps its place and shows only with a gap to the
+/// left of it (the user, 2026-11-01): a message that runs up to the segment needs none.
 component ActivitySegment inherits Rectangle {
     in property <ActivityView> item;
+    in property <bool> separated: true;
 
     property <color> tint: root.item.running || root.item.leaving ? Theme.text
         : root.item.level == 1 ? Theme.status-ok
@@ -83,8 +86,15 @@ component ActivitySegment inherits Rectangle {
 
         row := HorizontalLayout {
             spacing: 6px;
+            alignment: end;
 
-            StatusSeparator { }
+            StatusSeparator {
+                opacity: root.separated ? 1 : 0;
+            }
+
+            Rectangle {
+                horizontal-stretch: 1;
+            }
 
             VerticalLayout {
                 alignment: center;
@@ -93,9 +103,23 @@ component ActivitySegment inherits Rectangle {
                     size: IconSize.md;
                 }
 
-                if !root.item.running: AppIcon {
-                    icon: root.item.level == 1 ? IconId.status-ok : root.item.level == 3 ? IconId.status-error
-                        : root.item.level == 2 ? IconId.status-warning : IconId.none;
+                if !root.item.running && root.item.level == 0: Rectangle {
+                    width: IconSize.md;
+                    height: IconSize.md;
+
+                    Rectangle {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        width: 6px;
+                        height: 6px;
+                        border-radius: 3px;
+                        background: Theme.primary.with-alpha(0.6);
+                    }
+                }
+
+                if !root.item.running && root.item.level != 0: AppIcon {
+                    icon: root.item.level == 1 ? IconId.status-ok : root.item.level == 2 ? IconId.status-warning
+                        : IconId.status-error;
                     size: IconSize.md;
                     color: root.tint;
                 }
@@ -104,6 +128,7 @@ component ActivitySegment inherits Rectangle {
             Text {
                 text: root.item.text;
                 color: root.tint;
+                horizontal-alignment: right;
                 vertical-alignment: center;
                 overflow: elide;
             }
@@ -164,7 +189,7 @@ export component StatusLine inherits Rectangle {
             }
         }
 
-        Text {
+        message := Text {
             text: Status.message;
             color: Status.level == 3 ? Theme.status-corrupt : Theme.text-muted;
             vertical-alignment: center;
@@ -172,8 +197,9 @@ export component StatusLine inherits Rectangle {
             horizontal-stretch: 1;
         }
 
-        for item in Status.activities: ActivitySegment {
+        for item[index] in Status.activities: ActivitySegment {
             item: item;
+            separated: index > 0 || message.width > message.preferred-width + 6px;
         }
 
         if Status.activities.length > 0 && Status.decoder != "": StatusSeparator { }

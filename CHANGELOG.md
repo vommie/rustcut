@@ -9,6 +9,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Status bar: while auto-crop runs, a segment between the message and the decoder shows a throbber with "Waiting for
+  Auto-Crop (ffmpeg)... 3/8" and an × that cancels. The result stays there for 5 seconds (an error for 10; the time stands
+  while the pointer rests on it), then the segment goes. Settings > Messages can send the result elsewhere.
+- Auto-crop and the pipette wait with a pulsing symbol while it runs, and glow once after the result: green for a crop,
+  yellow when nothing was found, red for an error. Changing the crop yourself while it runs cancels the search.
+- Quick pipette: a right click on the auto-crop button starts the pipette, without the Crop menu; another right click
+  cancels. The color's badge shows as soon as the color is read, Ctrl + right click goes back to dark borders.
+- Crop history: a button beside auto-crop lists earlier crops, also from earlier starts, with a small drawing, the size and
+  the edges. The pointer on an entry shows that crop on the video, a click sets it. A crop counts when auto-crop set it,
+  when an edit on the video was kept and when a job was saved; a repeated crop moves up instead of being added again.
+  Crops of a video of the same shape are scaled ("scaled"), crops of another shape are dimmed. Entries can be pinned and
+  removed (held), the crop you replace goes into the list too, and a right click on the button sets the newest fitting
+  crop. Arrows and Enter work in the list, and Settings > Hotkeys has a key for it (none by default).
+- Settings > Filters > Crop history > Length (1-50, default 10). Above 10, a longer list gets pages.
+
 - Folder wheel: own pictures can fill their spoke (Settings > Target Folders > Look > Own pictures: Background). The picture
   is centered and cut to the spoke; without a color it is dimmed (adjustable) and turns bright under the pointer, with a
   color it gets a border in the color and a light tint. The name stands on it with a dark outline.
@@ -40,6 +55,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Auto-crop's result now shows in the status bar instead of a toast. "No black borders found" is a warning now.
 - Folder wheel: a picture now fills the whole middle. With a color, the ring on its inside is that color (0.4 % of the
   wheel, 2 px at 520 px); icons get the same ring and keep their padding. Letters and text stay as they were.
 - Folder wheel: the gap between spokes is equally wide from the inside to the outside (it used to widen outwards).
