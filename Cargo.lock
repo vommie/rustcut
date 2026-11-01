@@ -5212,6 +5212,7 @@ dependencies = [
  "resvg",
  "rusqlite",
  "rusqlite_migration",
+ "rustcut-thumbs-protocol",
  "rustix 1.1.5",
  "serde",
  "serde_json",

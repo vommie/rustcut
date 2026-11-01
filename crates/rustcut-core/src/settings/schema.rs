@@ -13,6 +13,7 @@ use super::file::{MigrationStep, VersionedFile};
 use super::filters::FilterDefaults;
 use super::notices::{NoticeSettings, migrate_notice_options};
 use super::player::{MAX_HIDE_POINTER_MS, MIN_HIDE_POINTER_MS, PlayerSettings};
+use super::thumbnails::ThumbnailSettings;
 use super::wheel::FolderWheelSettings;
 use crate::folders::FolderTree;
 use crate::naming::DEFAULT_TEMPLATE;
@@ -24,6 +25,8 @@ use crate::render::{DEFAULT_PROFILE_ID, RenderProfile, is_builtin_id};
 pub struct Settings {
     pub general: GeneralSettings,
     pub player: PlayerSettings,
+    /// The timeline's thumbnails (P12 block 6; older files have none: the defaults).
+    pub thumbnails: ThumbnailSettings,
     pub editor: EditorSettings,
     pub filters: FilterDefaults,
     pub export: ExportSettings,
@@ -509,6 +512,9 @@ impl VersionedFile for Settings {
 
     fn sanitize(&mut self) -> Vec<String> {
         let mut notes = Vec::new();
+        if self.thumbnails.sanitize() {
+            notes.push("thumbnails: values brought into range".to_owned());
+        }
         let mut fix = |note: &str, broken: bool| {
             if broken {
                 notes.push(note.to_owned());

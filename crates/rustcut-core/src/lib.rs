@@ -21,4 +21,5 @@ pub mod render;
 pub mod rustview;
 pub mod settings;
 pub mod store;
+pub mod thumbs;
 pub mod time;

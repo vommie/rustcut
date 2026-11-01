@@ -114,9 +114,43 @@ pub fn read_reply(input: &mut impl Read) -> Result<(Reply, Vec<u8>), FrameError>
     Ok((reply, blob))
 }
 
+/// The picture's size: the shown shape with the longer side at `long_side`, in even pixels.
+pub fn fit(width: u32, height: u32, aspect: (i32, i32), long_side: u32) -> (u32, u32) {
+    let (n, d) = aspect;
+    let shown_width = if n > 0 && d > 0 {
+        f64::from(width) * f64::from(n) / f64::from(d)
+    } else {
+        f64::from(width)
+    };
+    let shown_height = f64::from(height).max(1.0);
+    let long = f64::from(long_side.max(2));
+    let scale = long / shown_width.max(shown_height).max(1.0);
+    let even = |value: f64| {
+        let rounded = (value * scale / 2.0).round().clamp(1.0, 8192.0);
+        // The clamp keeps the value in range, so nothing is lost.
+        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "clamped to 1..=8192 above")]
+        let half = rounded as u32;
+        half * 2
+    };
+    (even(shown_width), even(shown_height))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_picture_keeps_the_shown_shape_in_even_pixels() {
+        assert_eq!(fit(1920, 1080, (1, 1), 320), (320, 180));
+        assert_eq!(fit(720, 1280, (1, 1), 320), (180, 320));
+        assert_eq!(fit(853, 479, (1, 1), 320), (320, 180));
+    }
+
+    #[test]
+    fn a_pixel_aspect_widens_the_picture() {
+        assert_eq!(fit(720, 576, (16, 15), 320), (320, 240));
+        assert_eq!(fit(720, 576, (0, 1), 320), (320, 256));
+    }
 
     #[test]
     fn replies_survive_the_round_trip() {

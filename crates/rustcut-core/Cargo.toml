@@ -38,6 +38,7 @@ quick_cache.workspace = true
 regex.workspace = true
 rusqlite.workspace = true
 rusqlite_migration.workspace = true
+rustcut-thumbs-protocol.workspace = true
 rustix.workspace = true
 serde.workspace = true
 serde_json.workspace = true
