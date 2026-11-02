@@ -170,6 +170,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Moving a job's target file twice in quick succession could take along a RustView entry that is not RustCut's: when
+  RustView refused to move the job's entry because another entry already sat at the new place, a second move right
+  after could move that other entry. RustCut now knows the entry is not its own before it reports the first move's
+  outcome, so foreign entries always stay where they are.
 - RustCut could crash right at the start, about once in 200 starts, before a window opened (the bindings to mpv handed mpv
   an already freed name; an upgrade of `libmpv2` to 7.0 fixes it).
 - Banners over the video fit narrow windows: instead of a few words per line and a banner that covered the status bar, the

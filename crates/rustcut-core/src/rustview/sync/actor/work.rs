@@ -51,9 +51,8 @@ where
                         Ok(moved) => tracing::info!(action = ?moved.action, "[RustView] Record moved"),
                         Err(e) => tracing::warn!(error = %e, "[RustView] The record could not be moved"),
                     }
-                    let error = answer.as_ref().err().cloned();
-                    let _ = reply.send(answer);
-                    Answer::Moved { id, error }
+                    // The loop answers: a refusal is recorded before the caller hears of it.
+                    Answer::Moved { id, answer, reply }
                 }),
             });
         }
@@ -208,17 +207,20 @@ where
                     self.reached();
                 }
             }
-            Answer::Moved { id, error } => {
-                if let Some(error) = error {
+            Answer::Moved { id, answer, reply } => {
+                if let Err(error) = &answer {
+                    // Reported before the reply goes out: the queue then knows the record at the new path is not
+                    // RustCut's before it learns the move's outcome, so a next move never takes a foreign record.
                     self.move_refused(id);
                     if error.is_transient() {
-                        self.unreachable(&error);
+                        self.unreachable(error);
                     } else {
                         self.reached();
                     }
                 } else {
                     self.reached();
                 }
+                let _ = reply.send(answer);
             }
             Answer::Lookup(None) => self.reached(),
             Answer::Lookup(Some(error)) => {
