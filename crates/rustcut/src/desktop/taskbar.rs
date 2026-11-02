@@ -3,8 +3,7 @@
 
 use std::collections::HashMap;
 
-use zbus::Connection;
-use zbus::zvariant::Value;
+use zbus::{Connection, Variant};
 
 use rustcut_core::app_identity::APP_ID;
 
@@ -31,12 +30,12 @@ fn app_uri() -> String {
 }
 
 /// The signal's properties for `badge`.
-fn properties(badge: Badge) -> HashMap<&'static str, Value<'static>> {
+fn properties(badge: Badge) -> HashMap<&'static str, Variant<'static>> {
     HashMap::from([
-        ("progress", Value::from(badge.progress.unwrap_or(0.0).clamp(0.0, 1.0))),
-        ("progress-visible", Value::from(badge.progress.is_some())),
-        ("count", Value::from(i64::from(badge.count.unwrap_or(0)))),
-        ("count-visible", Value::from(badge.count.is_some_and(|c| c > 0))),
+        ("progress", Variant::from(badge.progress.unwrap_or(0.0).clamp(0.0, 1.0))),
+        ("progress-visible", Variant::from(badge.progress.is_some())),
+        ("count", Variant::from(i64::from(badge.count.unwrap_or(0)))),
+        ("count-visible", Variant::from(badge.count.is_some_and(|c| c > 0))),
     ])
 }
 
@@ -58,10 +57,10 @@ mod tests {
             progress: Some(1.4),
             count: Some(3),
         });
-        assert_eq!(shown.get("progress"), Some(&Value::from(1.0)));
-        assert_eq!(shown.get("count-visible"), Some(&Value::from(true)));
+        assert_eq!(shown.get("progress"), Some(&Variant::from(1.0)));
+        assert_eq!(shown.get("count-visible"), Some(&Variant::from(true)));
         let hidden = properties(Badge::NONE);
-        assert_eq!(hidden.get("progress-visible"), Some(&Value::from(false)));
-        assert_eq!(hidden.get("count-visible"), Some(&Value::from(false)));
+        assert_eq!(hidden.get("progress-visible"), Some(&Variant::from(false)));
+        assert_eq!(hidden.get("count-visible"), Some(&Variant::from(false)));
     }
 }

@@ -1,8 +1,7 @@
 //! systemd-logind over the system bus: the sleep inhibitor while a job renders, suspend and power off when the queue is
 //! done (ADR-15). Every call runs on the runtime; the UI never waits for D-Bus.
 
-use zbus::zvariant::OwnedFd;
-use zbus::{Connection, Proxy};
+use zbus::{Connection, OwnedFd, Proxy};
 
 const SERVICE: &str = "org.freedesktop.login1";
 const PATH: &str = "/org/freedesktop/login1";

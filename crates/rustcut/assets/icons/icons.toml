@@ -16,7 +16,7 @@
 #   aliases = [...]      Additional names accepted by `Icon::from_name`.
 
 [library]
-tabler_version = "3.49.0"
+tabler_version = "3.50.0"
 
 [icons]
 # --- Generic UI glyphs -------------------------------------------------------------------------------------------

@@ -48,8 +48,9 @@ regex = "1"
 # Line diffs in the RustView parity test (tests/rustview_parity.rs).
 # Async runtime of the services (actors, processes, timers); the UI thread never runs on it (ADR-4).
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "signal", "io-util", "net", "process", "fs"] }
-parking_lot = "0.12"
+parking_lot = "0.13"
 # Queue, job history and job logs (ADR-5). `backup` copies the database before a migration.
+# 0.40, not 0.41: rusqlite_migration 2.6.0 (the newest) requires it, and both must share one SQLite.
 rusqlite = { version = "0.40", features = ["bundled", "backup"] }
 rusqlite_migration = "2"
 toml = "1"
@@ -94,7 +95,7 @@ opener = { version = "0.9", features = ["reveal"] }
 arboard = { version = "3.7", default-features = false, features = ["wayland-data-control"] }
 # D-Bus for logind (sleep inhibitor, suspend, power off) and the taskbar progress (Unity LauncherEntry); the version
 # rfd's portal already uses.
-zbus = { version = "5", default-features = false, features = ["tokio"] }
+zbus = { version = "6", default-features = false, features = ["default-rt", "proxy", "tokio"] }
 notify-rust = "4"
 # Language names of audio and subtitle tracks from their ISO 639 codes ("deu" -> "German").
 isolang = "2"
@@ -109,7 +110,7 @@ ioprio = "0.2"
 procfs = { version = "0.18", default-features = false }
 # X11 dialog hints (`WM_TRANSIENT_FOR`, dialog type) for windows that belong to another window (the color picker); the
 # version winit uses.
-x11rb = "0.13"
+x11rb = "0.14"
 # The X11 window id behind a Slint window (the version Slint's `raw-window-handle-06` feature hands out).
 raw-window-handle = "0.6"
 # Shell quoting of the ffmpeg command line in the job log (copy and paste it into a terminal to reproduce a render).
@@ -129,8 +130,8 @@ webp = { version = "0.3", default-features = false }
 # The thumbnail helper (P12 block 6): libav with one long-lived decoder per worker, the only crate that links it.
 ffmpeg-next = "9"
 rustcut-thumbs-protocol = { path = "crates/rustcut-thumbs-protocol" }
-usvg = { version = "0.48", default-features = false, features = ["writer"] }
-resvg = { version = "0.48", default-features = false }
+usvg = { version = "0.49", default-features = false, features = ["writer"] }
+resvg = { version = "0.49", default-features = false }
 blake3 = "1"
 
 # Tests only.
