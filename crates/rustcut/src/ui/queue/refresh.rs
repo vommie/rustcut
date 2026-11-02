@@ -248,6 +248,7 @@ impl ShownRow {
             selected: self.selected,
             current: self.current,
             editing: self.editing,
+            moving: t.moving,
             name: t.name.as_str().into(),
             state: t.state.as_str().into(),
             kind: t.kind,

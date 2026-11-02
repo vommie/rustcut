@@ -8,15 +8,21 @@ import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { IconButton, MiddleText, NumberField } from "controls.slint";
 import { DialogFrame, DialogHeader, DialogPanel } from "dialog_frame.slint";
-import { DialogButton } from "export_dialog_parts.slint";
+import { DialogButton, OptionRow } from "export_dialog_parts.slint";
+import { ConflictOptionView } from "export_types.slint";
 import { FolderField, FolderFieldView } from "folder_list.slint";
 import { NoticeLook } from "notice_types.slint";
 import { SmoothScrollArea } from "smooth_scroll_view.slint";
+import { TooltipArea } from "tooltip.slint";
+import { Throbber } from "throbber.slint";
 
-// A check: 0 info, 2 warning, 3 error (the notice levels).
-export struct RelocateCheckView {
-    level: int,
+// What the move does and what stands in its way, as a symbol with a short value (the details in its tooltip):
+// level 0 neutral, 1 fine, 2 warning, 3 error (the notice levels).
+export struct RelocateChipView {
+    icon: IconId,
     text: string,
+    tooltip: string,
+    level: int,
 }
 
 // A taken name and the name "Add (n)" gives it.
@@ -34,6 +40,9 @@ export struct RelocateRecordView {
 
 export global Relocate {
     in-out property <bool> open;
+    // Raised when a field of the dialog is done: the dialog takes the keys again.
+    in-out property <int> focus-tick;
+    in property <string> path-placeholder;
     in property <string> title;
     in property <string> text;
     in property <bool> single;
@@ -41,12 +50,17 @@ export global Relocate {
     in property <string> path;
     in property <string> name;
     in property <string> extension;
-    in property <[RelocateCheckView]> checks;
+    in property <[RelocateChipView]> chips;
     in property <bool> checking;
+    // A field's mark (0 none, 2 warning, 3 error) and what it says.
+    in property <int> folder-mark;
+    in property <string> folder-tip;
+    in property <int> name-mark;
+    in property <string> name-tip;
     in property <string> conflict-title;
     in property <[RelocateConflictView]> conflicts;
-    in property <bool> can-overwrite;
-    // 0 "Add (n)", 1 "Skip these", 2 "Overwrite".
+    // The choices for taken names, as the conflict dialog's rows: 0 "Add (n)", 1 "Skip", 2 "Overwrite".
+    in property <[ConflictOptionView]> options;
     in property <int> resolution;
     in property <bool> ready;
     in property <string> move-label: "Move";
@@ -70,60 +84,44 @@ export global Relocate {
     callback records-close();
 }
 
-component Choice inherits Rectangle {
-    in property <bool> selected;
-    in property <string> title;
-    in property <string> detail;
-    callback chosen();
+component Chip inherits TooltipArea {
+    in property <RelocateChipView> chip;
 
-    height: row.preferred-height;
-    border-radius: 4px;
-    background: root.selected ? Theme.primary.with-alpha(0.15) : touch.has-hover ? Theme.surface-hover : transparent;
+    property <color> tint: root.chip.level == 3 ? Theme.status-corrupt : root.chip.level == 2 ? Theme.accent
+        : root.chip.level == 1 ? Theme.status-ok : Theme.text;
 
-    touch := TouchArea {
-        mouse-cursor: MouseCursor.pointer;
-        clicked => { root.chosen(); }
+    text: root.chip.tooltip;
+    height: 24px;
+    width: row.preferred-width;
+
+    Rectangle {
+        border-radius: 12px;
+        background: root.chip.level == 0 ? Theme.surface-variant : root.tint.with-alpha(0.14);
+        border-width: 1px;
+        border-color: root.chip.level == 0 ? Theme.border : root.tint.with-alpha(0.6);
     }
 
     row := HorizontalLayout {
-        padding: 6px;
-        spacing: 8px;
+        padding-left: 8px;
+        padding-right: 10px;
+        spacing: 5px;
 
         VerticalLayout {
             alignment: center;
 
-            Rectangle {
-                width: 12px;
-                height: 12px;
-                border-radius: 6px;
-                border-width: 2px;
-                border-color: root.selected ? Theme.primary : Theme.text-muted;
-
-                Rectangle {
-                    width: 6px;
-                    height: 6px;
-                    border-radius: 3px;
-                    background: root.selected ? Theme.primary : transparent;
-                }
+            AppIcon {
+                icon: root.chip.icon;
+                size: IconSize.sm;
+                color: root.tint;
             }
         }
 
-        VerticalLayout {
-            horizontal-stretch: 1;
-            spacing: 2px;
-
-            Text {
-                text: root.title;
-                color: Theme.text;
-                font-size: 12px;
-            }
-
-            if root.detail != "": Text {
-                text: root.detail;
-                color: Theme.text-muted;
-                font-size: 11px;
-                wrap: word-wrap;
-            }
+        Text {
+            text: root.chip.text;
+            color: root.chip.level == 0 ? Theme.text : root.tint;
+            font-size: 12px;
+            font-weight: 600;
+            vertical-alignment: center;
         }
     }
 }
@@ -138,6 +136,9 @@ component Label inherits Text {
 export component RelocateDialog inherits Rectangle {
     background: #000000a0;
 
+    property <int> focus-tick: Relocate.focus-tick;
+    changed focus-tick => { keys.focus(); }
+
     TouchArea { }
 
     keys := FocusScope {
@@ -150,6 +151,13 @@ export component RelocateDialog inherits Rectangle {
             }
             if event.text == Key.Return && Relocate.ready && Relocate.resolution != 2 {
                 Relocate.confirm();
+                return accept;
+            }
+            // 1-3 pick a choice for the taken names, as in the conflict dialog.
+            if Relocate.conflicts.length > 0 && (event.text == "1" || event.text == "2" || event.text == "3") {
+                if event.text != "3" || Relocate.options[2].enabled {
+                    Relocate.set-resolution(event.text.to-float() - 1);
+                }
                 return accept;
             }
             accept
@@ -208,8 +216,10 @@ export component RelocateDialog inherits Rectangle {
                         alignment: left;
                         max-width: 100000px;
                         text: Relocate.path;
-                        placeholder: "Next to each source video";
-                        tooltip: "The folder as a whole path; Enter takes a typed path (a folder that does not exist yet is made)";
+                        placeholder: Relocate.path-placeholder;
+                        tooltip: Relocate.folder-mark > 0 ? Relocate.folder-tip
+                            : "The folder's path; a folder that does not exist yet is made";
+                        mark: Relocate.folder-mark == 3 ? IconId.status-error : Relocate.folder-mark == 2 ? IconId.status-warning : IconId.none;
                         committed(text) => { return Relocate.path-committed(text); }
                         typed(text) => { Relocate.path-typed(text); }
                     }
@@ -228,7 +238,9 @@ export component RelocateDialog inherits Rectangle {
                         max-width: 100000px;
                         text: Relocate.name;
                         unit: Relocate.extension;
-                        tooltip: "The file's new name (the extension stays: the job's container decides it)";
+                        tooltip: Relocate.name-mark > 0 ? Relocate.name-tip
+                            : "The file's new name; the extension stays";
+                        mark: Relocate.name-mark == 3 ? IconId.status-error : Relocate.name-mark == 2 ? IconId.status-warning : IconId.none;
                         committed(text) => { return Relocate.name-committed(text); }
                         typed(text) => { Relocate.name-typed(text); }
                     }
@@ -243,41 +255,13 @@ export component RelocateDialog inherits Rectangle {
                         spacing: 8px;
                         alignment: start;
 
-                        if Relocate.checking: HorizontalLayout {
+                        // What the move does, as symbols (the details in the tooltips); wraps by hand: two rows of chips.
+                        if Relocate.chips.length > 0: HorizontalLayout {
                             spacing: 6px;
+                            alignment: start;
 
-                            AppIcon {
-                                icon: IconId.notice-info;
-                                size: IconSize.sm;
-                                color: Theme.text-muted;
-                            }
-
-                            Text {
-                                text: "Checking the folders and files ...";
-                                color: Theme.text-muted;
-                                font-size: 12px;
-                            }
-                        }
-
-                        for check in Relocate.checks: HorizontalLayout {
-                            spacing: 6px;
-
-                            VerticalLayout {
-                                alignment: start;
-
-                                AppIcon {
-                                    icon: NoticeLook.icon(check.level);
-                                    size: IconSize.sm;
-                                    color: NoticeLook.color(check.level);
-                                }
-                            }
-
-                            Text {
-                                horizontal-stretch: 1;
-                                text: check.text;
-                                color: check.level == 3 ? Theme.status-corrupt : Theme.text;
-                                font-size: 12px;
-                                wrap: word-wrap;
+                            for chip in Relocate.chips: Chip {
+                                chip: chip;
                             }
                         }
 
@@ -293,40 +277,16 @@ export component RelocateDialog inherits Rectangle {
                                     wrap: word-wrap;
                                 }
 
-                                for conflict in Relocate.conflicts: HorizontalLayout {
-                                    spacing: 6px;
-
-                                    MiddleText {
-                                        horizontal-stretch: 1;
-                                        text: conflict.file;
-                                        color: Theme.text;
+                                // The conflict dialog's choice rows (the user's wish: they look alike).
+                                for option in Relocate.options: OptionRow {
+                                    option: option;
+                                    selected: option.key == Relocate.resolution;
+                                    picked => { Relocate.set-resolution(option.key); }
+                                    confirmed => {
+                                        if Relocate.ready && Relocate.resolution != 2 {
+                                            Relocate.confirm();
+                                        }
                                     }
-
-                                    if Relocate.resolution == 0: Text {
-                                        text: "→ " + conflict.numbered;
-                                        color: Theme.text-muted;
-                                        font-size: 11px;
-                                    }
-                                }
-
-                                Choice {
-                                    selected: Relocate.resolution == 0;
-                                    title: "Add (n) to the name (Recommended)";
-                                    chosen => { Relocate.set-resolution(0); }
-                                }
-
-                                Choice {
-                                    selected: Relocate.resolution == 1;
-                                    title: "Skip these jobs";
-                                    detail: "They keep their targets; the others move";
-                                    chosen => { Relocate.set-resolution(1); }
-                                }
-
-                                if Relocate.can-overwrite: Choice {
-                                    selected: Relocate.resolution == 2;
-                                    title: "Overwrite the files there";
-                                    detail: "The existing files are replaced and their RustView records go; hold Move to confirm. A queued job's target or another selected job's name gets (n) anyway";
-                                    chosen => { Relocate.set-resolution(2); }
                                 }
                             }
                         }
@@ -342,15 +302,30 @@ export component RelocateDialog inherits Rectangle {
                         clicked => { Relocate.cancel(); }
                     }
 
-                    if Relocate.resolution != 2: DialogButton {
+                    // While the folders are checked the button shows a throbber instead of its label.
+                    if Relocate.checking: Rectangle {
+                        width: 84px;
+                        height: 30px;
+                        border-radius: 5px;
+                        background: Theme.surface-variant;
+                        border-width: 1px;
+                        border-color: Theme.border;
+
+                        Throbber {
+                            size: IconSize.md;
+                        }
+                    }
+
+                    if !Relocate.checking && Relocate.resolution != 2: DialogButton {
                         text: Relocate.move-label;
                         primary: true;
                         enabled: Relocate.ready;
                         clicked => { Relocate.confirm(); }
                     }
 
-                    if Relocate.resolution == 2: IconButton {
+                    if !Relocate.checking && Relocate.resolution == 2: IconButton {
                         height: 30px;
+                        min-width: 84px;
                         icon: IconId.job-move;
                         text: Relocate.move-label;
                         hold: true;
@@ -397,7 +372,7 @@ export component RelocateRecordsDialog inherits Rectangle {
                     icon: IconId.status-warning;
                     tint: Theme.accent;
                     title: Relocate.records-title;
-                    text: "The files moved, but RustView could not move their records. Move them in RustView (the old entries show there as missing files), or move the files back.";
+                    text: "RustView could not follow. Move these entries to their new place in RustView.";
                     closable: true;
                     close-tooltip: "Close";
                     close => { Relocate.records-close(); }

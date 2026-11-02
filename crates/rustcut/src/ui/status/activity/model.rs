@@ -32,6 +32,8 @@ pub struct Item {
     pub key: String,
     pub text: String,
     pub cancelable: bool,
+    /// How far it is in thousandths while it runs (a bar in the segment; `None` = no bar).
+    pub progress: Option<u16>,
     phase: Phase,
 }
 
@@ -88,6 +90,7 @@ impl Board {
             item.text = text;
             item.cancelable = cancelable;
             item.phase = Phase::Running;
+            item.progress = None;
             return;
         }
         self.next_id += 1;
@@ -96,8 +99,21 @@ impl Board {
             key: key.to_owned(),
             text,
             cancelable,
+            progress: None,
             phase: Phase::Running,
         });
+    }
+
+    /// How far `key` is (0 to 1), while it runs; kept in thousandths.
+    pub fn progress(&mut self, key: &str, progress: Option<f32>) -> bool {
+        let progress = progress.map(|p| az::Az::az::<u16>((p.clamp(0.0, 1.0) * 1000.0).round()));
+        match self.find(key) {
+            Some(item) if item.is_running() && item.progress != progress => {
+                item.progress = progress;
+                true
+            }
+            _ => false,
+        }
     }
 
     /// New words while it runs.

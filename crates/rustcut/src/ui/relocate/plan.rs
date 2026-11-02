@@ -3,7 +3,6 @@
 //! conflicts the user decides, and the moves the queue gets. Nothing runs before the user decided everything.
 
 use std::collections::{HashMap, HashSet};
-use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use rustcut_core::job::{JobId, JobStateKind};
@@ -70,10 +69,31 @@ pub enum Level {
     Error,
 }
 
+/// The field a problem belongs to (it shows its mark there).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Field {
+    Folder,
+    Name,
+}
+
+/// A problem or a note: a short label for the dialog's chip, the whole text for its tooltip.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Check {
     pub level: Level,
+    pub short: String,
     pub text: String,
+    pub field: Option<Field>,
+}
+
+impl Check {
+    fn new(level: Level, short: &str, text: String, field: Option<Field>) -> Self {
+        Self {
+            level,
+            short: short.to_owned(),
+            text,
+            field,
+        }
+    }
 }
 
 /// A job whose new name is taken.
@@ -96,11 +116,26 @@ pub struct Plan {
     pub files: usize,
     pub copies: usize,
     pub copy_bytes: u64,
+    /// Jobs still to render whose target changes, rendering jobs whose file moves afterwards, jobs already there.
+    pub targets: usize,
+    pub after_render: usize,
+    pub unchanged: usize,
+    /// The free bytes of the drive the copies go to (the smallest, when several).
+    pub free: Option<u64>,
     /// The drives were not checked yet for the current choice.
     pub pending: bool,
 }
 
 impl Plan {
+    /// The same moves, conflicts and problems as `other` (what can change between two checks without mattering, like
+    /// the free bytes of a drive, is left out).
+    pub fn same_decision(&self, other: &Self) -> bool {
+        self.moves == other.moves
+            && self.conflicts == other.conflicts
+            && self.checks == other.checks
+            && self.pending == other.pending
+    }
+
     /// Move can be pressed.
     pub fn ready(&self) -> bool {
         !self.pending && !self.moves.is_empty() && !self.checks.iter().any(|c| c.level == Level::Error)
@@ -114,10 +149,6 @@ pub fn destination(job: &Job, folder: &Folder) -> Option<PathBuf> {
         Folder::Source => job.source.parent().map(Path::to_path_buf),
         Folder::Path(path) => Some(path.clone()),
     }
-}
-
-fn plural(n: usize, one: &str, many: &str) -> String {
-    format!("{n} {}", if n == 1 { one } else { many })
 }
 
 pub fn size_text(bytes: u64) -> String {
@@ -142,16 +173,18 @@ pub fn plan(
     resolution: Resolution,
 ) -> Plan {
     let mut plan = Plan::default();
-    let error = |plan: &mut Plan, text: String| {
-        plan.checks.push(Check {
-            level: Level::Error,
-            text,
-        });
+    let error = |plan: &mut Plan, short: &str, text: String, field: Option<Field>| {
+        plan.checks.push(Check::new(Level::Error, short, text, field));
     };
     if let Folder::Path(path) = folder
         && !path.is_absolute()
     {
-        error(&mut plan, "Type a whole path; it starts with /".into());
+        error(
+            &mut plan,
+            "Incomplete path",
+            "Type the whole path of the folder, starting with /".into(),
+            Some(Field::Folder),
+        );
         return plan;
     }
     if *folder == Folder::None {
@@ -162,39 +195,48 @@ pub fn plan(
         None => None,
         Some(Ok(stem)) => {
             if name.is_some_and(|n| n.trim() != stem) {
-                plan.checks.push(Check {
-                    level: Level::Info,
-                    text: format!("The name becomes \"{stem}\" (a file name cannot hold / or control characters)"),
-                });
+                plan.checks.push(Check::new(
+                    Level::Info,
+                    "Name adjusted",
+                    format!("The name will be \"{stem}\": a file name cannot contain /"),
+                    Some(Field::Name),
+                ));
             }
             Some(stem)
         }
         Some(Err(e)) => {
-            error(&mut plan, format!("The name cannot be used: {e}"));
+            error(
+                &mut plan,
+                "Invalid name",
+                format!("The name cannot be used: {e}"),
+                Some(Field::Name),
+            );
             return plan;
         }
     };
     let moved: HashSet<JobId> = jobs.iter().map(|j| j.id).collect();
     // Names the batch gives out, per folder.
     let mut given: HashMap<PathBuf, HashSet<String>> = HashMap::new();
-    let mut unchanged = 0;
-    let (mut targets, mut after_render) = (0, 0);
     let mut copy_per_folder: HashMap<PathBuf, u64> = HashMap::new();
     let mut checked_folders: HashSet<PathBuf> = HashSet::new();
     for job in jobs {
         let label = job.file(&job.stem);
         if job.unreadable {
-            plan.checks.push(Check {
-                level: Level::Warning,
-                text: format!("{label} is left out: another RustCut version wrote it"),
-            });
+            plan.checks.push(Check::new(
+                Level::Warning,
+                "Left out",
+                format!("{label}: made by a newer RustCut"),
+                None,
+            ));
             continue;
         }
         if job.moving {
-            plan.checks.push(Check {
-                level: Level::Warning,
-                text: format!("{label} is left out: its file is being moved already"),
-            });
+            plan.checks.push(Check::new(
+                Level::Warning,
+                "Left out",
+                format!("{label}: already moving"),
+                None,
+            ));
             continue;
         }
         let Some(dest) = destination(job, folder) else { continue };
@@ -202,17 +244,27 @@ pub fn plan(
         let mut file = job.file(&stem);
         let mut to = dest.join(&file);
         if same_path(&to, &job.target) {
-            unchanged += 1;
+            plan.unchanged += 1;
             continue;
         }
         if same_path(&to, &job.source) {
-            error(&mut plan, format!("{file} would replace the job's own source video"));
+            error(
+                &mut plan,
+                "Its own source",
+                format!("{file} would replace the job's own source video"),
+                None,
+            );
             continue;
         }
         if checked_folders.insert(dest.clone())
             && let Some(why) = facts.unusable.get(&dest)
         {
-            error(&mut plan, format!("{} cannot hold the files: {why}", dest.display()));
+            error(
+                &mut plan,
+                "Folder not usable",
+                format!("{}: {why}", dest.display()),
+                Some(Field::Folder),
+            );
         }
         let finished = job.state == JobStateKind::Finished;
         let mut copy = None;
@@ -220,13 +272,12 @@ pub fn plan(
             match facts.files.get(&job.id) {
                 None => plan.pending = true,
                 Some(None) => {
-                    plan.checks.push(Check {
-                        level: Level::Warning,
-                        text: format!(
-                            "{label} is left out: the file is not at {} any more",
-                            job.target.display()
-                        ),
-                    });
+                    plan.checks.push(Check::new(
+                        Level::Warning,
+                        "Left out",
+                        format!("{label}: file missing"),
+                        None,
+                    ));
                     continue;
                 }
                 Some(Some((size, across))) => copy = Some((*size, *across)),
@@ -264,7 +315,12 @@ pub fn plan(
                     to = dest.join(&file);
                 }
                 (_, None) => {
-                    error(&mut plan, format!("No free name for {file} in {}", dest.display()));
+                    error(
+                        &mut plan,
+                        "No free name",
+                        format!("No free name for {file} in {}", dest.display()),
+                        None,
+                    );
                     continue;
                 }
             }
@@ -282,9 +338,9 @@ pub fn plan(
                 *copy_per_folder.entry(dest.clone()).or_default() += size;
             }
         } else if job.state.is_active() {
-            after_render += 1;
+            plan.after_render += 1;
         } else {
-            targets += 1;
+            plan.targets += 1;
         }
         plan.moves.push(TargetMove {
             id: job.id,
@@ -294,56 +350,22 @@ pub fn plan(
         });
     }
     for (folder, bytes) in &copy_per_folder {
-        if let Some(free) = facts.free.get(folder)
-            && *free < bytes.saturating_add(bytes / 100)
-        {
+        let Some(free) = facts.free.get(folder) else { continue };
+        plan.free = Some(plan.free.map_or(*free, |f| f.min(*free)));
+        if *free < bytes.saturating_add(bytes / 100) {
             error(
                 &mut plan,
+                "Not enough space",
                 format!(
-                    "Not enough space on the drive of {}: {} needed, {} free",
+                    "{}: {} needed, {} free",
                     folder.display(),
                     size_text(*bytes),
                     size_text(*free)
                 ),
+                Some(Field::Folder),
             );
         }
     }
-    let mut info = Vec::new();
-    if plan.files > 0 {
-        let mut text = format!("Moves {}", plural(plan.files, "file", "files"));
-        if plan.copies > 0 {
-            let _ = write!(
-                text,
-                "; {} to another drive ({}): copied, read back and compared before the original is deleted",
-                plan.copies,
-                size_text(plan.copy_bytes)
-            );
-        }
-        info.push(text);
-    }
-    if targets > 0 {
-        info.push(format!(
-            "Changes the target of {} still to render",
-            plural(targets, "job", "jobs")
-        ));
-    }
-    if after_render > 0 {
-        info.push(format!(
-            "{} now: the file moves once the render is done",
-            plural(
-                after_render,
-                "rendering job changes its target",
-                "rendering jobs change their targets"
-            )
-        ));
-    }
-    if unchanged > 0 {
-        info.push(format!("{} there already", plural(unchanged, "job is", "jobs are")));
-    }
-    plan.checks.extend(info.into_iter().map(|text| Check {
-        level: Level::Info,
-        text,
-    }));
     plan.checks.sort_by_key(|c| std::cmp::Reverse(c.level));
     plan
 }
@@ -415,7 +437,8 @@ mod tests {
         f.free.insert("/v".into(), 4_000_000_000);
         let full = plan(&jobs, &to("/v"), None, &[], &f, Resolution::AddNumber);
         assert!(!full.ready());
-        assert!(full.checks[0].text.starts_with("Not enough space"), "{:?}", full.checks);
+        assert_eq!(full.checks[0].short, "Not enough space", "{:?}", full.checks);
+        assert_eq!(full.checks[0].field, Some(Field::Folder));
     }
 
     #[test]
@@ -459,7 +482,7 @@ mod tests {
         assert_eq!(p.moves[0].stem, "Beach");
         assert!(p.conflicts.is_empty(), "its own file does not stand in its way");
         let same = plan(&jobs, &to("/out"), Some("a"), &[], &f, Resolution::AddNumber);
-        assert!(same.moves.is_empty() && same.checks.iter().any(|c| c.text.contains("there already")));
+        assert!(same.moves.is_empty() && same.unchanged == 1);
         let bad = plan(&jobs, &to("/out"), Some("  "), &[], &f, Resolution::AddNumber);
         assert_eq!(bad.checks[0].level, Level::Error);
         let slash = plan(&jobs, &to("/out"), Some("x/y"), &[], &f, Resolution::AddNumber);
@@ -478,13 +501,10 @@ mod tests {
         f.unusable.insert("/v".into(), "it is a file".into());
         let p = plan(&jobs, &to("/v"), None, &[], &f, Resolution::AddNumber);
         let texts: Vec<&str> = p.checks.iter().map(|c| c.text.as_str()).collect();
-        assert!(
-            texts.iter().any(|t| t.contains("not at /out/a.mkv any more")),
-            "{texts:?}"
-        );
-        assert!(texts.iter().any(|t| t.contains("being moved already")));
+        assert!(texts.iter().any(|t| t.contains("a.mkv: file missing")), "{texts:?}");
+        assert!(texts.iter().any(|t| t.contains("already moving")));
         assert!(texts.iter().any(|t| t.contains("own source video")));
-        assert!(texts.iter().any(|t| t.contains("cannot hold the files")));
+        assert!(p.checks.iter().any(|c| c.short == "Folder not usable"));
         assert!(!p.ready());
         assert!(!plan(&jobs, &to("relative"), None, &[], &f, Resolution::AddNumber).ready());
     }

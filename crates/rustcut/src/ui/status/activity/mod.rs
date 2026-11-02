@@ -100,6 +100,15 @@ pub fn update(key: &str, text: impl Into<String>) {
     });
 }
 
+/// How far `key` is (0 to 1; `None` = no bar), while it runs.
+pub fn progress(key: &str, progress: Option<f32>) {
+    with(|a| {
+        if a.board.borrow_mut().progress(key, progress) {
+            a.publish();
+        }
+    });
+}
+
 /// `key` is over without a result in the segment; a result that shows stays for its time.
 pub fn finish(key: &str) {
     with(|a| {
@@ -131,6 +140,10 @@ impl Activities {
                 level: item.level().map_or(-1, Level::index),
                 running: item.is_running(),
                 cancelable: item.cancelable && item.is_running(),
+                progress: item
+                    .progress
+                    .filter(|_| item.is_running())
+                    .map_or(-1.0, |p| f32::from(p) / 1000.0),
                 leaving: item.is_leaving(),
             })
             .collect();

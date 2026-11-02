@@ -13,7 +13,7 @@ use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use plan::{Facts, Folder, Job, Level, Plan, Resolution};
+use plan::{Facts, Field, Folder, Job, Level, Plan, Resolution};
 use rustcut_core::folders::{FolderId, FolderTree};
 use rustcut_core::job::{JobId, JobStateKind};
 use rustcut_core::queue::{
@@ -22,6 +22,7 @@ use rustcut_core::queue::{
 use rustcut_core::rustview::{ConnectionState, SyncEvent};
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 
+use crate::icons::Icon;
 use crate::ui::dispatcher::{CoalesceKey, UiDispatcher, rate};
 use crate::ui::export::ExportBridge;
 use crate::ui::folders::select::{FolderSelect, Session};
@@ -29,7 +30,7 @@ use crate::ui::notices::{self, Kind, Level as NoticeLevel, Notice};
 use crate::ui::queue::QueueBridge;
 use crate::ui::status::activity;
 use crate::util::clipboard;
-use crate::{MainWindow, Relocate, RelocateCheckView, RelocateConflictView, RelocateRecordView};
+use crate::{ConflictOptionView, MainWindow, Relocate, RelocateChipView, RelocateConflictView, RelocateRecordView};
 
 /// The folder field's owner name.
 const OWNER: &str = "relocate";
@@ -184,6 +185,11 @@ impl RelocateBridge {
     fn replan(&self, d: &mut Dialog) {
         let queue = self.queue_bridge.upgrade().map(|q| q.targets()).unwrap_or_default();
         d.plan = plan::plan(&d.jobs, &d.folder, d.name.as_deref(), &queue, &d.facts, d.resolution);
+        // "Overwrite" only while a taken name is an existing file (another folder may have none).
+        if d.resolution == Resolution::Overwrite && !d.plan.pending && !d.plan.conflicts.iter().any(|c| c.file_exists) {
+            d.resolution = Resolution::AddNumber;
+            d.plan = plan::plan(&d.jobs, &d.folder, d.name.as_deref(), &queue, &d.facts, d.resolution);
+        }
     }
 
     /// Checks the folders and files of the current choice on the runtime.
@@ -217,7 +223,7 @@ impl RelocateBridge {
             self.replan(d);
             let confirming = std::mem::take(&mut d.confirming);
             // Move was pressed: the moves go only when the fresh checks left everything as the user saw it.
-            (confirming && d.plan == before && d.plan.ready()).then(|| d.plan.moves.clone())
+            (confirming && d.plan.same_decision(&before) && d.plan.ready()).then(|| d.plan.moves.clone())
         };
         match send {
             Some(moves) => self.send(moves),
@@ -273,33 +279,39 @@ impl RelocateBridge {
         let (field, path) = self.field(d);
         ui.set_folder_field(field);
         ui.set_path(path.into());
+        ui.set_path_placeholder(
+            if d.folder == Folder::Source {
+                "Next to each source video"
+            } else {
+                "Type the folder's path, or choose a folder above"
+            }
+            .into(),
+        );
         if let [job] = d.jobs.as_slice() {
             ui.set_name(d.name.clone().unwrap_or_default().into());
             ui.set_extension(format!(".{}", job.extension).into());
         }
-        let mut checks: Vec<RelocateCheckView> = d
-            .plan
-            .checks
-            .iter()
-            .map(|c| RelocateCheckView {
-                level: match c.level {
-                    Level::Info => 0,
-                    Level::Warning => 2,
-                    Level::Error => 3,
+        let rustview = self.rustview_warning(d);
+        ui.set_chips(ModelRc::new(VecModel::from(chips(&d.plan, rustview))));
+        let mark = |field: Field| {
+            let found: Vec<&plan::Check> = d.plan.checks.iter().filter(|c| c.field == Some(field)).collect();
+            let level = found.iter().map(|c| c.level).max();
+            let tip: Vec<&str> = found.iter().map(|c| c.text.as_str()).collect();
+            (
+                match level {
+                    Some(Level::Error) => 3,
+                    Some(_) => 2,
+                    None => 0,
                 },
-                text: c.text.as_str().into(),
-            })
-            .collect();
-        if let Some(warning) = self.rustview_warning(d) {
-            checks.insert(
-                0,
-                RelocateCheckView {
-                    level: 2,
-                    text: warning.into(),
-                },
-            );
-        }
-        ui.set_checks(ModelRc::new(VecModel::from(checks)));
+                tip.join("\n"),
+            )
+        };
+        let (folder_mark, folder_tip) = mark(Field::Folder);
+        ui.set_folder_mark(folder_mark);
+        ui.set_folder_tip(folder_tip.into());
+        let (name_mark, name_tip) = mark(Field::Name);
+        ui.set_name_mark(name_mark);
+        ui.set_name_tip(name_tip.into());
         ui.set_checking(d.plan.pending && d.folder != Folder::None);
         let conflicts = &d.plan.conflicts;
         ui.set_conflict_title(conflict_title(conflicts.len(), &d.folder).into());
@@ -312,7 +324,12 @@ impl RelocateBridge {
                 })
                 .collect::<Vec<_>>(),
         )));
-        ui.set_can_overwrite(conflicts.iter().any(|c| c.file_exists));
+        ui.set_options(ModelRc::new(VecModel::from(options(d))));
+        ui.set_resolution(match d.resolution {
+            Resolution::AddNumber => 0,
+            Resolution::Skip => 1,
+            Resolution::Overwrite => 2,
+        });
         ui.set_ready(d.plan.ready());
         ui.set_move_label(if d.plan.moves.len() > 1 {
             format!("Move {}", d.plan.moves.len()).into()
@@ -329,7 +346,10 @@ impl RelocateBridge {
                 crate::FolderFieldView {
                     label: rustcut_core::folders::SOURCE_NAME.into(),
                     tooltip: "Each job's file goes next to its source video".into(),
-                    ..Default::default()
+                    picture: crate::FolderPictureView {
+                        initial: "N".into(),
+                        ..Default::default()
+                    },
                 },
                 String::new(),
             ),
@@ -367,10 +387,11 @@ impl RelocateBridge {
         }
         match &*self.connection.lock() {
             ConnectionState::Unavailable { reason, .. } => Some(format!(
-                "RustView cannot be reached ({reason}): the files move, but their records stay; you get a list to move them in RustView"
+                "RustView cannot be reached right now ({reason}). The files move anyway; afterwards you get a list of the RustView entries to move yourself"
             )),
             ConnectionState::Disabled => Some(
-                "RustView is switched off in the settings: the records of these files stay at their old paths".into(),
+                "RustView is switched off in the settings: the RustView entries of these files stay at their old place"
+                    .into(),
             ),
             ConnectionState::Unknown | ConnectionState::Connected => None,
         }
@@ -378,6 +399,8 @@ impl RelocateBridge {
 
     fn set_folder(&self, folder: Folder, entry: Option<FolderId>) {
         if let Some(d) = self.dialog.borrow_mut().as_mut() {
+            // Whether a file goes to another drive depends on the folder: checked again.
+            d.facts.files.clear();
             d.folder = folder;
             d.entry = entry;
         }
@@ -463,29 +486,36 @@ impl RelocateBridge {
             }))
         };
         if progress.is_running() {
-            let mut text = format!(
-                "Moving {} of {}",
-                (progress.finished + 1).min(progress.total),
-                progress.total
-            );
-            if progress.bytes_total > 0 {
-                let pct = progress.bytes_done.saturating_mul(100) / progress.bytes_total.max(1);
-                let _ = write!(text, " · {pct} %");
-            }
+            let text = if progress.total == 1 {
+                "Moving".to_owned()
+            } else {
+                format!(
+                    "Moving {}/{}",
+                    (progress.finished + 1).min(progress.total),
+                    progress.total
+                )
+            };
+            #[expect(clippy::cast_precision_loss, reason = "a bar's fraction")]
+            let fraction = if progress.bytes_total > 0 {
+                progress.bytes_done as f32 / progress.bytes_total as f32
+            } else {
+                progress.finished as f32 / progress.total.max(1) as f32
+            };
             if self.moving_shown.replace(true) {
                 activity::update(MOVING, text);
             } else {
                 activity::begin(MOVING, text, cancel(true, false));
             }
+            activity::progress(MOVING, Some(fraction));
         } else if self.moving_shown.replace(false) {
             activity::finish(MOVING);
         }
         let waiting = progress.waiting.len();
         if waiting > 0 {
             let text = if waiting == 1 {
-                "1 move waits for its render".to_owned()
+                "Moves after its render".to_owned()
             } else {
-                format!("{waiting} moves wait for their renders")
+                format!("{waiting} move after their renders")
             };
             if self.waiting_shown.replace(true) {
                 activity::update(WAITING, text);
@@ -548,9 +578,9 @@ impl RelocateBridge {
         let records = self.records.borrow();
         let n = records.len();
         ui.set_records_title(if n == 1 {
-            "1 RustView Record Stayed Behind".into()
+            "1 RustView Entry Was Not Moved".into()
         } else {
-            format!("{n} RustView Records Stayed Behind").into()
+            format!("{n} RustView Entries Were Not Moved").into()
         });
         ui.set_records(ModelRc::new(VecModel::from(
             records
@@ -558,7 +588,7 @@ impl RelocateBridge {
                 .map(|r| RelocateRecordView {
                     from: r.from.display().to_string().into(),
                     to: r.to.display().to_string().into(),
-                    reason: r.record_error.clone().unwrap_or_default().into(),
+                    reason: friendly_reason(r.record_error.as_deref().unwrap_or_default()).into(),
                 })
                 .collect::<Vec<_>>(),
         )));
@@ -576,14 +606,23 @@ impl RelocateBridge {
     }
 }
 
+/// Why RustView did not follow, in the user's words.
+fn friendly_reason(raw: &str) -> String {
+    if raw.contains("registered at the target path") {
+        "RustView already has another entry at the new place (often of a file that is gone): merge them in RustView"
+            .into()
+    } else if raw.contains("0.6.9 or newer") {
+        "This RustView is too old to move entries: RustView 0.6.9 or newer is needed".into()
+    } else if raw.contains("cannot be started") || raw.contains("did not answer") || raw.contains("quitting") {
+        "RustView could not be reached".into()
+    } else {
+        raw.trim_start_matches("RustView reported: ").to_owned()
+    }
+}
+
 /// The result message of a batch (or of one later move).
 fn report(outcomes: &[RelocationOutcome]) {
-    let count = |want: fn(&Relocated) -> bool| {
-        outcomes
-            .iter()
-            .filter(|o| o.result.as_ref().is_ok_and(want))
-            .count()
-    };
+    let count = |want: fn(&Relocated) -> bool| outcomes.iter().filter(|o| o.result.as_ref().is_ok_and(want)).count();
     let files = count(|r| matches!(r, Relocated::Renamed | Relocated::Copied));
     let targets = count(|r| matches!(r, Relocated::TargetChanged));
     let later = count(|r| matches!(r, Relocated::AfterRender));
@@ -602,22 +641,25 @@ fn report(outcomes: &[RelocationOutcome]) {
     }
     if targets > 0 {
         parts.push(format!(
-            "{targets} {} changed",
+            "Changed {targets} {}",
             if targets == 1 { "target" } else { "targets" }
         ));
     }
     if later > 0 {
-        parts.push(format!(
-            "{later} after {}",
-            if later == 1 { "its render" } else { "their renders" }
-        ));
+        parts.push(format!("{later} will move after rendering"));
     }
     if canceled > 0 {
         parts.push(format!("{canceled} canceled"));
     }
     let folders: BTreeSet<&Path> = outcomes.iter().filter_map(|o| o.to.parent()).collect();
+    // The folder's name (the whole path is in the job's log and the queue's tooltip).
     let place = match folders.iter().next() {
-        Some(folder) if folders.len() == 1 => format!("to {}", folder.display()),
+        Some(folder) if folders.len() == 1 => format!(
+            "→ {}",
+            folder
+                .file_name()
+                .map_or_else(|| folder.display().to_string(), |n| n.to_string_lossy().into_owned())
+        ),
         _ => String::new(),
     };
     if let Some(first) = failed.first() {
@@ -640,8 +682,11 @@ fn report(outcomes: &[RelocationOutcome]) {
                 .activity(MOVING),
         );
     } else if !parts.is_empty() {
-        let title = parts.remove(0);
-        let mut detail = place;
+        let mut title = parts.remove(0);
+        if !place.is_empty() {
+            title = format!("{title} {place}");
+        }
+        let mut detail = String::new();
         if !parts.is_empty() {
             if !detail.is_empty() {
                 detail.push_str("; ");
@@ -683,6 +728,171 @@ fn job_of(row: &JobSummary) -> Job {
         moving: row.relocation.is_some() && !state.is_active(),
         unreadable: row.profile.is_empty(),
     }
+}
+
+/// What the move does and what stands in its way, as chips: a symbol with a number or a few words, the details in
+/// the tooltip (the user's wish: feedback by symbols, not by sentences).
+fn chips(plan: &Plan, rustview: Option<String>) -> Vec<RelocateChipView> {
+    let chip = |icon: Icon, text: String, tooltip: String, level: i32| RelocateChipView {
+        icon: icon.to_slint(),
+        text: text.into(),
+        tooltip: tooltip.into(),
+        level,
+    };
+    let many = |n: usize, one: &str, more: &str| {
+        if n == 1 {
+            one.to_owned()
+        } else {
+            more.replace('#', &n.to_string())
+        }
+    };
+    let mut chips = Vec::new();
+    for check in plan.checks.iter().filter(|c| c.level == Level::Error) {
+        chips.push(chip(Icon::StatusError, check.short.clone(), check.text.clone(), 3));
+    }
+    if let Some(reason) = rustview {
+        chips.push(chip(Icon::RustviewUnavailable, "RustView".into(), reason, 2));
+    }
+    let left_out: Vec<&str> = plan
+        .checks
+        .iter()
+        .filter(|c| c.level == Level::Warning && c.field.is_none())
+        .map(|c| c.text.as_str())
+        .collect();
+    if !left_out.is_empty() {
+        let mut tip: Vec<String> = left_out.iter().take(8).map(|t| (*t).to_owned()).collect();
+        if left_out.len() > 8 {
+            tip.push(format!("... and {} more", left_out.len() - 8));
+        }
+        chips.push(chip(
+            Icon::StatusWarning,
+            format!("{} left out", left_out.len()),
+            tip.join("\n"),
+            2,
+        ));
+    }
+    let renamed = plan.files.saturating_sub(plan.copies);
+    if renamed > 0 {
+        chips.push(chip(
+            Icon::JobMove,
+            renamed.to_string(),
+            many(
+                renamed,
+                "The file moves at once (same drive)",
+                "# files move at once (same drive)",
+            ),
+            0,
+        ));
+    }
+    if plan.copies > 0 {
+        let free = plan
+            .free
+            .map(|f| format!(", {} free there", plan::size_text(f)))
+            .unwrap_or_default();
+        chips.push(chip(
+            Icon::SectionDuplicate,
+            plan::size_text(plan.copy_bytes),
+            format!(
+                "{} to another drive{free}: copied and checked, then the original is removed",
+                many(plan.copies, "The file goes", "# files go")
+            ),
+            0,
+        ));
+    }
+    if plan.targets > 0 {
+        chips.push(chip(
+            Icon::TargetName,
+            plan.targets.to_string(),
+            many(
+                plan.targets,
+                "1 job not rendered yet gets the new target",
+                "# jobs not rendered yet get the new target",
+            ),
+            0,
+        ));
+    }
+    if plan.after_render > 0 {
+        chips.push(chip(
+            Icon::SyncWaiting,
+            plan.after_render.to_string(),
+            many(
+                plan.after_render,
+                "1 job is rendering: its file moves once it is done",
+                "# jobs are rendering: their files move once they are done",
+            ),
+            0,
+        ));
+    }
+    if plan.unchanged > 0 {
+        chips.push(chip(
+            Icon::StatusOk,
+            plan.unchanged.to_string(),
+            many(plan.unchanged, "Already there", "# jobs are there already"),
+            1,
+        ));
+    }
+    chips
+}
+
+/// The choices for taken names as the conflict dialog's rows (`OptionRow`): the key's color green for the next free
+/// number, red for what replaces files.
+fn options(d: &Dialog) -> Vec<ConflictOptionView> {
+    let conflicts = &d.plan.conflicts;
+    let single = d.jobs.len() == 1;
+    let names = |pick: fn(&plan::Conflict) -> &str| {
+        let shown: Vec<&str> = conflicts.iter().take(3).map(pick).collect();
+        let more = conflicts.len().saturating_sub(shown.len());
+        let mut text = shown.join(", ");
+        if more > 0 {
+            let _ = write!(text, " and {more} more");
+        }
+        text
+    };
+    let existing: Vec<&plan::Conflict> = conflicts.iter().filter(|c| c.file_exists).collect();
+    vec![
+        ConflictOptionView {
+            key: 0,
+            title: "Add (n)".into(),
+            file: names(|c| c.numbered.as_str()).into(),
+            detail: "The name gets the next free number".into(),
+            enabled: true,
+            recommended: true,
+            key_tint: 1,
+            ..Default::default()
+        },
+        ConflictOptionView {
+            key: 1,
+            title: if single { "Don't move it" } else { "Skip these" }.into(),
+            detail: if single {
+                "The job keeps its target".into()
+            } else {
+                format!("{} keep their targets; the others move", conflicts.len()).into()
+            },
+            enabled: true,
+            ..Default::default()
+        },
+        ConflictOptionView {
+            key: 2,
+            title: "Overwrite".into(),
+            file: existing
+                .iter()
+                .take(3)
+                .map(|c| c.file.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+                .into(),
+            detail: if existing.is_empty() {
+                "Not possible here: the name belongs to another job".into()
+            } else if single {
+                "The file there is replaced (and its RustView entry). Hold Move to confirm".into()
+            } else {
+                "The files there are replaced (and their RustView entries); names of other jobs still get (n). Hold Move to confirm".into()
+            },
+            enabled: !existing.is_empty(),
+            key_tint: 2,
+            ..Default::default()
+        },
+    ]
 }
 
 /// "2 finished · 1 rendering".

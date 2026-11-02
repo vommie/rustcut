@@ -127,6 +127,16 @@ export component QueueRow inherits Rectangle {
                     horizontal-stretch: 0;
                     spacing: 4px;
 
+                    if root.job.moving: VerticalLayout {
+                        alignment: center;
+
+                        AppIcon {
+                            icon: IconId.job-move;
+                            size: IconSize.sm;
+                            color: Theme.primary;
+                        }
+                    }
+
                     VerticalLayout {
                         alignment: center;
 
@@ -194,10 +204,18 @@ export component QueueRow inherits Rectangle {
                     }
                 }
 
+                // A file that waits to move (P12 block 7): its mark before the name.
+                if column.id == "name" && root.job.moving: AppIcon {
+                    x: 0px;
+                    icon: IconId.job-move;
+                    size: IconSize.sm;
+                    color: Theme.primary;
+                }
+
                 // Names and folders are cut in the middle (P9.1).
                 if column.id == "name" || column.id == "folder": MiddleText {
-                    x: 0px;
-                    width: parent.width;
+                    x: column.id == "name" && root.job.moving ? 20px : 0px;
+                    width: parent.width - self.x;
                     height: parent.height;
                     text: root.job.cells[i];
                     color: column.id == "name" ? Theme.text : Theme.text-muted;

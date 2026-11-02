@@ -40,6 +40,7 @@ where
                     Answer::Lookup(error)
                 }),
                 Request::MoveRecord {
+                    id,
                     from,
                     to,
                     replace,
@@ -52,7 +53,7 @@ where
                     }
                     let error = answer.as_ref().err().cloned();
                     let _ = reply.send(answer);
-                    Answer::Lookup(error)
+                    Answer::Moved { id, error }
                 }),
             });
         }
@@ -207,6 +208,18 @@ where
                     self.reached();
                 }
             }
+            Answer::Moved { id, error } => {
+                if let Some(error) = error {
+                    self.move_refused(id);
+                    if error.is_transient() {
+                        self.unreachable(&error);
+                    } else {
+                        self.reached();
+                    }
+                } else {
+                    self.reached();
+                }
+            }
             Answer::Lookup(None) => self.reached(),
             Answer::Lookup(Some(error)) => {
                 if error.is_transient() {
@@ -297,9 +310,7 @@ where
         let delay = backoff.delays.next().unwrap_or(LONGEST_RETRY);
         backoff.retry_at = Instant::now() + delay;
         self.want_tree = true;
-        for request in self.requests.drain(..) {
-            request.refuse(error.clone());
-        }
+        self.refuse_requests(error);
         for waiter in self.tree_waiters.drain(..) {
             let _ = waiter.send(Err(error.clone()));
         }

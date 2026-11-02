@@ -524,10 +524,16 @@ impl Actor {
             );
         }
         self.set_journal(id, None).await;
+        // A waiting move taken back goes the other way: from the new target back to the old one.
+        let (from, to) = if journal.after_render {
+            (journal.to.clone(), journal.from.clone())
+        } else {
+            (journal.from.clone(), journal.to.clone())
+        };
         let outcome = RelocationOutcome {
             id,
-            from: journal.from.clone(),
-            to: journal.to.clone(),
+            from,
+            to,
             result,
             record_error: None,
         };

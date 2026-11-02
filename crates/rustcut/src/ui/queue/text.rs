@@ -27,6 +27,8 @@ pub struct RowText {
     pub progress: f32,
     pub detail: String,
     pub tooltip: String,
+    /// Its file waits to move (P12 block 7).
+    pub moving: bool,
     /// The table's cells, one per shown column.
     pub cells: Vec<String>,
 }
@@ -67,6 +69,15 @@ pub fn row_text(row: &JobSummary, progress: Option<&JobProgress>, size: Option<u
         tooltip.push('\n');
         tooltip.push_str(note);
     }
+    if let Some(to) = &row.relocation {
+        tooltip.push('\n');
+        tooltip.push_str(if row.state.kind().is_active() {
+            "Moves after its render to "
+        } else {
+            "Moves to "
+        });
+        tooltip.push_str(&to.display().to_string());
+    }
     let state = state_text(&row.state, fraction);
     let percent = match row.state.kind() {
         JobStateKind::Rendering | JobStateKind::Paused if !matches!(row.state, JobState::Rendering { pass: 0, .. }) => {
@@ -106,6 +117,7 @@ pub fn row_text(row: &JobSummary, progress: Option<&JobProgress>, size: Option<u
         progress: progress_value,
         detail,
         tooltip,
+        moving: row.relocation.is_some(),
         cells,
     }
 }

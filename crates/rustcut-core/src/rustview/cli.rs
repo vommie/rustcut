@@ -242,9 +242,9 @@ impl RustViewClient for CliClient {
         }
         self.call("move-media", args).await.map_err(|e| match e {
             // RustView before 0.6.9 answers clap's "unrecognized subcommand" (exit code 2, no JSON).
-            RustViewError::Decode(_) => {
-                RustViewError::Api("this RustView cannot move records (RustView 0.6.9 or newer is needed)".into())
-            }
+            RustViewError::Decode(_) => RustViewError::Api(
+                "this RustView version cannot move entries yet (RustView 0.6.9 or newer is needed)".into(),
+            ),
             other => other,
         })
     }

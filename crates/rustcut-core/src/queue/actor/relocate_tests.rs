@@ -285,3 +285,30 @@ async fn an_existing_file_at_the_new_place_stops_the_move() {
     let stored = row(&store, id).await;
     assert_eq!((stored.target_path, stored.relocation), (old, None));
 }
+
+#[tokio::test]
+async fn a_refused_record_move_never_makes_a_foreign_record_rustcuts() {
+    // A waiting job's stub cannot follow to B (RustView has another entry there). Moving the job on to C later must
+    // leave that other entry at B: it is not RustCut's.
+    let dir = tempfile::tempdir().unwrap();
+    let fake = FakeRustView::new();
+    let (queue, _store) = start(Store::open_in_memory().unwrap(), dir.path(), &fake);
+    let mut events = queue.events.subscribe();
+    let id = enqueue(&queue, Box::new(tagged(dir.path(), "a"))).await.unwrap();
+    wait_for(&mut events, id, |r| r.sync == SyncState::Synced).await;
+    let b = dir.path().join("b");
+    let foreign = b.join("a.mkv").display().to_string();
+    fake.put(&foreign, &[9], 2, Some("Scanner"));
+    move_to(&queue, id, &b, "a").await;
+    let refused = outcome(&mut events, id).await;
+    assert!(refused.record_error.is_some(), "{refused:?}");
+    let c = dir.path().join("c");
+    move_to(&queue, id, &c, "a").await;
+    outcome(&mut events, id).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let still = fake.media(&foreign).expect("the other entry stays at B");
+    assert_eq!(
+        (still.tags, still.rating, still.source.as_deref()),
+        (vec![9], 2, Some("Scanner"))
+    );
+}
