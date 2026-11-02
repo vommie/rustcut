@@ -4,7 +4,7 @@
 use std::future::Future;
 use std::path::Path;
 
-use super::models::{BatchHashCheck, DeleteMedia, GetMedia, HashCheck, HashInsert, SetMedia, TagTree};
+use super::models::{BatchHashCheck, DeleteMedia, GetMedia, HashCheck, HashInsert, MoveMedia, SetMedia, TagTree};
 
 /// The `--source` value RustCut writes into records it registers.
 pub const SOURCE_APP: &str = "RustCut";
@@ -62,6 +62,11 @@ pub trait RustViewClient: Send + Sync + 'static {
     ) -> impl Future<Output = Result<SetMedia>> + Send;
 
     fn delete_media(&self, path: &Path) -> impl Future<Output = Result<DeleteMedia>> + Send;
+
+    /// Moves the record of `from` to `to` after the file moved (P12 block 7, RustView 0.6.9): it keeps its id, tags,
+    /// rating, hash and source. `replace` removes a different record at `to` (its file was overwritten); without it such a
+    /// record is a refusal. No record at either path is an answer (`NotFound`), not an error.
+    fn move_media(&self, from: &Path, to: &Path, replace: bool) -> impl Future<Output = Result<MoveMedia>> + Send;
 
     fn check_hash(&self, md5: &str) -> impl Future<Output = Result<HashCheck>> + Send;
 

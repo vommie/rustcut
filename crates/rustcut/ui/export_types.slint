@@ -3,6 +3,7 @@
 
 import { TabView } from "tabs.slint";
 import { TipRow } from "tooltip.slint";
+import { FolderFieldView } from "folder_list.slint";
 
 // One way out of a target conflict or a start problem. `file` is the name it leads to; `recommended` adds
 // "(Recommended)" after the title (the start dialogs, P9.3).
@@ -61,6 +62,8 @@ export struct ConflictJobView {
 export global Export {
     // The card.
     in property <bool> has-source;
+    // The target folder field (the shared folder select, src/ui/folders/select/).
+    in property <FolderFieldView> folder-field;
     in property <string> name;
     // The chosen container's extension (".mkv"), dim inside the name field (P9.7).
     in property <string> extension;

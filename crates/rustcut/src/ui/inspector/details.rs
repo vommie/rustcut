@@ -526,6 +526,7 @@ mod tests {
             started_at: Some(1_000),
             finished_at: Some(66_000),
             sync: SyncState::Failed { error: "no".into() },
+            relocation: None,
         }
     }
 

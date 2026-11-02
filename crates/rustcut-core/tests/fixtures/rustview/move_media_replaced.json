@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "action": "moved",
+  "media_id": 1,
+  "from": "/videos/2026/Clip.mkv",
+  "to": "/videos/2026/other.mkv",
+  "replaced_media_id": 2,
+  "rating": 4,
+  "tags": [],
+  "file_hash": "8f618d1ebd606025257057ee18536e64",
+  "source": "RustCut",
+  "message": "Media record moved to '/videos/2026/other.mkv'."
+}

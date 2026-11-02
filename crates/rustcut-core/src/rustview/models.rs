@@ -87,6 +87,42 @@ pub struct SetMedia {
     pub message: String,
 }
 
+/// What `move-media` did (RustView 0.6.9).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MoveMediaAction {
+    /// The record now lives at the new path.
+    Moved,
+    /// No record at the old path, one at the new path: moved before.
+    AlreadyMoved,
+    /// Both paths name the same record.
+    Unchanged,
+    /// No record at either path (exit code 2).
+    NotFound,
+    /// A value a newer RustView may report.
+    #[default]
+    #[serde(other)]
+    Other,
+}
+
+/// `move-media` response: the record keeps its id, tags, rating, hash and source.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MoveMedia {
+    pub success: bool,
+    pub action: MoveMediaAction,
+    pub media_id: Option<u64>,
+    pub from: String,
+    pub to: String,
+    /// The record of an overwritten file at the new path that went (`--replace`).
+    pub replaced_media_id: Option<u64>,
+    pub rating: Option<u8>,
+    pub tags: Vec<u32>,
+    pub file_hash: Option<String>,
+    pub source: Option<String>,
+    pub message: String,
+}
+
 /// `delete-media` response.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]

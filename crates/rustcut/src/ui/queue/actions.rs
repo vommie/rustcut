@@ -496,6 +496,16 @@ impl QueueBridge {
                     }
                 }
             }
+            QueueAction::MoveTarget => {
+                let chosen: Vec<JobSummary> = rows
+                    .iter()
+                    .filter(|r| ids.contains(&r.id))
+                    .map(|r| (*r).clone())
+                    .collect();
+                if let Some(hook) = self.hooks.borrow().move_targets.as_ref() {
+                    hook(&chosen);
+                }
+            }
             QueueAction::Hold if !ids.is_empty() => self.send(QueueCommand::Hold { ids }),
             QueueAction::Release if !ids.is_empty() => self.send(QueueCommand::Release { ids }),
             QueueAction::Retry if !ids.is_empty() => self.send(QueueCommand::Restart { ids, profile: None }),

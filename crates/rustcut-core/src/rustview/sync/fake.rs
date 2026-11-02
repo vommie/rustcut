@@ -9,8 +9,8 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 
 use crate::rustview::{
-    BatchHashCheck, DeleteMedia, GetMedia, HashCheck, HashInsert, MediaDetails, RustViewClient, RustViewError,
-    SOURCE_APP, SetMedia, SetMediaAction, TagItem, TagTree,
+    BatchHashCheck, DeleteMedia, GetMedia, HashCheck, HashInsert, MediaDetails, MoveMedia, MoveMediaAction,
+    RustViewClient, RustViewError, SOURCE_APP, SetMedia, SetMediaAction, TagItem, TagTree,
 };
 
 #[derive(Debug, Default)]
@@ -48,7 +48,9 @@ impl FakeRustView {
     pub fn writes(&self) -> Vec<String> {
         self.calls()
             .into_iter()
-            .filter(|c| c.starts_with("set") || c.starts_with("delete") || c.starts_with("insert"))
+            .filter(|c| {
+                c.starts_with("set") || c.starts_with("delete") || c.starts_with("insert") || c.starts_with("move")
+            })
             .collect()
     }
 
@@ -174,6 +176,44 @@ impl RustViewClient for FakeRustView {
             deleted: removed.is_some(),
             media_id: removed.map(|m| m.id),
             path: path.display().to_string(),
+            message: String::new(),
+        })
+    }
+
+    async fn move_media(&self, from: &Path, to: &Path, replace: bool) -> Result<MoveMedia, RustViewError> {
+        self.call(format!("move-media {} {}", from.display(), to.display()))
+            .await?;
+        let mut lib = self.0.lock();
+        let source = lib.media.get(from).cloned();
+        let target = lib.media.get(to).cloned();
+        let (action, record, replaced) = match (source, target) {
+            (None, None) => (MoveMediaAction::NotFound, None, None),
+            (None, Some(there)) => (MoveMediaAction::AlreadyMoved, Some(there), None),
+            (Some(rec), Some(there)) if rec.id == there.id => (MoveMediaAction::Unchanged, Some(rec), None),
+            (Some(_), Some(there)) if !replace => {
+                return Err(RustViewError::Api(format!(
+                    "Media #{} is registered at the target path already",
+                    there.id
+                )));
+            }
+            (Some(mut rec), there) => {
+                lib.media.remove(from);
+                rec.full_path = to.display().to_string();
+                lib.media.insert(to.to_path_buf(), rec.clone());
+                (MoveMediaAction::Moved, Some(rec), there.map(|t| t.id))
+            }
+        };
+        Ok(MoveMedia {
+            success: true,
+            action,
+            media_id: record.as_ref().map(|r| r.id),
+            from: from.display().to_string(),
+            to: to.display().to_string(),
+            replaced_media_id: replaced,
+            rating: record.as_ref().map(|r| r.rating),
+            tags: record.as_ref().map(|r| r.tags.clone()).unwrap_or_default(),
+            file_hash: record.as_ref().map(|r| r.file_hash.clone()),
+            source: record.and_then(|r| r.source),
             message: String::new(),
         })
     }

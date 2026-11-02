@@ -42,6 +42,20 @@ pub(super) enum Report {
         result: Result<RenderedFile, RenderError>,
         log: Box<JobLog>,
     },
+    /// A file move copied `done` bytes (P12 block 7).
+    MoveProgress {
+        id: JobId,
+        done: u64,
+    },
+    MoveEnded {
+        id: JobId,
+        result: Result<crate::files::Method, crate::files::RelocateError>,
+    },
+    /// RustView answered about a record that followed its file.
+    RecordMoved {
+        id: JobId,
+        result: Result<(), String>,
+    },
 }
 
 /// Refuses a job that can never render: no section, the source as the target, or a profile with an error.
@@ -114,6 +128,9 @@ impl Actor {
                 }
             }
             Report::Ended { id, result, log } => self.ended(id, result, &log).await,
+            Report::MoveProgress { id, done } => self.move_progress(id, done),
+            Report::MoveEnded { id, result } => self.move_ended(id, result).await,
+            Report::RecordMoved { id, result } => self.record_moved(id, result),
         }
     }
 
@@ -134,7 +151,8 @@ impl Actor {
             self.set_state(id, JobState::Rendering { pass, passes }, None).await;
         }
         self.model.count_end(&next);
-        self.set_state(id, next, note).await;
+        self.set_state(id, next.clone(), note).await;
+        self.render_ended_moving(id, &next).await;
         self.publish_processing();
         self.kick().await;
     }

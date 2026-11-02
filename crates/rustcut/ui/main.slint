@@ -33,7 +33,8 @@ import { OptionRowView, Probe, RenderIssueView, RenderSettings } from "render_ty
 import { ConflictJobView, ConflictOptionView, Export, PreviewView } from "export_types.slint";
 import { Queue, QueueColumnView, QueueRowView } from "queue_types.slint";
 import { QueueFilterFlyout } from "queue_filter.slint";
-import { FolderList, FolderListFlyout, FolderListRowView } from "folder_list.slint";
+import { FolderList, FolderListFlyout, FolderListRowView, FolderFieldView } from "folder_list.slint";
+import { Relocate, RelocateDialog, RelocateRecordsDialog, RelocateChipView, RelocateConflictView, RelocateRecordView } from "relocate_dialog.slint";
 import { FolderWheel, FolderWheelLayer, WheelHoldRing, WheelLookView, WheelMiddleView, WheelSlotView } from "folder_wheel.slint";
 import { MultiChoiceItem } from "controls_choice.slint";
 import { Job, JobLoad, JobRowView, JobSectionView, LogLineView, Logs } from "job_types.slint";
@@ -73,7 +74,7 @@ export {
     ConflictJobView, ConflictOptionView, PreviewView, TipRow, Tip, TipKey, TipKeys, TipPlacement, TipRect, TipSide,
     GlobalTooltip, TooltipLogic, DialogState, Queue, QueueRowView, QueueColumnView, MultiChoiceItem, TagRate, TagNodeView,
     TagColumnView, TagHistoryItemModel, TagHistoryRowModel, Job, JobRowView, JobSectionView, Logs, LogLineView, JobLoad,
-    ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderTreeUi, FolderTreeRowView, FolderList, FolderListRowView, FolderWheel, WheelSlotView, WheelLookView, WheelMiddleView, FolderDetailsView, FolderIconView, FolderIconRowView, FolderPictureView, RatioChipView, DiagCheckView, DiagGroupView,
+    ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, FolderTreeUi, FolderTreeRowView, FolderList, FolderListRowView, FolderFieldView, Relocate, RelocateChipView, RelocateConflictView, RelocateRecordView, FolderWheel, WheelSlotView, WheelLookView, WheelMiddleView, FolderDetailsView, FolderIconView, FolderIconRowView, FolderPictureView, RatioChipView, DiagCheckView, DiagGroupView,
     ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power, AppTray, Jump, Notices,
     ToastView, ToastTagView, BannerView, HistoryView, MessageKindView, Bubbles, BubbleView, BubbleButtonView, Problems, ColorCodec, ColorPickerWindow, TagFilterWindow, TagFilterRowView,
     TextLogic, TextSplit, DragLogic, DragState, AppMenu, MenuBarMenu, TabView
@@ -129,7 +130,7 @@ export component MainWindow inherits Window {
 
     // A modal dialog covers the window: the menu bar's keys (which Slint gives the menu before any focused element) must
     // not act on the editor behind it (found by the P8 audit: I, O and Shift+I moved the marks under the save question).
-    property <bool> modal-open: FolderList.open || CropHistoryUi.open || Export.dialog-open || Export.meta-open || Power.asking || Problems.newer-open
+    property <bool> modal-open: FolderList.open || Relocate.open || Relocate.records-open || CropHistoryUi.open || Export.dialog-open || Export.meta-open || Power.asking || Problems.newer-open
         || Problems.db-open || JobLoad.open || PlayerPopup.time-open;
     changed modal-open => {
         Shortcuts.modal-changed(root.modal-open);
@@ -499,6 +500,20 @@ export component MainWindow inherits Window {
     }
 
     if Export.meta-open: MetadataDialog {
+        x: 0;
+        y: root.bar-height;
+        width: parent.width;
+        height: parent.height - root.bar-height;
+    }
+
+    if Relocate.open: RelocateDialog {
+        x: 0;
+        y: root.bar-height;
+        width: parent.width;
+        height: parent.height - root.bar-height;
+    }
+
+    if Relocate.records-open: RelocateRecordsDialog {
         x: 0;
         y: root.bar-height;
         width: parent.width;

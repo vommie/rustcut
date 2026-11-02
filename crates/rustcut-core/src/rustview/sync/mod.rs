@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use super::client::RustViewError;
-use super::models::{GetMedia, HashCheck, TagTree};
+use super::models::{GetMedia, HashCheck, MoveMedia, TagTree};
 use crate::actor::{EventBus, Handle, Reply};
 use crate::job::{JobId, JobMetadata};
 
@@ -140,6 +140,18 @@ pub enum SyncCommand {
     Cleanup {
         id: JobId,
         record: JobSyncRecord,
+    },
+    /// The job's target file moved from `from` to `to` (P12 block 7, Q-P12f): the record follows it (`move-media`,
+    /// keeping its id, tags, rating, hash and source). RustCut counts the record as moved at once, also when RustView
+    /// cannot do it: the answer tells the queue, which shows a warning, and the user moves the record in RustView; the
+    /// sync never deletes and sets it instead. `replace` = the file at `to` was overwritten, its record goes.
+    MoveRecord {
+        id: JobId,
+        from: PathBuf,
+        to: PathBuf,
+        replace: bool,
+        record: JobSyncRecord,
+        reply: Reply<Result<MoveMedia, RustViewError>>,
     },
     TagTree {
         reply: Reply<Result<Arc<TagTree>, RustViewError>>,

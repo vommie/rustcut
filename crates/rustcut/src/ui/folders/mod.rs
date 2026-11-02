@@ -2,5 +2,6 @@
 
 pub mod pictures;
 pub mod presence;
+pub mod select;
 pub mod view;
 pub mod wheel;

@@ -14,7 +14,7 @@ use std::time::Duration;
 use serde::de::DeserializeOwned;
 
 use super::client::{Result, RustViewClient, RustViewError, SOURCE_APP};
-use super::models::{BatchHashCheck, DeleteMedia, GetMedia, HashCheck, HashInsert, SetMedia, TagTree};
+use super::models::{BatchHashCheck, DeleteMedia, GetMedia, HashCheck, HashInsert, MoveMedia, SetMedia, TagTree};
 use crate::settings::RustViewSettings;
 
 /// The program started when `Settings.rustview.binary` is not set (found in `PATH`).
@@ -231,6 +231,22 @@ impl RustViewClient for CliClient {
     async fn delete_media(&self, path: &Path) -> Result<DeleteMedia> {
         absolute(path)?;
         self.call("delete-media", vec![option("path", path)]).await
+    }
+
+    async fn move_media(&self, from: &Path, to: &Path, replace: bool) -> Result<MoveMedia> {
+        absolute(from)?;
+        absolute(to)?;
+        let mut args = vec![option("from", from), option("to", to)];
+        if replace {
+            args.push("--replace".into());
+        }
+        self.call("move-media", args).await.map_err(|e| match e {
+            // RustView before 0.6.9 answers clap's "unrecognized subcommand" (exit code 2, no JSON).
+            RustViewError::Decode(_) => RustViewError::Api(
+                "this RustView version cannot move entries yet (RustView 0.6.9 or newer is needed)".into(),
+            ),
+            other => other,
+        })
     }
 
     async fn check_hash(&self, md5: &str) -> Result<HashCheck> {

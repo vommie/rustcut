@@ -61,6 +61,7 @@ fn records(count: usize) -> Vec<JobRecord> {
                 note: None,
                 spec: SpecSlot::Decoded(Box::new(spec)),
                 sync: None,
+                relocation: None,
             }
         })
         .collect()

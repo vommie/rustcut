@@ -20,7 +20,7 @@ use super::steps::StepResult;
 use super::{ConnectionState, JobSyncRecord, SyncCommand, SyncEvent, SyncPhase, SyncRecords, SyncService, SyncState};
 use crate::actor::{EventBus, Mailbox, Reply, mailbox};
 use crate::job::{JobId, JobMetadata};
-use crate::rustview::{GetMedia, HashCheck, RustViewClient, RustViewError, TagTree, is_md5};
+use crate::rustview::{GetMedia, HashCheck, MoveMedia, RustViewClient, RustViewError, TagTree, is_md5};
 use crate::settings::{RustViewSettings, WriteTiming};
 
 mod work;
@@ -77,6 +77,13 @@ enum Request {
         md5: String,
         reply: Reply<Result<HashCheck, RustViewError>>,
     },
+    MoveRecord {
+        id: JobId,
+        from: PathBuf,
+        to: PathBuf,
+        replace: bool,
+        reply: Reply<Result<MoveMedia, RustViewError>>,
+    },
 }
 
 impl Request {
@@ -88,6 +95,10 @@ impl Request {
             Self::CheckHash { reply, .. } => {
                 let _ = reply.send(Err(error));
             }
+            Self::MoveRecord { reply, .. } => {
+                // The caller (`lookup`) marks the record as not known to be RustCut's.
+                let _ = reply.send(Err(error));
+            }
         }
     }
 }
@@ -97,6 +108,11 @@ enum Answer {
     Tree(Result<TagTree, RustViewError>),
     /// A lookup was answered (the reply went out inside the future); the error tells about the connection.
     Lookup(Option<RustViewError>),
+    /// A record that followed its file was answered; on an error the record at the new path is not known to be RustCut's.
+    Moved {
+        id: JobId,
+        error: Option<RustViewError>,
+    },
     Hash {
         md5: String,
         result: Result<(), RustViewError>,
@@ -229,9 +245,7 @@ where
 
     fn stop(&mut self) {
         let error = RustViewError::Unavailable("RustCut is quitting".into());
-        for request in self.requests.drain(..) {
-            request.refuse(error.clone());
-        }
+        self.refuse_requests(&error);
         for waiter in self.tree_waiters.drain(..) {
             let _ = waiter.send(Err(error.clone()));
         }
@@ -278,6 +292,24 @@ where
                     self.want_tree = true;
                 }
             },
+            SyncCommand::MoveRecord {
+                id,
+                from,
+                to,
+                replace,
+                record,
+                reply,
+            } => {
+                self.follow_move(id, &to, record);
+                tracing::info!(job = id.0, replace, "[RustView] The record follows its moved file");
+                self.lookup(Request::MoveRecord {
+                    id,
+                    from,
+                    to,
+                    replace,
+                    reply,
+                });
+            }
             SyncCommand::GetMedia { path, reply } => self.lookup(Request::GetMedia { path, reply }),
             SyncCommand::CheckHash { md5, reply } => self.lookup(Request::CheckHash { md5, reply }),
             SyncCommand::InsertHash { md5 } => {
@@ -315,9 +347,54 @@ where
 
     fn lookup(&mut self, request: Request) {
         match self.refusal() {
-            Some(error) => request.refuse(error),
+            Some(error) => {
+                if let Request::MoveRecord { id, .. } = &request {
+                    self.move_refused(*id);
+                }
+                request.refuse(error);
+            }
             None => self.requests.push_back(request),
         }
+    }
+
+    /// Refuses every waiting lookup; a record move among them counts as refused.
+    pub(super) fn refuse_requests(&mut self, error: &RustViewError) {
+        let requests: Vec<Request> = self.requests.drain(..).collect();
+        for request in requests {
+            if let Request::MoveRecord { id, .. } = &request {
+                self.move_refused(*id);
+            }
+            request.refuse(error.clone());
+        }
+    }
+
+    /// RustView did not move the record: whatever is at the new path is not known to be RustCut's, so nothing there is
+    /// ever moved or deleted as RustCut's own; a later write asks RustView first (user decision Q-P12f: the user moves
+    /// the old entry, RustCut never deletes and sets it).
+    pub(super) fn move_refused(&mut self, id: JobId) {
+        if let Some(entry) = self.entries.get_mut(&id) {
+            entry.record.preexisting = None;
+            entry.record.previous_tags = None;
+            entry.record.previous_rating = None;
+            let record = entry.record.clone();
+            self.report(id, record);
+        }
+    }
+
+    /// RustCut counts the job's record as moved to `to` (whatever RustView answers): later writes go there, nothing is
+    /// cleaned at the old path.
+    fn follow_move(&mut self, id: JobId, to: &std::path::Path, record: JobSyncRecord) {
+        let entry = self.entry(id, record);
+        if entry.record.synced_path.is_none() {
+            return;
+        }
+        entry.record.synced_path = Some(to.to_path_buf());
+        if entry.target.is_some() {
+            entry.target = Some(to.to_path_buf());
+        }
+        entry.generation = entry.generation.wrapping_add(1);
+        let record = entry.record.clone();
+        self.report(id, record);
     }
 
     fn entry(&mut self, id: JobId, record: JobSyncRecord) -> &mut Entry {
@@ -366,9 +443,7 @@ where
         } else {
             self.want_tree = false;
             let error = RustViewError::Unavailable(SWITCHED_OFF.into());
-            for request in self.requests.drain(..) {
-                request.refuse(error.clone());
-            }
+            self.refuse_requests(&error);
             for waiter in self.tree_waiters.drain(..) {
                 let _ = waiter.send(Err(error.clone()));
             }

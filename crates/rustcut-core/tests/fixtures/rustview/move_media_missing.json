@@ -1,0 +1,8 @@
+{
+  "success": true,
+  "action": "not_found",
+  "from": "/videos/x.mkv",
+  "to": "/videos/y.mkv",
+  "tags": [],
+  "message": "Neither path is registered in the database."
+}

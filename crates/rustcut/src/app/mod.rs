@@ -529,6 +529,24 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     );
     export.set_editing(&editing);
     opener.set_editing(&editing);
+    // Moving target files (P12 block 7): the queue's menu opens the dialog.
+    let relocate = crate::ui::relocate::RelocateBridge::install(
+        &main,
+        &ui,
+        &queue_service,
+        Some(sync.events.subscribe()),
+        &queue,
+        &export,
+        runtime.handle().clone(),
+    );
+    {
+        let relocate = Rc::downgrade(&relocate);
+        queue.hooks().move_targets = Some(Box::new(move |rows| {
+            if let Some(relocate) = relocate.upgrade() {
+                relocate.open(rows);
+            }
+        }));
+    }
     {
         let editing = Rc::downgrade(&editing);
         queue.hooks().edit = Some(Box::new(move |id| {

@@ -27,6 +27,7 @@ fn job(id: i64, target: &str, state: JobState) -> JobRecord {
         note: None,
         spec: SpecSlot::Decoded(Box::new(spec)),
         sync: None,
+        relocation: None,
     }
 }
 

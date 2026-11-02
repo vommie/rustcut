@@ -47,6 +47,10 @@ impl Actor {
                 let _ = reply.send(self.remove(&ids).await);
             }
             QueueCommand::Cancel { ids } => self.cancel(&ids).await,
+            QueueCommand::MoveTargets { moves, reply } => {
+                let _ = reply.send(self.move_targets(moves).await);
+            }
+            QueueCommand::CancelRelocations { running, waiting } => self.cancel_relocations(running, waiting).await,
             QueueCommand::Reload { reply } => {
                 let _ = reply.send(self.reload().await);
             }
@@ -171,7 +175,7 @@ impl Actor {
     }
 
     /// Stores a new spec and takes the row back from the store.
-    async fn store_spec(&mut self, id: JobId, spec: Box<JobSpec>) -> Result<(), QueueError> {
+    pub(super) async fn store_spec(&mut self, id: JobId, spec: Box<JobSpec>) -> Result<(), QueueError> {
         let stored = spec.clone();
         self.store_request(|reply| StoreCommand::UpdateSpec { id, spec, reply })
             .await?;

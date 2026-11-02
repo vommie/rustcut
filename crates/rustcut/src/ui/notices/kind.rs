@@ -243,6 +243,12 @@ kinds! {
         critical false, ("Job finished", "basic_h264_720p - 03.mkv in /videos/out");
     JobFailed = "job_failed", "Job failed", Queue, Error, Toast, LOUD, desktop true, critical false,
         ("Job failed", "basic_h264_720p - 03.mkv: the encoder refused the settings");
+    /// Target files moved (P12 block 7): the result of a move in the status bar's segment.
+    TargetsMoved = "targets_moved", "Target files moved", Queue, Success, Activity, ACTIVITY, desktop false,
+        critical false, ("Moved 3 files", "to /videos/2026; 2 targets changed");
+    /// A target move failed or was canceled (the job's log has the details).
+    TargetMoveFailed = "target_move_failed", "Moving a target file failed", Queue, Error, Activity, ACTIVITY,
+        desktop true, critical false, ("Clip.mkv was not moved", "/videos/2026/Clip.mkv exists already");
     QueueDone = "queue_done", "Queue done", Queue, Success, Toast, &[Toast, Nothing], desktop true, critical false,
         ("The queue is done", "3 jobs finished");
     /// "Power off in 5 s" after the queue (also suspend and quit; Q-N8: default the desktop only).

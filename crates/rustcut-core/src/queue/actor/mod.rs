@@ -7,6 +7,9 @@
 //! deletes what their renders left behind. At shutdown it stops the running renders; they wait again at the next start.
 
 mod commands;
+mod relocate;
+#[cfg(test)]
+mod relocate_tests;
 mod sync;
 #[cfg(test)]
 mod sync_tests;
@@ -134,6 +137,8 @@ struct Actor {
     stopping: bool,
     /// The RustView sync actor, when linked.
     sync: Option<SyncHandle>,
+    /// The target file moves (P12 block 7).
+    relocations: relocate::Relocations,
 }
 
 impl Actor {
@@ -154,12 +159,14 @@ impl Actor {
             reports,
             stopping: false,
             sync,
+            relocations: relocate::Relocations::default(),
         };
         let (jobs, recovered) = actor.read_jobs().await;
         let waiting = jobs.iter().any(|j| j.state == JobState::Waiting);
         let paused = options.paused || (options.pause_on_start && waiting);
         actor.model = Model::new(jobs, options.workers, paused, options.when_done);
         actor.clean_recovered(&recovered).await;
+        actor.resume_relocations().await;
         tracing::info!(
             jobs = actor.model.jobs().len(),
             recovered = recovered.len(),
@@ -227,11 +234,16 @@ impl Actor {
         if !self.workers.is_empty() {
             return Err(QueueError::Store("a job is rendering".into()));
         }
+        if self.relocation_running() {
+            return Err(QueueError::Store("a file is being moved".into()));
+        }
         let (jobs, recovered) = self.read_jobs().await;
         let state = self.model.processing();
         let old: Vec<JobId> = self.model.jobs().iter().map(|j| j.id).collect();
         self.model = Model::new(jobs, state.workers, state.paused, state.when_done);
         self.clean_recovered(&recovered).await;
+        self.relocations = relocate::Relocations::default();
+        self.resume_relocations().await;
         if !old.is_empty() {
             self.events.publish(QueueEvent::Removed(old));
         }
@@ -347,17 +359,22 @@ impl Actor {
                 self.sync_reported(id, record).await;
             }
         }
-        if self.workers.is_empty() {
+        let moving = self.stop_relocation();
+        if self.workers.is_empty() && !moving {
             tracing::info!("[Queue] Stopped");
             return;
         }
-        tracing::info!(running = self.workers.len(), "[Queue] Stopping the running renders");
+        tracing::info!(
+            running = self.workers.len(),
+            moving,
+            "[Queue] Stopping the running renders and moves"
+        );
         for worker in self.workers.values_mut() {
             worker.stop = Some(Stop::Quit);
             worker.control.send_replace(crate::render::Control::Cancel);
         }
         let deadline = tokio::time::Instant::now() + SHUTDOWN_WAIT;
-        while !self.workers.is_empty() {
+        while !self.workers.is_empty() || self.relocation_running() {
             match tokio::time::timeout_at(deadline, reports.recv()).await {
                 Ok(Some(report)) => self.report(report).await,
                 Ok(None) | Err(_) => break,

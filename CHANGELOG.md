@@ -9,6 +9,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Moving target files (queue menu > "Move Target File ..."): choose another folder for one or several jobs, and for one job
+  another name. A finished job's file moves; a job not rendered yet only gets the new target; a rendering job gets it at
+  once and its file moves as soon as the render is done. The folder comes from the same list as in Job Finalization (your
+  target folders and favorites), a typed path or the system's folder dialog. The dialog shows what will happen as symbols
+  (the details in their tooltips) and checks everything before anything moves: permissions, free space, missing files, the
+  job's own source, names that are taken (decided like in the conflict dialog: add (n), skip, or overwrite with a held
+  button). Nothing happens until you press Move, and the folders are checked once more right before.
+- Moves to another drive copy the file, read the copy back and compare it, and only then remove the original; a file that
+  changes meanwhile stays where it is. The status bar shows the moves with a progress bar and an × that stops them (the
+  original stays), and the moves that wait for their renders (× gives them their old target back). The queue marks a job
+  whose file waits to move. Each move is written into the job's log.
+- RustView entries move with their files and keep their tags, rating, hash and source (also what you changed in RustView
+  after the render). This needs RustView 0.6.9 (`rustview api move-media`). When RustView cannot follow, the file moves
+  anyway and a dialog lists the entries to move in RustView yourself; RustCut never deletes and recreates them.
+- A crash or a power cut in the middle of a move is settled at the next start: a half copy is removed and the move starts
+  again, a finished copy is kept. Quitting while a move waits for its render keeps the new target; the render starts again.
+
 - Timeline thumbnails: hovering the timeline shows a picture of that place, with the time under it. They are made in the
   background the moment a video opens: 5 evenly spread within a fraction of a second, then finer and finer, and the place
   under the pointer goes first. Where keyframes lie far apart, a second stage decodes the places in between, and when the
@@ -88,6 +105,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The target folder field of Job Finalization is now one component that other places use too (the move dialog).
+- The status bar's activity segment can show a progress bar.
+
 - Licenses: `ATTRIBUTION.md` and `LICENSES/` hold what the licenses require, also for the libwebp code compiled in; the package installs them to
   `/usr/share/licenses/rustcut/`, and the About page says where. The source stays MIT; the built program as a whole is
   under the GPL-3.0, because it links libmpv and FFmpeg.
@@ -119,6 +139,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   field now holds the base name; the counter is added to it as usual.
 - The "Job queued" message cuts a long file name in the middle and shows all of it, with every tag, while the pointer
   rests on the message.
+
+### Migration
+
+- `queue.sqlite` goes from schema 1 to 2 (a column for unfinished moves). The database is backed up first
+  (`backups/queue.sqlite.v1.<time>.bak`); an older RustCut refuses the new file and leaves it alone.
 
 ### Fixed
 

@@ -56,7 +56,13 @@ pub(super) fn connect(editor: &Rc<Editor>, window: &MainWindow) {
     let window_weak = window.as_weak();
     sc.on_release_focus(move || {
         if let Some(window) = window_weak.upgrade() {
-            window.invoke_focus_keys();
+            // A field of the move dialog gives the keys back to its dialog (Escape, Enter, 1-3), not to the window.
+            let relocate = window.global::<crate::Relocate<'_>>();
+            if relocate.get_open() {
+                relocate.set_focus_tick(relocate.get_focus_tick().wrapping_add(1));
+            } else {
+                window.invoke_focus_keys();
+            }
         }
     });
 }

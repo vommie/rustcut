@@ -57,6 +57,8 @@ impl Actor {
     /// loses what RustCut created, a restarted job wants its record again.
     pub(super) fn sync_state_changed(&self, id: JobId, from: JobStateKind, to: &JobState) {
         match to.kind() {
+            // A file that still moves is asserted at its new place once it got there.
+            JobStateKind::Finished if self.journal(id).is_some() => {}
             JobStateKind::Finished => self.sync_job(id, SyncPhase::Finished),
             JobStateKind::Failed | JobStateKind::Canceled => {
                 if let Some(record) = self.model.get(id) {

@@ -25,6 +25,8 @@ export struct QueueRowView {
     current: bool,
     // Loaded into the editor.
     editing: bool,
+    // Its file waits to move (after its render or behind other moves; the tooltip names where to, P12 block 7).
+    moving: bool,
     // The table form's cells, one per entry of `Queue.columns`.
     cells: [string],
 }
