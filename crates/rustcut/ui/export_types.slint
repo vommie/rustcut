@@ -64,6 +64,8 @@ export global Export {
     in property <bool> has-source;
     // The target folder field (the shared folder select, src/ui/folders/select/).
     in property <FolderFieldView> folder-field;
+    // A plugin set the target folder: its tooltip ("Set by Auto-Folder (rule ...)"); empty = the user's or RustCut's.
+    in property <string> folder-plugin;
     in property <string> name;
     // The chosen container's extension (".mkv"), dim inside the name field (P9.7).
     in property <string> extension;
@@ -80,6 +82,8 @@ export global Export {
 
     // The jump to the folder tree in Settings > Target Folders (the field and its list: `FolderList`, P11.4).
     callback edit-folders();
+    // The plugin mark at the folder field: the plugin's Settings page.
+    callback folder-plugin-clicked();
     callback name-edited(string);
     // A typed counter ("" = no counter); false = not accepted.
     callback counter-committed(string) -> bool;

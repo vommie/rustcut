@@ -62,6 +62,10 @@ export global TagRate {
 
     // The rating bar: -1 = no rating chosen (the bar sets it on a click; Rust sets what the job holds right after).
     in-out property <int> rating: -1;
+    // A plugin set the rating: its tooltip ("Set by Auto-Rate (tag ...)"); empty = the user's.
+    in property <string> rating-plugin;
+    // The plugin mark at the rating: the plugin's Settings page.
+    callback rating-plugin-clicked();
     in property <bool> has-last-tags;
     in property <string> last-tags-tooltip;
     /// -1 = no job was saved with a rating yet.

@@ -25,6 +25,15 @@ use serde_json::{Map, Value};
 use crate::actor::{EventBus, Handle, Reply, mailbox};
 use crate::settings::PluginSettings;
 
+/// The file name extension of plugin files (`rcplugin`).
+pub fn package_extension() -> &'static str {
+    rustcut_plugin_host::package::EXTENSION
+}
+
+/// The plugin's manifest fields and their values (re-exported for the Settings pages).
+pub use rustcut_plugin_host::manifest::{Card, ChoiceOption, Field, FieldKind, PathSelect};
+pub use rustcut_plugin_host::values;
+
 /// How many failures in a row pause a plugin.
 pub const PAUSE_AFTER: u32 = 3;
 

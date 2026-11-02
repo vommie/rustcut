@@ -218,6 +218,44 @@ impl TagPanel {
             .unwrap_or_default()
     }
 
+    /// The names from the root down to tag `id`, its own name last; empty when the tree does not know it.
+    pub fn path(&self, id: u32) -> Vec<String> {
+        let mut path = Vec::new();
+        let mut next = Some(id);
+        while let Some(current) = next {
+            let Some(tag) = self.by_id.get(&current) else { break };
+            if path.len() > self.by_id.len() {
+                break; // A cycle in RustView's data; never loop.
+            }
+            path.push(tag.name.trim().to_owned());
+            next = tag.parent_id;
+        }
+        path.reverse();
+        path
+    }
+
+    /// Whether the tree knows tag `id` (`None` while no tree arrived).
+    pub fn knows(&self, id: u32) -> Option<bool> {
+        self.tree.as_ref().map(|_| self.by_id.contains_key(&id))
+    }
+
+    /// Every tag with its path, for the plugin settings' tag lists.
+    pub fn tag_paths(&self) -> Vec<(u32, Vec<String>)> {
+        let mut all: Vec<(u32, Vec<String>)> = self.by_id.keys().map(|id| (*id, self.path(*id))).collect();
+        all.sort_by_cached_key(|(_, path)| path.iter().map(|p| p.to_lowercase()).collect::<Vec<_>>());
+        all
+    }
+
+    /// Whether a rating can be set now (a job is edited, or a video is open and "Active" is on).
+    pub fn taggable(&self, has_video: bool) -> bool {
+        self.editing.is_some() || (has_video && self.active)
+    }
+
+    /// A plugin's rating (0 to 5).
+    pub fn set_rating(&mut self, stars: u8) {
+        self.choice_mut().rating = Some(stars.min(5));
+    }
+
     pub fn name(&self, id: u32) -> Option<&str> {
         self.by_id.get(&id).map(|t| t.name.trim())
     }

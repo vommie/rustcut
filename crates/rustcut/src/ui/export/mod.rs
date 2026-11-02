@@ -17,6 +17,7 @@ mod folder_field;
 mod job_check;
 mod known;
 mod metadata;
+mod plugin;
 mod previews;
 mod save;
 mod state;
@@ -42,6 +43,7 @@ pub use state::{ExportDraft, ExportState, JobFacts, MAX_COUNTER, codec_label};
 
 use self::job_check::JobProblem;
 use self::metadata::MetaPending;
+pub use self::plugin::{PluginMark, PluginTarget};
 use self::previews::DialogPreviews;
 use self::save::Pending;
 use crate::app::SettingsWriter;
@@ -119,6 +121,10 @@ pub struct ExportBridge {
     select: Rc<FolderSelect>,
     /// The banner about a loaded job's folder shows (it goes when the folder is no longer the target).
     job_target_banner: Cell<bool>,
+    /// The user chose the target for this video: plugins leave it alone until the next video (Q-P12g).
+    user_target: Cell<bool>,
+    /// The plugin that set the target, for the mark at the folder field.
+    plugin_mark: RefCell<Option<PluginMark>>,
 }
 
 /// The key of the banner about the job problem.
@@ -185,6 +191,8 @@ impl ExportBridge {
                 settings,
             ),
             job_target_banner: Cell::new(false),
+            user_target: Cell::new(false),
+            plugin_mark: RefCell::new(None),
         });
         let weak = Rc::downgrade(&bridge);
         parts.pictures.listen(move || {
@@ -228,6 +236,8 @@ impl ExportBridge {
     /// Another video was opened: the name and the counter start over, the source folder may be another one.
     pub fn file_opened(&self, path: &Path) {
         self.state.borrow_mut().file_opened(path);
+        self.user_target.set(false);
+        self.plugin_mark.replace(None);
         self.rescan();
     }
 
@@ -457,6 +467,14 @@ fn connect(bridge: &Rc<ExportBridge>, window: &MainWindow) {
     bridge.select.on_field(folder_field::OWNER, move || {
         if let Some(b) = weak.upgrade() {
             b.open_list();
+        }
+    });
+    e.on_folder_plugin_clicked({
+        let weak = Rc::downgrade(bridge);
+        move || {
+            if let Some(id) = weak.upgrade().and_then(|b| b.target_plugin()) {
+                crate::ui::plugins::show_settings(&id);
+            }
         }
     });
     e.on_edit_folders(|| {

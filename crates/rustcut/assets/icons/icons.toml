@@ -290,3 +290,11 @@ normalize_loudness = { tabler = "arrow-autofit-height", doc = "Normalization: ev
 normalize_dynamic = { tabler = "activity", doc = "Normalization: evens out slowly" }
 normalize_speech = { custom = "lips.svg", doc = "Normalization: made for speech (own drawing in Tabler's style)" }
 normalize_compressor = { tabler = "fold", doc = "Normalization: pushes down the loud parts" }
+
+# --- Plugins (P12 block 8) ----------------------------------------------------------------------------------------
+plugin = { tabler = "puzzle", doc = "A plugin; the mark at a value a plugin set; the Plugins page" }
+plugin_install = { tabler = "package-import", doc = "Install a plugin file" }
+plugin_dev = { tabler = "flask", doc = "A development folder of a plugin" }
+plugin_update = { tabler = "circle-arrow-up", doc = "A newer version of a plugin is available" }
+settings_export = { tabler = "file-download", doc = "Save a plugin's settings to a file" }
+settings_import = { tabler = "file-upload", doc = "Read a plugin's settings from a file" }

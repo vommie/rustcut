@@ -8,8 +8,8 @@ use std::rc::Rc;
 use rustcut_core::folders::FolderId;
 use slint::ComponentHandle as _;
 
-use super::ExportBridge;
 use super::target::Target;
+use super::{ExportBridge, plugin};
 use crate::Export;
 use crate::ui::folders::select::list::JOB_TARGET;
 use crate::ui::folders::select::{FolderSelect, Session};
@@ -35,7 +35,16 @@ impl ExportBridge {
                 view
             }
         };
-        window.global::<Export<'_>>().set_folder_field(view);
+        let export = window.global::<Export<'_>>();
+        export.set_folder_field(view);
+        export.set_folder_plugin(
+            self.plugin_mark
+                .borrow()
+                .as_ref()
+                .map(plugin::PluginMark::tooltip)
+                .unwrap_or_default()
+                .into(),
+        );
     }
 
     /// The field was clicked: the list opens with the target highlighted.
@@ -78,8 +87,11 @@ impl ExportBridge {
         }
     }
 
-    /// Another target (the list, the folder wheel); the job is not saved.
+    /// Another target (the list, the folder wheel): the user's choice, which plugins leave alone until the next video;
+    /// the job is not saved.
     pub fn choose_target(&self, id: FolderId) {
+        self.user_target.set(true);
+        self.plugin_mark.replace(None);
         self.state.borrow_mut().target.select_id(id);
         self.rescan();
         self.publish();

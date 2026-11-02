@@ -303,7 +303,7 @@ impl Actor {
             let Some(manifest) = slot.info.manifest.clone() else {
                 continue;
             };
-            let effective = values::effective(&manifest, &entry.values);
+            let effective = plugin_values(&manifest, &entry.values);
             if slot.configured.as_ref() != Some(&effective)
                 && let Some(worker) = &slot.worker
             {
@@ -446,7 +446,7 @@ impl Actor {
             return;
         };
         let id = id.to_owned();
-        let effective = values::effective(&manifest, values);
+        let effective = plugin_values(&manifest, values);
         worker.check(
             Value::Object(effective),
             Box::new(move |report| {
@@ -541,10 +541,9 @@ impl Actor {
     }
 
     async fn check_updates(&mut self) -> Vec<Available> {
-        let folder = self.settings.update_folder.clone();
-        if folder.as_os_str().is_empty() {
+        let Some(folder) = self.settings.update_folder.clone().filter(|f| !f.as_os_str().is_empty()) else {
             return Vec::new();
-        }
+        };
         let offered = tokio::task::spawn_blocking(move || newest_files(&folder))
             .await
             .unwrap_or_default();
@@ -596,6 +595,15 @@ impl Actor {
             .collect();
         self.watch = watch::watch(watched, self.me.clone());
     }
+}
+
+/// The values a plugin gets: declared fields only, sanitized, `~` expanded.
+fn plugin_values(manifest: &Manifest, stored: &Map<String, Value>) -> Map<String, Value> {
+    let mut values = values::effective(manifest, stored);
+    if let Some(dirs) = directories::BaseDirs::new() {
+        values::expand_home(manifest, &mut values, dirs.home_dir());
+    }
+    values
 }
 
 fn limits(entry: &PluginEntry) -> Limits {

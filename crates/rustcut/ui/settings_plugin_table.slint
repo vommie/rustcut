@@ -1,0 +1,197 @@
+// A table of a plugin's settings (P12 block 8): rules as rows of the same columns. The header explains each column in
+// its tooltip; a row with a finding (a conflict, a tag that no longer exists) shows a warning mark whose tooltip says
+// what and why. Rows move with the arrows and are deleted with a held button.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId } from "icons.slint";
+import { TooltipArea } from "tooltip.slint";
+import { ChoiceButton, IconButton, NumberField, UpDownButton } from "controls.slint";
+import { ToggleSwitch } from "toggle_switch.slint";
+import { RatingBar } from "rating_bar.slint";
+import { PluginBlockView, PluginCellView, PluginsUi } from "settings_plugin_types.slint";
+
+// One cell; its control follows the column's kind.
+component PluginCell inherits HorizontalLayout {
+    in property <PluginCellView> cell;
+    in property <string> table;
+    in property <int> row-index;
+    in property <int> column;
+
+    spacing: 2px;
+    alignment: start;
+
+    if root.cell.kind == 0 || root.cell.kind == 1: NumberField {
+        horizontal-stretch: 1;
+        min-width: 80px;
+        text: root.cell.text;
+        placeholder: root.cell.placeholder;
+        enabled: root.cell.enabled;
+        alignment: left;
+        committed(text) => { return PluginsUi.cell-text(root.table, root.row-index, root.column, text); }
+    }
+
+    if root.cell.kind == 1: IconButton {
+        icon: IconId.browse;
+        tooltip: "Choose a folder";
+        enabled: root.cell.enabled;
+        clicked => { PluginsUi.cell-pick(root.table, root.row-index, root.column); }
+    }
+
+    if root.cell.kind == 2: VerticalLayout {
+        alignment: center;
+
+        switch-area := TouchArea {
+            width: 36px;
+            height: 20px;
+            enabled: root.cell.enabled;
+            clicked => { PluginsUi.cell-toggle(root.table, root.row-index, root.column); }
+
+            ToggleSwitch {
+                checked: root.cell.checked;
+                enabled: root.cell.enabled;
+            }
+        }
+    }
+
+    if root.cell.kind == 3 || root.cell.kind == 4 || root.cell.kind == 5: ChoiceButton {
+        horizontal-stretch: 1;
+        min-width: 80px;
+        stretch-fully: true;
+        items: root.cell.items;
+        current: root.cell.index;
+        enabled: root.cell.enabled;
+        tooltip: root.cell.issue != "" ? root.cell.issue : root.cell.items.length > root.cell.index ? root.cell.items[root.cell.index] : "";
+        selected(index) => { PluginsUi.cell-choose(root.table, root.row-index, root.column, index); }
+    }
+
+    if root.cell.kind == 6: RatingBar {
+        selected-rating: root.cell.stars;
+        is-assign-mode: true;
+        has-selection: root.cell.enabled;
+        rating-selected(stars) => { PluginsUi.cell-rate(root.table, root.row-index, root.column, stars); }
+    }
+
+    if root.cell.issue != "": TooltipArea {
+        width: 16px;
+        text: root.cell.issue;
+
+        AppIcon {
+            y: (parent.height - self.height) / 2;
+            size: 14px;
+            icon: IconId.status-warning;
+            color: Theme.accent;
+        }
+    }
+}
+
+export component PluginTable inherits VerticalLayout {
+    in property <PluginBlockView> block;
+
+    // The marks, the arrows and the delete button at the right end of each row (with their spacing).
+    property <length> tools-width: 6px + 16px + 6px + 22px + 6px + 28px;
+
+    spacing: 4px;
+
+    // The header: each column's label, its help in the tooltip.
+    header := HorizontalLayout {
+        spacing: 6px;
+        padding-left: 4px;
+        padding-right: root.tools-width + 4px;
+
+        for column in root.block.columns: TooltipArea {
+            horizontal-stretch: column.kind == 2 || column.kind == 6 ? 0 : 1;
+            min-width: column.kind == 2 ? 60px : column.kind == 6 ? 150px : 90px;
+            max-width: column.kind == 2 ? 60px : column.kind == 6 ? 150px : 100000px;
+            height: 20px;
+            text: column.help;
+
+            Text {
+                x: 0;
+                text: column.label;
+                color: Theme.text-muted;
+                font-size: 11px;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+    }
+
+    if root.block.rows.length == 0: Text {
+        text: root.block.empty;
+        color: Theme.text-muted;
+        font-size: 12px;
+        wrap: word-wrap;
+    }
+
+    for row[r] in root.block.rows: Rectangle {
+        background: Theme.background;
+        border-radius: 4px;
+        border-width: 1px;
+        border-color: row.issue-level == 2 ? Theme.status-corrupt : Theme.border;
+        min-height: line.min-height;
+
+        line := HorizontalLayout {
+            padding: 4px;
+            spacing: 6px;
+
+            for cell[c] in row.cells: PluginCell {
+                horizontal-stretch: cell.kind == 2 || cell.kind == 6 ? 0 : 1;
+                min-width: cell.kind == 2 ? 60px : cell.kind == 6 ? 150px : 90px;
+                max-width: cell.kind == 2 ? 60px : cell.kind == 6 ? 150px : 100000px;
+                cell: cell;
+                table: root.block.key;
+                row-index: r;
+                column: c;
+            }
+
+            TooltipArea {
+                width: 16px;
+                text: row.issue;
+
+                if row.issue != "": AppIcon {
+                    y: (parent.height - self.height) / 2;
+                    size: 14px;
+                    icon: row.issue-level == 2 ? IconId.status-error : IconId.status-warning;
+                    color: row.issue-level == 2 ? Theme.status-corrupt : Theme.accent;
+                }
+            }
+
+            UpDownButton {
+                up-tooltip: "Move the rule up";
+                down-tooltip: "Move the rule down";
+                up-enabled: r > 0;
+                down-enabled: r < root.block.rows.length - 1;
+                up => { PluginsUi.row-move(root.block.key, r, -1); }
+                down => { PluginsUi.row-move(root.block.key, r, 1); }
+            }
+
+            IconButton {
+                width: 28px;
+                icon: IconId.job-remove;
+                hold: true;
+                tooltip: "Delete this rule";
+                clicked => { PluginsUi.row-remove(root.block.key, r); }
+            }
+        }
+    }
+
+    HorizontalLayout {
+        alignment: start;
+        spacing: 6px;
+
+        IconButton {
+            icon: IconId.plus;
+            text: root.block.add-label != "" ? root.block.add-label : "Add";
+            tooltip: root.block.help;
+            clicked => { PluginsUi.row-add(root.block.key); }
+        }
+
+        if root.block.issue != "": Text {
+            text: root.block.issue;
+            color: Theme.accent;
+            font-size: 11px;
+            vertical-alignment: center;
+            wrap: word-wrap;
+        }
+    }
+}

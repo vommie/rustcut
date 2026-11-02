@@ -41,6 +41,9 @@ pub struct FileOpener {
     runtime: tokio::runtime::Handle,
     last_open_dir: RefCell<Option<PathBuf>>,
     drops: RefCell<DropTracker>,
+    /// Hears every opened file after it opened, with whether RustCut itself opened it (a loaded job), once a loaded
+    /// job's own values are in place (the plugins, P12 block 8).
+    on_opened: RefCell<Option<Box<dyn Fn(&Path, bool)>>>,
 }
 
 /// Where a file opened by RustCut itself starts (a job loaded into the editor: its first section, user decision Q-P8).
@@ -84,6 +87,7 @@ impl FileOpener {
             runtime,
             last_open_dir: RefCell::new(last_open_dir),
             drops: RefCell::new(DropTracker::default()),
+            on_opened: RefCell::new(None),
         });
         let this = Rc::downgrade(&opener);
         window.on_open_file(move || {
@@ -112,6 +116,11 @@ impl FileOpener {
         *self.editing.borrow_mut() = Rc::downgrade(editing);
     }
 
+    /// `hook` hears every file that opened (see `on_opened`).
+    pub fn set_on_opened(&self, hook: impl Fn(&Path, bool) + 'static) {
+        *self.on_opened.borrow_mut() = Some(Box::new(hook));
+    }
+
     /// The folder of the last opened file (the dialog starts there; saved in the UI state).
     pub fn last_open_dir(&self) -> Option<PathBuf> {
         self.last_open_dir.borrow().clone()
@@ -130,6 +139,7 @@ impl FileOpener {
             (path, kind)
         });
         let this = Rc::downgrade(self);
+        let by_rustcut = then.is_some();
         let spawned = slint::spawn_local(async move {
             let Ok((path, kind)) = check.await else { return };
             let Some(opener) = this.upgrade() else { return };
@@ -146,6 +156,9 @@ impl FileOpener {
             };
             if let Some(then) = then {
                 then(opened);
+            }
+            if opened && let Some(hook) = opener.on_opened.borrow().as_ref() {
+                hook(&path, by_rustcut);
             }
         });
         if let Err(e) = spawned {

@@ -39,6 +39,8 @@ pub enum Group {
     Tags,
     Settings,
     Logs,
+    /// Plugins (P12 block 8).
+    Plugins,
     App,
 }
 
@@ -56,6 +58,7 @@ impl Group {
             Self::Tags => "Tags",
             Self::Settings => "Settings",
             Self::Logs => "Logs",
+            Self::Plugins => "Plugins",
             Self::App => "RustCut",
         }
     }
@@ -288,6 +291,26 @@ kinds! {
         ("143 log lines copied", "");
     ClipboardFailed = "clipboard_failed", "Clipboard unusable", Logs, Warning, Toast, EVENT, desktop false,
         critical false, ("The clipboard cannot be used", "");
+    /// A plugin asked for a short message (its notice with place "toast"); the title starts with the plugin's name.
+    PluginMessage = "plugin_message", "A plugin's message", Plugins, Info, Toast, EVENT, desktop false,
+        critical false, ("Auto-Folder: Target folder set", "rule ~/Videos/Holiday");
+    /// A plugin asked for a message that stays (its notice with place "banner").
+    PluginBanner = "plugin_banner", "A plugin's lasting message", Plugins, Info, Banner, LOUD, desktop false,
+        critical false, ("Auto-Rate: Rating set to 5 stars", "tag Treasure chest › Great");
+    /// A plugin failed (an error, a crash, a timeout, too much memory, refused settings).
+    PluginFailed = "plugin_failed", "A plugin failed", Plugins, Error, Banner, LOUD, desktop true, critical false,
+        ("Auto-Folder failed", "timed out after 1s");
+    /// A plugin failed three times in a row and is paused until it is reloaded.
+    PluginPaused = "plugin_paused", "A plugin was paused", Plugins, Warning, Banner, LOUD, desktop false,
+        critical false, ("Auto-Folder paused after 3 failures", "timed out after 1s");
+    /// What a plugin set does not exist (a target folder removed from Settings, a folder missing on disk).
+    PluginTargetMissing = "plugin_target_missing", "A plugin's target folder is missing", Plugins, Warning, Banner,
+        LOUD, desktop false, critical false,
+        ("Auto-Folder: the target folder does not exist", "/videos/holiday 2026");
+    PluginInstalled = "plugin_installed", "Plugin installed", Plugins, Success, Toast, EVENT, desktop false,
+        critical false, ("Auto-Folder 1.1.0 installed", "Updated from 1.0.0; its settings stay.");
+    PluginInstallFailed = "plugin_install_failed", "Plugin not installed", Plugins, Error, Banner, LOUD,
+        desktop true, critical false, ("auto-folder-1.1.0.rcplugin was not installed", "it needs plugin API 2.0");
     TimeCopied = "time_copied", "Time copied", App, Success, Toast, EVENT, desktop false, critical false,
         ("0:01:23.456 copied", "");
     MpvFailed = "mpv_failed", "mpv did not start", App, Warning, Toast, EVENT, desktop false, critical false,

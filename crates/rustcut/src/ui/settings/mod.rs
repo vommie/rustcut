@@ -16,8 +16,12 @@ mod hotkeys;
 mod input;
 mod messages;
 pub mod page;
+mod page_list;
+pub mod pages;
+mod plugins;
 mod profiles;
 mod ratios;
+mod rows;
 mod status;
 mod view;
 
@@ -27,7 +31,9 @@ use std::rc::{Rc, Weak};
 
 use rustcut_core::app_identity::{APP_NAME, VERSION};
 use rustcut_core::settings::{AppPaths, Settings, SettingsWindowState};
-use slint::{ComponentHandle as _, ModelRc, SharedString, VecModel};
+use slint::{ComponentHandle as _, ModelRc, VecModel};
+
+use self::rows::{hotkey_view, row_view};
 
 use self::hotkeys::HotkeysPage;
 use self::page::{Page, Special};
@@ -44,8 +50,8 @@ use crate::util::model::{sync, sync_with};
 const PROFILE_JUMP_KEY: &str = "settings:profiles.selected";
 
 use crate::{
-    HoldConfirm, HotkeyChipView, HotkeyRowView, MainWindow, MessageKindView, OptionRowView, ProfileItemView,
-    RatioChipView, RenderIssueView, SettingCardView, SettingRowView, SettingsUi, SettingsWindow, TooltipSettings,
+    HoldConfirm, HotkeyRowView, MainWindow, MessageKindView, OptionRowView, ProfileItemView, RatioChipView,
+    RenderIssueView, SettingCardView, SettingRowView, SettingsUi, SettingsWindow, TooltipSettings,
 };
 
 /// The help text of the option `key` (`config.toml`'s name, as `Field::key`); empty for an unknown key. The filters'
@@ -65,6 +71,10 @@ pub struct Hooks {
     pub rustview_connection: Option<Box<dyn Fn() -> rustcut_core::rustview::ConnectionState>>,
     /// The connection test: RustView is asked for its tag tree now; the answer comes on the receiver.
     pub test_rustview: Option<Box<dyn Fn() -> Option<RustViewTest>>>,
+    /// The plugins (Settings > Plugins and the plugins' pages, P12 block 8).
+    pub plugins: Option<Rc<crate::ui::plugins::PluginsBridge>>,
+    /// Every tag with its path, `None` while no tag tree arrived (the plugin pages' tag lists and checks).
+    pub tag_paths: Option<Box<dyn Fn() -> Option<Vec<(u32, Vec<String>)>>>>,
 }
 
 /// The answer of the connection test.
@@ -76,7 +86,9 @@ pub type RustViewTest = tokio::sync::oneshot::Receiver<
 type CardSlot = (Rc<VecModel<SettingRowView>>, Vec<view::RowView>);
 
 struct Models {
-    pages: Rc<VecModel<SharedString>>,
+    pages: Rc<VecModel<crate::SettingsPageItem>>,
+    /// One scroll position per page and sub-page (grows when a new sub-page shows).
+    page_scroll: Rc<VecModel<f32>>,
     cards: Rc<VecModel<SettingCardView>>,
     /// One row model per card slot, so a card keeps its elements while its rows change, and the rows it shows.
     card_rows: RefCell<Vec<CardSlot>>,
@@ -99,6 +111,12 @@ pub struct SettingsBridge {
     paths: AppPaths,
     state: RefCell<SettingsWindowState>,
     page: Cell<Page>,
+    /// The sub-page shown below `page` (a plugin's page), if any (P12 block 8).
+    sub: RefCell<Option<pages::PageRef>>,
+    /// The sidebar's rows, folded pages and scroll slots.
+    page_list: RefCell<pages::PageState>,
+    /// The plugin pages (P12 block 8).
+    plugin_pages: plugins::PluginPages,
     /// Why a typed text was refused, by option key (shown until a value of that option is kept).
     errors: RefCell<BTreeMap<String, String>>,
     profiles: RefCell<ProfilesPage>,
@@ -137,7 +155,8 @@ impl SettingsBridge {
         pictures: &Rc<Pictures>,
     ) -> Rc<Self> {
         let settings = writer.current();
-        let page = Page::from_id(&state.page).unwrap_or(Page::General);
+        let shown = pages::PageRef::from_id(&state.page).unwrap_or(pages::PageRef::Fixed(Page::General));
+        let page = shown.page();
         let bridge = Rc::new_cyclic(|me| Self {
             me: Weak::clone(me),
             window: RefCell::new(None),
@@ -146,6 +165,9 @@ impl SettingsBridge {
             paths,
             state: RefCell::new(state.clone()),
             page: Cell::new(page),
+            sub: RefCell::new(matches!(shown, pages::PageRef::Plugin(_)).then_some(shown)),
+            page_list: RefCell::new(pages::PageState::new(&state.folded_pages)),
+            plugin_pages: plugins::PluginPages::default(),
             errors: RefCell::default(),
             profiles: RefCell::new(ProfilesPage::new(
                 settings.render.profiles.clone(),
@@ -158,12 +180,8 @@ impl SettingsBridge {
             hotkeys_shown: RefCell::default(),
             hooks: RefCell::default(),
             models: Models {
-                pages: Rc::new(VecModel::from(
-                    Page::ALL
-                        .iter()
-                        .map(|p| SharedString::from(p.title()))
-                        .collect::<Vec<_>>(),
-                )),
+                pages: Rc::new(VecModel::default()),
+                page_scroll: Rc::new(VecModel::from(vec![0.0_f32; Page::ALL.len()])),
                 cards: Rc::new(VecModel::default()),
                 card_rows: RefCell::default(),
                 ratios: Rc::new(VecModel::default()),
@@ -241,6 +259,7 @@ impl SettingsBridge {
         }
         if let Some(page) = page {
             self.page.set(page);
+            self.sub.replace(None);
         }
         if !self.window.borrow().as_ref().is_some_and(|w| w.window().is_visible()) {
             self.status_refresh();
@@ -306,7 +325,8 @@ impl SettingsBridge {
             self.capture_size(window);
         }
         let mut current = self.state.borrow().clone();
-        self.page.get().id().clone_into(&mut current.page);
+        current.page = self.shown_page().id();
+        current.folded_pages.clone_from(&self.page_list.borrow().folded);
         current.profile = Some(self.profiles.borrow().selected_id().to_owned());
         current.hotkey_search.clone_from(&self.hotkeys.borrow().search);
         self.folder_page.save_into(&mut current);
@@ -353,7 +373,8 @@ impl SettingsBridge {
         let m = &self.models;
         ui.set_pages(ModelRc::from(Rc::clone(&m.pages)));
         // Each page starts at its top the first time it shows; the window keeps the positions while it is hidden.
-        ui.set_page_scroll(ModelRc::from(Rc::new(VecModel::from(vec![0.0_f32; Page::ALL.len()]))));
+        ui.set_page_scroll(ModelRc::from(Rc::clone(&m.page_scroll)));
+        plugins::connect(&self.me, &window);
         ui.set_cards(ModelRc::from(Rc::clone(&m.cards)));
         ui.set_ratios(ModelRc::from(Rc::clone(&m.ratios)));
         ui.set_profiles(ModelRc::from(Rc::clone(&m.profiles)));
@@ -471,9 +492,9 @@ impl SettingsBridge {
         let ui = window.global::<SettingsUi<'_>>();
         let page = self.page.get();
         let settings = self.writer.current();
-        ui.set_page(i32::try_from(page.index()).unwrap_or(0));
-        ui.set_page_title(page.title().into());
+        let sub = self.publish_page_list(&ui);
         ui.set_special(match page.special() {
+            _ if sub.is_some() => 9,
             Special::None => 0,
             Special::Folders => 1,
             Special::Profiles => 2,
@@ -482,7 +503,14 @@ impl SettingsBridge {
             Special::Messages => 5,
             Special::CropRatios => 6,
             Special::Diagnostics => 7,
+            Special::Plugins => 8,
         });
+        if let Some(id) = sub {
+            ui.set_resettable(true);
+            self.publish_cards(&[]);
+            self.publish_plugin_page(&window, &id, &settings);
+            return;
+        }
         ui.set_resettable(!catalog::cards(page).is_empty());
         self.check_programs(page, &settings);
         let cards = view::cards(page, &settings, &self.errors.borrow(), self);
@@ -494,6 +522,7 @@ impl SettingsBridge {
             Special::Messages => self.publish_messages(&ui, &settings),
             Special::CropRatios => self.publish_ratios(&settings),
             Special::Diagnostics => self.publish_diagnostics(),
+            Special::Plugins => self.publish_plugins(&window, &settings),
             Special::None | Special::About => {}
         }
     }
@@ -537,56 +566,5 @@ impl view::Context for SettingsBridge {
 
     fn status(&self, key: &str) -> status::RowStatus {
         self.status.borrow().get(key)
-    }
-}
-
-fn row_view(r: &view::RowView) -> SettingRowView {
-    SettingRowView {
-        key: r.key.into(),
-        kind: r.kind as i32,
-        label: r.label.into(),
-        description: r.description.as_str().into(),
-        checked: r.checked,
-        items: ModelRc::new(VecModel::from(
-            r.items.iter().map(|i| SharedString::from(*i)).collect::<Vec<_>>(),
-        )),
-        item_icons: ModelRc::new(VecModel::from(
-            r.item_icons
-                .iter()
-                .copied()
-                .map(crate::icons::Icon::to_slint)
-                .collect::<Vec<_>>(),
-        )),
-        index: i32::try_from(r.index).unwrap_or(0),
-        text: r.text.as_str().into(),
-        placeholder: r.placeholder.into(),
-        suffix: r.suffix.into(),
-        hold: r.hold,
-        segmented: r.kind == view::RowKind::Choice && crate::util::choice::segmented(&r.items),
-        enabled: r.enabled,
-        indent: r.indent,
-        error: r.error.as_str().into(),
-        icon: r.icon.map_or(crate::IconId::None, crate::icons::Icon::to_slint),
-        status: r.status.index(),
-        status_text: r.status.text().into(),
-    }
-}
-
-fn hotkey_view(row: &hotkeys::HotkeyRow) -> HotkeyRowView {
-    HotkeyRowView {
-        id: row.action.id().into(),
-        title: row.action.title().into(),
-        group: hotkeys::group(row.action).into(),
-        keys: ModelRc::new(VecModel::from(
-            row.keys
-                .iter()
-                .map(|(text, label)| HotkeyChipView {
-                    text: text.as_str().into(),
-                    label: label.as_str().into(),
-                })
-                .collect::<Vec<_>>(),
-        )),
-        changed: row.changed,
-        defaults: row.defaults.as_str().into(),
     }
 }

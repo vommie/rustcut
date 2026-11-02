@@ -13,6 +13,7 @@ mod filter_window;
 mod hidden;
 mod history;
 mod history_view;
+mod plugin;
 mod state;
 mod switches;
 mod sync_notice;
@@ -105,6 +106,10 @@ pub struct TagsBridge {
     menu: RefCell<Weak<crate::ui::menu::ContextMenuBridge>>,
     /// Compact Mode (`rustview.compact_tree`).
     compact: Cell<bool>,
+    /// Hears every tag the user assigns (`true`) or removes (`false`) in the panel (the plugins, P12 block 8).
+    on_user_tag: RefCell<Option<Box<dyn Fn(u32, bool)>>>,
+    /// The plugin that set the rating, for the mark at the rating bar.
+    rating_mark: RefCell<Option<crate::ui::export::PluginMark>>,
 }
 
 impl TagsBridge {
@@ -163,6 +168,8 @@ impl TagsBridge {
             filter_rows: Rc::new(VecModel::default()),
             menu: RefCell::new(Weak::new()),
             compact: Cell::new(compact),
+            on_user_tag: RefCell::new(None),
+            rating_mark: RefCell::new(None),
         });
         BRIDGE.with(|b| *b.borrow_mut() = Rc::downgrade(&bridge));
         let t = window.global::<TagRate<'_>>();
@@ -216,6 +223,7 @@ impl TagsBridge {
     /// The export queued a job with these values: they become "last", the draft starts again with the locked tags.
     pub fn job_saved(&self, tags: &[u32], rating: Option<u8>) {
         self.state.borrow_mut().saved(tags, rating);
+        self.rating_mark.replace(None);
         self.publish();
     }
 
@@ -231,6 +239,7 @@ impl TagsBridge {
     /// A job loaded into the editor: its tags and rating become the panel's choice.
     pub fn load_draft(&self, choice: Choice) {
         self.state.borrow_mut().load_draft(choice);
+        self.rating_mark.replace(None);
         self.publish();
     }
 
@@ -445,6 +454,14 @@ impl TagsBridge {
 
         let choice = state.choice();
         t.set_rating(choice.rating.map_or(-1, i32::from));
+        t.set_rating_plugin(
+            self.rating_mark
+                .borrow()
+                .as_ref()
+                .map(crate::ui::export::PluginMark::tooltip)
+                .unwrap_or_default()
+                .into(),
+        );
         t.set_has_last_tags(!state.last_tags.is_empty());
         t.set_last_tags_tooltip(view::tag_names(&state, &state.last_tags).into());
         t.set_last_rating(state.last_rating.map_or(-1, i32::from));

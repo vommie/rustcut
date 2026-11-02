@@ -120,13 +120,25 @@ export struct MessageKindView {
     tested: string,
 }
 
+// A row of the page list (P12 block 8): a page, or a sub-page one level below its page (depth 1). A page with
+// sub-pages has a chevron at its right end that folds them in and out.
+export struct SettingsPageItem {
+    title: string,
+    depth: int,
+    expandable: bool,
+    expanded: bool,
+}
+
 export global SettingsUi {
-    in property <[string]> pages;
+    in property <[SettingsPageItem]> pages;
+    // The row of the shown page in `pages`.
     in property <int> page;
     in property <string> page-title;
-    // Each page's scroll position while RustCut runs (one entry per page, filled by Rust; never saved).
+    // Each page's scroll position while RustCut runs (one slot per page and sub-page, filled by Rust; never saved).
     in-out property <[length]> page-scroll;
-    // 0 none, 1 target folders (`FolderTreeUi`, above the cards), 2 render profiles, 3 hotkeys, 4 About, 5 Messages, 6 crop ratios (Filters), 7 Diagnostics.
+    // The shown page's slot in `page-scroll`.
+    in property <int> page-slot;
+    // 0 none, 1 target folders (`FolderTreeUi`, above the cards), 2 render profiles, 3 hotkeys, 4 About, 5 Messages, 6 crop ratios (Filters), 7 Diagnostics, 8 plugins (the list), 9 one plugin's page (`PluginsUi`).
     in property <int> special;
     in property <[SettingCardView]> cards;
     // The page has generic options that can go back to their defaults.
@@ -135,6 +147,8 @@ export global SettingsUi {
     in property <string> read-only-note;
 
     callback select-page(int);
+    // The chevron of a page with sub-pages.
+    callback toggle-page(int);
     callback reset-page();
     callback toggle(/* key */ string);
     // The pointer came to or left a row (the folder wheel's preview plays its effects).

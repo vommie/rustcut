@@ -26,8 +26,8 @@ pub struct PluginSettings {
     /// Plugin folders loaded straight from their build (a `plugin.toml` with `wasm` pointing to the build output);
     /// reloaded when the build changes.
     pub dev_folders: Vec<PathBuf>,
-    /// Where newer plugin files are looked for ("check for updates"); empty = nowhere.
-    pub update_folder: PathBuf,
+    /// Where newer plugin files are looked for ("check for updates"); `None` = nowhere.
+    pub update_folder: Option<PathBuf>,
     /// Per plugin id; an unreadable entry reads as the defaults instead of failing the whole file.
     #[serde_as(as = "BTreeMap<_, DefaultOnError>")]
     pub entries: BTreeMap<String, PluginEntry>,
@@ -39,7 +39,7 @@ impl Default for PluginSettings {
             enabled: true,
             order: Vec::new(),
             dev_folders: Vec::new(),
-            update_folder: PathBuf::new(),
+            update_folder: None,
             entries: BTreeMap::new(),
         }
     }

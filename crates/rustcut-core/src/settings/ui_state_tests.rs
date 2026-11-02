@@ -366,6 +366,7 @@ fn the_settings_window_round_trips_and_old_files_load() {
             diagnostics_passed: [true, false],
             folder_selected: Some(crate::folders::FolderId(3)),
             folder_collapsed: vec![crate::folders::FolderId(1), crate::folders::FolderId(4)],
+            folded_pages: vec!["plugins".into()],
         },
         ..UiState::default()
     };

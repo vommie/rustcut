@@ -559,7 +559,10 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     window.window().on_winit_window_event(move |_, event| {
         match event {
             WindowEvent::DroppedFile(path) => {
-                with(&t, |b| b.folder_file_over(false));
+                with(&t, |b| {
+                    b.folder_file_over(false);
+                    b.plugin_file_over(false);
+                });
                 let first = batch.borrow().is_empty();
                 batch.borrow_mut().push(path.clone());
                 if first {
@@ -567,16 +570,23 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
                     let (t, batch) = (t.clone(), Rc::clone(&batch));
                     slint::Timer::single_shot(DROP_GATHER, move || {
                         let paths = std::mem::take(&mut *batch.borrow_mut());
-                        with(&t, |b| {
-                            if b.page.get() == crate::ui::settings::page::Page::Folders {
-                                b.folders_dropped(paths);
-                            }
+                        with(&t, |b| match b.page.get() {
+                            crate::ui::settings::page::Page::Folders => b.folders_dropped(paths),
+                            // Plugin files (P12 block 8): on the Plugins page and the plugins' pages.
+                            crate::ui::settings::page::Page::Plugins => b.plugins_dropped(paths),
+                            _ => {}
                         });
                     });
                 }
             }
-            WindowEvent::HoveredFile(_) => with(&t, |b| b.folder_file_over(true)),
-            WindowEvent::HoveredFileCancelled => with(&t, |b| b.folder_file_over(false)),
+            WindowEvent::HoveredFile(_) => with(&t, |b| {
+                b.folder_file_over(true);
+                b.plugin_file_over(true);
+            }),
+            WindowEvent::HoveredFileCancelled => with(&t, |b| {
+                b.folder_file_over(false);
+                b.plugin_file_over(false);
+            }),
             _ => {}
         }
         EventResult::Propagate

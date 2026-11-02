@@ -20,16 +20,17 @@ use crate::{ProfileItemView, RenderIssueView, SettingsUi};
 
 impl SettingsBridge {
     pub(super) fn select_page(&self, index: Option<usize>) {
-        if let Some(page) = index.and_then(Page::from_index) {
-            self.hotkeys.borrow_mut().cancel();
-            self.page.set(page);
-            self.publish();
-            notices::layout_changed();
+        if let Some(index) = index {
+            self.select_row(index);
         }
     }
 
     /// Every generic option of the page back to its default (the held button in the header).
     pub(super) fn reset_page(&self) {
+        if let Some(super::pages::PageRef::Plugin(id)) = self.sub.borrow().clone() {
+            self.reset_plugin(&id);
+            return;
+        }
         let page = self.page.get();
         if page == Page::Hotkeys {
             self.reset_hotkeys();
@@ -62,6 +63,9 @@ impl SettingsBridge {
 
     /// A click, choice, typed text or wheel step on a generic option.
     pub(super) fn edit(&self, key: &str, edit: Edit) -> Result<(), String> {
+        if let Some(key) = super::plugins::PluginKey::parse(key) {
+            return self.plugin_edit(&key, edit);
+        }
         let Some(field) = catalog::field(key) else {
             return Ok(());
         };
@@ -117,6 +121,10 @@ impl SettingsBridge {
 
     /// The browse button of a path option: the portal's dialog, then the path as if typed.
     pub(super) fn pick(&self, key: &str) {
+        if let Some(key) = super::plugins::PluginKey::parse(key) {
+            self.plugin_pick(key, None);
+            return;
+        }
         let Some(field) = catalog::field(key) else { return };
         let Kind::Path { folder, .. } = field.kind else { return };
         let mut dialog = rfd::AsyncFileDialog::new().set_title(format!("Choose: {}", field.label));
@@ -194,6 +202,11 @@ impl SettingsBridge {
             "open.data" => self.open_folder("data"),
             "open.cache" => self.open_folder("cache"),
             "rustview.test" => self.test_rustview(),
+            _ if super::plugins::PluginKey::parse(key).is_some() => {
+                if let Some(key) = super::plugins::PluginKey::parse(key) {
+                    self.plugin_action(&key);
+                }
+            }
             _ => tracing::debug!(key, "[Settings] Unknown button"),
         }
     }
@@ -479,7 +492,7 @@ impl SettingsBridge {
 }
 
 /// The portal's file or folder dialog as a future of the picked path.
-fn pick_path(
+pub(super) fn pick_path(
     dialog: rfd::AsyncFileDialog,
     folder: bool,
 ) -> std::pin::Pin<Box<dyn Future<Output = Option<std::path::PathBuf>>>> {

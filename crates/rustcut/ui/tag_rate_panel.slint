@@ -344,12 +344,25 @@ export component TagRatePanel inherits Rectangle {
         if TagRate.editing-job: EditingBanner { }
 
         // Always in assign mode for one job (RustView's file selection is RustCut's job).
-        rating := RatingBar {
-            opacity: root.closed ? 0.4 : 1;
-            selected-rating <=> TagRate.rating;
-            is-assign-mode: true;
-            has-selection: root.has-job;
-            rating-selected(r) => { TagRate.rating-clicked(r); }
+        rating-row := HorizontalLayout {
+            spacing: 4px;
+
+            rating := RatingBar {
+                opacity: root.closed ? 0.4 : 1;
+                selected-rating <=> TagRate.rating;
+                is-assign-mode: true;
+                has-selection: root.has-job;
+                rating-selected(r) => { TagRate.rating-clicked(r); }
+            }
+
+            // A plugin set the rating (P12 block 8): the mark names it; a click leads to its settings.
+            if TagRate.rating-plugin != "": IconButton {
+                width: 20px;
+                height: 20px;
+                icon: IconId.plugin;
+                tooltip: TagRate.rating-plugin;
+                clicked => { TagRate.rating-plugin-clicked(); }
+            }
         }
 
         // The copied filter fills its parent; it is off while there is no tree to filter (P9.8). The toggle under the
@@ -502,10 +515,10 @@ export component TagRatePanel inherits Rectangle {
     // Over the dimmed part (rating, filter, tree, history; not the switches below): no click, no hover, no wheel
     // reaches it, and its tooltip says why.
     if root.closed: Rectangle {
-        x: layout.x + rating.x;
-        y: layout.y + rating.y;
-        width: rating.width;
-        height: history-panel.y + history-panel.height - rating.y;
+        x: layout.x + rating-row.x;
+        y: layout.y + rating-row.y;
+        width: rating-row.width;
+        height: history-panel.y + history-panel.height - rating-row.y;
 
         closed-host := TooltipHost {
             text: "Active is off: jobs are saved without RustView. The tag button at the bottom switches it on.";

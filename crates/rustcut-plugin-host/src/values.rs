@@ -112,6 +112,37 @@ fn number_value(number: f64, decimals: u8) -> Value {
     serde_json::Number::from_f64(number).map_or(Value::Null, Value::Number)
 }
 
+/// Replaces a leading `~` in every path field (also in table columns) by `home`: plugins see no environment, so
+/// RustCut hands them absolute paths while the settings keep what the user typed.
+pub fn expand_home(manifest: &Manifest, values: &mut Map<String, Value>, home: &std::path::Path) {
+    let fields: Vec<&Field> = manifest.fields().collect();
+    expand_level(&fields, values, home);
+}
+
+fn expand_level(fields: &[&Field], values: &mut Map<String, Value>, home: &std::path::Path) {
+    for field in fields {
+        let Some(value) = values.get_mut(&field.key) else { continue };
+        match &field.kind {
+            FieldKind::Path { .. } => {
+                if let Some(text) = value.as_str()
+                    && let Some(rest) = text.strip_prefix('~').filter(|rest| rest.is_empty() || rest.starts_with('/'))
+                {
+                    *value = Value::String(format!("{}{rest}", home.display()));
+                }
+            }
+            FieldKind::Table { columns, .. } => {
+                let columns: Vec<&Field> = columns.iter().collect();
+                for row in value.as_array_mut().into_iter().flatten() {
+                    if let Some(row) = row.as_object_mut() {
+                        expand_level(&columns, row, home);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 /// The stored TOML table as JSON.
 #[must_use]
 pub fn from_toml(table: &toml::Table) -> Map<String, Value> {
@@ -240,6 +271,14 @@ mod tests {
             Value::Object(from_toml(&table)),
             json!({"on": false, "limit": 3, "rules": [{"source": "/a"}]})
         );
+    }
+
+    #[test]
+    fn home_is_expanded_in_path_fields_only() {
+        let mut values = effective(&manifest(), json!({"rules": [{"source": "~/Videos"}, {"source": "~user/x"}]}).as_object().unwrap());
+        expand_home(&manifest(), &mut values, std::path::Path::new("/home/me"));
+        assert_eq!(values["rules"][0]["source"], json!("/home/me/Videos"));
+        assert_eq!(values["rules"][1]["source"], json!("~user/x"));
     }
 
     #[test]

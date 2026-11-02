@@ -1,0 +1,369 @@
+// Settings > Plugins (the list and its management) and each plugin's own page (P12 block 8, Q-P12g).
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId } from "icons.slint";
+import { TooltipArea } from "tooltip.slint";
+import { IconButton, UpDownButton } from "controls.slint";
+import { ToggleSwitch } from "toggle_switch.slint";
+import { SettingsCard } from "settings_card.slint";
+import { SettingsRow } from "settings_row.slint";
+import { PluginTable } from "settings_plugin_table.slint";
+import { PluginItemView, PluginsUi } from "settings_plugin_types.slint";
+
+component StateText inherits Text {
+    in property <int> kind;
+
+    color: root.kind == 0 ? Theme.status-ok : root.kind == 2 ? Theme.accent : root.kind == 3 ? Theme.status-corrupt
+        : Theme.text-muted;
+    font-size: 11px;
+    vertical-alignment: center;
+}
+
+// One plugin of the list: its symbol, name, version, what it does, its state and switch; a click unfolds the details.
+component PluginRow inherits Rectangle {
+    in property <PluginItemView> plugin;
+    in property <int> index;
+
+    background: touch.has-hover ? Theme.surface-hover : transparent;
+    border-radius: 4px;
+    min-height: column.min-height;
+
+    touch := TouchArea {
+        clicked => { PluginsUi.expand(root.plugin.id); }
+    }
+
+    column := VerticalLayout {
+        padding: 6px;
+        spacing: 6px;
+
+        HorizontalLayout {
+            spacing: 8px;
+
+            Image {
+                width: 24px;
+                height: 24px;
+                source: root.plugin.icon;
+                image-fit: contain;
+            }
+
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: 1px;
+
+                HorizontalLayout {
+                    spacing: 6px;
+
+                    Text {
+                        text: root.plugin.name;
+                        color: Theme.text;
+                        font-size: 13px;
+                        font-weight: 700;
+                    }
+
+                    Text {
+                        text: root.plugin.version;
+                        color: Theme.text-muted;
+                        font-size: 11px;
+                        vertical-alignment: center;
+                    }
+
+                    if root.plugin.development: TooltipArea {
+                        width: 16px;
+                        text: "Loaded from a development folder: reloaded whenever its build changes";
+
+                        AppIcon {
+                            y: (parent.height - self.height) / 2;
+                            size: 14px;
+                            icon: IconId.plugin-dev;
+                            color: Theme.primary;
+                        }
+                    }
+
+                    if root.plugin.update != "": TooltipArea {
+                        width: 16px;
+                        text: root.plugin.update;
+
+                        AppIcon {
+                            y: (parent.height - self.height) / 2;
+                            size: 14px;
+                            icon: IconId.plugin-update;
+                            color: Theme.primary;
+                        }
+                    }
+
+                    Rectangle { }
+                }
+
+                Text {
+                    text: root.plugin.description;
+                    color: Theme.text-muted;
+                    font-size: 11px;
+                    overflow: elide;
+                }
+            }
+
+            StateText {
+                kind: root.plugin.state-kind;
+                text: root.plugin.state;
+                max-width: 220px;
+                overflow: elide;
+            }
+
+            UpDownButton {
+                up-tooltip: "Run earlier (a later plugin sees the earlier ones' changes and wins)";
+                down-tooltip: "Run later (a later plugin sees the earlier ones' changes and wins)";
+                up-enabled: root.plugin.can-move-up;
+                down-enabled: root.plugin.can-move-down;
+                up => { PluginsUi.move(root.plugin.id, -1); }
+                down => { PluginsUi.move(root.plugin.id, 1); }
+            }
+
+            VerticalLayout {
+                alignment: center;
+
+                TouchArea {
+                    width: 36px;
+                    height: 20px;
+                    enabled: root.plugin.can-toggle;
+                    clicked => { PluginsUi.toggle(root.plugin.id); }
+
+                    ToggleSwitch {
+                        checked: root.plugin.enabled;
+                        enabled: root.plugin.can-toggle;
+                    }
+                }
+            }
+        }
+
+        if root.plugin.expanded: VerticalLayout {
+            padding-left: 32px;
+            spacing: 6px;
+
+            for detail in root.plugin.details: HorizontalLayout {
+                spacing: 8px;
+
+                Text {
+                    width: 110px;
+                    text: detail.label;
+                    color: Theme.text-muted;
+                    font-size: 11px;
+                }
+
+                Text {
+                    horizontal-stretch: 1;
+                    text: detail.value;
+                    color: Theme.text;
+                    font-size: 11px;
+                    wrap: word-wrap;
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 4px;
+                alignment: start;
+
+                IconButton {
+                    icon: IconId.open-settings;
+                    tooltip: "The plugin's settings";
+                    clicked => { PluginsUi.open-page(root.plugin.id); }
+                }
+
+                IconButton {
+                    icon: IconId.reload;
+                    tooltip: "Reload the plugin (also resumes it after a pause)";
+                    clicked => { PluginsUi.reload(root.plugin.id); }
+                }
+
+                if root.plugin.update != "": IconButton {
+                    icon: IconId.plugin-update;
+                    tooltip: "Install " + root.plugin.update;
+                    clicked => { PluginsUi.update(root.plugin.id); }
+                }
+
+                IconButton {
+                    icon: IconId.open-folder;
+                    tooltip: "Open the plugin's folder";
+                    clicked => { PluginsUi.open-folder(root.plugin.id); }
+                }
+
+                IconButton {
+                    icon: IconId.settings-export;
+                    tooltip: "Save the plugin's settings to a file";
+                    clicked => { PluginsUi.export-settings(root.plugin.id); }
+                }
+
+                IconButton {
+                    icon: IconId.settings-import;
+                    tooltip: "Read the plugin's settings from a file";
+                    clicked => { PluginsUi.import-settings(root.plugin.id); }
+                }
+
+                IconButton {
+                    icon: IconId.job-remove;
+                    hold: true;
+                    enabled: root.plugin.can-remove;
+                    tooltip: root.plugin.development ? "Disconnect the development folder (its files stay)"
+                        : "Remove the plugin (its settings stay for a reinstall)";
+                    clicked => { PluginsUi.remove(root.plugin.id); }
+                }
+            }
+        }
+    }
+}
+
+export component SettingsPlugins inherits VerticalLayout {
+    spacing: 16px;
+
+    SettingsCard {
+        title: "Installed plugins";
+        description: PluginsUi.plugins.length == 0 ? "No plugin yet. Install a plugin file (.rcplugin) or drop one onto this page."
+            : "They run from top to bottom: a later plugin sees what the earlier ones changed and wins. A click on a plugin shows its details.";
+
+        for plugin[i] in PluginsUi.plugins: PluginRow {
+            plugin: plugin;
+            index: i;
+        }
+
+        HorizontalLayout {
+            spacing: 4px;
+            alignment: start;
+
+            IconButton {
+                icon: IconId.plugin-install;
+                text: "Install";
+                enabled: !PluginsUi.installing;
+                tooltip: "Install or update a plugin from a plugin file (.rcplugin); dropping the file onto this page does the same";
+                clicked => { PluginsUi.install(); }
+            }
+
+            IconButton {
+                icon: IconId.plugin-update;
+                enabled: !PluginsUi.checking;
+                tooltip: "Look for newer plugin files in the update folder";
+                clicked => { PluginsUi.check-updates(); }
+            }
+
+            IconButton {
+                icon: IconId.reload;
+                tooltip: "Reload every plugin (also resumes paused ones)";
+                clicked => { PluginsUi.reload(""); }
+            }
+
+            IconButton {
+                icon: IconId.open-folder;
+                tooltip: "Open the folder of the installed plugins";
+                clicked => { PluginsUi.open-folder(""); }
+            }
+        }
+
+        if PluginsUi.drop-hover: Rectangle {
+            height: 40px;
+            border-radius: 6px;
+            border-width: 1px;
+            border-color: Theme.primary;
+            background: Theme.primary.with-alpha(0.12);
+
+            Text {
+                text: "Drop the plugin file to install it";
+                color: Theme.primary;
+                font-size: 12px;
+            }
+        }
+    }
+
+    if PluginsUi.available.length > 0: SettingsCard {
+        title: "Available in the update folder";
+        description: "Plugin files that are not installed yet.";
+
+        for item[i] in PluginsUi.available: HorizontalLayout {
+            spacing: 8px;
+
+            VerticalLayout {
+                horizontal-stretch: 1;
+
+                Text {
+                    text: item.name + "  " + item.version;
+                    color: Theme.text;
+                    font-size: 12px;
+                    font-weight: 700;
+                }
+
+                Text {
+                    text: item.description;
+                    color: Theme.text-muted;
+                    font-size: 11px;
+                    overflow: elide;
+                }
+            }
+
+            IconButton {
+                icon: IconId.plugin-install;
+                tooltip: "Install " + item.name + " " + item.version;
+                clicked => { PluginsUi.install-available(i); }
+            }
+        }
+    }
+
+    SettingsCard {
+        title: "Development folders";
+        description: "Plugin folders loaded straight from their build (a plugin.toml whose wasm points to the build output). A new build reloads the plugin by itself.";
+
+        for folder[i] in PluginsUi.dev-folders: HorizontalLayout {
+            spacing: 8px;
+
+            AppIcon {
+                y: 2px;
+                size: 14px;
+                icon: IconId.plugin-dev;
+                color: Theme.primary;
+            }
+
+            Text {
+                horizontal-stretch: 1;
+                text: folder;
+                color: Theme.text;
+                font-size: 12px;
+                overflow: elide;
+                vertical-alignment: center;
+            }
+
+            IconButton {
+                icon: IconId.job-remove;
+                hold: true;
+                tooltip: "Disconnect this folder (its files stay)";
+                clicked => { PluginsUi.remove-dev(i); }
+            }
+        }
+
+        HorizontalLayout {
+            alignment: start;
+
+            IconButton {
+                icon: IconId.folder-add;
+                text: "Add development folder";
+                tooltip: "Choose a plugin's folder (the one with its plugin.toml)";
+                clicked => { PluginsUi.add-dev(); }
+            }
+        }
+    }
+}
+
+// One plugin's page: RustCut's card about the plugin first, then the plugin's own cards.
+export component SettingsPluginPage inherits VerticalLayout {
+    spacing: 16px;
+
+    for card in PluginsUi.cards: SettingsCard {
+        title: card.title;
+        description: card.description;
+
+        for block in card.blocks: VerticalLayout {
+            if !block.table: SettingsRow {
+                option: block.row;
+            }
+
+            if block.table: PluginTable {
+                block: block;
+            }
+        }
+    }
+}
