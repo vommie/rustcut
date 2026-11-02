@@ -74,8 +74,11 @@ pub struct Hooks {
     /// The plugins (Settings > Plugins and the plugins' pages, P12 block 8).
     pub plugins: Option<Rc<crate::ui::plugins::PluginsBridge>>,
     /// Every tag with its path, `None` while no tag tree arrived (the plugin pages' tag lists and checks).
-    pub tag_paths: Option<Box<dyn Fn() -> Option<Vec<(u32, Vec<String>)>>>>,
+    pub tag_paths: Option<TagPaths>,
 }
+
+/// Every tag with its path (the plugin pages' tag lists).
+pub type TagPaths = Box<dyn Fn() -> Option<Vec<(u32, Vec<String>)>>>;
 
 /// The answer of the connection test.
 pub type RustViewTest = tokio::sync::oneshot::Receiver<
@@ -508,7 +511,7 @@ impl SettingsBridge {
         if let Some(id) = sub {
             ui.set_resettable(true);
             self.publish_cards(&[]);
-            self.publish_plugin_page(&window, &id, &settings);
+            self.publish_plugin_page(window, &id, &settings);
             return;
         }
         ui.set_resettable(!catalog::cards(page).is_empty());
@@ -522,7 +525,7 @@ impl SettingsBridge {
             Special::Messages => self.publish_messages(&ui, &settings),
             Special::CropRatios => self.publish_ratios(&settings),
             Special::Diagnostics => self.publish_diagnostics(),
-            Special::Plugins => self.publish_plugins(&window, &settings),
+            Special::Plugins => self.publish_plugins(window, &settings),
             Special::None | Special::About => {}
         }
     }

@@ -2,6 +2,7 @@
 //! remove, switch, order, reload, development folders, details and statistics) and the plugin's settings, which its
 //! `plugin.toml` declares and RustCut draws with its own controls.
 
+mod drag;
 mod edit;
 mod files;
 mod page;
@@ -57,6 +58,11 @@ pub struct PluginPages {
     check_serial: Cell<u64>,
     /// The plugins' pictures, by plugin id and icon.
     icons: RefCell<HashMap<(String, String), slint::Image>>,
+    /// The drag of a table's rows or of the plugin list, and the rows' shifts.
+    drag: RefCell<Option<drag::RowDrag>>,
+    shifts: Rc<VecModel<f32>>,
+    /// The list's rows (kept, so a refresh changes rows in place and a drag keeps its pointer).
+    rows: Rc<VecModel<crate::PluginItemView>>,
 }
 
 fn with<R: Default>(this: &Weak<SettingsBridge>, f: impl FnOnce(&SettingsBridge) -> R) -> R {
@@ -67,11 +73,11 @@ fn with<R: Default>(this: &Weak<SettingsBridge>, f: impl FnOnce(&SettingsBridge)
 pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     let ui = window.global::<PluginsUi<'_>>();
     let t = this.clone();
-    ui.on_toggle(move |id| with(&t, |b| b.plugin_toggle(&id)));
+    ui.on_toggle(move |key| with(&t, |b| b.plugin_toggle(view::key_id(&key))));
     let t = this.clone();
     ui.on_expand(move |id| with(&t, |b| b.plugin_expand(&id)));
     let t = this.clone();
-    ui.on_move(move |id, delta| with(&t, |b| b.plugin_move(&id, delta)));
+    ui.on_move(move |key, delta| with(&t, |b| b.plugin_move(view::key_id(&key), delta)));
     let t = this.clone();
     ui.on_install(move || with(&t, SettingsBridge::plugin_install_dialog));
     let t = this.clone();
@@ -83,19 +89,31 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     let t = this.clone();
     ui.on_install_available(move |index| with(&t, |b| b.plugin_install_available(index)));
     let t = this.clone();
-    ui.on_update(move |id| with(&t, |b| b.plugin_update(&id)));
+    ui.on_update(move |key| with(&t, |b| b.plugin_update(&key)));
     let t = this.clone();
-    ui.on_reload(move |id| with(&t, |b| b.plugin_reload(&id)));
+    ui.on_reload(move |key| with(&t, |b| b.plugin_reload(view::key_id(&key))));
     let t = this.clone();
     ui.on_open_folder(move |id| with(&t, |b| b.plugin_open_folder(&id)));
     let t = this.clone();
     ui.on_remove(move |id| with(&t, |b| b.plugin_remove(&id)));
     let t = this.clone();
-    ui.on_export_settings(move |id| with(&t, |b| b.plugin_export(&id)));
+    ui.on_export_settings(move |key| with(&t, |b| b.plugin_export(view::key_id(&key))));
     let t = this.clone();
-    ui.on_import_settings(move |id| with(&t, |b| b.plugin_import(&id)));
+    ui.on_import_settings(move |key| with(&t, |b| b.plugin_import(view::key_id(&key))));
     let t = this.clone();
-    ui.on_open_page(move |id| with(&t, |b| b.show_page(PageRef::Plugin(id.to_string()))));
+    ui.on_open_page(move |key| with(&t, |b| b.show_page(PageRef::Plugin(view::key_id(&key).to_owned()))));
+    let t = this.clone();
+    ui.on_drag_start(move |key, row, pointer, pitch, height| {
+        with(&t, |b| {
+            if let Ok(row) = usize::try_from(row) {
+                b.plugin_drag_start(&key, row, pointer, pitch, height);
+            }
+        });
+    });
+    let t = this.clone();
+    ui.on_drag_move(move |pointer| with(&t, |b| b.plugin_drag_move(pointer)));
+    let t = this.clone();
+    ui.on_drag_end(move || with(&t, |b| b.plugin_drag_end(true)));
     edit::connect(this, &ui);
 }
 
@@ -124,8 +142,22 @@ impl SettingsBridge {
         self.hooks.borrow().plugins.clone()
     }
 
-    fn plugin_info(&self, id: &str) -> Option<PluginInfo> {
-        self.plugins()?.list().iter().find(|p| p.id == id).cloned()
+    /// The plugin of a row's key, or of a plain id (then the one that is not shadowed).
+    fn plugin_info(&self, key: &str) -> Option<PluginInfo> {
+        let list = self.plugins()?.list();
+        if key.contains('|') {
+            return list.iter().find(|p| view::row_key(p) == key).cloned();
+        }
+        let mut same = list.iter().filter(|p| p.id == key);
+        let first = same.next().cloned();
+        same.find(|p| p.state != rustcut_core::plugins::PluginState::Shadowed)
+            .cloned()
+            .filter(|_| {
+                first
+                    .as_ref()
+                    .is_some_and(|f| f.state == rustcut_core::plugins::PluginState::Shadowed)
+            })
+            .or(first)
     }
 
     fn plugin_command(&self, command: PluginCommand) {
@@ -153,7 +185,8 @@ impl SettingsBridge {
                 item
             })
             .collect();
-        ui.set_plugins(ModelRc::new(VecModel::from(items)));
+        crate::util::model::sync(&self.plugin_pages.rows, items);
+        ui.set_plugins(ModelRc::from(Rc::clone(&self.plugin_pages.rows)));
         let folders: Vec<slint::SharedString> = settings
             .plugins
             .dev_folders
@@ -228,10 +261,11 @@ impl SettingsBridge {
 
     /// Moves a plugin up (`delta` -1) or down in the order (the order lists every plugin then).
     fn plugin_move(&self, id: &str, delta: i32) {
-        let ids: Vec<String> = self
+        let mut ids: Vec<String> = self
             .plugins()
             .map(|p| p.list().iter().map(|i| i.id.clone()).collect())
             .unwrap_or_default();
+        ids.dedup();
         let Some(from) = ids.iter().position(|i| i == id) else {
             return;
         };
@@ -272,13 +306,13 @@ impl SettingsBridge {
     fn plugin_remove(&self, id: &str) {
         let Some(info) = self.plugin_info(id) else { return };
         if info.source == Source::Development {
-            let dir = info.dir.clone();
+            let dir = info.dir;
             self.update(|s| s.plugins.dev_folders.retain(|f| *f != dir));
             return;
         }
         let Some(plugins) = self.plugins() else { return };
         let handle = plugins.service().handle.clone();
-        let (id, name) = (id.to_owned(), info.name().to_owned());
+        let (id, name) = (info.id.clone(), info.name().to_owned());
         let removing = self
             .runtime
             .spawn(async move { handle.request(|reply| PluginCommand::Remove { id, reply }).await });
@@ -340,8 +374,7 @@ impl SettingsBridge {
             b.plugin_pages.checking.set(false);
             let updates = b
                 .plugins()
-                .map(|p| p.list().iter().filter(|i| i.update.is_some()).count())
-                .unwrap_or(0);
+                .map_or(0, |p| p.list().iter().filter(|i| i.update.is_some()).count());
             let text = match (updates, available.len()) {
                 (0, 0) => "Every plugin is up to date".to_owned(),
                 (u, a) => format!("{u} update(s), {a} new plugin(s) in the update folder"),

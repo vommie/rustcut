@@ -22,9 +22,12 @@ impl SettingsBridge {
         let Some(plugins) = self.hooks.borrow().plugins.clone() else {
             return Vec::new();
         };
+        // One page per id: an installed plugin and a development folder with the same id share their settings.
+        let mut seen = std::collections::HashSet::new();
         plugins
             .list()
             .iter()
+            .filter(|plugin| seen.insert(plugin.id.clone()))
             .map(|plugin| SubPage {
                 page: PageRef::Plugin(plugin.id.clone()),
                 title: plugin.name().to_owned(),

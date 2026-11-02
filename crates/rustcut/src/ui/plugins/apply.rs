@@ -20,7 +20,7 @@ impl PluginsBridge {
         let mark = |reason: &str| PluginMark {
             id: id.to_owned(),
             plugin: outcome.name.clone(),
-            reason: reason.to_owned(),
+            reason: tidy(reason),
         };
         match action {
             Action::SetTarget { target, reason } => {
@@ -90,6 +90,21 @@ impl PluginsBridge {
     }
 }
 
+/// The home folder written as `~` (plugins get absolute paths; the user typed `~`).
+fn tidy(text: &str) -> String {
+    match directories::BaseDirs::new() {
+        Some(dirs) => {
+            let home = dirs.home_dir().display().to_string();
+            if home.len() > 1 {
+                text.replace(&format!("{home}/"), "~/")
+            } else {
+                text.to_owned()
+            }
+        }
+        None => text.to_owned(),
+    }
+}
+
 /// A plugin's message, with its name in front.
 fn post(plugin: &str, notice: &PluginNotice) {
     let kind = match notice.place {
@@ -107,7 +122,7 @@ fn post(plugin: &str, notice: &PluginNotice) {
     };
     notices::post(
         Notice::new(kind, format!("{plugin}: {}", notice.title))
-            .detail(notice.detail.clone())
+            .detail(tidy(&notice.detail))
             .level(level),
     );
 }

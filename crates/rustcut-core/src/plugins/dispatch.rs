@@ -11,7 +11,7 @@ use rustcut_plugin_host::types::{Action, Context, Event, LogLine, Target};
 use tokio::sync::{mpsc, oneshot};
 
 use super::{Outcome, PluginCommand};
-use crate::actor::{Handle, Reply};
+use crate::actor::Handle;
 
 /// How long past its own time limit a call may stay unanswered before the dispatcher stops waiting (the sandbox
 /// stops it at the limit; this only guards against a lost answer).
@@ -51,7 +51,7 @@ pub(super) struct Job {
     pub event: Event,
     pub context: Context,
     pub folders: Arc<BTreeMap<u32, PathBuf>>,
-    pub reply: Reply<Vec<Outcome>>,
+    pub outcomes: mpsc::UnboundedSender<Outcome>,
 }
 
 /// The dispatcher's loop; it ends when the actor drops the sender.
@@ -59,7 +59,6 @@ pub(super) async fn run(mut jobs: mpsc::UnboundedReceiver<Job>, runners: Runners
     while let Some(job) = jobs.recv().await {
         let list = Arc::clone(&runners.lock());
         let mut context = job.context;
-        let mut outcomes = Vec::new();
         for runner in list.iter() {
             let (tx, rx) = oneshot::channel();
             runner.worker.handle(
@@ -92,7 +91,7 @@ pub(super) async fn run(mut jobs: mpsc::UnboundedReceiver<Job>, runners: Runners
                     apply(&mut context, action, &job.folders);
                 }
                 if !actions.is_empty() {
-                    outcomes.push(Outcome {
+                    let _ = job.outcomes.send(Outcome {
                         id: runner.id.clone(),
                         name: runner.name.clone(),
                         actions,
@@ -100,7 +99,6 @@ pub(super) async fn run(mut jobs: mpsc::UnboundedReceiver<Job>, runners: Runners
                 }
             }
         }
-        let _ = job.reply.send(outcomes);
     }
 }
 

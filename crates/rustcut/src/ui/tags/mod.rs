@@ -66,6 +66,9 @@ fn with_bridge(ui: &UiDispatcher, job: impl FnOnce(&Rc<TagsBridge>) + Send + 'st
     });
 }
 
+/// Hears the user's tag clicks (assigned or removed).
+type UserTagHook = Box<dyn Fn(u32, bool)>;
+
 /// Hears the "Active" switch.
 type ActiveHook = Box<dyn Fn(bool)>;
 
@@ -107,7 +110,7 @@ pub struct TagsBridge {
     /// Compact Mode (`rustview.compact_tree`).
     compact: Cell<bool>,
     /// Hears every tag the user assigns (`true`) or removes (`false`) in the panel (the plugins, P12 block 8).
-    on_user_tag: RefCell<Option<Box<dyn Fn(u32, bool)>>>,
+    on_user_tag: RefCell<Option<UserTagHook>>,
     /// The plugin that set the rating, for the mark at the rating bar.
     rating_mark: RefCell<Option<crate::ui::export::PluginMark>>,
 }

@@ -181,16 +181,7 @@ async fn install_dispatch_pause_reload_and_remove() {
 
     let dispatch = || async {
         let (event, context) = opened();
-        service
-            .handle
-            .request(|reply| PluginCommand::Dispatch {
-                event,
-                context,
-                folders: Arc::default(),
-                reply,
-            })
-            .await
-            .unwrap()
+        dispatch_all(&service.handle, event, context, Arc::default()).await
     };
     let outcomes = dispatch().await;
     assert_eq!(outcomes.len(), 1);

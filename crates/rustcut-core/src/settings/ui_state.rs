@@ -331,6 +331,8 @@ pub enum LogSource {
     RustView,
     /// The messages of this session (toasts, banners, the status line; M6.5).
     Messages,
+    /// The plugins' lines of this run (P12 block 8).
+    Plugins,
 }
 
 /// The Logs panel's filter.

@@ -110,18 +110,15 @@ impl Actor {
                 event,
                 context,
                 folders,
-                reply,
+                outcomes,
             } => {
-                let job = dispatch::Job {
-                    event,
-                    context,
-                    folders,
-                    reply,
-                };
-                if let Some(jobs) = &self.jobs
-                    && let Err(err) = jobs.send(job)
-                {
-                    let _ = err.0.reply.send(Vec::new());
+                if let Some(jobs) = &self.jobs {
+                    let _ = jobs.send(dispatch::Job {
+                        event,
+                        context,
+                        folders,
+                        outcomes,
+                    });
                 }
             }
             PluginCommand::Check { id, values, reply } => self.check(&id, &values, reply),
@@ -536,12 +533,17 @@ impl Actor {
             Ok(()) => tracing::info!("[Plugins] {id}: removed (its settings stay)"),
             Err(err) => tracing::warn!("[Plugins] {id}: not removed: {err}"),
         }
-        self.rescan(None).await;
+        self.rescan(Some(id.to_owned())).await;
         result
     }
 
     async fn check_updates(&mut self) -> Vec<Available> {
-        let Some(folder) = self.settings.update_folder.clone().filter(|f| !f.as_os_str().is_empty()) else {
+        let Some(folder) = self
+            .settings
+            .update_folder
+            .clone()
+            .filter(|f| !f.as_os_str().is_empty())
+        else {
             return Vec::new();
         };
         let offered = tokio::task::spawn_blocking(move || newest_files(&folder))

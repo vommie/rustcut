@@ -16,17 +16,29 @@ export component SettingsCard inherits Rectangle {
         padding: 12px;
         spacing: 10px;
 
-        if root.title != "" : Text {
-            text: root.title;
-            font-weight: 700;
-            color: Theme.primary;
+        // The title and the description start where the rows' labels start (a row pads 8px for its hover), so every
+        // text of a card has one left edge, also on wrapped lines.
+        if root.title != "" : HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+
+            Text {
+                text: root.title;
+                font-weight: 700;
+                color: Theme.primary;
+            }
         }
 
-        if root.description != "" : Text {
-            text: root.description;
-            font-size: 11px;
-            color: Theme.text-muted;
-            wrap: word-wrap;
+        if root.description != "" : HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+
+            Text {
+                text: root.description;
+                font-size: 11px;
+                color: Theme.text-muted;
+                wrap: word-wrap;
+            }
         }
 
         @children

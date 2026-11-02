@@ -23,6 +23,32 @@ pub use rustcut_plugin_host::types::{Action, Context, Event, Issue, Level, Notic
 use serde_json::{Map, Value};
 
 use crate::actor::{EventBus, Handle, Reply, mailbox};
+
+/// Collects every answer of one dispatched event (tests and simple callers).
+pub async fn dispatch_all(
+    handle: &Handle<PluginCommand>,
+    event: Event,
+    context: Context,
+    folders: Arc<BTreeMap<u32, PathBuf>>,
+) -> Vec<Outcome> {
+    let (outcomes, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    if handle
+        .send(PluginCommand::Dispatch {
+            event,
+            context,
+            folders,
+            outcomes,
+        })
+        .is_err()
+    {
+        return Vec::new();
+    }
+    let mut all = Vec::new();
+    while let Some(outcome) = rx.recv().await {
+        all.push(outcome);
+    }
+    all
+}
 use crate::settings::PluginSettings;
 
 /// The file name extension of plugin files (`rcplugin`).
@@ -174,12 +200,13 @@ pub enum PluginCommand {
         id: Option<String>,
     },
     /// Hands an event to every running plugin in order. `folders` maps target folder ids to paths, so a later
-    /// plugin's context shows an earlier one's target.
+    /// plugin's context shows an earlier one's target. Each plugin's answer goes to `outcomes` as soon as it is there
+    /// (a slow plugin never holds back the ones before it); the sender is dropped when the event is through.
     Dispatch {
         event: Event,
         context: Context,
         folders: Arc<BTreeMap<u32, PathBuf>>,
-        reply: Reply<Vec<Outcome>>,
+        outcomes: tokio::sync::mpsc::UnboundedSender<Outcome>,
     },
     /// Lets a plugin check settings being edited; `None` when it does not run.
     Check {

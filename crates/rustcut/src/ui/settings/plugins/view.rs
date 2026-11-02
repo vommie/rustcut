@@ -78,6 +78,16 @@ fn millis(time: std::time::Duration) -> String {
     format!("{:.1} ms", time.as_secs_f64() * 1000.0)
 }
 
+/// A row's key: the id and the folder, because an installed plugin and a development folder may share an id.
+pub fn row_key(info: &PluginInfo) -> String {
+    format!("{}|{}", info.id, info.dir.display())
+}
+
+/// The plugin id of a row's key (or of a plain id).
+pub fn key_id(key: &str) -> &str {
+    key.split_once('|').map_or(key, |(id, _)| id)
+}
+
 /// A plugin's row of the list.
 pub fn item(info: &PluginInfo, settings: &Settings, expanded: &HashSet<String>, icon: slint::Image) -> PluginItemView {
     let (state_text, state_kind) = state(&info.state);
@@ -89,7 +99,7 @@ pub fn item(info: &PluginInfo, settings: &Settings, expanded: &HashSet<String>, 
         })
         .collect();
     PluginItemView {
-        id: info.id.as_str().into(),
+        id: row_key(info).into(),
         name: info.name().into(),
         version: info
             .manifest
@@ -115,7 +125,7 @@ pub fn item(info: &PluginInfo, settings: &Settings, expanded: &HashSet<String>, 
             .map(|(v, _)| format!("Version {v} is available"))
             .unwrap_or_default()
             .into(),
-        expanded: expanded.contains(&info.id),
+        expanded: expanded.contains(&row_key(info)),
         details: ModelRc::new(VecModel::from(details)),
         can_remove: true,
         can_move_up: false,
@@ -134,7 +144,6 @@ pub struct Choices {
 
 impl Choices {
     pub fn new(tree: &FolderTree, tags: Option<Vec<(u32, Vec<String>)>>) -> Self {
-        let mut folders = vec![(0, SOURCE_NAME.to_owned())];
         fn walk(nodes: &[FolderNode], prefix: &str, out: &mut Vec<(u32, String)>) {
             for node in nodes {
                 let label = if prefix.is_empty() {
@@ -148,6 +157,7 @@ impl Choices {
                 walk(&node.children, &label, out);
             }
         }
+        let mut folders = vec![(0, SOURCE_NAME.to_owned())];
         walk(&tree.entries, "", &mut folders);
         let tags = tags.map(|list| list.into_iter().map(|(id, path)| (id, path.join(" › "))).collect());
         Self { folders, tags }
@@ -298,7 +308,7 @@ mod tests {
              [[cards.fields.columns]]\nkey = \"target\"\nlabel = \"Target\"\nkind = \"target\"\n",
         )
         .unwrap();
-        let folder = tree().folders().first().map(|n| n.id).unwrap_or(FolderId(1));
+        let folder = tree().folders().first().map_or(FolderId(1), |n| n.id);
         let choices = Choices::new(&tree(), Some(vec![(7, vec!["Nature".into(), "Water".into()])]));
         let values = json!({"rules": [{"tag": 7, "target": folder.0}, {"tag": 8, "target": 99}]});
         let fields: Vec<&Field> = manifest.fields().collect();

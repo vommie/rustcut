@@ -7,7 +7,8 @@ import { IconButton, UpDownButton } from "controls.slint";
 import { ToggleSwitch } from "toggle_switch.slint";
 import { SettingsCard } from "settings_card.slint";
 import { SettingsRow } from "settings_row.slint";
-import { PluginTable } from "settings_plugin_table.slint";
+import { PluginTable, RowGrip } from "settings_plugin_table.slint";
+import { DragGhost, DragMotion, DragState, DropGap } from "drag.slint";
 import { PluginItemView, PluginsUi } from "settings_plugin_types.slint";
 
 component StateText inherits Text {
@@ -23,6 +24,9 @@ component StateText inherits Text {
 component PluginRow inherits Rectangle {
     in property <PluginItemView> plugin;
     in property <int> index;
+    callback drag-started(/* window y */ length);
+    callback drag-moved(/* window y */ length);
+    callback drag-ended();
 
     background: touch.has-hover ? Theme.surface-hover : transparent;
     border-radius: 4px;
@@ -36,8 +40,30 @@ component PluginRow inherits Rectangle {
         padding: 6px;
         spacing: 6px;
 
+        // A collapsed row is 48px high (the drag of the list counts on it).
         HorizontalLayout {
+            height: 36px;
             spacing: 8px;
+
+            // The order: drag the grip, or use the arrows.
+            RowGrip {
+                drag-started(y) => { root.drag-started(y); }
+                drag-moved(y) => { root.drag-moved(y); }
+                drag-ended => { root.drag-ended(); }
+            }
+
+            VerticalLayout {
+                alignment: center;
+
+                UpDownButton {
+                    up-tooltip: "Run earlier (a later plugin sees the earlier ones' changes and wins)";
+                    down-tooltip: "Run later (a later plugin sees the earlier ones' changes and wins)";
+                    up-enabled: root.plugin.can-move-up;
+                    down-enabled: root.plugin.can-move-down;
+                    up => { PluginsUi.move(root.plugin.id, -1); }
+                    down => { PluginsUi.move(root.plugin.id, 1); }
+                }
+            }
 
             Image {
                 width: 24px;
@@ -109,15 +135,6 @@ component PluginRow inherits Rectangle {
                 overflow: elide;
             }
 
-            UpDownButton {
-                up-tooltip: "Run earlier (a later plugin sees the earlier ones' changes and wins)";
-                down-tooltip: "Run later (a later plugin sees the earlier ones' changes and wins)";
-                up-enabled: root.plugin.can-move-up;
-                down-enabled: root.plugin.can-move-down;
-                up => { PluginsUi.move(root.plugin.id, -1); }
-                down => { PluginsUi.move(root.plugin.id, 1); }
-            }
-
             VerticalLayout {
                 alignment: center;
 
@@ -136,7 +153,7 @@ component PluginRow inherits Rectangle {
         }
 
         if root.plugin.expanded: VerticalLayout {
-            padding-left: 32px;
+            padding-left: 90px;
             spacing: 6px;
 
             for detail in root.plugin.details: HorizontalLayout {
@@ -219,9 +236,62 @@ export component SettingsPlugins inherits VerticalLayout {
         description: PluginsUi.plugins.length == 0 ? "No plugin yet. Install a plugin file (.rcplugin) or drop one onto this page."
             : "They run from top to bottom: a later plugin sees what the earlier ones changed and wins. A click on a plugin shows its details.";
 
-        for plugin[i] in PluginsUi.plugins: PluginRow {
-            plugin: plugin;
-            index: i;
+        if PluginsUi.plugins.length > 0: plugin-area := Rectangle {
+            height: plugin-list.preferred-height;
+
+            property <bool> dragged-here: PluginsUi.dragging && PluginsUi.drag-key == "#plugins";
+            // The page scrolled under the pointer: the pointer is measured again (`DragState.scrolls`).
+            property <int> scrolls: DragState.scrolls;
+            changed scrolls => {
+                if self.dragged-here {
+                    PluginsUi.drag-move(DragState.pointer-y - plugin-list.absolute-position.y);
+                }
+            }
+
+            plugin-list := VerticalLayout {
+                width: parent.width;
+                alignment: start;
+                spacing: 2px;
+
+                for plugin[i] in PluginsUi.plugins: Rectangle {
+                    min-height: row.min-height;
+
+                    row := PluginRow {
+                        y: plugin-area.dragged-here && PluginsUi.drag-row == i ? 0px
+                            : plugin-area.dragged-here && i < PluginsUi.drag-shifts.length ? PluginsUi.drag-shifts[i] : 0px;
+                        animate y { duration: PluginsUi.drag-instant ? 0ms : DragMotion.shift; easing: ease-out; }
+                        width: parent.width;
+                        opacity: plugin-area.dragged-here && PluginsUi.drag-row == i ? 0 : 1;
+                        plugin: plugin;
+                        index: i;
+                        drag-started(y) => {
+                            DragState.pointer-y = y;
+                            PluginsUi.drag-start("#plugins", i, y - plugin-list.absolute-position.y, 50px, 48px);
+                        }
+                        drag-moved(y) => {
+                            DragState.pointer-y = y;
+                            PluginsUi.drag-move(y - plugin-list.absolute-position.y);
+                        }
+                        drag-ended => { PluginsUi.drag-end(); }
+                    }
+                }
+            }
+
+            if self.dragged-here: DropGap {
+                x: 0px;
+                y: PluginsUi.drag-gap-y;
+                width: parent.width;
+                height: Math.max(0px, PluginsUi.drag-gap-height - 2px);
+            }
+
+            if self.dragged-here: DragGhost {
+                x: 0px;
+                y: PluginsUi.drag-ghost-y;
+                width: parent.width;
+                height: 48px;
+                title: PluginsUi.drag-title;
+                detail: PluginsUi.drag-detail;
+            }
         }
 
         HorizontalLayout {

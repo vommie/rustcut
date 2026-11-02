@@ -69,6 +69,10 @@ fn found(issues: &[Issue], field: &str, row: Option<u32>) -> (String, i32) {
 
 impl SettingsBridge {
     pub(in crate::ui::settings) fn publish_plugin_page(&self, window: &SettingsWindow, id: &str, settings: &Settings) {
+        // A drag of a table's rows keeps the rows it holds; the page shows the new state when it ends.
+        if self.plugin_pages.drag.borrow().is_some() {
+            return;
+        }
         let ui = window.global::<PluginsUi<'_>>();
         let Some(info) = self.plugin_info(id) else {
             ui.set_cards(ModelRc::default());
@@ -81,7 +85,7 @@ impl SettingsBridge {
         let expanded = self.plugin_pages.expanded.borrow().clone();
         ui.set_current(view::item(&info, settings, &expanded, self.plugin_icon(&info)));
         let entry = settings.plugins.entry(id);
-        let mut cards = vec![self.host_card(&info, &entry)];
+        let mut cards = vec![Self::host_card(&info, &entry)];
         if let Some(manifest) = info.manifest.as_deref() {
             let values = values::effective(manifest, &entry.values);
             let choices = self.plugin_choices(settings);
@@ -109,7 +113,7 @@ impl SettingsBridge {
     }
 
     /// RustCut's card: the plugin's switch, its limits, its facts and what can be done with it.
-    fn host_card(&self, info: &PluginInfo, entry: &PluginEntry) -> PluginCardView {
+    fn host_card(info: &PluginInfo, entry: &PluginEntry) -> PluginCardView {
         let id = info.id.as_str();
         let facts = view::details(info)
             .into_iter()
@@ -205,6 +209,8 @@ fn field_block(
         columns,
         add_label,
         empty,
+        reorder_drag,
+        reorder_buttons,
     } = &field.kind
     {
         let rows = value.as_array().cloned().unwrap_or_default();
@@ -236,12 +242,29 @@ fn field_block(
             .collect();
         let column_views: Vec<PluginColumnView> = columns
             .iter()
-            .map(|c| PluginColumnView {
-                label: c.label.as_str().into(),
-                help: c.help.as_str().into(),
-                kind: cell_kind(&c.kind),
+            .map(|c| {
+                let (fixed, weight) = column_width(&c.kind);
+                PluginColumnView {
+                    label: c.label.as_str().into(),
+                    help: c.help.as_str().into(),
+                    kind: cell_kind(&c.kind),
+                    fixed,
+                    weight,
+                    marked: false,
+                }
             })
             .collect();
+        let mut column_views = column_views;
+        for (c, view) in column_views.iter_mut().enumerate() {
+            let key = columns
+                .get(c)
+                .map(|col| format!("{}.{}", field.key, col.key))
+                .unwrap_or_default();
+            view.marked = issues.iter().any(|i| i.field == key && i.row.is_some());
+        }
+        let row_marked = issues.iter().any(|i| i.field == field.key && i.row.is_some());
+        let fixed_total = column_views.iter().map(|c| c.fixed).sum();
+        let weight_total = column_views.iter().map(|c| c.weight).sum();
         return PluginBlockView {
             table: true,
             key: key.into(),
@@ -251,6 +274,11 @@ fn field_block(
             rows: ModelRc::new(VecModel::from(row_views)),
             add_label: add_label.as_str().into(),
             empty: empty.as_str().into(),
+            fixed_total,
+            weight_total,
+            row_marked,
+            reorder_drag: *reorder_drag,
+            reorder_buttons: *reorder_buttons,
             issue: found(issues, &field.key, None).0.into(),
             ..PluginBlockView::default()
         };
@@ -305,17 +333,28 @@ fn field_block(
     block(r)
 }
 
+/// A column's fixed width in logical pixels, or 0 and its share of the free width: folders and texts get the most.
+fn column_width(kind: &FieldKind) -> (f32, f32) {
+    match kind {
+        FieldKind::Switch { .. } => (72.0, 0.0),
+        FieldKind::Rating { .. } => (150.0, 0.0),
+        FieldKind::Path { .. } => (0.0, 3.0),
+        FieldKind::Text { .. } | FieldKind::Target | FieldKind::Tag => (0.0, 2.0),
+        FieldKind::Number { .. } | FieldKind::Table { .. } => (0.0, 1.0),
+        FieldKind::Choice { options, .. } => (0.0, if options.len() <= 3 { 1.2 } else { 1.6 }),
+    }
+}
+
 /// The cell kind of a column (0 text, 1 folder path, 2 switch, 3 choice, 4 target folder, 5 tag, 6 rating).
 fn cell_kind(kind: &FieldKind) -> i32 {
     match kind {
-        FieldKind::Text { .. } | FieldKind::Number { .. } => 0,
+        FieldKind::Text { .. } | FieldKind::Number { .. } | FieldKind::Table { .. } => 0,
         FieldKind::Path { .. } => 1,
         FieldKind::Switch { .. } => 2,
         FieldKind::Choice { .. } => 3,
         FieldKind::Target => 4,
         FieldKind::Tag => 5,
         FieldKind::Rating { .. } => 6,
-        FieldKind::Table { .. } => 0,
     }
 }
 

@@ -99,6 +99,13 @@ pub enum FieldKind {
         /// Shown while the table is empty.
         #[serde(default)]
         empty: String,
+        /// The user may reorder the rows by drag & drop: RustCut adds a grip to each row and does the rest (the
+        /// plugin only gets the rows in their new order).
+        #[serde(default)]
+        reorder_drag: bool,
+        /// Move-up and move-down buttons on each row (beside the grip or instead of it), also done by RustCut.
+        #[serde(default)]
+        reorder_buttons: bool,
     },
 }
 

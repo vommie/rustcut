@@ -161,6 +161,7 @@ impl LogsBridge {
                 LogSource::App => 1,
                 LogSource::RustView => 2,
                 LogSource::Messages => 3,
+                LogSource::Plugins => 4,
             });
             match source {
                 LogSource::Job => {}
@@ -177,6 +178,11 @@ impl LogsBridge {
                 LogSource::Messages => {
                     l.set_has_job(true);
                     l.set_title("Messages · this session".into());
+                    l.set_note("".into());
+                }
+                LogSource::Plugins => {
+                    l.set_has_job(true);
+                    l.set_title("Plugins · this run".into());
                     l.set_note("".into());
                 }
             }
@@ -388,6 +394,7 @@ fn connect(bridge: &Rc<LogsBridge>, window: &MainWindow) {
                 1 => LogSource::App,
                 2 => LogSource::RustView,
                 3 => LogSource::Messages,
+                4 => LogSource::Plugins,
                 _ => LogSource::Job,
             });
         }

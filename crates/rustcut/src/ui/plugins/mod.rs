@@ -41,6 +41,9 @@ fn with_bridge(ui: &UiDispatcher, job: impl FnOnce(&Rc<PluginsBridge>) + Send + 
     });
 }
 
+/// Opens a plugin's Settings page.
+type OpenPage = Box<dyn Fn(&str)>;
+
 pub struct PluginsBridge {
     ui: UiDispatcher,
     runtime: tokio::runtime::Handle,
@@ -49,12 +52,13 @@ pub struct PluginsBridge {
     tags: Weak<TagsBridge>,
     /// Counts the opened videos: an answer about an earlier one is dropped.
     generation: Cell<u64>,
-    /// The plugins as the service last reported them.
+    /// The plugins as the service last reported them, and whether it reported at all.
     list: RefCell<Arc<Vec<PluginInfo>>>,
+    listed: Cell<bool>,
     /// Told when the list changed (the Settings pages).
     listeners: RefCell<Vec<Box<dyn Fn()>>>,
     /// Opens a plugin's Settings page (set by the Settings window).
-    open_page: RefCell<Option<Box<dyn Fn(&str)>>>,
+    open_page: RefCell<Option<OpenPage>>,
 }
 
 impl PluginsBridge {
@@ -73,6 +77,7 @@ impl PluginsBridge {
             tags: Rc::downgrade(tags),
             generation: Cell::new(0),
             list: RefCell::new(Arc::new(Vec::new())),
+            listed: Cell::new(false),
             listeners: RefCell::new(Vec::new()),
             open_page: RefCell::new(None),
         });
@@ -142,42 +147,44 @@ impl PluginsBridge {
     }
 
     fn dispatch(&self, event: Event, context: Context) {
-        if self
-            .list
-            .borrow()
-            .iter()
-            .all(|p| p.state != rustcut_core::plugins::PluginState::Ready)
+        // Before the first list arrives the service is still loading; it takes the event after that, so it is sent.
+        if self.listed.get()
+            && self
+                .list
+                .borrow()
+                .iter()
+                .all(|p| p.state != rustcut_core::plugins::PluginState::Ready)
         {
             return;
         }
         let generation = self.generation.get();
         let folders: Arc<std::collections::BTreeMap<u32, PathBuf>> =
             Arc::new(self.export.upgrade().map(|e| e.folder_paths()).unwrap_or_default());
-        let handle = self.service.handle.clone();
+        let (outcomes, mut answers) = tokio::sync::mpsc::unbounded_channel();
+        if self
+            .service
+            .handle
+            .send(PluginCommand::Dispatch {
+                event,
+                context,
+                folders,
+                outcomes,
+            })
+            .is_err()
+        {
+            return;
+        }
         let ui = self.ui.clone();
-        let name = event.name();
         self.runtime.spawn(async move {
-            let Ok(outcomes) = handle
-                .request(|reply| PluginCommand::Dispatch {
-                    event,
-                    context,
-                    folders,
-                    reply,
-                })
-                .await
-            else {
-                return;
-            };
-            if outcomes.is_empty() {
-                return;
+            while let Some(outcome) = answers.recv().await {
+                with_bridge(&ui, move |bridge| {
+                    if bridge.generation.get() == generation {
+                        bridge.apply(std::slice::from_ref(&outcome));
+                    } else {
+                        tracing::debug!("[Plugins] {}: an answer about an earlier video; dropped", outcome.id);
+                    }
+                });
             }
-            with_bridge(&ui, move |bridge| {
-                if bridge.generation.get() == generation {
-                    bridge.apply(&outcomes);
-                } else {
-                    tracing::debug!("[Plugins] The answers to {name} are about an earlier video; dropped");
-                }
-            });
         });
     }
 
@@ -204,6 +211,7 @@ impl PluginsBridge {
 
     fn changed(&self, list: Arc<Vec<PluginInfo>>) {
         self.list.replace(list);
+        self.listed.set(true);
         for listener in self.listeners.borrow().iter() {
             listener();
         }

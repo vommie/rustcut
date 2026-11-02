@@ -121,11 +121,15 @@ pub fn expand_home(manifest: &Manifest, values: &mut Map<String, Value>, home: &
 
 fn expand_level(fields: &[&Field], values: &mut Map<String, Value>, home: &std::path::Path) {
     for field in fields {
-        let Some(value) = values.get_mut(&field.key) else { continue };
+        let Some(value) = values.get_mut(&field.key) else {
+            continue;
+        };
         match &field.kind {
             FieldKind::Path { .. } => {
                 if let Some(text) = value.as_str()
-                    && let Some(rest) = text.strip_prefix('~').filter(|rest| rest.is_empty() || rest.starts_with('/'))
+                    && let Some(rest) = text
+                        .strip_prefix('~')
+                        .filter(|rest| rest.is_empty() || rest.starts_with('/'))
                 {
                     *value = Value::String(format!("{}{rest}", home.display()));
                 }
@@ -275,7 +279,12 @@ mod tests {
 
     #[test]
     fn home_is_expanded_in_path_fields_only() {
-        let mut values = effective(&manifest(), json!({"rules": [{"source": "~/Videos"}, {"source": "~user/x"}]}).as_object().unwrap());
+        let mut values = effective(
+            &manifest(),
+            json!({"rules": [{"source": "~/Videos"}, {"source": "~user/x"}]})
+                .as_object()
+                .unwrap(),
+        );
         expand_home(&manifest(), &mut values, std::path::Path::new("/home/me"));
         assert_eq!(values["rules"][0]["source"], json!("/home/me/Videos"));
         assert_eq!(values["rules"][1]["source"], json!("~user/x"));

@@ -62,6 +62,11 @@ export struct PluginColumnView {
     label: string,
     help: string,
     kind: int,
+    // A column of fixed width (switch, rating), or 0 and its share of the rest.
+    fixed: length,
+    weight: float,
+    // A cell of this column has a finding: the column keeps room for the marks, so its fields line up.
+    marked: bool,
 }
 
 // A part of a card: one option row, or a table.
@@ -75,6 +80,15 @@ export struct PluginBlockView {
     rows: [PluginTableRowView],
     add-label: string,
     empty: string,
+    // The sum of the fixed widths and of the weights of the columns.
+    fixed-total: length,
+    weight-total: float,
+    // A row has a finding: the rows keep room for the marks.
+    row-marked: bool,
+    // The rows can be dragged to another place (a grip), and moved with buttons (`plugin.toml`: reorder_drag,
+    // reorder_buttons).
+    reorder-drag: bool,
+    reorder-buttons: bool,
     // A finding about the whole table.
     issue: string,
 }
@@ -110,6 +124,23 @@ export global PluginsUi {
     callback export-settings(/* id */ string);
     callback import-settings(/* id */ string);
     callback open-page(/* id */ string);
+
+    // Drag & drop of a table's rows and of the plugin list (key "#plugins"), the program's scheme (`drag.slint`): the
+    // rows' shifts, the gap where the row lands, the ghost under the pointer; the page scrolls near its edges.
+    in property <bool> dragging;
+    in property <string> drag-key;
+    in property <int> drag-row;
+    in property <[length]> drag-shifts;
+    in property <bool> drag-instant;
+    in property <length> drag-gap-y;
+    in property <length> drag-gap-height;
+    in property <length> drag-ghost-y;
+    in property <string> drag-title;
+    in property <string> drag-detail;
+    // The pointer in the list's coordinates (0 = the top of the first row).
+    callback drag-start(/* key */ string, /* row */ int, /* pointer */ length, /* pitch */ length, /* height */ length);
+    callback drag-move(/* pointer */ length);
+    callback drag-end();
 
     // One plugin's page: its cards (the first is RustCut's "Plugin" card).
     in property <PluginItemView> current;

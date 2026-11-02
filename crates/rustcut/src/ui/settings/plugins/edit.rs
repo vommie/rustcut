@@ -67,6 +67,7 @@ enum RowEdit {
     Add,
     Remove(i32),
     Move(i32, i32),
+    MoveTo(usize, usize),
 }
 
 /// The new value of `field` after `edit`, or why it is refused.
@@ -88,7 +89,7 @@ fn edited(field: &Field, old: &Value, edit: Edit, choices: &Choices) -> Result<V
                     .trim()
                     .replace(',', ".")
                     .parse::<f64>()
-                    .map_err(|_| format!("{} must be a number between {min} and {max}", field.label))?,
+                    .map_err(|err| format!("{} must be a number between {min} and {max} ({err})", field.label))?,
                 Edit::Step(steps) => old.as_f64().unwrap_or_default() + f64::from(steps) * step,
                 _ => return Err(String::new()),
             };
@@ -153,7 +154,7 @@ impl SettingsBridge {
                 Edit::Type(text) => text
                     .trim()
                     .parse::<i64>()
-                    .map_err(|_| format!("A whole number between {} and {}", range.start(), range.end()))?,
+                    .map_err(|err| format!("A whole number between {} and {} ({err})", range.start(), range.end()))?,
                 Edit::Step(steps) => i64::from(value) + i64::from(steps) * by,
                 _ => return Ok(value),
             };
@@ -328,6 +329,12 @@ impl SettingsBridge {
                     rows.remove(r);
                 }
             }
+            RowEdit::MoveTo(from, to) => {
+                if from < rows.len() && to < rows.len() {
+                    let row = rows.remove(from);
+                    rows.insert(to, row);
+                }
+            }
             RowEdit::Move(r, delta) => {
                 let from = index(r);
                 let to = from.and_then(|f| if delta < 0 { f.checked_sub(1) } else { Some(f + 1) });
@@ -340,6 +347,27 @@ impl SettingsBridge {
             }
         }
         self.store_value(&key.id, &field.key, Value::Array(rows));
+    }
+
+    /// A table's rows as the page shows them.
+    pub(super) fn plugin_table_rows(&self, key: &PluginKey) -> Vec<Value> {
+        let Some(info) = self.plugin_info(&key.id) else {
+            return Vec::new();
+        };
+        let Some(manifest) = manifest(&info) else {
+            return Vec::new();
+        };
+        let current = values::effective(manifest, &self.writer.current().plugins.entry(&key.id).values);
+        current
+            .get(&key.field)
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// A dropped row of a table.
+    pub(super) fn plugin_rows_move_to(&self, key: &str, from: usize, to: usize) {
+        self.plugin_rows(key, RowEdit::MoveTo(from, to));
     }
 
     /// Writes one value of a plugin (the other stored values, also unknown ones, stay) and checks again.
@@ -362,7 +390,7 @@ impl SettingsBridge {
     pub(in crate::ui::settings) fn request_plugin_check(&self, id: &str) {
         let Some(plugins) = self.plugins() else { return };
         let Some(info) = self.plugin_info(id) else { return };
-        let Some(manifest) = info.manifest.clone() else { return };
+        let Some(manifest) = info.manifest else { return };
         let settings = self.writer.current();
         let stored = settings.plugins.entry(id).values;
         let current = values::effective(&manifest, &stored);

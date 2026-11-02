@@ -138,7 +138,7 @@ impl PageState {
     pub fn slot(&mut self, page: &PageRef) -> usize {
         match page {
             PageRef::Fixed(page) => page.index(),
-            sub => {
+            sub @ PageRef::Plugin(_) => {
                 let at = self.extra_slots.iter().position(|p| p == sub).unwrap_or_else(|| {
                     self.extra_slots.push(sub.clone());
                     self.extra_slots.len() - 1

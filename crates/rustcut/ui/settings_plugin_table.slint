@@ -1,6 +1,6 @@
 // A table of a plugin's settings (P12 block 8): rules as rows of the same columns. The header explains each column in
 // its tooltip; a row with a finding (a conflict, a tag that no longer exists) shows a warning mark whose tooltip says
-// what and why. Rows move with the arrows and are deleted with a held button.
+// what and why. Rows move by drag & drop and with buttons where the plugin allows it, and are deleted with a held button.
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId } from "icons.slint";
@@ -8,7 +8,8 @@ import { TooltipArea } from "tooltip.slint";
 import { ChoiceButton, IconButton, NumberField, UpDownButton } from "controls.slint";
 import { ToggleSwitch } from "toggle_switch.slint";
 import { RatingBar } from "rating_bar.slint";
-import { PluginBlockView, PluginCellView, PluginsUi } from "settings_plugin_types.slint";
+import { DragArea, DragGhost, DragMotion, DragState, DropGap } from "drag.slint";
+import { PluginBlockView, PluginCellView, PluginTableRowView, PluginsUi } from "settings_plugin_types.slint";
 
 // One cell; its control follows the column's kind.
 component PluginCell inherits HorizontalLayout {
@@ -16,13 +17,17 @@ component PluginCell inherits HorizontalLayout {
     in property <string> table;
     in property <int> row-index;
     in property <int> column;
+    // The column has a finding in some row: every cell keeps room for the mark.
+    in property <bool> marked;
 
     spacing: 2px;
-    alignment: start;
+
+    // The field takes the column's width; a folder's browse button and the marks' room stand beside it.
+    property <length> marks: (root.cell.kind == 1 ? 30px : 0px) + (root.marked ? 18px : 0px);
 
     if root.cell.kind == 0 || root.cell.kind == 1: NumberField {
-        horizontal-stretch: 1;
-        min-width: 80px;
+        width: Math.max(40px, root.width - root.marks);
+        spin: false;
         text: root.cell.text;
         placeholder: root.cell.placeholder;
         enabled: root.cell.enabled;
@@ -54,8 +59,7 @@ component PluginCell inherits HorizontalLayout {
     }
 
     if root.cell.kind == 3 || root.cell.kind == 4 || root.cell.kind == 5: ChoiceButton {
-        horizontal-stretch: 1;
-        min-width: 80px;
+        width: Math.max(40px, root.width - root.marks);
         stretch-fully: true;
         items: root.cell.items;
         current: root.cell.index;
@@ -71,11 +75,11 @@ component PluginCell inherits HorizontalLayout {
         rating-selected(stars) => { PluginsUi.cell-rate(root.table, root.row-index, root.column, stars); }
     }
 
-    if root.cell.issue != "": TooltipArea {
+    if root.marked: TooltipArea {
         width: 16px;
         text: root.cell.issue;
 
-        AppIcon {
+        if root.cell.issue != "": AppIcon {
             y: (parent.height - self.height) / 2;
             size: 14px;
             icon: IconId.status-warning;
@@ -84,29 +88,62 @@ component PluginCell inherits HorizontalLayout {
     }
 }
 
+// The grip of a row that can be dragged: a press on it that moves starts the drag (`DragArea`); while the pointer rests
+// on it the page does not scroll (`DragState.holding`).
+export component RowGrip inherits Rectangle {
+    callback drag-started(/* window y */ length);
+    callback drag-moved(/* window y */ length);
+    callback drag-ended();
+
+    width: 14px;
+
+    AppIcon {
+        size: 14px;
+        icon: IconId.drag-grip;
+        color: grip-area.has-hover || grip-area.pressed ? Theme.text : Theme.text-muted;
+    }
+
+    grip-area := DragArea {
+        mouse-cursor: MouseCursor.grab;
+        drag-started(y) => { root.drag-started(y); }
+        drag-moved(y) => { root.drag-moved(y); }
+        drag-ended => { root.drag-ended(); }
+    }
+}
+
 export component PluginTable inherits VerticalLayout {
     in property <PluginBlockView> block;
 
-    // The marks, the arrows and the delete button at the right end of each row (with their spacing).
-    property <length> tools-width: 6px + 16px + 6px + 22px + 6px + 28px;
+    // In front of the cells: the grip and the move buttons (when the plugin allows them).
+    property <length> lead-width: (root.block.reorder-drag ? 14px + 6px : 0px) + (root.block.reorder-buttons ? 22px + 6px : 0px);
+    // Behind the cells: the row's marks and the delete button (with their spacing).
+    property <length> tools-width: (root.block.row-marked ? 6px + 16px : 0px) + 6px + 28px;
+    // What the columns without a fixed width share (a row's padding is 4px on each side, its spacing 6px).
+    property <length> free: Math.max(0px, root.width - 8px - 2px - root.lead-width - root.tools-width
+        - Math.max(0, root.block.columns.length - 1) * 6px - root.block.fixed-total);
+    property <bool> dragged-here: PluginsUi.dragging && PluginsUi.drag-key == root.block.key;
+    property <length> row-height: 34px;
+
+    pure function column-width(fixed: length, weight: float) -> length {
+        return fixed > 0 ? fixed : root.free * weight / Math.max(0.01, root.block.weight-total);
+    }
 
     spacing: 4px;
 
     // The header: each column's label, its help in the tooltip.
     header := HorizontalLayout {
         spacing: 6px;
-        padding-left: 4px;
-        padding-right: root.tools-width + 4px;
+        padding-left: 5px + root.lead-width;
+        alignment: start;
 
         for column in root.block.columns: TooltipArea {
-            horizontal-stretch: column.kind == 2 || column.kind == 6 ? 0 : 1;
-            min-width: column.kind == 2 ? 60px : column.kind == 6 ? 150px : 90px;
-            max-width: column.kind == 2 ? 60px : column.kind == 6 ? 150px : 100000px;
+            width: root.column-width(column.fixed, column.weight);
             height: 20px;
             text: column.help;
 
             Text {
                 x: 0;
+                width: parent.width;
                 text: column.label;
                 color: Theme.text-muted;
                 font-size: 11px;
@@ -123,55 +160,111 @@ export component PluginTable inherits VerticalLayout {
         wrap: word-wrap;
     }
 
-    for row[r] in root.block.rows: Rectangle {
-        background: Theme.background;
-        border-radius: 4px;
-        border-width: 1px;
-        border-color: row.issue-level == 2 ? Theme.status-corrupt : Theme.border;
-        min-height: line.min-height;
+    if root.block.rows.length > 0: list-area := Rectangle {
+        height: list.preferred-height;
 
-        line := HorizontalLayout {
-            padding: 4px;
-            spacing: 6px;
-
-            for cell[c] in row.cells: PluginCell {
-                horizontal-stretch: cell.kind == 2 || cell.kind == 6 ? 0 : 1;
-                min-width: cell.kind == 2 ? 60px : cell.kind == 6 ? 150px : 90px;
-                max-width: cell.kind == 2 ? 60px : cell.kind == 6 ? 150px : 100000px;
-                cell: cell;
-                table: root.block.key;
-                row-index: r;
-                column: c;
+        // The page scrolled under the pointer: the pointer is measured again (`DragState.scrolls`).
+        property <int> scrolls: DragState.scrolls;
+        changed scrolls => {
+            if root.dragged-here {
+                PluginsUi.drag-move(DragState.pointer-y - list.absolute-position.y);
             }
+        }
 
-            TooltipArea {
-                width: 16px;
-                text: row.issue;
+        list := VerticalLayout {
+            width: parent.width;
+            alignment: start;
+            spacing: 4px;
 
-                if row.issue != "": AppIcon {
-                    y: (parent.height - self.height) / 2;
-                    size: 14px;
-                    icon: row.issue-level == 2 ? IconId.status-error : IconId.status-warning;
-                    color: row.issue-level == 2 ? Theme.status-corrupt : Theme.accent;
+            for row[r] in root.block.rows: Rectangle {
+                height: root.row-height;
+
+                Rectangle {
+                    y: root.dragged-here && PluginsUi.drag-row == r ? 0px
+                        : root.dragged-here && r < PluginsUi.drag-shifts.length ? PluginsUi.drag-shifts[r] : 0px;
+                    animate y { duration: PluginsUi.drag-instant ? 0ms : DragMotion.shift; easing: ease-out; }
+                    height: parent.height;
+                    opacity: root.dragged-here && PluginsUi.drag-row == r ? 0 : 1;
+                    background: Theme.background;
+                    border-radius: 4px;
+                    border-width: 1px;
+                    border-color: row.issue-level == 2 ? Theme.status-corrupt : Theme.border;
+
+                    line := HorizontalLayout {
+                        padding: 4px;
+                        spacing: 6px;
+
+                        if root.block.reorder-drag: RowGrip {
+                            drag-started(y) => {
+                                DragState.pointer-y = y;
+                                PluginsUi.drag-start(root.block.key, r, y - list.absolute-position.y,
+                                    root.row-height + 4px, root.row-height);
+                            }
+                            drag-moved(y) => {
+                                DragState.pointer-y = y;
+                                PluginsUi.drag-move(y - list.absolute-position.y);
+                            }
+                            drag-ended => { PluginsUi.drag-end(); }
+                        }
+
+                        if root.block.reorder-buttons: UpDownButton {
+                            up-tooltip: "Move the rule up";
+                            down-tooltip: "Move the rule down";
+                            up-enabled: r > 0;
+                            down-enabled: r < root.block.rows.length - 1;
+                            up => { PluginsUi.row-move(root.block.key, r, -1); }
+                            down => { PluginsUi.row-move(root.block.key, r, 1); }
+                        }
+
+                        for cell[c] in row.cells: PluginCell {
+                            width: root.column-width(root.block.columns[c].fixed, root.block.columns[c].weight);
+                            cell: cell;
+                            marked: root.block.columns[c].marked;
+                            table: root.block.key;
+                            row-index: r;
+                            column: c;
+                        }
+
+                        if root.block.row-marked: TooltipArea {
+                            width: 16px;
+                            text: row.issue;
+
+                            if row.issue != "": AppIcon {
+                                y: (parent.height - self.height) / 2;
+                                size: 14px;
+                                icon: row.issue-level == 2 ? IconId.status-error : IconId.status-warning;
+                                color: row.issue-level == 2 ? Theme.status-corrupt : Theme.accent;
+                            }
+                        }
+
+                        IconButton {
+                            width: 28px;
+                            icon: IconId.job-remove;
+                            hold: true;
+                            tooltip: "Delete this rule";
+                            clicked => { PluginsUi.row-remove(root.block.key, r); }
+                        }
+                    }
                 }
             }
+        }
 
-            UpDownButton {
-                up-tooltip: "Move the rule up";
-                down-tooltip: "Move the rule down";
-                up-enabled: r > 0;
-                down-enabled: r < root.block.rows.length - 1;
-                up => { PluginsUi.row-move(root.block.key, r, -1); }
-                down => { PluginsUi.row-move(root.block.key, r, 1); }
-            }
+        // Where the dragged row would land (the other rows moved aside).
+        if root.dragged-here: DropGap {
+            x: 0px;
+            y: PluginsUi.drag-gap-y;
+            width: parent.width;
+            height: Math.max(0px, PluginsUi.drag-gap-height - 4px);
+        }
 
-            IconButton {
-                width: 28px;
-                icon: IconId.job-remove;
-                hold: true;
-                tooltip: "Delete this rule";
-                clicked => { PluginsUi.row-remove(root.block.key, r); }
-            }
+        // The dragged row under the pointer.
+        if root.dragged-here: DragGhost {
+            x: 0px;
+            y: PluginsUi.drag-ghost-y;
+            width: parent.width;
+            height: root.row-height;
+            title: PluginsUi.drag-title;
+            detail: PluginsUi.drag-detail;
         }
     }
 

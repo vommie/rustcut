@@ -28,6 +28,9 @@ use crate::ui::player::PlayerBridge;
 use crate::ui::probe::ProbeBridge;
 use crate::{MainWindow, Playback};
 
+/// Hears every opened file (see `FileOpener::on_opened`).
+type OpenedHook = Box<dyn Fn(&Path, bool)>;
+
 pub struct FileOpener {
     window: slint::Weak<MainWindow>,
     player: Weak<PlayerBridge>,
@@ -43,7 +46,7 @@ pub struct FileOpener {
     drops: RefCell<DropTracker>,
     /// Hears every opened file after it opened, with whether RustCut itself opened it (a loaded job), once a loaded
     /// job's own values are in place (the plugins, P12 block 8).
-    on_opened: RefCell<Option<Box<dyn Fn(&Path, bool)>>>,
+    on_opened: RefCell<Option<OpenedHook>>,
 }
 
 /// Where a file opened by RustCut itself starts (a job loaded into the editor: its first section, user decision Q-P8).
