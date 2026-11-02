@@ -2,4 +2,4 @@
 
 mod relocate;
 
-pub use relocate::{Method, RelocateError, needs_copy, relocate, temp_path};
+pub use relocate::{Interrupted, Method, RelocateError, needs_copy, relocate, settle_interrupted, temp_path};

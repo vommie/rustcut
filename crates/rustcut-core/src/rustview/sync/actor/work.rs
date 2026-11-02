@@ -39,6 +39,21 @@ where
                     let _ = reply.send(answer);
                     Answer::Lookup(error)
                 }),
+                Request::MoveRecord {
+                    from,
+                    to,
+                    replace,
+                    reply,
+                } => Box::pin(async move {
+                    let answer = client.move_media(&from, &to, replace).await;
+                    match &answer {
+                        Ok(moved) => tracing::info!(action = ?moved.action, "[RustView] Record moved"),
+                        Err(e) => tracing::warn!(error = %e, "[RustView] The record could not be moved"),
+                    }
+                    let error = answer.as_ref().err().cloned();
+                    let _ = reply.send(answer);
+                    Answer::Lookup(error)
+                }),
             });
         }
         if self.want_tree {

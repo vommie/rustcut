@@ -274,6 +274,53 @@ fn copy_verified(
     Ok(done)
 }
 
+/// Where a move stands that a crash or a kill cut short.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Interrupted {
+    /// The original is there (and the target is not, or differs): move it again.
+    Again,
+    /// The file is at the target (the original was removed, or it is an equal copy, which is removed now).
+    Done,
+    /// Neither file exists.
+    Missing,
+}
+
+/// Settles a move that was cut short: its partial copy goes, an equal finished copy counts as moved. Blocking.
+pub fn settle_interrupted(source: &Path, target: &Path) -> Interrupted {
+    let temp = temp_path(target);
+    if temp.symlink_metadata().is_ok() {
+        match std::fs::remove_file(&temp) {
+            Ok(()) => tracing::info!("[Move] The partial copy of an interrupted move was removed"),
+            Err(e) => tracing::warn!(error = %e, "[Move] The partial copy of an interrupted move cannot be removed"),
+        }
+    }
+    match (source.is_file(), target.is_file()) {
+        (true, false) => Interrupted::Again,
+        (false, true) => Interrupted::Done,
+        (false, false) => Interrupted::Missing,
+        (true, true) if same_file(source, target) => Interrupted::Done,
+        (true, true) => {
+            if checksum(source).is_some_and(|a| checksum(target).is_some_and(|b| a == b)) {
+                match std::fs::remove_file(source) {
+                    Ok(()) => Interrupted::Done,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "[Move] The original of a finished copy cannot be removed");
+                        Interrupted::Done
+                    }
+                }
+            } else {
+                Interrupted::Again
+            }
+        }
+    }
+}
+
+fn checksum(path: &Path) -> Option<blake3::Hash> {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update_reader(File::open(path).ok()?).ok()?;
+    Some(hasher.finalize())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -403,6 +450,29 @@ mod tests {
             "{result:?}"
         );
         assert!(a.exists() && !b.exists() && !temp_path(&b).exists());
+    }
+
+    #[test]
+    fn interrupted_moves_settle() {
+        let dir = tempfile::tempdir().unwrap();
+        let (a, b) = (dir.path().join("a.mkv"), dir.path().join("b.mkv"));
+        std::fs::write(&a, b"video").unwrap();
+        std::fs::write(temp_path(&b), b"vi").unwrap();
+        assert_eq!(settle_interrupted(&a, &b), Interrupted::Again);
+        assert!(!temp_path(&b).exists(), "the partial copy goes");
+        std::fs::write(&b, b"video").unwrap();
+        assert_eq!(settle_interrupted(&a, &b), Interrupted::Done);
+        assert!(!a.exists(), "an equal copy counts, the original goes");
+        assert_eq!(settle_interrupted(&a, &b), Interrupted::Done);
+        std::fs::write(&a, b"other").unwrap();
+        assert_eq!(
+            settle_interrupted(&a, &b),
+            Interrupted::Again,
+            "a different file at the target"
+        );
+        std::fs::remove_file(&a).unwrap();
+        std::fs::remove_file(&b).unwrap();
+        assert_eq!(settle_interrupted(&a, &b), Interrupted::Missing);
     }
 
     #[test]

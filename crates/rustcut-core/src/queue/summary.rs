@@ -53,6 +53,7 @@ pub fn summarize(record: &JobRecord) -> JobSummary {
         started_at: record.started_at,
         finished_at: record.finished_at,
         sync,
+        relocation: crate::queue::Relocation::from_column(record.relocation.as_deref()).map(|r| r.to),
     }
 }
 
@@ -103,7 +104,7 @@ fn spec_temp(spec: &JobSpec) -> PathBuf {
 }
 
 /// The temp file of a stored target path (a row whose spec is unreadable still knows its target).
-fn stored_temp(target: &Path) -> Option<PathBuf> {
+pub(super) fn stored_temp(target: &Path) -> Option<PathBuf> {
     let folder = target.parent()?;
     let stem = target.file_stem()?.to_str()?;
     let extension = target.extension()?.to_str()?;

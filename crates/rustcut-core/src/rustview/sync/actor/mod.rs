@@ -20,7 +20,7 @@ use super::steps::StepResult;
 use super::{ConnectionState, JobSyncRecord, SyncCommand, SyncEvent, SyncPhase, SyncRecords, SyncService, SyncState};
 use crate::actor::{EventBus, Mailbox, Reply, mailbox};
 use crate::job::{JobId, JobMetadata};
-use crate::rustview::{GetMedia, HashCheck, RustViewClient, RustViewError, TagTree, is_md5};
+use crate::rustview::{GetMedia, HashCheck, MoveMedia, RustViewClient, RustViewError, TagTree, is_md5};
 use crate::settings::{RustViewSettings, WriteTiming};
 
 mod work;
@@ -77,6 +77,12 @@ enum Request {
         md5: String,
         reply: Reply<Result<HashCheck, RustViewError>>,
     },
+    MoveRecord {
+        from: PathBuf,
+        to: PathBuf,
+        replace: bool,
+        reply: Reply<Result<MoveMedia, RustViewError>>,
+    },
 }
 
 impl Request {
@@ -86,6 +92,9 @@ impl Request {
                 let _ = reply.send(Err(error));
             }
             Self::CheckHash { reply, .. } => {
+                let _ = reply.send(Err(error));
+            }
+            Self::MoveRecord { reply, .. } => {
                 let _ = reply.send(Err(error));
             }
         }
@@ -278,6 +287,23 @@ where
                     self.want_tree = true;
                 }
             },
+            SyncCommand::MoveRecord {
+                id,
+                from,
+                to,
+                replace,
+                record,
+                reply,
+            } => {
+                self.follow_move(id, &to, record);
+                tracing::info!(job = id.0, replace, "[RustView] The record follows its moved file");
+                self.lookup(Request::MoveRecord {
+                    from,
+                    to,
+                    replace,
+                    reply,
+                });
+            }
             SyncCommand::GetMedia { path, reply } => self.lookup(Request::GetMedia { path, reply }),
             SyncCommand::CheckHash { md5, reply } => self.lookup(Request::CheckHash { md5, reply }),
             SyncCommand::InsertHash { md5 } => {
@@ -318,6 +344,22 @@ where
             Some(error) => request.refuse(error),
             None => self.requests.push_back(request),
         }
+    }
+
+    /// RustCut counts the job's record as moved to `to` (whatever RustView answers): later writes go there, nothing is
+    /// cleaned at the old path.
+    fn follow_move(&mut self, id: JobId, to: &std::path::Path, record: JobSyncRecord) {
+        let entry = self.entry(id, record);
+        if entry.record.synced_path.is_none() {
+            return;
+        }
+        entry.record.synced_path = Some(to.to_path_buf());
+        if entry.target.is_some() {
+            entry.target = Some(to.to_path_buf());
+        }
+        entry.generation = entry.generation.wrapping_add(1);
+        let record = entry.record.clone();
+        self.report(id, record);
     }
 
     fn entry(&mut self, id: JobId, record: JobSyncRecord) -> &mut Entry {

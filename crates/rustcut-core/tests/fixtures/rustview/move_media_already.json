@@ -1,0 +1,12 @@
+{
+  "success": true,
+  "action": "already_moved",
+  "media_id": 1,
+  "from": "/videos/out/clip.mkv",
+  "to": "/videos/2026/Clip.mkv",
+  "rating": 4,
+  "tags": [],
+  "file_hash": "8f618d1ebd606025257057ee18536e64",
+  "source": "RustCut",
+  "message": "The media record is at '/videos/2026/Clip.mkv' already."
+}

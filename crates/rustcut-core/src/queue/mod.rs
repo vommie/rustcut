@@ -6,6 +6,7 @@ mod actor;
 mod model;
 #[cfg(test)]
 mod model_tests;
+mod relocation;
 mod summary;
 
 use std::path::PathBuf;
@@ -24,6 +25,7 @@ pub use actor::{
     validate as validate_spec,
 };
 pub use model::{MAX_WORKERS, Model, Refused, Tally, moved};
+pub use relocation::{Relocated, Relocation, RelocationOutcome, RelocationProgress, TargetMove};
 pub use summary::{StaleFiles, summarize};
 
 /// Where selected jobs move to. Several selected jobs keep their relative order.
@@ -56,6 +58,8 @@ pub struct JobSummary {
     pub started_at: Option<i64>,
     pub finished_at: Option<i64>,
     pub sync: SyncState,
+    /// The job's target file waits to move to this path (after its render, or behind other moves; P12 block 7).
+    pub relocation: Option<PathBuf>,
 }
 
 /// Progress of a rendering job (coalesced by the UI to about 10 Hz).
@@ -209,6 +213,21 @@ pub enum QueueCommand {
     Reload {
         reply: Reply<Result<usize, QueueError>>,
     },
+    /// Gives jobs new targets (P12 block 7, Q-P12f): a finished job's file moves (one after the other, a copy with
+    /// verification across file systems), a job still to render only changes its target, a rendering job changes its
+    /// target now and its file moves once the render is verified. The RustView record follows. Conflicts were decided
+    /// before (the dialog); a move that cannot happen is reported in its [`RelocationOutcome`]. The answer counts the jobs
+    /// taken.
+    MoveTargets {
+        moves: Vec<TargetMove>,
+        reply: Reply<Result<usize, QueueError>>,
+    },
+    /// The status bar's ×: `running` stops the file moves (the one copying deletes its partial copy, the original stays;
+    /// the queued ones are dropped), `waiting` takes back the moves that wait for their render (the old target again).
+    CancelRelocations {
+        running: bool,
+        waiting: bool,
+    },
     /// Stops rendering jobs (they wait again at the next start) and ends the actor.
     Shutdown {
         reply: Reply<()>,
@@ -225,6 +244,11 @@ pub enum QueueEvent {
     Reordered(Vec<JobId>),
     Progress(JobProgress),
     Processing(ProcessingState),
+    /// The state of the target file moves (P12 block 7), after every change and at most about ten times a second
+    /// while a copy runs.
+    Relocation(RelocationProgress),
+    /// One job's move ended (or its target changed).
+    Relocated(Box<RelocationOutcome>),
     /// The last waiting job finished; the "when done" action follows.
     Done {
         finished: u32,

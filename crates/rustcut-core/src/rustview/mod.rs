@@ -11,7 +11,7 @@ pub use cli::{CliClient, DEFAULT_BINARY, decode};
 pub use client::{RustViewClient, RustViewError, SOURCE_APP};
 pub use models::{
     ApiErrorResponse, BatchHashCheck, DeleteMedia, GetMedia, HashCheck, HashCheckItem, HashInsert, MediaDetails,
-    SetMedia, SetMediaAction, TagItem, TagTree,
+    MoveMedia, MoveMediaAction, SetMedia, SetMediaAction, TagItem, TagTree,
 };
 pub use source::{is_md5, trusted_hash};
 #[cfg(test)]

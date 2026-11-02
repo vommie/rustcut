@@ -14,8 +14,8 @@ use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 
 use rustcut_core::rustview::{
-    BatchHashCheck, CliClient, DeleteMedia, GetMedia, HashCheck, HashInsert, RustViewClient as _, RustViewError,
-    SetMedia, SetMediaAction, TagTree, decode,
+    BatchHashCheck, CliClient, DeleteMedia, GetMedia, HashCheck, HashInsert, MoveMedia, MoveMediaAction,
+    RustViewClient as _, RustViewError, SetMedia, SetMediaAction, TagTree, decode,
 };
 use rustcut_core::settings::RustViewSettings;
 
@@ -219,4 +219,50 @@ async fn refusals_timeouts_and_a_missing_program_are_told_apart() {
         gone.is_transient() && gone.to_string().contains("not installed"),
         "{gone}"
     );
+}
+
+/// `move-media` (RustView 0.6.9, P12 block 7): the answers recorded from the real RustView, the command line, and what an
+/// older RustView without the command answers.
+#[tokio::test]
+async fn move_media_answers_and_its_command_line() {
+    let moved: MoveMedia = ok("move_media_moved", 0);
+    assert_eq!(
+        (moved.action, moved.media_id, moved.rating),
+        (MoveMediaAction::Moved, Some(1), Some(4))
+    );
+    assert_eq!(moved.source.as_deref(), Some("RustCut"));
+    let again: MoveMedia = ok("move_media_already", 0);
+    assert_eq!(again.action, MoveMediaAction::AlreadyMoved);
+    let missing: MoveMedia = ok("move_media_missing", 2);
+    assert_eq!((missing.action, missing.media_id), (MoveMediaAction::NotFound, None));
+    let replaced: MoveMedia = ok("move_media_replaced", 0);
+    assert_eq!(replaced.replaced_media_id, Some(2));
+    let taken = decode::<MoveMedia>(Some(1), b"", &fixture("move_media_taken.stderr")).unwrap_err();
+    assert!(taken.to_string().contains("registered at the target path"), "{taken}");
+
+    let dir = tempfile::tempdir().unwrap();
+    let answer = String::from_utf8(fixture("move_media_replaced.json")).unwrap();
+    let program = script(dir.path(), &answer, "", 0, 0);
+    client(program, 5)
+        .move_media(Path::new("/videos/out/-a.mkv"), Path::new("/videos/2026/b.mkv"), true)
+        .await
+        .unwrap();
+    assert_eq!(
+        args(dir.path()),
+        [
+            "api",
+            "move-media",
+            "--from=/videos/out/-a.mkv",
+            "--to=/videos/2026/b.mkv",
+            "--replace",
+            "--json"
+        ]
+    );
+    let old = script(dir.path(), "", "error: unrecognized subcommand 'move-media'", 2, 0);
+    let refused = client(old, 5)
+        .move_media(Path::new("/a.mkv"), Path::new("/b.mkv"), false)
+        .await
+        .unwrap_err();
+    assert!(refused.to_string().contains("0.6.9 or newer"), "{refused}");
+    assert!(!refused.is_transient());
 }
