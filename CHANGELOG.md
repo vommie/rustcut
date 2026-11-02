@@ -9,6 +9,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Plugins: small add-ons that react to what happens in RustCut and do something for you, each in a sandbox (no files,
+  no network, a time and a memory limit), so a broken or slow plugin never blocks or breaks RustCut. A plugin is a
+  `.rcplugin` file; Settings > Plugins installs it (or drop the file onto that page), lists every plugin with its state,
+  details and numbers, switches each on or off, sets their order (drag the grip or use the buttons: a later plugin wins),
+  reloads, updates (from an update folder you choose), removes (its settings stay), saves and reads their settings, and
+  runs plugins straight from a development folder, reloading them when their build changes. Each plugin has its own page
+  below Plugins with its switch, time and memory limit and its own settings, which RustCut draws: options and rule
+  tables whose rows can be dragged, with warning marks that explain conflicts, rules a more specific one overrides, and
+  tags or target folders that no longer exist.
+- A plugin can set the target folder when a video is opened and the rating when you assign a tag; a small puzzle mark at
+  the folder field and at the rating names the plugin and why (a click opens its page), and what you choose yourself
+  stays until the next video. A plugin that fails gets a banner; after 3 failures in a row it pauses until it is
+  reloaded. The Logs panel has a "Plugins" source. `rustcut --no-plugins` starts without running any.
+- The first two plugins live in their own repository (`rustcut-plugins`): Auto-Folder (rules from a source folder, with
+  or without subfolders or as a regular expression, to a target folder; the most specific rule wins; a message per rule
+  and a master switch; what happens without a match) and Auto-Rate (a rating when you assign a tag, only if unrated by
+  default; removing the tag keeps the rating). `docs/plugins.md` explains how to write one.
+- Settings: pages can have sub-pages (the chevron at the right folds them; the folded state is kept).
+
 - Moving target files (queue menu > "Move Target File ..."): choose another folder for one or several jobs, and for one job
   another name. A finished job's file moves; a job not rendered yet only gets the new target; a rendering job gets it at
   once and its file moves as soon as the render is done. The folder comes from the same list as in Job Finalization (your
@@ -105,6 +124,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Settings: every option's label and control share one line, the description stands below over the whole width, and
+  card titles and descriptions start at the same edge as the options.
 - The target folder field of Job Finalization is now one component that other places use too (the move dialog).
 - The status bar's activity segment can show a progress bar.
 
