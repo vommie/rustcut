@@ -62,6 +62,8 @@ export global TagRate {
 
     // The rating bar: -1 = no rating chosen (the bar sets it on a click; Rust sets what the job holds right after).
     in-out property <int> rating: -1;
+    // Several jobs edited with different ratings: each rating they have shows faintly (RustView's mixed selection).
+    in property <[bool]> partial-ratings: [false, false, false, false, false, false];
     // A plugin set the rating: its tooltip ("Set by Auto-Rate (tag ...)"); empty = the user's.
     in property <string> rating-plugin;
     // The plugin mark at the rating: the plugin's Settings page.

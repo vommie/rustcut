@@ -60,6 +60,7 @@ fn flatten(
         hidden: &empty,
         shown: &empty,
         show_hidden: false,
+        multi: None,
     };
     let mut rows = Vec::new();
     TagTreeBuilder::flatten(nodes, 0, &ctx, &mut rows);

@@ -24,7 +24,7 @@ exclude = ["crates/rustcut-plugin-host/test-plugin"]
 [workspace.package]
 # Single source of truth for the app version: the About page, the package script and the PKGBUILD read it from here.
 # Claude bumps the patch number whenever a state is testable; major and minor belong to the user.
-version = "0.0.101"
+version = "0.0.102"
 edition = "2024"
 # The lowest toolchain known to work (wasmtime 50 needs 1.97). rust-toolchain.toml pins `stable`.
 rust-version = "1.97"

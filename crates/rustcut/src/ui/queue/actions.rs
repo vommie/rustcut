@@ -212,7 +212,16 @@ pub(super) fn publish_toolbar(q: &Queue<'_>, selected: &[JobSummary], visible: &
     };
     q.set_selected_count(i32::try_from(n).unwrap_or(i32::MAX));
     q.set_can_edit(count(&QueueAction::Edit) == 1);
-    q.set_can_edit_tags(n == 1);
+    let tags = count(&QueueAction::EditTags);
+    q.set_can_edit_tags(tags > 0);
+    q.set_edit_tags_tooltip(
+        if tags > 1 {
+            format!("Edit the tags and ratings of {tags} jobs together in the Tag & Rate panel")
+        } else {
+            "Edit the job's tags and rating in the Tag & Rate panel".to_owned()
+        }
+        .into(),
+    );
     let cancel = count(&QueueAction::Cancel);
     q.set_can_cancel(cancel > 0);
     q.set_cancel_tooltip(
@@ -473,9 +482,15 @@ impl QueueBridge {
             QueueAction::Details => self.reveal(PanelId::Job),
             QueueAction::ShowLog => self.reveal(PanelId::Logs),
             QueueAction::EditTags => {
-                let name = first.and_then(|id| self.row(id)).map(|r| r.name);
-                if let (Some(id), Some(name), Some(hook)) = (first, name, self.hooks.borrow().edit_tags.as_ref()) {
-                    hook(id, name);
+                let jobs: Vec<(JobId, String)> = rows
+                    .iter()
+                    .filter(|r| ids.contains(&r.id))
+                    .map(|r| (r.id, r.name.clone()))
+                    .collect();
+                if !jobs.is_empty()
+                    && let Some(hook) = self.hooks.borrow().edit_tags.as_ref()
+                {
+                    hook(jobs);
                 }
             }
             QueueAction::LoadLabels => {

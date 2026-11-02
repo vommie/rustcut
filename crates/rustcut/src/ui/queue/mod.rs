@@ -112,6 +112,9 @@ pub type ProfileHook = Box<dyn Fn(&str) -> Option<RenderProfile>>;
 /// Every job's id and source.
 pub type JobsHook = Box<dyn Fn(Vec<(i64, std::path::PathBuf)>)>;
 
+/// "Edit tags and rating": the jobs (id, name) the Tag & Rate panel edits together.
+pub type EditTagsHook = Box<dyn Fn(Vec<(JobId, String)>)>;
+
 /// "Load Tags and Rating": the tag ids and the rating for the Tag & Rate panel.
 pub type LoadLabelsHook = Box<dyn Fn(Vec<u32>, Option<u8>)>;
 
@@ -126,7 +129,7 @@ pub struct QueueHooks {
     /// A job ended (the export panel looks at the target folder again).
     pub job_ended: Option<Box<dyn Fn()>>,
     /// "Edit tags and rating" (id, name): the Tag & Rate panel takes it.
-    pub edit_tags: Option<Box<dyn Fn(JobId, String)>>,
+    pub edit_tags: Option<EditTagsHook>,
     /// "Edit in the editor" / "Load as a new job".
     pub edit: Option<Box<dyn Fn(JobId)>>,
     /// Shows a dock panel (the Job or the Logs panel).

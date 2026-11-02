@@ -298,9 +298,9 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             }
         }));
         let tags_weak = Rc::downgrade(&tags);
-        queue.hooks().edit_tags = Some(Box::new(move |id, name| {
+        queue.hooks().edit_tags = Some(Box::new(move |jobs| {
             if let Some(tags) = tags_weak.upgrade() {
-                tags.edit_job(id, name);
+                tags.edit_jobs(jobs);
             }
         }));
         let dock = dock_for_queue;

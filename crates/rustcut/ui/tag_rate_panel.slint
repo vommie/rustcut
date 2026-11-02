@@ -347,6 +347,7 @@ export component TagRatePanel inherits Rectangle {
             rating := RatingBar {
                 opacity: root.closed ? 0.4 : 1;
                 selected-rating <=> TagRate.rating;
+                partial-ratings: TagRate.partial-ratings;
                 is-assign-mode: true;
                 has-selection: root.has-job;
                 rating-selected(r) => { TagRate.rating-clicked(r); }

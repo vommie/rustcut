@@ -25,7 +25,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
-use rustcut_core::job::JobId;
+use rustcut_core::job::{JobId, JobMetadata};
 use rustcut_core::queue::{QueueCommand, QueueError, QueueHandle};
 use rustcut_core::rustview::{ConnectionState, RustViewError, SyncCommand, SyncEvent, SyncService, TagTree};
 use rustcut_core::settings::TagPanelState;
@@ -33,7 +33,7 @@ use slint::{ComponentHandle as _, Model as _, ModelRc, VecModel};
 
 pub use hidden::{Check, FilterRow};
 pub use history::{TagHistoryItem, TagHistoryLayoutEngine, TagHistoryManager, TagHistoryRow};
-pub use state::{Choice, Editing, TagPanel};
+pub use state::{Choice, EditedJob, Editing, TagPanel};
 pub use tree::{
     MAX_TAG_ITEM_WIDTH, MIN_TAG_ITEM_WIDTH, TAG_COLUMN_SPACING, TAG_ITEM_HEIGHT, TAG_PADDING_H, TAG_PADDING_V,
     TAG_ROW_SPACING, TagFlattenContext, TagTreeBuilder, TagTreeNode,
@@ -267,82 +267,149 @@ impl TagsBridge {
         }
     }
 
-    /// The queue's "Edit tags and rating": reads the job's metadata on the runtime, then the panel edits it.
-    pub fn edit_job(&self, id: JobId, name: String) {
+    /// The queue's "Edit tags and rating" for one or several jobs: reads their metadata on the runtime, then the panel
+    /// edits them together (RustView's multi-selection logic). Jobs saved without RustView are left out.
+    pub fn edit_jobs(&self, jobs: Vec<(JobId, String)>) {
         let queue = self.queue.clone();
         let ui = self.ui.clone();
         self.runtime.spawn(async move {
-            let answer = queue
-                .request(|reply| QueueCommand::Metadata { id, reply })
-                .await
-                .unwrap_or_else(|_gone| Err(QueueError::Store("the queue has stopped".into())));
-            with_bridge(&ui, move |b| match answer {
-                Ok(metadata) if metadata.without_rustview => {
-                    Self::tell(
-                        Notice::new(Kind::TagsFailed, "This job has no RustView entry")
-                            .detail("It was saved while Active was off: RustView knows nothing of it.")
-                            .level(notices::Level::Info),
-                    );
-                }
-                Ok(metadata) => {
-                    tracing::info!(job = id.0, "[Tags] Editing the RustView entry of a job");
-                    b.state.borrow_mut().begin_edit(id, name, metadata);
-                    b.reveal();
-                    b.publish();
-                }
-                Err(e) => {
-                    Self::tell(Notice::new(Kind::TagsFailed, "The job's tags cannot be edited").detail(e.to_string()));
-                }
-            });
+            let mut read = Vec::with_capacity(jobs.len());
+            for (id, name) in jobs {
+                let answer = queue
+                    .request(|reply| QueueCommand::Metadata { id, reply })
+                    .await
+                    .unwrap_or_else(|_gone| Err(QueueError::Store("the queue has stopped".into())));
+                read.push((id, name, answer));
+            }
+            with_bridge(&ui, move |b| b.begin_editing(read));
         });
+    }
+
+    fn begin_editing(&self, read: Vec<(JobId, String, Result<JobMetadata, QueueError>)>) {
+        let total = read.len();
+        let mut jobs = Vec::with_capacity(total);
+        let (mut without, mut failed) = (0, Vec::new());
+        for (id, name, answer) in read {
+            match answer {
+                Ok(metadata) if metadata.without_rustview => without += 1,
+                Ok(metadata) => jobs.push(EditedJob::new(id, name, metadata)),
+                Err(e) => failed.push(e.to_string()),
+            }
+        }
+        if !failed.is_empty() {
+            let title = if total == 1 {
+                "The job's tags cannot be edited".to_owned()
+            } else {
+                format!("The tags of {} of the jobs cannot be edited", failed.len())
+            };
+            Self::tell(Notice::new(Kind::TagsFailed, title).detail(failed.join("\n")));
+        }
+        if without > 0 {
+            let (title, detail) = if total == 1 {
+                (
+                    "This job has no RustView entry".to_owned(),
+                    "It was saved while Active was off: RustView knows nothing of it.",
+                )
+            } else {
+                (
+                    format!("{without} of the jobs have no RustView entry and are left out"),
+                    "They were saved while Active was off: RustView knows nothing of them.",
+                )
+            };
+            Self::tell(
+                Notice::new(Kind::TagsFailed, title)
+                    .detail(detail)
+                    .level(notices::Level::Info),
+            );
+        }
+        if jobs.is_empty() {
+            return;
+        }
+        tracing::info!(jobs = jobs.len(), "[Tags] Editing the RustView entries of jobs");
+        self.state.borrow_mut().begin_edit(jobs);
+        self.reveal();
+        self.publish();
     }
 
     /// Escape or Cancel: back to the draft.
     pub fn cancel_edit(&self) {
-        if self.state.borrow_mut().end_edit().is_some() {
+        if let Some(editing) = self.state.borrow_mut().end_edit() {
             // Nothing changed: no message (Q-N8 #36), only the history notes it.
-            Self::tell(Notice::new(
-                Kind::Editing,
-                "The job's tags and rating were left as they were",
-            ));
+            let text = if editing.jobs.len() == 1 {
+                "The job's tags and rating were left as they were".to_owned()
+            } else {
+                format!(
+                    "The tags and ratings of {} jobs were left as they were",
+                    editing.jobs.len()
+                )
+            };
+            Self::tell(Notice::new(Kind::Editing, text));
         }
         self.publish();
     }
 
+    /// Apply: every edited job whose tags or rating changed is written, one after the other.
     fn apply_edit(&self) {
         if self.applying.get() {
             return;
         }
-        let Some((id, metadata)) = self.state.borrow().edited() else {
+        let edited = self.state.borrow().edited();
+        if edited.is_empty() {
             self.cancel_edit();
             return;
-        };
+        }
         self.applying.set(true);
         self.publish();
         let queue = self.queue.clone();
         let ui = self.ui.clone();
         self.runtime.spawn(async move {
-            let answer = queue
-                .request(|reply| QueueCommand::UpdateMetadata { id, metadata, reply })
-                .await
-                .unwrap_or_else(|_gone| Err(QueueError::Store("the queue has stopped".into())));
-            with_bridge(&ui, move |b| {
-                b.applying.set(false);
-                match answer {
-                    Ok(()) => {
-                        let name = b.state.borrow_mut().end_edit().map(|e| e.name).unwrap_or_default();
-                        Self::tell(Notice::new(
-                            Kind::TagsUpdated,
-                            format!("Tags and rating of \"{name}\" updated"),
-                        ));
-                    }
-                    Err(e) => Self::tell(
-                        Notice::new(Kind::TagsFailed, "The job's tags were not changed").detail(e.to_string()),
-                    ),
-                }
-                b.publish();
-            });
+            let mut results = Vec::with_capacity(edited.len());
+            for (id, metadata) in edited {
+                let answer = queue
+                    .request(|reply| QueueCommand::UpdateMetadata { id, metadata, reply })
+                    .await
+                    .unwrap_or_else(|_gone| Err(QueueError::Store("the queue has stopped".into())));
+                results.push((id, answer));
+            }
+            with_bridge(&ui, move |b| b.applied(results));
         });
+    }
+
+    /// The answers of Apply: done when every job took its change; a job that refused stays edited with its message.
+    fn applied(&self, results: Vec<(JobId, Result<(), QueueError>)>) {
+        self.applying.set(false);
+        let written = results.iter().filter(|(_, r)| r.is_ok()).count();
+        let errors: Vec<String> = results
+            .iter()
+            .filter_map(|(id, r)| r.as_ref().err().map(|e| format!("Job {id}: {e}")))
+            .collect();
+        let title = {
+            let mut state = self.state.borrow_mut();
+            if let Some(editing) = state.editing.as_mut() {
+                for (id, result) in &results {
+                    if result.is_ok() {
+                        editing.written(*id);
+                    }
+                }
+            }
+            let title = state.editing.as_ref().map(Editing::title).unwrap_or_default();
+            if errors.is_empty() {
+                state.end_edit();
+            }
+            title
+        };
+        let notice = match (errors.is_empty(), results.len()) {
+            (true, 1) => Notice::new(Kind::TagsUpdated, format!("Tags and rating of \"{title}\" updated")),
+            (true, n) => Notice::new(Kind::TagsUpdated, format!("Tags and ratings of {n} jobs updated")),
+            (false, 1) => Notice::new(Kind::TagsFailed, "The job's tags were not changed").detail(errors.join("\n")),
+            (false, n) => Notice::new(
+                Kind::TagsFailed,
+                format!("{} of {n} jobs were not changed ({written} were)", n - written),
+            )
+            .detail(errors.join("\n")),
+        };
+        Self::tell(notice);
+        self.publish();
     }
 
     /// Asks the sync actor for the tag tree (cached there; loaded again after a reconnect).
@@ -452,25 +519,16 @@ impl TagsBridge {
         t.set_editing_job(editing.is_some());
         t.set_editing_title(
             editing
-                .map(|e| format!("Editing: {}", e.name))
+                .map(|e| format!("Editing: {}", e.title()))
                 .unwrap_or_default()
                 .into(),
         );
-        t.set_editing_tooltip(
-            editing
-                .map(|e| {
-                    format!(
-                        "The tags and the rating of job {} ({}); Apply writes them.",
-                        e.id, e.name
-                    )
-                })
-                .unwrap_or_default()
-                .into(),
-        );
-        t.set_can_apply(!self.applying.get() && state.edited().is_some());
+        t.set_editing_tooltip(editing.map(view::editing_tooltip).unwrap_or_default().into());
+        t.set_can_apply(!self.applying.get() && !state.edited().is_empty());
 
         let choice = state.choice();
         t.set_rating(choice.rating.map_or(-1, i32::from));
+        t.set_partial_ratings(ModelRc::new(VecModel::from(state.partial_ratings().to_vec())));
         t.set_rating_plugin(
             self.rating_mark
                 .borrow()
