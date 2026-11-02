@@ -424,7 +424,7 @@ export component QueuePanel inherits Rectangle {
             IconButton {
                 icon: IconId.job-tags;
                 enabled: Queue.can-edit-tags;
-                tooltip: "Edit the job's tags and rating in the Tag & Rate panel";
+                tooltip: Queue.edit-tags-tooltip;
                 clicked => { Queue.edit-tags(); }
             }
 

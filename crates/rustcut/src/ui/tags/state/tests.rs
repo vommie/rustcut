@@ -117,13 +117,13 @@ fn editing_a_job_leaves_the_draft_alone() {
         source_hash: Some("abc".into()),
         without_rustview: false,
     };
-    p.begin_edit(JobId(7), "Clip - 01".into(), original);
+    p.begin_edit(vec![EditedJob::new(JobId(7), "Clip - 01".into(), original)]);
     assert_eq!(p.choice().tags, [3]);
-    assert!(p.edited().is_none(), "nothing changed yet");
+    assert!(p.edited().is_empty(), "nothing changed yet");
     assert!(!p.toggle_lock(2), "no locks while a job is edited");
     p.click_tag(2);
     p.click_rating(4);
-    let (id, metadata) = p.edited().unwrap();
+    let (id, metadata) = p.edited().pop().unwrap();
     assert_eq!(id, JobId(7));
     assert_eq!(
         metadata,
@@ -137,7 +137,7 @@ fn editing_a_job_leaves_the_draft_alone() {
     p.clear();
     assert_eq!(
         p.choice(),
-        &Choice::default(),
+        Choice::default(),
         "clearing an edited job clears everything"
     );
     p.end_edit();
@@ -222,11 +222,11 @@ fn loaded_labels_replace_the_choice_and_keep_locked_tags() {
         source_hash: None,
         without_rustview: false,
     };
-    p.begin_edit(JobId(7), "Clip".into(), original);
+    p.begin_edit(vec![EditedJob::new(JobId(7), "Clip".into(), original)]);
     p.take_labels(&[2], Some(3));
     assert_eq!(
         p.choice(),
-        &Choice {
+        Choice {
             tags: vec![2],
             rating: Some(3)
         },
@@ -237,6 +237,56 @@ fn loaded_labels_replace_the_choice_and_keep_locked_tags() {
         (vec![4], Some(0)),
         "the draft waits"
     );
-    let (_, edited) = p.edited().unwrap();
+    let (_, edited) = p.edited().pop().unwrap();
     assert_eq!((edited.tags, edited.rating), (vec![2], Some(3)));
+}
+
+#[test]
+fn several_edited_jobs_show_partial_tags_and_mixed_ratings() {
+    let mut p = panel();
+    p.toggle_lock(4);
+    let job = |id: i64, tags: &[u32], rating| {
+        EditedJob::new(
+            JobId(id),
+            format!("Clip {id}"),
+            JobMetadata {
+                tags: tags.to_vec(),
+                rating,
+                source_hash: None,
+                without_rustview: false,
+            },
+        )
+    };
+    p.begin_edit(vec![job(1, &[2, 3], Some(2)), job(2, &[2], Some(4))]);
+    assert_eq!(
+        p.choice(),
+        Choice {
+            tags: vec![2],
+            rating: None
+        },
+        "what both share"
+    );
+    assert_eq!(p.partial_tags(), HashSet::from([3]));
+    assert_eq!(p.partial_ratings(), [false, false, true, false, true, false]);
+    p.toggle_expanded(1);
+    let rows = p.rows();
+    let row = |id: i32| rows.iter().find(|r| r.id == id).unwrap();
+    assert!(row(2).is_assigned && row(2).name.as_str() == "Beach (2)");
+    assert!(row(3).is_partial && !row(3).is_assigned && row(3).name.as_str() == "Alps (1)");
+    assert!(!row(4).is_locked, "no locks while jobs are edited");
+    p.click_tag(3);
+    assert!(
+        p.partial_tags().is_empty() && p.choice().tags.contains(&3),
+        "partial: given to all"
+    );
+    p.click_rating(4);
+    assert_eq!(p.choice().rating, Some(4), "mixed: set on all");
+    p.click_rating(4);
+    assert_eq!(p.choice().rating, None, "shared: cleared from all");
+    assert!(p.can_clear());
+    p.clear();
+    assert!(!p.can_clear());
+    assert_eq!(p.edited().len(), 2);
+    let history = p.history_items();
+    assert!(history.iter().all(|i| !i.is_partial));
 }

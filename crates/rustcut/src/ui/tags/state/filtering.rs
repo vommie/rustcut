@@ -47,7 +47,10 @@ impl TagPanel {
         } else {
             self.locked.iter().copied().collect()
         };
+        let counts = self.tag_counts();
+        let total = self.editing.as_ref().map_or(1, |e| e.jobs.len());
         let ctx = TagFlattenContext {
+            multi: counts.as_ref().map(|c| (c, total)),
             expanded_set: &self.expanded,
             filter_text: &filter,
             filter_regex: regex.as_ref(),

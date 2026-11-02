@@ -1,5 +1,5 @@
 //! The Tag & Rate panel's state, without Slint: the tag tree as RustView last sent it, the tags and rating chosen for the
-//! next job (the draft) or for a queued job being edited (user decision Q-G3), locked tags that stay for the next jobs
+//! next job (the draft) or for queued jobs being edited (user decision Q-G3, several since 0.0.102), locked tags that stay for the next jobs
 //! (Q-G2), hidden branches (chosen in the tag filter window, which edits a copy until Apply), the filter, the expanded
 //! branches and the tag history. Every operation is a method; the bridge only shows what [`TagPanel::rows`] and the
 //! other views say.
@@ -15,7 +15,10 @@ use super::hidden::Marks;
 use super::history::{TagHistoryItem, TagHistoryManager};
 use super::tree::{TagTreeBuilder, TagTreeNode, descendants};
 
+mod editing;
 mod filtering;
+
+pub use editing::{EditedJob, Editing};
 
 /// Tags and rating of one job.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -42,25 +45,6 @@ impl Choice {
             if !self.tags.contains(&id) {
                 self.tags.push(id);
             }
-        }
-    }
-}
-
-/// A queued job whose RustView entry is being edited.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Editing {
-    pub id: JobId,
-    pub name: String,
-    /// What the job holds (its source hash stays).
-    pub original: JobMetadata,
-    pub choice: Choice,
-}
-
-impl Editing {
-    fn original_choice(&self) -> Choice {
-        Choice {
-            tags: self.original.tags.clone(),
-            rating: self.original.rating,
         }
     }
 }
@@ -253,22 +237,48 @@ impl TagPanel {
 
     /// A plugin's rating (0 to 5).
     pub fn set_rating(&mut self, stars: u8) {
-        self.choice_mut().rating = Some(stars.min(5));
+        self.put_rating(Some(stars.min(5)));
     }
 
     pub fn name(&self, id: u32) -> Option<&str> {
         self.by_id.get(&id).map(|t| t.name.trim())
     }
 
-    /// The choice the panel edits now.
-    pub fn choice(&self) -> &Choice {
-        self.editing.as_ref().map_or(&self.draft, |e| &e.choice)
+    /// The choice the panel shows now: the draft, or what the edited jobs share (`editing::Editing::common`).
+    pub fn choice(&self) -> Choice {
+        self.editing
+            .as_ref()
+            .map_or_else(|| self.draft.clone(), Editing::common)
     }
 
-    fn choice_mut(&mut self) -> &mut Choice {
+    /// The tags only some of the edited jobs have (empty for the draft and one job).
+    pub fn partial_tags(&self) -> HashSet<u32> {
+        self.editing.as_ref().map(Editing::partial_tags).unwrap_or_default()
+    }
+
+    /// How many of several edited jobs have each tag (`None` for the draft and one job).
+    pub fn tag_counts(&self) -> Option<HashMap<u32, usize>> {
+        self.editing.as_ref().filter(|e| e.jobs.len() > 1).map(Editing::counts)
+    }
+
+    /// The ratings the rating bar shows faintly (the edited jobs' ratings while they differ).
+    pub fn partial_ratings(&self) -> [bool; 6] {
+        self.editing.as_ref().map_or([false; 6], Editing::partial_ratings)
+    }
+
+    /// Sets the rating of the draft or of every edited job.
+    fn put_rating(&mut self, rating: Option<u8>) {
         match &mut self.editing {
-            Some(e) => &mut e.choice,
-            None => &mut self.draft,
+            Some(e) => e.set_rating(rating),
+            None => self.draft.rating = rating,
+        }
+    }
+
+    /// Adds tags to the draft or to every edited job.
+    fn put_tags(&mut self, tags: &[u32]) {
+        match &mut self.editing {
+            Some(e) => e.add_tags(tags),
+            None => self.draft.add(tags),
         }
     }
 
@@ -278,8 +288,11 @@ impl TagPanel {
         if !self.by_id.contains_key(&id) {
             return;
         }
-        let assigned = self.choice_mut().toggle(id);
-        if !assigned && self.editing.is_none() {
+        if let Some(editing) = self.editing.as_mut() {
+            editing.click_tag(id);
+            return;
+        }
+        if !self.draft.toggle(id) {
             self.locked.retain(|t| *t != id);
         }
     }
@@ -306,45 +319,48 @@ impl TagPanel {
     pub fn rate_key(&mut self, rating: u8, has_video: bool) -> bool {
         let taggable = self.editing.is_some() || (has_video && self.active);
         if taggable && rating <= 5 {
-            self.choice_mut().rating = Some(rating);
+            self.put_rating(Some(rating));
         }
         taggable && rating <= 5
     }
 
-    /// A click on a rating button: chooses it, or clears it when it was the chosen one.
+    /// A click on a rating button: chooses it, or clears it when it was the chosen one (of every edited job).
     pub fn click_rating(&mut self, rating: i32) {
         let rating = u8::try_from(rating).ok().filter(|r| *r <= 5);
-        let choice = self.choice_mut();
-        choice.rating = if choice.rating == rating { None } else { rating };
+        match &mut self.editing {
+            Some(e) => e.click_rating(rating),
+            None => self.draft.rating = if self.draft.rating == rating { None } else { rating },
+        }
     }
 
     /// Clears tags and rating; the draft keeps its locked tags.
     pub fn clear(&mut self) {
-        let keep = if self.editing.is_some() {
-            Vec::new()
-        } else {
-            self.locked.clone()
-        };
-        *self.choice_mut() = Choice {
-            tags: keep,
-            rating: None,
-        };
+        match &mut self.editing {
+            Some(e) => e.set_all(&Choice::default()),
+            None => {
+                self.draft = Choice {
+                    tags: self.locked.clone(),
+                    rating: None,
+                };
+            }
+        }
     }
 
     pub fn can_clear(&self) -> bool {
-        let choice = self.choice();
-        let locked = if self.editing.is_some() { 0 } else { self.locked.len() };
-        choice.rating.is_some() || choice.tags.len() > locked
+        match &self.editing {
+            Some(e) => e.has_anything(),
+            None => self.draft.rating.is_some() || self.draft.tags.len() > self.locked.len(),
+        }
     }
 
     pub fn apply_last_tags(&mut self) {
         let last = self.last_tags.clone();
-        self.choice_mut().add(&last);
+        self.put_tags(&last);
     }
 
     pub fn apply_last_rating(&mut self) {
         if let Some(rating) = self.last_rating {
-            self.choice_mut().rating = Some(rating);
+            self.put_rating(Some(rating));
         }
     }
 
@@ -365,7 +381,15 @@ impl TagPanel {
 
     pub fn history_items(&self) -> Vec<TagHistoryItem> {
         let assigned: HashSet<u32> = self.choice().tags.iter().copied().collect();
-        TagHistoryManager::items(&self.history, &self.by_id, &assigned, &self.name_twins(&self.history))
+        let counts = self.tag_counts();
+        let total = self.editing.as_ref().map_or(1, |e| e.jobs.len());
+        TagHistoryManager::items(
+            &self.history,
+            &self.by_id,
+            &assigned,
+            &self.name_twins(&self.history),
+            counts.as_ref().map(|c| (c, total)),
+        )
     }
 
     /// Tags of the choice that a hidden branch keeps out of the tree (they are still assigned).
@@ -424,7 +448,7 @@ impl TagPanel {
         self.draft = choice;
     }
 
-    /// The queue's "Load Tags and Rating": `tags` (those RustView knows) and `rating` become the current choice, of the
+    /// The queue's "Load Tags and Rating": `tags` (those RustView knows) and `rating` become the current choice, of every
     /// queued job being edited or else of the draft, which keeps its locked tags first.
     pub fn take_labels(&mut self, tags: &[u32], rating: Option<u8>) {
         let known: Vec<u32> = tags
@@ -438,7 +462,7 @@ impl TagPanel {
                 rating,
             };
             choice.add(&known);
-            editing.choice = choice;
+            editing.set_all(&choice);
             return;
         }
         let mut choice = Choice {
@@ -449,37 +473,14 @@ impl TagPanel {
         self.draft = choice;
     }
 
-    /// Starts editing a queued job's entry; the draft waits meanwhile.
-    pub fn begin_edit(&mut self, id: JobId, name: String, metadata: JobMetadata) {
-        let choice = Choice {
-            tags: metadata.tags.clone(),
-            rating: metadata.rating,
-        };
-        self.editing = Some(Editing {
-            id,
-            name,
-            original: metadata,
-            choice,
-        });
+    /// Starts editing the entries of queued jobs (one or several); the draft waits meanwhile.
+    pub fn begin_edit(&mut self, jobs: Vec<EditedJob>) {
+        self.editing = (!jobs.is_empty()).then_some(Editing { jobs });
     }
 
-    /// The edited job's new metadata, when it differs from what the job holds.
-    pub fn edited(&self) -> Option<(JobId, JobMetadata)> {
-        let e = self.editing.as_ref()?;
-        if e.choice == e.original_choice() {
-            return None;
-        }
-        let mut tags = e.choice.tags.clone();
-        tags.sort_unstable();
-        Some((
-            e.id,
-            JobMetadata {
-                tags,
-                rating: e.choice.rating,
-                source_hash: e.original.source_hash.clone(),
-                without_rustview: e.original.without_rustview,
-            },
-        ))
+    /// The edited jobs whose metadata changed, with the new metadata.
+    pub fn edited(&self) -> Vec<(JobId, JobMetadata)> {
+        self.editing.as_ref().map(Editing::edited).unwrap_or_default()
     }
 
     /// Back to the draft (after Apply or Cancel).

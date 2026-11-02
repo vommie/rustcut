@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- "Edit Tags and Rating" works for several jobs at once (queue menu and the queue's tag button), like a selection of
+  several files in RustView: the banner says "Editing: 3 jobs", a tag all of them have is green with a check and the
+  number ("Beach (3)"), a tag only some have is yellow, italic, with a half circle ("Beach (1)"); a click on a tag all
+  have removes it from all, any other click gives it to all. A rating all share is chosen (a click on it clears it from
+  all); different ratings show faintly and a click sets one rating on all. The tag history's pills show the same. Apply
+  writes every job that changed (a job that refuses stays in the editing with its message); Escape or × leaves them as
+  they were. Jobs saved without RustView are left out and named.
 - Queue menu > "Load Tags and Rating" (under "Edit Tags and Rating"): puts the job's tags and rating into the Tag & Rate
   panel's current choice (the next job's, or the job you are editing there), so you can reuse them. Its name says what it
   loads ("Load Tag", "Load Rating", "Load Tags and Rating", ...). With several jobs selected it takes every tag any of

@@ -1,7 +1,8 @@
 //! The tag tree, ported from RustView (`crates/rustview/src/ui/tags/tree.rs`: `TagTreeBuilder::{build_hierarchy,
 //! build_branch, flatten, chunk_into_columns}`; the constants come from `crates/rustview/src/ui/tags/mod.rs`, ADR-10).
-//! What differs: the tags are the API's `TagItem`s; RustView's selection statistics over several files become the one
-//! job's assigned tags (RustCut's panel is always in assign mode, so nothing is "selected" or "partial"); RustCut adds
+//! What differs: the tags are the API's `TagItem`s; RustView's selection statistics over several files become the edited
+//! jobs' tags (RustCut's panel is always in assign mode, so nothing is "selected"; several edited jobs give partial tags
+//! and counts, `TagFlattenContext::multi`); RustCut adds
 //! locked tags and hidden branches (a tag shown again inside a hidden branch keeps the way to it in the tree, dimmed).
 //! Ported from RustView; RustCut's own since 0.0.72 (no parity check any more, user decision 2026-10-27).
 
@@ -48,9 +49,18 @@ pub struct TagFlattenContext<'a> {
     /// Tags shown again inside a hidden branch (with their branch); the hidden tags above them stay as the way there.
     pub shown: &'a HashSet<u32>,
     pub show_hidden: bool,
+    /// Several jobs edited at once: how many have each tag, and how many there are (RustView's multi-selection: a tag
+    /// only some have is partial, and every tag any has shows its count, "Beach (2)").
+    pub multi: Option<(&'a HashMap<u32, usize>, usize)>,
 }
 
 impl TagFlattenContext<'_> {
+    /// How many of several edited jobs have tag `id` (`None` for one job or the draft).
+    fn count(&self, id: u32) -> Option<(usize, usize)> {
+        self.multi
+            .map(|(counts, total)| (counts.get(&id).copied().unwrap_or(0), total))
+    }
+
     /// Whether a tag shows itself: its own mark, else its parent's state.
     fn visible(&self, id: u32, parent_visible: bool) -> bool {
         if self.hidden.contains(&id) {
@@ -154,15 +164,20 @@ impl TagTreeBuilder {
 
             let start_idx = output.len();
 
+            let count = ctx.count(node.record.id);
+            let name = match count {
+                Some((n, _)) if n > 0 => format!("{} ({n})", node.record.name).into(),
+                _ => node.record.name.as_str().into(),
+            };
             output.push(TagNodeView {
                 id: i32::try_from(node.record.id).unwrap_or(i32::MAX),
-                name: node.record.name.as_str().into(),
+                name,
                 depth,
                 has_children,
                 is_expanded,
                 is_selected: false,
                 is_assigned: ctx.assigned.contains(&node.record.id),
-                is_partial: false,
+                is_partial: count.is_some_and(|(n, total)| n > 0 && n < total),
                 is_dimmed: hidden,
                 is_locked: ctx.locked.contains(&node.record.id),
             });
@@ -308,6 +323,7 @@ mod tests {
             hidden: &sets.hidden,
             shown: &sets.shown,
             show_hidden,
+            multi: None,
         };
         let mut out = Vec::new();
         TagTreeBuilder::flatten(&tree, 0, &ctx, &mut out);
@@ -342,6 +358,7 @@ mod tests {
             hidden: &s.hidden,
             shown: &s.shown,
             show_hidden: false,
+            multi: None,
         };
         let mut out = Vec::new();
         TagTreeBuilder::flatten(&tree, 0, &ctx, &mut out);
@@ -430,6 +447,7 @@ mod tests {
             hidden: &s.hidden,
             shown: &s.shown,
             show_hidden: false,
+            multi: None,
         };
         let mut out = Vec::new();
         TagTreeBuilder::flatten(&tree, 0, &ctx, &mut out);

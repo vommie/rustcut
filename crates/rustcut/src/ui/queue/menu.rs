@@ -133,10 +133,7 @@ impl QueueAction {
 
     /// Only for one job at a time.
     const fn single(&self) -> bool {
-        matches!(
-            self,
-            Self::Edit | Self::Details | Self::ShowLog | Self::EditTags | Self::Play
-        )
+        matches!(self, Self::Edit | Self::Details | Self::ShowLog | Self::Play)
     }
 }
 

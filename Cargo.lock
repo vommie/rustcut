@@ -5708,7 +5708,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut"
-version = "0.0.101"
+version = "0.0.102"
 dependencies = [
  "arboard",
  "az",
@@ -5747,7 +5747,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-core"
-version = "0.0.101"
+version = "0.0.102"
 dependencies = [
  "atomic-write-file",
  "az",
@@ -5794,7 +5794,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-player"
-version = "0.0.101"
+version = "0.0.102"
 dependencies = [
  "glow",
  "hdrhistogram",
@@ -5819,7 +5819,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-plugin-host"
-version = "0.0.101"
+version = "0.0.102"
 dependencies = [
  "regex",
  "semver",
@@ -5837,7 +5837,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-thumbs"
-version = "0.0.101"
+version = "0.0.102"
 dependencies = [
  "ffmpeg-next",
  "ioprio",
@@ -5851,7 +5851,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-thumbs-protocol"
-version = "0.0.101"
+version = "0.0.102"
 dependencies = [
  "serde",
  "serde_json",

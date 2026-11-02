@@ -100,29 +100,40 @@ impl TagHistoryManager {
     }
 
     /// The pills of `history` for a job that has `assigned` (RustView's flags for one selected file: an assigned tag is
-    /// bold with a check mark); `twins` are the tags that need their parent to be told apart.
+    /// bold with a check mark); `twins` are the tags that need their parent to be told apart. `multi` = several edited
+    /// jobs (how many have each tag, how many there are): RustView's multi-selection pills, the count after the name, a
+    /// tag only some have partial, any tag one of them has italic.
     pub fn items(
         history: &[u32],
         all_tags_map: &HashMap<u32, TagItem>,
         assigned: &HashSet<u32>,
         twins: &HashSet<u32>,
+        multi: Option<(&HashMap<u32, usize>, usize)>,
     ) -> Vec<TagHistoryItem> {
         history
             .iter()
             .filter_map(|&tag_id| {
                 let tag = all_tags_map.get(&tag_id)?;
                 let name = tag.name.trim().to_string();
-                let is_assigned = assigned.contains(&tag_id);
-                let display_text = Self::label(tag, all_tags_map, twins);
+                let count = multi.map(|(counts, total)| (counts.get(&tag_id).copied().unwrap_or(0), total));
+                let is_assigned = match count {
+                    Some((n, total)) => n == total,
+                    None => assigned.contains(&tag_id),
+                };
+                let is_partial = count.is_some_and(|(n, total)| n > 0 && n < total);
+                let mut display_text = Self::label(tag, all_tags_map, twins);
+                if let Some((n, _)) = count.filter(|(n, _)| *n > 0) {
+                    display_text = format!("{display_text} ({n})");
+                }
                 Some(TagHistoryItem {
                     id: tag_id,
-                    width: TagHistoryLayoutEngine::estimate_stable_pill_width(&display_text, is_assigned),
+                    width: TagHistoryLayoutEngine::estimate_stable_pill_width(&display_text, is_assigned || is_partial),
                     display_text,
                     name,
                     is_assigned,
-                    is_partial: false,
+                    is_partial,
                     is_bold: is_assigned,
-                    is_italic: false,
+                    is_italic: count.is_some_and(|(n, _)| n > 0),
                     tooltip: Self::build_hierarchy_tooltip(tag_id, all_tags_map),
                 })
             })
@@ -248,7 +259,7 @@ mod tests {
     #[test]
     fn items_mark_assigned_tags_and_rows_wrap() {
         let tags = map();
-        let items = TagHistoryManager::items(&[3, 99, 4], &tags, &[4].into_iter().collect(), &HashSet::new());
+        let items = TagHistoryManager::items(&[3, 99, 4], &tags, &[4].into_iter().collect(), &HashSet::new(), None);
         assert_eq!(
             items.iter().map(|i| i.id).collect::<Vec<_>>(),
             [3, 4],
@@ -268,10 +279,25 @@ mod tests {
     fn a_twin_shows_its_parent_unless_that_is_the_root() {
         let tags = map();
         let twins: HashSet<u32> = [3, 4].into_iter().collect();
-        let items = TagHistoryManager::items(&[3, 4, 2], &tags, &HashSet::new(), &twins);
+        let items = TagHistoryManager::items(&[3, 4, 2], &tags, &HashSet::new(), &twins, None);
         let labels: Vec<&str> = items.iter().map(|i| i.display_text.as_str()).collect();
         assert_eq!(labels, ["Dunes (Beach)", "Anna", "Beach"]);
         assert_eq!(items[0].name, "Dunes", "the tag's own name stays");
+        // Several edited jobs: counts, partial and italic like RustView's multi-selection.
+        let counts = HashMap::from([(3, 2), (4, 1)]);
+        let multi = TagHistoryManager::items(&[3, 4, 2], &tags, &HashSet::new(), &twins, Some((&counts, 2)));
+        let pills: Vec<(&str, bool, bool, bool)> = multi
+            .iter()
+            .map(|i| (i.display_text.as_str(), i.is_assigned, i.is_partial, i.is_italic))
+            .collect();
+        assert_eq!(
+            pills,
+            [
+                ("Dunes (Beach) (2)", true, false, true),
+                ("Anna (1)", false, true, true),
+                ("Beach", false, false, false)
+            ]
+        );
         assert!(
             (items[0].width - (13.0 * 5.8 + 10.0)).abs() < 1e-3,
             "the estimate fits the label"
