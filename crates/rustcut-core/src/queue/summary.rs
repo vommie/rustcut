@@ -148,6 +148,7 @@ mod tests {
             note: None,
             spec,
             sync: Some(r#"{"state":{"state":"pending"}}"#.into()),
+            relocation: None,
         }
     }
 

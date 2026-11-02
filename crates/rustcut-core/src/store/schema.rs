@@ -9,7 +9,7 @@ use rusqlite_migration::{M, Migrations, SchemaVersion};
 use super::StoreError;
 
 /// Schema version this build writes.
-pub const SCHEMA_VERSION: usize = 1;
+pub const SCHEMA_VERSION: usize = 2;
 
 const V1: &str = r"
 CREATE TABLE jobs (
@@ -43,8 +43,14 @@ CREATE TABLE job_logs (
 CREATE INDEX job_logs_job ON job_logs (job_id, id);
 ";
 
+/// P12 block 7 (0.0.96): a move of the job's target file that is not finished yet (JSON of the queue's `Relocation`), so a
+/// crash in the middle of a move is finished or undone at the next start.
+const V2: &str = r"
+ALTER TABLE jobs ADD COLUMN relocation TEXT;
+";
+
 fn migrations() -> Migrations<'static> {
-    Migrations::new(vec![M::up(V1)])
+    Migrations::new(vec![M::up(V1), M::up(V2)])
 }
 
 /// Brings the database to [`SCHEMA_VERSION`]. `file` = (database path, backup folder) for databases on disk.
@@ -132,6 +138,43 @@ mod tests {
             !backups.exists(),
             "a fresh database needs no backup, an up-to-date one neither"
         );
+    }
+
+    #[test]
+    fn a_version_1_database_gets_the_relocation_column_after_a_backup() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("queue.sqlite");
+        let backups = dir.path().join("backups");
+        {
+            let mut conn = Connection::open(&path).unwrap();
+            Migrations::new(vec![M::up(V1)]).to_latest(&mut conn).unwrap();
+            conn.execute(
+                "INSERT INTO jobs (position, state, state_detail, created_at, source_path, target_path, spec_version, spec, sync) \
+                 VALUES (1, 'finished', '\"finished\"', 5, '/in/a.mkv', '/out/a.mkv', 1, '{}', '{\"state\":\"synced\"}')",
+                [],
+            )
+            .unwrap();
+        }
+        let mut conn = Connection::open(&path).unwrap();
+        migrate(&mut conn, Some((&path, &backups))).unwrap();
+        let (target, sync, relocation): (String, String, Option<String>) = conn
+            .query_row("SELECT target_path, sync, relocation FROM jobs", [], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            })
+            .unwrap();
+        assert_eq!(
+            (target.as_str(), sync.as_str(), relocation),
+            ("/out/a.mkv", r#"{"state":"synced"}"#, None)
+        );
+        let copies: Vec<_> = std::fs::read_dir(&backups)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(copies.len(), 1, "backed up before the step");
+        assert!(copies[0].to_string_lossy().starts_with("queue.sqlite.v1."));
+        let old = Connection::open(std::fs::read_dir(&backups).unwrap().next().unwrap().unwrap().path()).unwrap();
+        let version: i64 = old.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
+        assert_eq!(version, 1, "the backup is the old database");
     }
 
     #[test]

@@ -48,6 +48,12 @@ pub enum StoreCommand {
         sync: Option<String>,
         reply: Answer<()>,
     },
+    /// The unfinished move of a job's target file (`None` = done), P12 block 7.
+    SetRelocation {
+        id: JobId,
+        relocation: Option<String>,
+        reply: Answer<()>,
+    },
     RecoverInterrupted {
         note: String,
         reply: Answer<Vec<JobId>>,
@@ -106,6 +112,9 @@ pub fn spawn_store(mut store: Store) -> std::io::Result<(StoreHandle, JoinHandle
                     }
                     StoreCommand::DeleteJobs { ids, reply } => {
                         let _ = reply.send(store.delete_jobs(&ids));
+                    }
+                    StoreCommand::SetRelocation { id, relocation, reply } => {
+                        let _ = reply.send(store.set_relocation(id, relocation.as_deref()));
                     }
                     StoreCommand::SetSync { id, sync, reply } => {
                         let _ = reply.send(store.set_sync(id, sync.as_deref()));

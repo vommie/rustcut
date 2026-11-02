@@ -34,6 +34,8 @@ pub struct JobRecord {
     pub spec: SpecSlot,
     /// The RustView sync record (JSON owned by the sync actor).
     pub sync: Option<String>,
+    /// A move of the target file that is not finished (JSON owned by the queue, P12 block 7).
+    pub relocation: Option<String>,
 }
 
 /// Which log of a job a line belongs to.
@@ -71,7 +73,7 @@ pub struct LogLine {
 }
 
 const COLUMNS: &str = "id, position, state_detail, attempt, created_at, started_at, finished_at, source_path, target_path, \
-                       note, spec_version, spec, sync";
+                       note, spec_version, spec, sync, relocation";
 
 fn now_millis() -> i64 {
     chrono::Utc::now().timestamp_millis()
@@ -108,6 +110,7 @@ fn read_row(row: &Row<'_>) -> rusqlite::Result<JobRecord> {
         note: row.get(9)?,
         spec,
         sync: row.get(12)?,
+        relocation: row.get(13)?,
     })
 }
 
@@ -234,6 +237,19 @@ impl Store {
         }
         tx.commit()?;
         Ok(n)
+    }
+
+    /// Stores (or with `None` clears) the unfinished move of a job's target file (JSON of the queue).
+    pub fn set_relocation(&mut self, id: JobId, relocation: Option<&str>) -> Result<(), StoreError> {
+        let n = self.conn.execute(
+            "UPDATE jobs SET relocation = ?2 WHERE id = ?1",
+            params![id.0, relocation],
+        )?;
+        if n == 0 {
+            Err(StoreError::NoSuchJob(id.0))
+        } else {
+            Ok(())
+        }
     }
 
     /// Stores the RustView sync record of a job (JSON of the sync actor).

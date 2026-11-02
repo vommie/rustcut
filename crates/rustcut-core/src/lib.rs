@@ -9,6 +9,7 @@ pub mod app_identity;
 pub mod diagnostics;
 pub mod edit;
 pub mod external;
+pub mod files;
 pub mod folders;
 pub mod hashing;
 pub mod job;
