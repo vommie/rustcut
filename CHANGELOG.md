@@ -116,6 +116,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- RustCut could crash right at the start, about once in 200 starts, before a window opened (the bindings to mpv handed mpv
+  an already freed name; an upgrade of `libmpv2` to 7.0 fixes it).
 - Banners over the video fit narrow windows: instead of a few words per line and a banner that covered the status bar, the
   buttons and the details move under the title, very narrow the time goes and the text uses the whole width. A banner
   takes at most half of the video; what does not fit shows whole in its tooltip.

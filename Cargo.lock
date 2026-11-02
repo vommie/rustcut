@@ -3199,9 +3199,9 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "libmpv2"
-version = "6.0.0"
+version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f3d44c1c29b866d44453249d1d8b2822d891fdabd08359a5b85bb6944445e70"
+checksum = "89e81e632a25ec5101179af42617be2de51fbd2e98a75e9f5bc1eaf1680257ed"
 dependencies = [
  "libmpv2-sys",
 ]
@@ -5147,7 +5147,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut"
-version = "0.0.93"
+version = "0.0.94"
 dependencies = [
  "arboard",
  "az",
@@ -5186,7 +5186,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-core"
-version = "0.0.93"
+version = "0.0.94"
 dependencies = [
  "atomic-write-file",
  "az",
@@ -5230,7 +5230,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-player"
-version = "0.0.93"
+version = "0.0.94"
 dependencies = [
  "glow",
  "hdrhistogram",
@@ -5246,7 +5246,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-thumbs"
-version = "0.0.93"
+version = "0.0.94"
 dependencies = [
  "ffmpeg-next",
  "ioprio",
@@ -5260,7 +5260,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-thumbs-protocol"
-version = "0.0.93"
+version = "0.0.94"
 dependencies = [
  "serde",
  "serde_json",
