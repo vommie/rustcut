@@ -8,4 +8,7 @@ components = [
     "llvm-tools-preview"
 ]
 
+# Plugins are WebAssembly components (P12 block 8); the host tests build a test plugin for this target.
+targets = ["wasm32-wasip2"]
+
 profile = "default"

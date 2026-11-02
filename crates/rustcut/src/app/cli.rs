@@ -15,6 +15,10 @@ pub struct Cli {
     /// Keep settings, data and logs below this folder instead of the XDG folders (isolated test profile).
     #[arg(long, value_name = "DIR")]
     pub home: Option<PathBuf>,
+
+    /// Start without running any plugin (they stay listed in Settings > Plugins; for this start only).
+    #[arg(long)]
+    pub no_plugins: bool,
 }
 
 #[cfg(test)]
@@ -33,5 +37,7 @@ mod tests {
         let cli = Cli::parse_from(["rustcut", "--home", "/tmp/p", "a.mkv", "b.mp4"]);
         assert_eq!(cli.home, Some(PathBuf::from("/tmp/p")));
         assert_eq!(cli.files, vec![PathBuf::from("a.mkv"), PathBuf::from("b.mp4")]);
+        assert!(!cli.no_plugins);
+        assert!(Cli::parse_from(["rustcut", "--no-plugins"]).no_plugins);
     }
 }

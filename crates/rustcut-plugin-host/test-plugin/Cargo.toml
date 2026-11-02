@@ -1,0 +1,21 @@
+# A plugin for RustCut's own tests: it misbehaves on request (fails, panics, runs too long, eats memory).
+# Its own workspace, built for wasm32-wasip2 by the host's tests and by rc-testenv.
+[package]
+name = "rustcut-test-plugin"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+rustcut-plugin-api = { path = "../../rustcut-plugin-api" }
+serde = { version = "1", features = ["derive"] }
+
+[profile.release]
+opt-level = "s"
+strip = true
+
+[workspace]

@@ -1,0 +1,156 @@
+// The data of Settings > Plugins and of each plugin's page (P12 block 8; src/ui/settings/plugins/ fills `PluginsUi`).
+// A plugin page's simple fields are ordinary `SettingRowView`s (keys `plugin:<id>:<key>`, the same callbacks as every
+// option); tables have their own view and callbacks.
+
+import { SettingRowView } from "settings_types.slint";
+
+export struct PluginDetailView {
+    label: string,
+    value: string,
+}
+
+export struct PluginItemView {
+    id: string,
+    name: string,
+    version: string,
+    description: string,
+    icon: image,
+    // The state's text and kind: 0 runs, 1 off, 2 warning (paused, shadowed), 3 error (broken, incompatible).
+    state: string,
+    state-kind: int,
+    enabled: bool,
+    can-toggle: bool,
+    development: bool,
+    // "1.1.0 available" ("" = none).
+    update: string,
+    expanded: bool,
+    details: [PluginDetailView],
+    can-remove: bool,
+    can-move-up: bool,
+    can-move-down: bool,
+}
+
+export struct PluginAvailableView {
+    name: string,
+    version: string,
+    description: string,
+}
+
+// One cell of a table row. kind: 0 text, 1 folder path, 2 switch, 3 choice, 4 target folder, 5 tag, 6 rating.
+export struct PluginCellView {
+    kind: int,
+    text: string,
+    checked: bool,
+    items: [string],
+    index: int,
+    enabled: bool,
+    placeholder: string,
+    // The rating (-1 = none).
+    stars: int,
+    // A problem of this value (a tag or folder that no longer exists), its tooltip.
+    issue: string,
+}
+
+export struct PluginTableRowView {
+    cells: [PluginCellView],
+    // What the plugin or RustCut found about the row (the warning mark's tooltip; "" = nothing). level 1 warning, 2 error.
+    issue: string,
+    issue-level: int,
+}
+
+export struct PluginColumnView {
+    label: string,
+    help: string,
+    kind: int,
+    // A column of fixed width (switch, rating), or 0 and its share of the rest.
+    fixed: length,
+    weight: float,
+    // A cell of this column has a finding: the column keeps room for the marks, so its fields line up.
+    marked: bool,
+}
+
+// A part of a card: one option row, or a table.
+export struct PluginBlockView {
+    table: bool,
+    row: SettingRowView,
+    key: string,
+    label: string,
+    help: string,
+    columns: [PluginColumnView],
+    rows: [PluginTableRowView],
+    add-label: string,
+    empty: string,
+    // The sum of the fixed widths and of the weights of the columns.
+    fixed-total: length,
+    weight-total: float,
+    // A row has a finding: the rows keep room for the marks.
+    row-marked: bool,
+    // The rows can be dragged to another place (a grip), and moved with buttons (`plugin.toml`: reorder_drag,
+    // reorder_buttons).
+    reorder-drag: bool,
+    reorder-buttons: bool,
+    // A finding about the whole table.
+    issue: string,
+}
+
+export struct PluginCardView {
+    title: string,
+    description: string,
+    blocks: [PluginBlockView],
+}
+
+export global PluginsUi {
+    // Settings > Plugins.
+    in property <[PluginItemView]> plugins;
+    in property <[string]> dev-folders;
+    in property <[PluginAvailableView]> available;
+    in property <bool> checking;
+    in property <bool> installing;
+    // A plugin file is dragged over the window.
+    in property <bool> drop-hover;
+    callback toggle(/* id */ string);
+    callback expand(/* id */ string);
+    callback move(/* id */ string, /* -1 up, 1 down */ int);
+    callback install();
+    callback add-dev();
+    callback remove-dev(int);
+    callback check-updates();
+    callback install-available(int);
+    callback update(/* id */ string);
+    // "" = every plugin.
+    callback reload(/* id */ string);
+    callback open-folder(/* id; "" = the plugins' folder */ string);
+    callback remove(/* id */ string);
+    callback export-settings(/* id */ string);
+    callback import-settings(/* id */ string);
+    callback open-page(/* id */ string);
+
+    // Drag & drop of a table's rows and of the plugin list (key "#plugins"), the program's scheme (`drag.slint`): the
+    // rows' shifts, the gap where the row lands, the ghost under the pointer; the page scrolls near its edges.
+    in property <bool> dragging;
+    in property <string> drag-key;
+    in property <int> drag-row;
+    in property <[length]> drag-shifts;
+    in property <bool> drag-instant;
+    in property <length> drag-gap-y;
+    in property <length> drag-gap-height;
+    in property <length> drag-ghost-y;
+    in property <string> drag-title;
+    in property <string> drag-detail;
+    // The pointer in the list's coordinates (0 = the top of the first row).
+    callback drag-start(/* key */ string, /* row */ int, /* pointer */ length, /* pitch */ length, /* height */ length);
+    callback drag-move(/* pointer */ length);
+    callback drag-end();
+
+    // One plugin's page: its cards (the first is RustCut's "Plugin" card).
+    in property <PluginItemView> current;
+    in property <[PluginCardView]> cards;
+    callback cell-text(/* table key */ string, /* row */ int, /* column */ int, string) -> bool;
+    callback cell-toggle(string, int, int);
+    callback cell-choose(string, int, int, /* index */ int);
+    callback cell-pick(string, int, int);
+    callback cell-rate(string, int, int, /* stars */ int);
+    callback row-add(/* table key */ string);
+    callback row-remove(string, int);
+    callback row-move(string, int, /* -1 up, 1 down */ int);
+}

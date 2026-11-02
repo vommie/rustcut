@@ -23,6 +23,7 @@ import { SettingsProfiles } from "settings_profiles.slint";
 import { SettingsHotkeys } from "settings_hotkeys.slint";
 import { SettingsAbout } from "settings_about.slint";
 import { SettingsMessages } from "settings_messages.slint";
+import { SettingsPlugins, SettingsPluginPage } from "settings_plugins.slint";
 
 export component SettingsWindow inherits Window {
     title: "RustCut - Settings";
@@ -61,6 +62,7 @@ export component SettingsWindow inherits Window {
                     dialog-focus.focus();
                     SettingsUi.select-page(index);
                 }
+                category-toggled(index) => { SettingsUi.toggle-page(index); }
             }
 
             VerticalLayout {
@@ -155,7 +157,7 @@ export component SettingsWindow inherits Window {
                         content-height: page.preferred-height;
                         interactive: !DragState.active && !DragState.holding;
 
-                        property <int> page-now: SettingsUi.page;
+                        property <int> page-now: SettingsUi.page-slot;
                         // The page whose position `viewport-y` is (set before the position of a new page).
                         property <int> shown-page: -1;
                         init => {
@@ -223,6 +225,10 @@ export component SettingsWindow inherits Window {
                             if SettingsUi.special == 6: SettingsCropRatios { }
 
                             if SettingsUi.special == 7: SettingsDiagnostics { }
+
+                            if SettingsUi.special == 8: SettingsPlugins { }
+
+                            if SettingsUi.special == 9: SettingsPluginPage { }
                         }
                     }
 

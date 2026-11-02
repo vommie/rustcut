@@ -91,6 +91,37 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 - Copyright (c) 2011 Google Inc. All rights reserved.
 - Copyright (c) 2020 Yevhenii Reizner All rights reserved.
+- Copyright (c) 2026, Alexandre Bury
+- Copyright © WHATWG (Apple, Google, Mozilla, Microsoft).
+
+```
+BSD 3-Clause License
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
 
 ```
 Redistribution and use in source and binary forms, with or without
@@ -133,6 +164,33 @@ modification, are permitted provided that the following conditions are met:
    this list of conditions and the following disclaimer in the documentation
    and/or other materials provided with the distribution.
 
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+```
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
 3. Neither the name of the copyright holder nor the names of its contributors
    may be used to endorse or promote products derived from this software
    without specific prior written permission.
@@ -151,18 +209,20 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ## ISC License
 
+- Copyright (c) Hanno Braun and contributors
 - Copyright © 2015, Simonas Kazlauskas
 
 ```
-Permission to use, copy, modify, and/or distribute this software for any purpose with or without
-fee is hereby granted, provided that the above copyright notice and this permission notice appear
-in all copies.
+Permission to use, copy, modify, and/or distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright notice
+and this permission notice appear in all copies.
 
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS
-SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
-AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,
-NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
@@ -170,6 +230,7 @@ THIS SOFTWARE.
 
 - Copyright (c) 2006-2009 Graydon Hoare
 - Copyright (c) 2009-2013 Mozilla Foundation
+- Copyright (c) 2010 The Rust Project Developers
 - Copyright (c) 2012-2013 Mozilla Foundation
 - Copyright (c) 2013-2014 The Rust Project Developers.
 - Copyright (c) 2013-2016 The rust-url developers
@@ -188,7 +249,9 @@ THIS SOFTWARE.
 - Copyright (c) 2014-2026 Alex Crichton
 - Copyright (c) 2014-2026 Sean McArthur
 - Copyright (c) 2015
+- Copyright (c) 2015 Alice Maz
 - Copyright (c) 2015 Andrew Gallant
+- Copyright (c) 2015 Bartłomiej Kamiński
 - Copyright (c) 2015 Carl Lerche + nix-rust Authors
 - Copyright (c) 2015 Dan Burkert
 - Copyright (c) 2015 Danny Guo
@@ -196,6 +259,9 @@ THIS SOFTWARE.
 - Copyright (c) 2015 fangyuanziti
 - Copyright (c) 2015 Nicholas Allegra (comex).
 - Copyright (c) 2015 nwin
+- Copyright (c) 2015 Steven Allen
+- Copyright (c) 2015 The cobs.rs Developers
+- Copyright (c) 2015 The Gimli Developers
 - Copyright (c) 2015 The procfs Developers
 - Copyright (c) 2015 The quick-error Developers
 - Copyright (c) 2015 The Rust Project Developers
@@ -217,10 +283,12 @@ THIS SOFTWARE.
 - Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>
 - Copyright (c) 2016--2017
 - Copyright (c) 2016--2023
+- Copyright (c) 2016-2018 The gimli Developers
 - Copyright (c) 2016-2019 Ulrik Sverdrup "bluss" and scopeguard developers
 - Copyright (c) 2016-2021 Diggory Blake, and other contributors.
 - Copyright (c) 2016-2026 The RustCrypto Project Developers
 - Copyright (c) 2017 Aaron Hancock
+- Copyright (c) 2017 Andrew Gallant
 - Copyright (c) 2017 arc-swap developers
 - Copyright (c) 2017 Artyom Pavlov
 - Copyright (c) 2017 Contributors
@@ -235,6 +303,7 @@ THIS SOFTWARE.
 - Copyright (c) 2017 Ted Driggs
 - Copyright (c) 2017 The Tokio Authors
 - Copyright (c) 2017 tokio-jsonrpc developers
+- Copyright (c) 2017-2020 The Rust Project Developers
 - Copyright (c) 2017-2023 Maik Klein, Maja Kądziołka
 - Copyright (c) 2017-2024 oyvindln
 - Copyright (c) 2017-2025 RustCrypto Developers
@@ -253,10 +322,12 @@ THIS SOFTWARE.
 - Copyright (c) 2018 Victor Berger
 - Copyright (c) 2018 Yevhenii Reizner
 - Copyright (c) 2018-2019 dirs-rs contributors
+- Copyright (c) 2018-2019 The RustCrypto Project Developers
 - Copyright (c) 2018-2025 The rust-random Project Developers
 - Copyright (c) 2018-2025 The RustCrypto Project Developers
 - Copyright (c) 2018-2026 The Rand Project Developers
 - Copyright (c) 2018-2026 The rust-random Project Developers
+- Copyright (c) 2019 Anthony James Munns
 - Copyright (c) 2019 Carl Lerche
 - Copyright (c) 2019 Daniel "Lokathor" Gee.
 - Copyright (c) 2019 Eliza Weisman
@@ -264,6 +335,7 @@ THIS SOFTWARE.
 - Copyright (c) 2019 Ivan Molodetskikh
 - Copyright (c) 2019 Kornel
 - Copyright (c) 2019 Manish Goregaokar
+- Copyright (c) 2019 Nick Fitzgerald
 - Copyright (c) 2019 Osspial
 - Copyright (c) 2019 Peter Glotfelty
 - Copyright (c) 2019 Reizner Evgeniy
@@ -285,10 +357,12 @@ THIS SOFTWARE.
 - Copyright (c) 2020 Yoshua Wuyts, Stjepan Glavina & Zeeshan Ali Khan
 - Copyright (c) 2020 Élie ROUDNINSKI (marmeladema) <xademax@gmail.com>
 - Copyright (c) 2020-2021 Joshua Barretto
+- Copyright (c) 2020-2025 The RustCrypto Project Developers
 - Copyright (c) 2020-2026 Paweł Kuna
 - Copyright (c) 2020-2026 The RustCrypto Project Developers
 - Copyright (c) 2021 1Password
 - Copyright (c) 2021 4lDO2
+- Copyright (c) 2021 RustCrypto Developers
 - Copyright (c) 2021-2022 The Nushell Project Developers
 - Copyright (c) 2021-2026 RustCrypto Developers
 - Copyright (c) 2022 Arthur Silva
@@ -303,6 +377,7 @@ THIS SOFTWARE.
 - Copyright (c) 2023 Jacob Pratt et al.
 - Copyright (c) 2023 John Nunley
 - Copyright (c) 2023 Kirill Chibisov
+- Copyright (c) 2023 Notify Contributors
 - Copyright (c) 2024 Jacob Pratt et al.
 - Copyright (c) 2024 Zeeshan Ali Khan & zbus contributors
 - Copyright (c) 2025 Alice Maz, Marshall Pierce
@@ -318,6 +393,7 @@ THIS SOFTWARE.
 - Copyright (c) Jacob Pratt et al.
 - Copyright (c) The Rust Project Developers
 - Copyright (c) The rust-url developers
+- Copyright (c) The tar-rs Project Contributors
 - Copyright (c) Tokio Contributors
 - Copyright (c) Ulrik Sverdrup "bluss" 2015-2023
 - Copyright (c) zune-image developers

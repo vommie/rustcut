@@ -73,13 +73,22 @@ pub fn is_rustview(line: &BookLine) -> bool {
     line.text.starts_with("[RustView]") || line.text.starts_with("[Tags]")
 }
 
+/// Whether a line of the app's log is a plugin's (or about the plugins).
+pub fn is_plugins(line: &BookLine) -> bool {
+    line.text.starts_with("[Plugins]")
+}
+
 /// The lines of the app's log (`LogSource::App`) or its RustView part that pass the filter, numbered by their place
 /// in this run's log; each line starts with its time and level.
 pub fn book_shown(lines: &[BookLine], source: LogSource, search: &str, errors_only: bool) -> Vec<ShownLine> {
     let needle = search.trim().to_lowercase();
     lines
         .iter()
-        .filter(|line| source != LogSource::RustView || is_rustview(line))
+        .filter(|line| match source {
+            LogSource::RustView => is_rustview(line),
+            LogSource::Plugins => is_plugins(line),
+            _ => true,
+        })
         .filter_map(|line| {
             let level = match line.level {
                 tracing::Level::ERROR => LineLevel::Error,
@@ -282,6 +291,30 @@ mod tests {
             book_shown(&log, LogSource::App, "warn", false).len(),
             1,
             "the level text is searchable"
+        );
+    }
+
+    #[test]
+    fn the_plugins_part_of_the_app_log() {
+        let log = vec![
+            book(
+                1,
+                tracing::Level::INFO,
+                "[Plugins] auto-folder: target folder set (rule ~/Videos)",
+            ),
+            book(2, tracing::Level::INFO, "[Queue] Started jobs=0"),
+            book(
+                3,
+                tracing::Level::WARN,
+                "[Plugins] test-slow: video-opened failed: timed out after 1s",
+            ),
+        ];
+        let plugins = book_shown(&log, LogSource::Plugins, "", false);
+        assert_eq!(plugins.iter().map(|l| l.number).collect::<Vec<_>>(), [1, 3]);
+        assert_eq!(
+            book_shown(&log, LogSource::Plugins, "test-slow", false).len(),
+            1,
+            "one plugin by its id"
         );
     }
 

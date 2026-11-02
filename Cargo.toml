@@ -1,15 +1,33 @@
 [workspace]
 resolver = "3"
-members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustcut", "crates/rustcut-thumbs", "crates/rustcut-thumbs-protocol"]
-default-members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustcut", "crates/rustcut-thumbs", "crates/rustcut-thumbs-protocol"]
+members = [
+    "crates/rustcut-core",
+    "crates/rustcut-player",
+    "crates/rustcut",
+    "crates/rustcut-thumbs",
+    "crates/rustcut-thumbs-protocol",
+    "crates/rustcut-plugin-api",
+    "crates/rustcut-plugin-host",
+]
+default-members = [
+    "crates/rustcut-core",
+    "crates/rustcut-player",
+    "crates/rustcut",
+    "crates/rustcut-thumbs",
+    "crates/rustcut-thumbs-protocol",
+    "crates/rustcut-plugin-api",
+    "crates/rustcut-plugin-host",
+]
+# The test plugins are WebAssembly crates with a workspace of their own (built for wasm32-wasip2 by the tests).
+exclude = ["crates/rustcut-plugin-host/test-plugin"]
 
 [workspace.package]
 # Single source of truth for the app version: the About page, the package script and the PKGBUILD read it from here.
 # Claude bumps the patch number whenever a state is testable; major and minor belong to the user.
-version = "0.0.96"
+version = "0.0.97"
 edition = "2024"
-# The lowest toolchain known to work (rusqlite_migration needs 1.95). rust-toolchain.toml pins `stable`.
-rust-version = "1.95"
+# The lowest toolchain known to work (wasmtime 50 needs 1.97). rust-toolchain.toml pins `stable`.
+rust-version = "1.97"
 license = "MIT"
 authors = ["vommie"]
 repository = "https://github.com/vommie/rustcut"
@@ -133,6 +151,20 @@ rustcut-thumbs-protocol = { path = "crates/rustcut-thumbs-protocol" }
 usvg = { version = "0.49", default-features = false, features = ["writer"] }
 resvg = { version = "0.49", default-features = false }
 blake3 = "1"
+# Plugins (P12 block 8, Q-P12g): WebAssembly components in a sandbox with time and memory limits; `cache` keeps the
+# compiled code on disk so a plugin starts in half a millisecond after its first start.
+wasmtime = { version = "50", default-features = false, features = ["component-model", "cranelift", "cache", "parallel-compilation", "std", "runtime", "pooling-allocator", "addr2line", "demangle"] }
+wasmtime-wasi = { version = "50", default-features = false, features = ["p2"] }
+# The guest side of the plugin API (crates/rustcut-plugin-api, compiled into every plugin).
+wit-bindgen = "0.63"
+# Plugin files (.rcplugin) are tar archives compressed with zstd.
+tar = "0.4"
+zstd = "0.14"
+# Plugin and plugin API versions.
+semver = { version = "1", features = ["serde"] }
+# Development plugin folders are reloaded when their build changes.
+notify = "8"
+rustcut-plugin-host = { path = "crates/rustcut-plugin-host" }
 
 # Tests only.
 proptest = "1"

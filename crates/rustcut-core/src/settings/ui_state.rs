@@ -75,6 +75,10 @@ pub struct SettingsWindowState {
     #[serde_as(as = "DefaultOnError")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub folder_collapsed: Vec<FolderId>,
+    /// The sidebar's pages whose sub-pages are folded in (P12 block 8: `plugins`); unknown ids are ignored.
+    #[serde_as(as = "DefaultOnError")]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub folded_pages: Vec<String>,
 }
 
 impl SettingsWindowState {
@@ -97,6 +101,7 @@ impl Default for SettingsWindowState {
             diagnostics_passed: [false; 2],
             folder_selected: None,
             folder_collapsed: Vec::new(),
+            folded_pages: Vec::new(),
         }
     }
 }
@@ -326,6 +331,8 @@ pub enum LogSource {
     RustView,
     /// The messages of this session (toasts, banners, the status line; M6.5).
     Messages,
+    /// The plugins' lines of this run (P12 block 8).
+    Plugins,
 }
 
 /// The Logs panel's filter.

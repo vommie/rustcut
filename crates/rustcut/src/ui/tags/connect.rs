@@ -33,7 +33,10 @@ pub(super) fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
     ));
     on!(on_apply_edit, |b| b.apply_edit());
     on!(on_cancel_edit, |b| b.cancel_edit());
-    on!(on_rating_clicked, |b, rating| b.change(|s| s.click_rating(rating)));
+    on!(on_rating_clicked, |b, rating| {
+        b.change(|s| s.click_rating(rating));
+        b.user_rated();
+    });
     // Ctrl+0..5 (RustView's keys): the rating, and its digit in the middle of the video (the buttons show it themselves).
     on!(on_rate_key, |b, rating| {
         let Some(window) = b.window.upgrade() else { return };
@@ -42,12 +45,14 @@ pub(super) fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
         let mut rated = false;
         b.change(|s| rated = s.rate_key(rating, playback.get_has_video()));
         if rated {
+            b.user_rated();
             tracing::info!(rating, "[Tags] Rating set by key");
             crate::ui::player::flash(&playback, crate::ui::player::FlashKind::Rating(rating));
         }
     });
     on!(on_tag_clicked, |b, id| if let Some(id) = tag_id(id) {
         b.change(|s| s.click_tag(id));
+        b.user_clicked_tag(id);
     });
     on!(on_tag_right_clicked, |b, id| if let Some(id) = tag_id(id) {
         let locked = b.state.borrow_mut().toggle_lock(id);
@@ -66,6 +71,7 @@ pub(super) fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
     on!(on_refresh_tree, |b| b.refresh_tree());
     on!(on_history_tag_clicked, |b, id| if let Some(id) = tag_id(id) {
         b.change(|s| s.click_tag(id));
+        b.user_clicked_tag(id);
     });
     on!(on_history_width_changed, |b, width| b.history_width_changed(width));
     on!(
@@ -86,7 +92,13 @@ pub(super) fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
     });
     on!(on_apply_last_tags, |b| b.change(TagPanel::apply_last_tags));
     on!(on_apply_last_rating, |b| b.change(TagPanel::apply_last_rating));
-    on!(on_clear, |b| b.change(TagPanel::clear));
+    on!(on_clear, |b| {
+        b.change(TagPanel::clear);
+        b.user_rated();
+    });
+    on!(on_rating_plugin_clicked, |b| if let Some(id) = b.rating_plugin() {
+        crate::ui::plugins::show_settings(&id);
+    });
     on!(on_toggle_show_hidden, |b| b.change(TagPanel::toggle_show_hidden));
     on!(on_toggle_search, |b| b.change(|s| {
         s.search_shown = !s.search_shown;

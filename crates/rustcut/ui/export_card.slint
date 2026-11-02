@@ -165,6 +165,13 @@ export component FinalizeCardBody inherits VerticalLayout {
             bubble: Playback.has-video ? "export.folder" : "";
         }
 
+        if Export.folder-plugin != "": IconButton {
+            width: FinalizeMetrics.counter-width;
+            icon: IconId.plugin;
+            tooltip: Export.folder-plugin;
+            clicked => { Export.folder-plugin-clicked(); }
+        }
+
         IconButton {
             width: FinalizeMetrics.counter-width;
             icon: IconId.jump-to;

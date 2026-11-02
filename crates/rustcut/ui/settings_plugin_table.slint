@@ -1,0 +1,290 @@
+// A table of a plugin's settings (P12 block 8): rules as rows of the same columns. The header explains each column in
+// its tooltip; a row with a finding (a conflict, a tag that no longer exists) shows a warning mark whose tooltip says
+// what and why. Rows move by drag & drop and with buttons where the plugin allows it, and are deleted with a held button.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId } from "icons.slint";
+import { TooltipArea } from "tooltip.slint";
+import { ChoiceButton, IconButton, NumberField, UpDownButton } from "controls.slint";
+import { ToggleSwitch } from "toggle_switch.slint";
+import { RatingBar } from "rating_bar.slint";
+import { DragArea, DragGhost, DragMotion, DragState, DropGap } from "drag.slint";
+import { PluginBlockView, PluginCellView, PluginTableRowView, PluginsUi } from "settings_plugin_types.slint";
+
+// One cell; its control follows the column's kind.
+component PluginCell inherits HorizontalLayout {
+    in property <PluginCellView> cell;
+    in property <string> table;
+    in property <int> row-index;
+    in property <int> column;
+    // The column has a finding in some row: every cell keeps room for the mark.
+    in property <bool> marked;
+
+    spacing: 2px;
+
+    // The field takes the column's width; a folder's browse button and the marks' room stand beside it.
+    property <length> marks: (root.cell.kind == 1 ? 30px : 0px) + (root.marked ? 18px : 0px);
+
+    if root.cell.kind == 0 || root.cell.kind == 1: NumberField {
+        width: Math.max(40px, root.width - root.marks);
+        spin: false;
+        text: root.cell.text;
+        placeholder: root.cell.placeholder;
+        enabled: root.cell.enabled;
+        alignment: left;
+        committed(text) => { return PluginsUi.cell-text(root.table, root.row-index, root.column, text); }
+    }
+
+    if root.cell.kind == 1: IconButton {
+        icon: IconId.browse;
+        tooltip: "Choose a folder";
+        enabled: root.cell.enabled;
+        clicked => { PluginsUi.cell-pick(root.table, root.row-index, root.column); }
+    }
+
+    if root.cell.kind == 2: VerticalLayout {
+        alignment: center;
+
+        switch-area := TouchArea {
+            width: 36px;
+            height: 20px;
+            enabled: root.cell.enabled;
+            clicked => { PluginsUi.cell-toggle(root.table, root.row-index, root.column); }
+
+            ToggleSwitch {
+                checked: root.cell.checked;
+                enabled: root.cell.enabled;
+            }
+        }
+    }
+
+    if root.cell.kind == 3 || root.cell.kind == 4 || root.cell.kind == 5: ChoiceButton {
+        width: Math.max(40px, root.width - root.marks);
+        stretch-fully: true;
+        items: root.cell.items;
+        current: root.cell.index;
+        enabled: root.cell.enabled;
+        tooltip: root.cell.issue != "" ? root.cell.issue : root.cell.items.length > root.cell.index ? root.cell.items[root.cell.index] : "";
+        selected(index) => { PluginsUi.cell-choose(root.table, root.row-index, root.column, index); }
+    }
+
+    if root.cell.kind == 6: RatingBar {
+        selected-rating: root.cell.stars;
+        is-assign-mode: true;
+        has-selection: root.cell.enabled;
+        rating-selected(stars) => { PluginsUi.cell-rate(root.table, root.row-index, root.column, stars); }
+    }
+
+    if root.marked: TooltipArea {
+        width: 16px;
+        text: root.cell.issue;
+
+        if root.cell.issue != "": AppIcon {
+            y: (parent.height - self.height) / 2;
+            size: 14px;
+            icon: IconId.status-warning;
+            color: Theme.accent;
+        }
+    }
+}
+
+// The grip of a row that can be dragged: a press on it that moves starts the drag (`DragArea`); while the pointer rests
+// on it the page does not scroll (`DragState.holding`).
+export component RowGrip inherits Rectangle {
+    callback drag-started(/* window y */ length);
+    callback drag-moved(/* window y */ length);
+    callback drag-ended();
+
+    width: 14px;
+
+    AppIcon {
+        size: 14px;
+        icon: IconId.drag-grip;
+        color: grip-area.has-hover || grip-area.pressed ? Theme.text : Theme.text-muted;
+    }
+
+    grip-area := DragArea {
+        mouse-cursor: MouseCursor.grab;
+        drag-started(y) => { root.drag-started(y); }
+        drag-moved(y) => { root.drag-moved(y); }
+        drag-ended => { root.drag-ended(); }
+    }
+}
+
+export component PluginTable inherits VerticalLayout {
+    in property <PluginBlockView> block;
+
+    // In front of the cells: the grip and the move buttons (when the plugin allows them).
+    property <length> lead-width: (root.block.reorder-drag ? 14px + 6px : 0px) + (root.block.reorder-buttons ? 22px + 6px : 0px);
+    // Behind the cells: the row's marks and the delete button (with their spacing).
+    property <length> tools-width: (root.block.row-marked ? 6px + 16px : 0px) + 6px + 28px;
+    // What the columns without a fixed width share (a row's padding is 4px on each side, its spacing 6px).
+    property <length> free: Math.max(0px, root.width - 8px - 2px - root.lead-width - root.tools-width
+        - Math.max(0, root.block.columns.length - 1) * 6px - root.block.fixed-total);
+    property <bool> dragged-here: PluginsUi.dragging && PluginsUi.drag-key == root.block.key;
+    property <length> row-height: 34px;
+
+    pure function column-width(fixed: length, weight: float) -> length {
+        return fixed > 0 ? fixed : root.free * weight / Math.max(0.01, root.block.weight-total);
+    }
+
+    spacing: 4px;
+
+    // The header: each column's label, its help in the tooltip.
+    header := HorizontalLayout {
+        spacing: 6px;
+        padding-left: 5px + root.lead-width;
+        alignment: start;
+
+        for column in root.block.columns: TooltipArea {
+            width: root.column-width(column.fixed, column.weight);
+            height: 20px;
+            text: column.help;
+
+            Text {
+                x: 0;
+                width: parent.width;
+                text: column.label;
+                color: Theme.text-muted;
+                font-size: 11px;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+    }
+
+    if root.block.rows.length == 0: Text {
+        text: root.block.empty;
+        color: Theme.text-muted;
+        font-size: 12px;
+        wrap: word-wrap;
+    }
+
+    if root.block.rows.length > 0: list-area := Rectangle {
+        height: list.preferred-height;
+
+        // The page scrolled under the pointer: the pointer is measured again (`DragState.scrolls`).
+        property <int> scrolls: DragState.scrolls;
+        changed scrolls => {
+            if root.dragged-here {
+                PluginsUi.drag-move(DragState.pointer-y - list.absolute-position.y);
+            }
+        }
+
+        list := VerticalLayout {
+            width: parent.width;
+            alignment: start;
+            spacing: 4px;
+
+            for row[r] in root.block.rows: Rectangle {
+                height: root.row-height;
+
+                Rectangle {
+                    y: root.dragged-here && PluginsUi.drag-row == r ? 0px
+                        : root.dragged-here && r < PluginsUi.drag-shifts.length ? PluginsUi.drag-shifts[r] : 0px;
+                    animate y { duration: PluginsUi.drag-instant ? 0ms : DragMotion.shift; easing: ease-out; }
+                    height: parent.height;
+                    opacity: root.dragged-here && PluginsUi.drag-row == r ? 0 : 1;
+                    background: Theme.background;
+                    border-radius: 4px;
+                    border-width: 1px;
+                    border-color: row.issue-level == 2 ? Theme.status-corrupt : Theme.border;
+
+                    line := HorizontalLayout {
+                        padding: 4px;
+                        spacing: 6px;
+
+                        if root.block.reorder-drag: RowGrip {
+                            drag-started(y) => {
+                                DragState.pointer-y = y;
+                                PluginsUi.drag-start(root.block.key, r, y - list.absolute-position.y,
+                                    root.row-height + 4px, root.row-height);
+                            }
+                            drag-moved(y) => {
+                                DragState.pointer-y = y;
+                                PluginsUi.drag-move(y - list.absolute-position.y);
+                            }
+                            drag-ended => { PluginsUi.drag-end(); }
+                        }
+
+                        if root.block.reorder-buttons: UpDownButton {
+                            up-tooltip: "Move the rule up";
+                            down-tooltip: "Move the rule down";
+                            up-enabled: r > 0;
+                            down-enabled: r < root.block.rows.length - 1;
+                            up => { PluginsUi.row-move(root.block.key, r, -1); }
+                            down => { PluginsUi.row-move(root.block.key, r, 1); }
+                        }
+
+                        for cell[c] in row.cells: PluginCell {
+                            width: root.column-width(root.block.columns[c].fixed, root.block.columns[c].weight);
+                            cell: cell;
+                            marked: root.block.columns[c].marked;
+                            table: root.block.key;
+                            row-index: r;
+                            column: c;
+                        }
+
+                        if root.block.row-marked: TooltipArea {
+                            width: 16px;
+                            text: row.issue;
+
+                            if row.issue != "": AppIcon {
+                                y: (parent.height - self.height) / 2;
+                                size: 14px;
+                                icon: row.issue-level == 2 ? IconId.status-error : IconId.status-warning;
+                                color: row.issue-level == 2 ? Theme.status-corrupt : Theme.accent;
+                            }
+                        }
+
+                        IconButton {
+                            width: 28px;
+                            icon: IconId.job-remove;
+                            hold: true;
+                            tooltip: "Delete this rule";
+                            clicked => { PluginsUi.row-remove(root.block.key, r); }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Where the dragged row would land (the other rows moved aside).
+        if root.dragged-here: DropGap {
+            x: 0px;
+            y: PluginsUi.drag-gap-y;
+            width: parent.width;
+            height: Math.max(0px, PluginsUi.drag-gap-height - 4px);
+        }
+
+        // The dragged row under the pointer.
+        if root.dragged-here: DragGhost {
+            x: 0px;
+            y: PluginsUi.drag-ghost-y;
+            width: parent.width;
+            height: root.row-height;
+            title: PluginsUi.drag-title;
+            detail: PluginsUi.drag-detail;
+        }
+    }
+
+    HorizontalLayout {
+        alignment: start;
+        spacing: 6px;
+
+        IconButton {
+            icon: IconId.plus;
+            text: root.block.add-label != "" ? root.block.add-label : "Add";
+            tooltip: root.block.help;
+            clicked => { PluginsUi.row-add(root.block.key); }
+        }
+
+        if root.block.issue != "": Text {
+            text: root.block.issue;
+            color: Theme.accent;
+            font-size: 11px;
+            vertical-alignment: center;
+            wrap: word-wrap;
+        }
+    }
+}

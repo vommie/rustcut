@@ -3,11 +3,19 @@
 
 import { Theme } from "styles.slint";
 import { SettingsScroll } from "settings_scroll.slint";
+import { AppIcon, IconId } from "icons.slint";
+import { SettingsPageItem } from "settings_types.slint";
 
 export component SettingsCategoryItem inherits Rectangle {
     in property <string> title: "";
     in property <bool> is-active: false;
+    // A sub-page one level below its page (P12 block 8).
+    in property <int> depth: 0;
+    // The page has sub-pages: the chevron at the right end folds them in and out.
+    in property <bool> expandable: false;
+    in property <bool> expanded: false;
     callback clicked();
+    callback toggled();
 
     height: 34px;
     background: root.is-active ? Theme.surface-selected : (cat-touch.has-hover ? Theme.surface-hover : transparent);
@@ -18,24 +26,44 @@ export component SettingsCategoryItem inherits Rectangle {
     }
 
     HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
+        padding-left: 12px + root.depth * 14px;
+        padding-right: root.expandable ? 2px : 12px;
+        spacing: 4px;
 
         Text {
+            horizontal-stretch: 1;
             text: root.title;
             color: root.is-active ? Theme.primary : Theme.text;
             font-weight: root.is-active ? 700 : 400;
-            font-size: 12px;
+            font-size: root.depth > 0 ? 11px : 12px;
             vertical-alignment: center;
+            overflow: elide;
+        }
+
+        if root.expandable: Rectangle {
+            width: 26px;
+            border-radius: 4px;
+            background: chevron-touch.has-hover ? Theme.surface-hover : transparent;
+
+            AppIcon {
+                size: 14px;
+                icon: root.expanded ? IconId.chevron-down : IconId.chevron-right;
+                color: Theme.text-muted;
+            }
+
+            chevron-touch := TouchArea {
+                clicked => { root.toggled(); }
+            }
         }
     }
 }
 
 export component SettingsSidebar inherits Rectangle {
     in property <int> active-category: 0;
-    in property <[string]> categories;
+    in property <[SettingsPageItem]> categories;
 
     callback category-selected(int);
+    callback category-toggled(int);
 
     width: 200px;
     background: Theme.surface;
@@ -60,9 +88,14 @@ export component SettingsSidebar inherits Rectangle {
             alignment: start;
 
             for cat[idx] in root.categories: SettingsCategoryItem {
-                title: cat;
+                title: cat.title;
+                depth: cat.depth;
+                expandable: cat.expandable;
+                expanded: cat.expanded;
+                height: cat.depth > 0 ? 28px : 34px;
                 is-active: root.active-category == idx;
                 clicked => { root.category-selected(idx); }
+                toggled => { root.category-toggled(idx); }
             }
         }
     }

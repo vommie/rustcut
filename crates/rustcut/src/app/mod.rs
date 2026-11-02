@@ -9,6 +9,7 @@ mod log_files;
 mod logging;
 mod persistence;
 mod pictures;
+mod plugins;
 pub mod redaction;
 mod services;
 mod shutdown;
@@ -529,6 +530,18 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     );
     export.set_editing(&editing);
     opener.set_editing(&editing);
+    // Plugins (P12 block 8): opened videos and the user's tag clicks become their events.
+    let plugins = plugins::start(&plugins::Parts {
+        ui: &ui,
+        runtime: runtime.handle().clone(),
+        paths: &loaded.paths,
+        settings: &loaded.settings,
+        safe_mode: cli.no_plugins,
+        writer: &writer,
+        export: &export,
+        tags: &tags,
+        opener: &opener,
+    });
     // Moving target files (P12 block 7): the queue's menu opens the dialog.
     let relocate = crate::ui::relocate::RelocateBridge::install(
         &main,
@@ -617,6 +630,12 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         &loaded.ui_state.settings,
         &folder_pictures,
     );
+    // The plugins' pages (P12 block 8): the list, the marks' and messages' way to a plugin, RustView's tags.
+    settings_window.attach_plugins(&plugins);
+    {
+        let tags = Rc::downgrade(&tags);
+        settings_window.hooks().tag_paths = Some(Box::new(move || tags.upgrade().and_then(|t| t.tag_paths())));
+    }
     // Jump marks lead from messages to the options (Q-N6); held until the event loop ends.
     let _jump = JumpBridge::install(&main, &dock, &settings_window, &queue);
     {

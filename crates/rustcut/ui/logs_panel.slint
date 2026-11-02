@@ -104,6 +104,13 @@ export component LogsPanel inherits Rectangle {
                 clicked => { Logs.select-source(3); }
             }
 
+            IconButton {
+                icon: IconId.plugin;
+                checked: Logs.source == 4;
+                tooltip: "The plugins' log of this run (the search finds one plugin by its id)";
+                clicked => { Logs.select-source(4); }
+            }
+
             MiddleText {
                 horizontal-stretch: 1;
                 text: Logs.has-job ? Logs.title : "No job chosen";

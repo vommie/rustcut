@@ -655,3 +655,55 @@ fn version_8_pictures_become_looks() {
         "the old file is backed up first"
     );
 }
+
+#[test]
+fn plugins_have_defaults_old_files_load_and_values_round_trip() {
+    use crate::settings::PluginEntry;
+    // 0.0.96 wrote no `[plugins]`.
+    let s: Settings = toml::from_str("version = 10\n[queue]\nworkers = 2\n").unwrap();
+    assert!(s.plugins.enabled);
+    assert!(s.plugins.entries.is_empty());
+
+    let mut s = Settings::default();
+    let values = serde_json::json!({"show_messages": true, "rules": [{"source": "/a", "target": 3}, {"source": "/b"}]});
+    s.plugins.entries.insert(
+        "auto-folder".into(),
+        PluginEntry {
+            values: values.as_object().unwrap().clone(),
+            ..PluginEntry::default()
+        },
+    );
+    s.plugins.order = vec!["auto-folder".into()];
+    let text = toml::to_string_pretty(&s).unwrap();
+    assert!(text.contains("[plugins.entries.auto-folder.values]"), "{text}");
+    let back: Settings = toml::from_str(&text).unwrap();
+    assert_eq!(back.plugins, s.plugins);
+
+    // A broken entry falls back to the defaults; the rest of the file stays.
+    let s: Settings =
+        toml::from_str("version = 10\n[plugins.entries.x1]\nenabled = \"maybe\"\n[queue]\nworkers = 3\n").unwrap();
+    assert_eq!(s.queue.workers, 3);
+    assert_eq!(s.plugins.entry("x1"), PluginEntry::default());
+}
+
+#[test]
+fn plugin_limits_and_ids_are_sanitized() {
+    use crate::settings::PluginEntry;
+    let mut s = Settings::default();
+    s.plugins.entries.insert(
+        "ok-id".into(),
+        PluginEntry {
+            time_limit_ms: 5,
+            memory_mb: 99_999,
+            ..PluginEntry::default()
+        },
+    );
+    s.plugins.entries.insert("Bad Id".into(), PluginEntry::default());
+    s.plugins.order = vec!["ok-id".into(), "ok-id".into(), "Bad Id".into()];
+    assert!(s.plugins.sanitize());
+    let entry = s.plugins.entry("ok-id");
+    assert_eq!((entry.time_limit_ms, entry.memory_mb), (100, 1024));
+    assert_eq!(s.plugins.entries.len(), 1);
+    assert_eq!(s.plugins.order, vec!["ok-id".to_owned()]);
+    assert!(!s.plugins.sanitize());
+}

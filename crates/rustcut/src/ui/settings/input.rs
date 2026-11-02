@@ -22,6 +22,8 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     let t = this.clone();
     ui.on_select_page(move |i| with(&t, |b| b.select_page(index(i))));
     let t = this.clone();
+    ui.on_toggle_page(move |i| with(&t, |b| index(i).map(|i| b.toggle_row(i)).unwrap_or_default()));
+    let t = this.clone();
     ui.on_reset_page(move || with(&t, SettingsBridge::reset_page));
     let t = this.clone();
     ui.on_close(move || with(&t, SettingsBridge::close));

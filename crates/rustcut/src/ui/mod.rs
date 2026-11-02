@@ -20,6 +20,7 @@ pub mod menu;
 pub mod notices;
 pub mod open;
 pub mod player;
+pub mod plugins;
 pub mod power;
 pub mod probe;
 pub mod problems;

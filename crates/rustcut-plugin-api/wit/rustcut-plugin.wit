@@ -1,0 +1,141 @@
+// The contract between RustCut and its plugins. A plugin is a WebAssembly component of the world `plugin`.
+//
+// Versioning: the package version is the plugin API version. A minor version only adds (new events, actions, fields
+// at the end of a variant); a plugin built against 1.0 runs on every 1.x RustCut. A major version may break, and
+// RustCut keeps loading the previous major for a while. docs/plugins.md in RustCut's repository explains everything.
+package rustcut:plugin@1.0.0;
+
+/// What RustCut offers a plugin to call.
+interface host {
+    /// How important a log line or a message is.
+    enum level {
+        debug,
+        info,
+        warning,
+        error,
+    }
+
+    /// Writes a line into the plugin log (the Logs panel, source "Plugins", and RustCut's log file).
+    log: func(level: level, message: string);
+}
+
+/// The values RustCut and a plugin exchange.
+interface types {
+    use host.{level};
+
+    /// A tag of RustView's tag tree.
+    record tag {
+        /// RustView's id of the tag; stable while the tag exists.
+        id: u32,
+        name: string,
+        /// The names from the root down to this tag, its own name last: ["Nature", "Waterfall"].
+        path: list<string>,
+    }
+
+    /// What the editor holds when an event happens.
+    record context {
+        /// The open video's path, if a video is open.
+        video: option<string>,
+        /// The rating set in the Tag & Rate panel (0 to 5), if any.
+        rating: option<u8>,
+        /// The tags set in the Tag & Rate panel.
+        tags: list<tag>,
+        /// The target folder of Job Finalization as a path, if it is known.
+        target: option<string>,
+    }
+
+    /// Who opened a video.
+    enum opened-by {
+        /// The user opened a new video (File > Open, a drop, the command line, a second start).
+        user,
+        /// A queued job was loaded into the editor.
+        job,
+    }
+
+    /// Something that happened in RustCut.
+    variant event {
+        /// A video was opened; `context.video` is its path.
+        video-opened(opened-by),
+        /// The user assigned a tag in the Tag & Rate panel.
+        tag-assigned(tag),
+        /// The user removed a tag in the Tag & Rate panel.
+        tag-removed(tag),
+    }
+
+    /// Where a message appears.
+    enum place {
+        /// Only the plugin log.
+        none,
+        /// A toast that goes away by itself.
+        toast,
+        /// A banner that stays until it is closed.
+        banner,
+    }
+
+    /// A message to show; RustCut puts the plugin's name in front of the title.
+    record notice {
+        place: place,
+        level: level,
+        title: string,
+        detail: string,
+    }
+
+    /// A target folder.
+    variant target {
+        /// A folder of Settings > Target Folders, by its id.
+        folder(u32),
+        /// Any folder on disk (shown as "Job target", like the folder of a loaded job).
+        path(string),
+    }
+
+    /// Sets the target folder of Job Finalization.
+    record set-target {
+        target: target,
+        /// Why, for the tooltip of the plugin mark at the folder field: "rule ~/Videos/Holiday".
+        reason: string,
+    }
+
+    /// Sets the rating in the Tag & Rate panel.
+    record set-rating {
+        /// 0 to 5 stars.
+        stars: u8,
+        /// Why, for the tooltip of the plugin mark at the rating: "tag Nature › Waterfall".
+        reason: string,
+    }
+
+    /// What RustCut should do after an event. Actions apply in order; the user's own change wins over a plugin's
+    /// until the next video.
+    variant action {
+        set-target(set-target),
+        set-rating(set-rating),
+        notify(notice),
+    }
+
+    /// A finding about the plugin's settings, shown on the plugin's Settings page.
+    record issue {
+        /// The setting's key (`plugin.toml`, `[[cards.fields]] key`).
+        field: string,
+        /// For a table: the row, counted from 0.
+        row: option<u32>,
+        level: level,
+        /// One explaining sentence; it is the tooltip of the issue's mark.
+        message: string,
+    }
+}
+
+/// A RustCut plugin.
+world plugin {
+    import host;
+    use types.{context, event, action, issue};
+
+    /// Called after the plugin is loaded and whenever its settings change. `settings` is a JSON object with one
+    /// member per field declared in `plugin.toml`. An error keeps the plugin from handling events until the next
+    /// successful call.
+    export configure: func(settings: string) -> result<_, string>;
+
+    /// Called for every event; returns what RustCut should do.
+    export handle: func(event: event, context: context) -> result<list<action>, string>;
+
+    /// Checks settings that the user is editing, without applying them (`settings` as in `configure`).
+    export check: func(settings: string) -> list<issue>;
+}

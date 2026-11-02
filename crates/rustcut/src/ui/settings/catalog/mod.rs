@@ -7,6 +7,7 @@ mod editing;
 mod filters;
 mod folders;
 mod messages;
+mod plugins;
 mod thumbnails;
 mod work;
 
@@ -39,6 +40,7 @@ pub fn cards(page: Page) -> &'static [Card] {
         Page::Desktop => app::DESKTOP,
         Page::Appearance => app::APPEARANCE,
         Page::Advanced => app::ADVANCED,
+        Page::Plugins => plugins::PLUGINS,
     }
 }
 
