@@ -38,7 +38,10 @@ export component RatingButton inherits Rectangle {
         clicked => { root.clicked(); }
     }
 
+    // The whole box, so the digit is centered in it exactly (block 10: it stood a pixel off in the 18 px job card box).
     Text {
+        width: parent.width;
+        height: parent.height;
         text: root.rating;
         color: root.filled ? #000000 : Theme.text;
         font-weight: 700;

@@ -43,14 +43,33 @@ fn key_caps(text: &str) -> TipKeys {
     }
 }
 
+fn rect(r: &TipRect) -> Rect {
+    Rect {
+        x: r.x,
+        y: r.y,
+        width: r.width,
+        height: r.height,
+    }
+}
+
 fn place(anchor: &TipRect, width: f32, height: f32, area_width: f32, area_height: f32, beside: bool) -> TipPlacement {
-    let anchor = Rect {
-        x: anchor.x,
-        y: anchor.y,
-        width: anchor.width,
-        height: anchor.height,
-    };
-    let p = placement::place(anchor, width, height, area_width, area_height, beside);
+    to_slint(placement::place(
+        rect(anchor),
+        width,
+        height,
+        area_width,
+        area_height,
+        beside,
+    ))
+}
+
+/// A bubble beside a list's row (the job card): the row is cut to the list first, then the bubble goes beside it.
+pub fn place_beside_row(anchor: &TipRect, list: &TipRect, size: (f32, f32), area: (f32, f32)) -> TipPlacement {
+    let anchor = placement::clip_rows(rect(anchor), rect(list));
+    to_slint(placement::place(anchor, size.0, size.1, area.0, area.1, true))
+}
+
+fn to_slint(p: placement::Placement) -> TipPlacement {
     TipPlacement {
         x: p.x,
         y: p.y,

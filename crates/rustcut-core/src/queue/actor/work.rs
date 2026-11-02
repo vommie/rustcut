@@ -56,6 +56,11 @@ pub(super) enum Report {
         id: JobId,
         result: Result<(), String>,
     },
+    /// A job's own picture was made (`None`: it could not be), P12 block 10.
+    Picture {
+        id: JobId,
+        picture: Option<crate::store::JobPicture>,
+    },
 }
 
 /// Refuses a job that can never render: no section, the source as the target, or a profile with an error.
@@ -131,6 +136,7 @@ impl Actor {
             Report::MoveProgress { id, done } => self.move_progress(id, done),
             Report::MoveEnded { id, result } => self.move_ended(id, result).await,
             Report::RecordMoved { id, result } => self.record_moved(id, result),
+            Report::Picture { id, picture } => self.picture_made(id, picture).await,
         }
     }
 

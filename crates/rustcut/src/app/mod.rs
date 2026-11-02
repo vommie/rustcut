@@ -285,6 +285,8 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
                 dock.reveal(PanelId::TagRate);
             }
         });
+        let names = Rc::downgrade(&tags);
+        queue.hooks().tag_name = Some(Box::new(move |id| names.upgrade().and_then(|tags| tags.tag_name(id))));
         let tags_weak = Rc::downgrade(&tags);
         queue.hooks().edit_tags = Some(Box::new(move |id, name| {
             if let Some(tags) = tags_weak.upgrade() {

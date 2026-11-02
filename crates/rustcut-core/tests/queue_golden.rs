@@ -330,3 +330,59 @@ async fn a_render_stopped_at_quit_waits_again() {
         .await
         .unwrap();
 }
+
+/// P12 block 10: a saved job gets its own picture (WebP), turned like the output and cropped by the job's filters, and
+/// keeps it in the database.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_saved_job_gets_its_own_picture() {
+    use rustcut_core::edit::{Crop, Filter, FilterKind};
+    let fixture = Fixture::new();
+    let queue = fixture.start(fixture.store(), 1, true);
+    let picture = |id| {
+        let handle = queue.handle.clone();
+        async move {
+            tokio::time::timeout(
+                Duration::from_secs(60),
+                handle.request(|reply| QueueCommand::Picture { id, reply }),
+            )
+            .await
+            .unwrap()
+            .unwrap()
+        }
+    };
+    let turned = enqueue(
+        &queue,
+        fixture.spec("rotated_90_metadata.mp4", &[(1_000, 2_000)], "turned", "ultrafast"),
+    )
+    .await;
+    let turned = picture(turned).await.expect("a picture of the turned video");
+    assert_eq!(turned.height, 90, "a portrait picture is as high as the room");
+    assert!(turned.width < 60, "the source's rotation applies: {}", turned.width);
+    assert!(turned.webp.starts_with(b"RIFF"), "stored as WebP");
+    let mut square = fixture.spec("hd_h264_1080p.mp4", &[(500, 1_500)], "square", "ultrafast");
+    square.filters.set(Filter::Crop(Crop {
+        top: 0,
+        right: 420,
+        bottom: 0,
+        left: 420,
+    }));
+    square.filters.set_enabled(FilterKind::Crop, true);
+    let id = enqueue(&queue, square).await;
+    let square = picture(id).await.expect("a picture of the cropped job");
+    assert_eq!((square.width, square.height), (90, 90), "the job's crop applies");
+    let mut missing = fixture.spec("hd_h264_1080p.mp4", &[(500, 1_500)], "missing", "ultrafast");
+    missing.source = fixture.dir.path().join("gone.mp4");
+    let gone = enqueue(&queue, missing).await;
+    assert_eq!(picture(gone).await, None, "no source, no picture");
+    queue
+        .handle
+        .request(|reply| QueueCommand::Shutdown { reply })
+        .await
+        .unwrap();
+    let store = Store::open(
+        &fixture.dir.path().join("queue.sqlite"),
+        &fixture.dir.path().join("backups"),
+    )
+    .unwrap();
+    assert_eq!(store.picture(id).unwrap(), Some(square), "kept with the job");
+}

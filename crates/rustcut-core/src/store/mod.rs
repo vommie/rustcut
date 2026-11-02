@@ -3,6 +3,7 @@
 
 mod actor;
 mod jobs;
+mod pictures;
 mod rescue;
 mod schema;
 
@@ -12,6 +13,7 @@ use rusqlite::Connection;
 
 pub use actor::{StoreCommand, StoreHandle, spawn_store};
 pub use jobs::{JobRecord, LogLine, LogStream, SpecSlot};
+pub use pictures::JobPicture;
 pub use rescue::{Problem, Rescue, readable, rescue, start_empty};
 pub use schema::SCHEMA_VERSION;
 

@@ -7,6 +7,7 @@
 //! deletes what their renders left behind. At shutdown it stops the running renders; they wait again at the next start.
 
 mod commands;
+mod picture;
 mod relocate;
 #[cfg(test)]
 mod relocate_tests;
@@ -146,6 +147,8 @@ struct Actor {
     sync: Option<SyncHandle>,
     /// The target file moves (P12 block 7).
     relocations: relocate::Relocations,
+    /// The jobs' own pictures being made (P12 block 10).
+    pictures: picture::Pictures,
 }
 
 impl Actor {
@@ -167,6 +170,7 @@ impl Actor {
             stopping: false,
             sync,
             relocations: relocate::Relocations::default(),
+            pictures: picture::Pictures::default(),
         };
         let (jobs, recovered) = actor.read_jobs().await;
         let waiting = jobs.iter().any(|j| j.state == JobState::Waiting);

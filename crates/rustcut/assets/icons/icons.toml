@@ -249,6 +249,25 @@ log_follow = { tabler = "arrow-autofit-down", doc = "Stay at the newest line" }
 job_details = { tabler = "file-description", doc = "Show the job in the Job panel" }
 job_move = { tabler = "folder-symlink", doc = "Move the target file of jobs to another folder (P12 block 7)" }
 
+# --- Job card (P12 block 10: the card of a queue job the pointer rests on) -----------------------------------------
+card_source = { tabler = "movie", doc = "Job card: the source video" }
+card_cut = { tabler = "scissors", doc = "Job card: length and sections" }
+card_output = { tabler = "file-export", doc = "Job card: profile and file size" }
+card_time = { tabler = "clock", doc = "Job card: when it renders or how long it took" }
+card_failed = { tabler = "alert-circle", doc = "Job card: why the render failed" }
+card_note = { tabler = "note", doc = "Job card: the job's note" }
+card_rustview_written = { tabler = "cloud-check", doc = "Job card: written to RustView" }
+card_rustview_waiting = { tabler = "cloud-upload", doc = "Job card: waiting to be written to RustView" }
+card_rustview_off = { tabler = "cloud-off", doc = "Job card: not written to RustView (or saved without it)" }
+card_rustview_failed = { tabler = "cloud-x", doc = "Job card: writing to RustView failed" }
+card_rustview_removed = { tabler = "cloud", doc = "Job card: the RustView entry was removed again" }
+card_no_picture = { tabler = "photo-off", doc = "Job card: the job has no picture (its source could not be read)" }
+filter_deinterlace = { tabler = "baseline-density-medium", doc = "Job card: the Deinterlace filter is on" }
+filter_crop = { tabler = "crop", doc = "Job card: the Crop filter is on" }
+filter_deshake = { tabler = "wave-sine", doc = "Job card: the Deshake filter is on" }
+filter_orientation = { tabler = "rotate-clockwise", doc = "Job card: the Orientation filter is on" }
+filter_resize = { tabler = "arrows-diagonal", doc = "Job card: the Resize filter is on" }
+
 # --- Settings window -----------------------------------------------------------------------------------------------
 settings_reset = { tabler = "restore", doc = "Put the options of a settings page back to their defaults" }
 browse = { tabler = "folder-open", doc = "Pick a file or a folder with the file dialog" }

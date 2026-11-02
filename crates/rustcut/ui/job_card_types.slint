@@ -1,0 +1,94 @@
+// The job card's data (P12 block 10): what Rust shows in it (`src/ui/queue/card/`), where the queue's list is, and the
+// rows' hover. The card itself is `job_card.slint`.
+
+import { IconId } from "icons.slint";
+import { TipPlacement, TipRect } from "tooltip.slint";
+
+// 0 normal, 1 muted, 2 error, 3 accent (a file that waits to move).
+export struct JobCardRow {
+    icon: IconId,
+    text: string,
+    right: string,
+    tone: int,
+    // Cut in the middle (a path).
+    path: bool,
+    // The active filters' symbols follow the right text.
+    filters: bool,
+}
+
+export struct JobCardPill {
+    text: string,
+    x: length,
+    y: length,
+    width: length,
+    more: bool,
+}
+
+export struct JobCardView {
+    id: int,
+    name: string,
+    state: string,
+    // JobStateKind order (queue_types.slint).
+    kind: int,
+    picture: image,
+    has-picture: bool,
+    // The picture could not be made (the source is gone): a quiet symbol in its place.
+    no-picture: bool,
+    // -1 = no rating.
+    rating: int,
+    hint: string,
+    pills: [JobCardPill],
+    pills-width: length,
+    pills-height: length,
+    has-progress: bool,
+    progress: float,
+    progress-left: string,
+    progress-right: string,
+    error: string,
+    rows: [JobCardRow],
+    filters: [IconId],
+    footer: string,
+    note: string,
+}
+
+export global JobCard {
+    in property <bool> shown;
+    in property <JobCardView> view;
+    // The shown job's row among the rows shown.
+    in property <int> index;
+    // The queue's list in window coordinates and its scroll position (the panel's `JobCardAnchor` reports them).
+    in-out property <TipRect> list;
+    in-out property <length> content-y;
+    in-out property <length> row-step;
+    in-out property <length> row-height;
+    // The pointer came to (`entered`) or left a job's row.
+    callback hovered(/* job id */ int, /* entered */ bool);
+    // A press on a row: the card closes, the next one waits again.
+    callback pressed();
+    callback pill-measured(/* text */ string, /* width */ length);
+    // The card's place beside `anchor`, which is first cut to `clip` (the list): a job scrolled out points at its edge.
+    pure callback place(/* anchor */ TipRect, /* clip */ TipRect, /* width */ length, /* height */ length,
+        /* area width */ length, /* area height */ length) -> TipPlacement;
+}
+
+/// Placed in the queue panel: reports where the list is while the card shows.
+export component JobCardAnchor inherits Rectangle {
+    in property <TipRect> list;
+    in property <length> content-y;
+    in property <length> row-step;
+    in property <length> row-height;
+
+    width: 0;
+    height: 0;
+
+    init => {
+        JobCard.list = root.list;
+        JobCard.content-y = root.content-y;
+        JobCard.row-step = root.row-step;
+        JobCard.row-height = root.row-height;
+    }
+    changed list => { JobCard.list = root.list; }
+    changed content-y => { JobCard.content-y = root.content-y; }
+    changed row-step => { JobCard.row-step = root.row-step; }
+    changed row-height => { JobCard.row-height = root.row-height; }
+}

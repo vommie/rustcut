@@ -66,6 +66,8 @@ import { BubbleButtonView, BubbleView, Bubbles } from "bubble.slint";
 import { NewerFileDialog, Problems, QueueDatabaseDialog } from "problem_dialogs.slint";
 import { TextLogic, TextSplit } from "controls_text.slint";
 import { DragLogic, DragState } from "drag.slint";
+import { JobCardLayer } from "job_card.slint";
+import { JobCard, JobCardPill, JobCardRow, JobCardView } from "job_card_types.slint";
 
 export {
     Theme, IconId, Dock, DockMetrics, RailPeek, DockCardView, DockGroupView, DockRailItem, DockTabView, Playback, BarFit, PlayerPopup, Status, ActivityView,
@@ -78,7 +80,7 @@ export {
     ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, SettingsPageItem, PluginsUi, PluginItemView, PluginDetailView, PluginAvailableView, PluginCardView, PluginBlockView, PluginCellView, PluginColumnView, PluginTableRowView, FolderTreeUi, FolderTreeRowView, FolderList, FolderListRowView, FolderFieldView, Relocate, RelocateChipView, RelocateConflictView, RelocateRecordView, FolderWheel, WheelSlotView, WheelLookView, WheelMiddleView, FolderDetailsView, FolderIconView, FolderIconRowView, FolderPictureView, RatioChipView, DiagCheckView, DiagGroupView,
     ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power, AppTray, Jump, Notices,
     ToastView, ToastTagView, BannerView, HistoryView, MessageKindView, Bubbles, BubbleView, BubbleButtonView, Problems, ColorCodec, ColorPickerWindow, TagFilterWindow, TagFilterRowView,
-    TextLogic, TextSplit, DragLogic, DragState, AppMenu, MenuBarMenu, TabView
+    TextLogic, TextSplit, DragLogic, DragState, AppMenu, MenuBarMenu, TabView, JobCard, JobCardPill, JobCardRow, JobCardView
 }
 
 export component MainWindow inherits Window {
@@ -656,6 +658,14 @@ export component MainWindow inherits Window {
         menus: root.menus;
         activated(id) => { root.run-menu(id); }
         closed => { key-scope.focus(); }
+    }
+
+    // The job card of the queue row the pointer rests on (P12 block 10), below the tooltips.
+    JobCardLayer {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
     }
 
     TooltipLayer {

@@ -95,6 +95,14 @@ pub fn rescue(path: &Path, backups: &Path) -> Result<Rescue, StoreError> {
                 ) {
                     tracing::debug!(job = id, error = %e, "[Store] No unfinished move to rescue");
                 }
+                // Schema 3's picture (an older file has no such table; a lost picture is made again).
+                if let Err(e) = store.conn.execute(
+                    "INSERT INTO main.job_pictures (job_id, format, width, height, picture) SELECT job_id, format, \
+                     width, height, picture FROM old.job_pictures WHERE job_id = ?1",
+                    [id],
+                ) {
+                    tracing::debug!(job = id, error = %e, "[Store] No picture to rescue");
+                }
                 let logs = store.conn.execute(
                     "INSERT INTO main.job_logs (job_id, at, stream, line) SELECT job_id, at, stream, line FROM \
                      old.job_logs WHERE job_id = ?1 ORDER BY id",
