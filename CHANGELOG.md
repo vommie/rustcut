@@ -199,6 +199,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A loaded job whose folder is not among the target folders shows "Job target" with the letter "J" in the folder field,
+  the same as its row in the folder list (it showed the first letter of the folder's own name) (0.0.104).
+- Dropping a file that is not a plugin file onto Settings > Plugins now says so ("notes.toml is not a plugin file");
+  before, the page invited the drop and then did nothing (0.0.104).
 - Text fields scroll with their cursor: in the target's name (Job Finalization) and every other text field, typing past
   the end, the arrow keys, Home and End now move the text along instead of always showing its start.
 - Moving a job's target file twice in quick succession could take along a RustView entry that is not RustCut's: when
