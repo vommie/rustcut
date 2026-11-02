@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use serde_with::{DefaultOnError, VecSkipError, serde_as};
 
-/// An entry's id: given out once (the highest + 1); 0 is "Next to the source" (D-FPa). The export card, the recent
+/// An entry's id: given out once and never again, also after its entry was deleted (`FolderTree::last_id`); 0 is "Next
+/// to the source" (D-FPa). The export card, the recent
 /// targets and the list's collapsed groups refer to entries by id, so renaming or moving one never loses them.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -165,6 +166,19 @@ pub struct FolderTree {
     #[serde_as(as = "DefaultOnError<VecSkipError<_>>")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub entries: Vec<FolderNode>,
+    /// The highest id ever given out (0.0.105). It only grows, so a deleted entry's id never comes back for a new one
+    /// (a plugin rule or a stored choice that named the deleted entry must not land on another). Files written before
+    /// have none (0): the ids in the tree count.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub last_id: u32,
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if passes a reference"
+)]
+const fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 /// An entry as the pickers show it: the source or a node.
@@ -259,10 +273,13 @@ impl FolderTree {
                 ..FolderNode::folder(FolderId(id), path)
             })
             .collect();
-        Self {
+        let mut tree = Self {
             source: SourceEntry::default(),
             entries,
-        }
+            last_id: 0,
+        };
+        tree.last_id = tree.highest_id();
+        tree
     }
 
     /// Every node depth-first in the tree's order.
@@ -345,10 +362,21 @@ impl FolderTree {
             .unwrap_or_default()
     }
 
-    /// The next free id.
+    /// The highest id in the tree (0 without entries).
+    pub fn highest_id(&self) -> u32 {
+        self.walk().iter().map(|w| w.node.id.0).max().unwrap_or(0)
+    }
+
+    /// The id the next new entry gets: above every id in the tree and every id given out before.
     pub fn next_id(&self) -> FolderId {
-        let highest = self.walk().iter().map(|w| w.node.id.0).max().unwrap_or(0);
-        FolderId(highest.saturating_add(1))
+        FolderId(self.highest_id().max(self.last_id).saturating_add(1))
+    }
+
+    /// Gives out [`Self::next_id`] and remembers it, so it is never given again.
+    pub fn take_id(&mut self) -> FolderId {
+        let id = self.next_id();
+        self.last_id = id.0;
+        id
     }
 
     /// The hashes of the stored pictures the tree keeps, shown or not (the picture store keeps these, removes the rest).
