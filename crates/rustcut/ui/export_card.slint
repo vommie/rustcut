@@ -160,6 +160,8 @@ export component FinalizeCardBody inherits VerticalLayout {
         spacing: 4px;
 
         FolderField {
+            owner: "export";
+            view: Export.folder-field;
             bubble: Playback.has-video ? "export.folder" : "";
         }
 

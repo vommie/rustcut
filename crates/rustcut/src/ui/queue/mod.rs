@@ -110,9 +110,14 @@ pub type ProfileHook = Box<dyn Fn(&str) -> Option<RenderProfile>>;
 /// Every job's id and source.
 pub type JobsHook = Box<dyn Fn(Vec<(i64, std::path::PathBuf)>)>;
 
+/// The move dialog's hook: the selected jobs (P12 block 7).
+pub type MoveTargetsHook = Box<dyn Fn(&[JobSummary])>;
+
 /// What other parts of the app do for the queue panel.
 #[derive(Default)]
 pub struct QueueHooks {
+    /// "Move Target File": the move dialog takes the selected jobs (P12 block 7).
+    pub move_targets: Option<MoveTargetsHook>,
     /// A job ended (the export panel looks at the target folder again).
     pub job_ended: Option<Box<dyn Fn()>>,
     /// "Edit tags and rating" (id, name): the Tag & Rate panel takes it.

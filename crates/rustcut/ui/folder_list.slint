@@ -1,5 +1,5 @@
-// The Job Finalization card's target folder field and its list (P11.4, user decision Q-FP2): the card keeps only the
-// field (the entry's picture and name); opened, a flyout lists "Next to the source", the favorites, the last three
+// The folder select (P11.4, user decision Q-FP2; reusable since P12 block 7): a field shows the entry's picture and
+// name; opened, a flyout lists "Next to the source", the favorites, the last three
 // targets and the tree (folding is remembered). Typing searches every level (hits show their group); a missing folder
 // shows a warning mark. Up/Down move, Left/Right fold, Enter picks, Escape closes (src/ui/export/folder_list.rs).
 
@@ -33,8 +33,17 @@ export struct FolderListRowView {
     stripe: bool,
 }
 
+// What a folder field shows: the folder's picture, its name and its whole path (the tooltip).
+export struct FolderFieldView {
+    picture: FolderPictureView,
+    label: string,
+    tooltip: string,
+}
+
+// One list per window serves every folder field; `owner` names the field it hangs from (src/ui/folders/select/).
 export global FolderList {
     in-out property <bool> open;
+    in-out property <string> owner;
     // The field in window coordinates (the flyout hangs from it).
     in-out property <length> anchor-x;
     in-out property <length> anchor-y;
@@ -47,27 +56,25 @@ export global FolderList {
     // The rows' total height and the width the longest row wants (Rust; the panel is not tied to the field's width).
     in property <length> rows-height;
     in property <length> panel-width: 300px;
-    // The field: the target's picture, its name and its whole path (the tooltip).
-    in property <FolderPictureView> picture;
-    in property <string> label;
-    in property <string> tooltip;
     // The look (Settings > Target Folders): the pictures' shape, one-color pictures in the entry's color, the stripe.
     in property <int> shape: 1;
     in property <bool> tint: true;
     in property <bool> stripe: true;
     in property <string> query;
 
-    callback opened();
+    callback opened(/* owner */ string);
     callback closed();
     callback pick(/* row */ int);
     callback search(string);
     callback key(/* text */ string) -> bool;
 }
 
-/// The field in the card: looks like a choice, opens the list.
+/// A folder field: looks like a choice, opens the list for its owner.
 export component FolderField inherits Rectangle {
     in property <bool> enabled: true;
     in property <string> bubble;
+    in property <string> owner;
+    in property <FolderFieldView> view;
 
     height: 24px;
     min-width: 60px;
@@ -75,10 +82,10 @@ export component FolderField inherits Rectangle {
     border-radius: 4px;
     background: touch.has-hover && root.enabled ? Theme.surface-hover : Theme.surface;
     border-width: 1px;
-    border-color: FolderList.open ? Theme.primary : Theme.border;
+    border-color: FolderList.open && FolderList.owner == root.owner ? Theme.primary : Theme.border;
 
     host := TooltipHost {
-        text: FolderList.tooltip;
+        text: root.view.tooltip;
     }
 
     BubbleAnchor {
@@ -96,7 +103,7 @@ export component FolderField inherits Rectangle {
             FolderPicture {
                 width: 16px;
                 height: 16px;
-                picture: FolderList.picture;
+                picture: root.view.picture;
                 shape: FolderList.shape;
                 tint: FolderList.tint;
             }
@@ -104,7 +111,7 @@ export component FolderField inherits Rectangle {
 
         Text {
             horizontal-stretch: 1;
-            text: FolderList.label;
+            text: root.view.label;
             color: root.enabled ? Theme.text : Theme.status-deleted;
             font-size: 12px;
             vertical-alignment: center;
@@ -131,7 +138,7 @@ export component FolderField inherits Rectangle {
             FolderList.anchor-y = root.absolute-position.y;
             FolderList.anchor-width = root.width;
             FolderList.anchor-height = root.height;
-            FolderList.opened();
+            FolderList.opened(root.owner);
         }
     }
 }

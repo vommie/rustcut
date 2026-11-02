@@ -1,4 +1,4 @@
-//! The Job Finalization card's folder list without Slint (P11.4, user decision Q-FP2): opened from the card's field, it
+//! The folder list without Slint (P11.4, user decision Q-FP2; reusable since P12 block 7): opened from a folder field, it
 //! shows "Next to the source", the favorites, the last three targets and the tree (folded groups are remembered); typing
 //! searches every level. The keys move a highlight over the entries (Up/Down), fold and unfold groups (Left/Right),
 //! pick (Enter) and close (Escape). While a loaded job's folder is the target, the temporary entry "Job target" stands

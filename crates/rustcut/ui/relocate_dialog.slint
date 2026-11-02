@@ -1,0 +1,456 @@
+// Moving the target files of jobs (P12 block 7, user decision Q-P12f; src/ui/relocate/): one dialog for one job (folder
+// and name) and for several (only the folder). The folder comes from the shared folder select (every target folder and
+// its options menu), a typed path or the system's folder dialog. Every check shows before anything happens; a name that
+// is taken is decided here ("Add (n)" preselected, "Skip these", "Overwrite" held). The second dialog names the RustView
+// records that could not follow their files (the user moves them in RustView).
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId, IconSize } from "icons.slint";
+import { IconButton, MiddleText, NumberField } from "controls.slint";
+import { DialogFrame, DialogHeader, DialogPanel } from "dialog_frame.slint";
+import { DialogButton } from "export_dialog_parts.slint";
+import { FolderField, FolderFieldView } from "folder_list.slint";
+import { NoticeLook } from "notice_types.slint";
+import { SmoothScrollArea } from "smooth_scroll_view.slint";
+
+// A check: 0 info, 2 warning, 3 error (the notice levels).
+export struct RelocateCheckView {
+    level: int,
+    text: string,
+}
+
+// A taken name and the name "Add (n)" gives it.
+export struct RelocateConflictView {
+    file: string,
+    numbered: string,
+}
+
+// A record that stayed at the old path.
+export struct RelocateRecordView {
+    from: string,
+    to: string,
+    reason: string,
+}
+
+export global Relocate {
+    in-out property <bool> open;
+    in property <string> title;
+    in property <string> text;
+    in property <bool> single;
+    in property <FolderFieldView> folder-field;
+    in property <string> path;
+    in property <string> name;
+    in property <string> extension;
+    in property <[RelocateCheckView]> checks;
+    in property <bool> checking;
+    in property <string> conflict-title;
+    in property <[RelocateConflictView]> conflicts;
+    in property <bool> can-overwrite;
+    // 0 "Add (n)", 1 "Skip these", 2 "Overwrite".
+    in property <int> resolution;
+    in property <bool> ready;
+    in property <string> move-label: "Move";
+    // The dialog's size while RustCut runs.
+    in-out property <length> width;
+    in-out property <length> height;
+
+    callback path-committed(string) -> bool;
+    callback path-typed(string);
+    callback name-committed(string) -> bool;
+    callback name-typed(string);
+    callback browse();
+    callback set-resolution(int);
+    callback confirm();
+    callback cancel();
+
+    in-out property <bool> records-open;
+    in property <string> records-title;
+    in property <[RelocateRecordView]> records;
+    callback records-copy();
+    callback records-close();
+}
+
+component Choice inherits Rectangle {
+    in property <bool> selected;
+    in property <string> title;
+    in property <string> detail;
+    callback chosen();
+
+    height: row.preferred-height;
+    border-radius: 4px;
+    background: root.selected ? Theme.primary.with-alpha(0.15) : touch.has-hover ? Theme.surface-hover : transparent;
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.chosen(); }
+    }
+
+    row := HorizontalLayout {
+        padding: 6px;
+        spacing: 8px;
+
+        VerticalLayout {
+            alignment: center;
+
+            Rectangle {
+                width: 12px;
+                height: 12px;
+                border-radius: 6px;
+                border-width: 2px;
+                border-color: root.selected ? Theme.primary : Theme.text-muted;
+
+                Rectangle {
+                    width: 6px;
+                    height: 6px;
+                    border-radius: 3px;
+                    background: root.selected ? Theme.primary : transparent;
+                }
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 2px;
+
+            Text {
+                text: root.title;
+                color: Theme.text;
+                font-size: 12px;
+            }
+
+            if root.detail != "": Text {
+                text: root.detail;
+                color: Theme.text-muted;
+                font-size: 11px;
+                wrap: word-wrap;
+            }
+        }
+    }
+}
+
+component Label inherits Text {
+    width: 46px;
+    color: Theme.text-muted;
+    font-size: 12px;
+    vertical-alignment: center;
+}
+
+export component RelocateDialog inherits Rectangle {
+    background: #000000a0;
+
+    TouchArea { }
+
+    keys := FocusScope {
+        init => { self.focus(); }
+
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                Relocate.cancel();
+                return accept;
+            }
+            if event.text == Key.Return && Relocate.ready && Relocate.resolution != 2 {
+                Relocate.confirm();
+                return accept;
+            }
+            accept
+        }
+
+        DialogFrame {
+            area-width: root.width;
+            area-height: root.height;
+            default-width: 560px;
+            default-height: Math.min(content.preferred-height, root.height - 40px);
+            least-width: 420px;
+            least-height: 260px;
+            stored-width <=> Relocate.width;
+            stored-height <=> Relocate.height;
+
+            content := VerticalLayout {
+                padding: 16px;
+                spacing: 10px;
+
+                DialogHeader {
+                    icon: IconId.job-move;
+                    title: Relocate.title;
+                    text: Relocate.text;
+                    closable: true;
+                    close => { Relocate.cancel(); }
+                }
+
+                HorizontalLayout {
+                    spacing: 6px;
+
+                    Label {
+                        text: "Folder";
+                    }
+
+                    FolderField {
+                        owner: "relocate";
+                        view: Relocate.folder-field;
+                    }
+
+                    IconButton {
+                        icon: IconId.browse;
+                        tooltip: "Choose the folder with the system's folder dialog";
+                        clicked => { Relocate.browse(); }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 6px;
+
+                    Label {
+                        text: "Path";
+                    }
+
+                    NumberField {
+                        spin: false;
+                        alignment: left;
+                        max-width: 100000px;
+                        text: Relocate.path;
+                        placeholder: "Next to each source video";
+                        tooltip: "The folder as a whole path; Enter takes a typed path (a folder that does not exist yet is made)";
+                        committed(text) => { return Relocate.path-committed(text); }
+                        typed(text) => { Relocate.path-typed(text); }
+                    }
+                }
+
+                if Relocate.single: HorizontalLayout {
+                    spacing: 6px;
+
+                    Label {
+                        text: "Name";
+                    }
+
+                    NumberField {
+                        spin: false;
+                        alignment: left;
+                        max-width: 100000px;
+                        text: Relocate.name;
+                        unit: Relocate.extension;
+                        tooltip: "The file's new name (the extension stays: the job's container decides it)";
+                        committed(text) => { return Relocate.name-committed(text); }
+                        typed(text) => { Relocate.name-typed(text); }
+                    }
+                }
+
+                SmoothScrollArea {
+                    vertical-stretch: 1;
+                    min-height: 60px;
+                    preferred-height: checks.preferred-height;
+
+                    checks := VerticalLayout {
+                        spacing: 8px;
+                        alignment: start;
+
+                        if Relocate.checking: HorizontalLayout {
+                            spacing: 6px;
+
+                            AppIcon {
+                                icon: IconId.notice-info;
+                                size: IconSize.sm;
+                                color: Theme.text-muted;
+                            }
+
+                            Text {
+                                text: "Checking the folders and files ...";
+                                color: Theme.text-muted;
+                                font-size: 12px;
+                            }
+                        }
+
+                        for check in Relocate.checks: HorizontalLayout {
+                            spacing: 6px;
+
+                            VerticalLayout {
+                                alignment: start;
+
+                                AppIcon {
+                                    icon: NoticeLook.icon(check.level);
+                                    size: IconSize.sm;
+                                    color: NoticeLook.color(check.level);
+                                }
+                            }
+
+                            Text {
+                                horizontal-stretch: 1;
+                                text: check.text;
+                                color: check.level == 3 ? Theme.status-corrupt : Theme.text;
+                                font-size: 12px;
+                                wrap: word-wrap;
+                            }
+                        }
+
+                        if Relocate.conflicts.length > 0: DialogPanel {
+                            VerticalLayout {
+                                spacing: 4px;
+
+                                Text {
+                                    text: Relocate.conflict-title;
+                                    color: Theme.accent;
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                    wrap: word-wrap;
+                                }
+
+                                for conflict in Relocate.conflicts: HorizontalLayout {
+                                    spacing: 6px;
+
+                                    MiddleText {
+                                        horizontal-stretch: 1;
+                                        text: conflict.file;
+                                        color: Theme.text;
+                                    }
+
+                                    if Relocate.resolution == 0: Text {
+                                        text: "→ " + conflict.numbered;
+                                        color: Theme.text-muted;
+                                        font-size: 11px;
+                                    }
+                                }
+
+                                Choice {
+                                    selected: Relocate.resolution == 0;
+                                    title: "Add (n) to the name (Recommended)";
+                                    chosen => { Relocate.set-resolution(0); }
+                                }
+
+                                Choice {
+                                    selected: Relocate.resolution == 1;
+                                    title: "Skip these jobs";
+                                    detail: "They keep their targets; the others move";
+                                    chosen => { Relocate.set-resolution(1); }
+                                }
+
+                                if Relocate.can-overwrite: Choice {
+                                    selected: Relocate.resolution == 2;
+                                    title: "Overwrite the files there";
+                                    detail: "The existing files are replaced and their RustView records go; hold Move to confirm. A queued job's target or another selected job's name gets (n) anyway";
+                                    chosen => { Relocate.set-resolution(2); }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+
+                    DialogButton {
+                        text: "Cancel";
+                        clicked => { Relocate.cancel(); }
+                    }
+
+                    if Relocate.resolution != 2: DialogButton {
+                        text: Relocate.move-label;
+                        primary: true;
+                        enabled: Relocate.ready;
+                        clicked => { Relocate.confirm(); }
+                    }
+
+                    if Relocate.resolution == 2: IconButton {
+                        height: 30px;
+                        icon: IconId.job-move;
+                        text: Relocate.move-label;
+                        hold: true;
+                        alert: true;
+                        enabled: Relocate.ready;
+                        tooltip: "Moves and replaces the existing files";
+                        clicked => { Relocate.confirm(); }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component RelocateRecordsDialog inherits Rectangle {
+    background: #000000a0;
+
+    TouchArea { }
+
+    FocusScope {
+        init => { self.focus(); }
+
+        key-pressed(event) => {
+            if event.text == Key.Escape || event.text == Key.Return {
+                Relocate.records-close();
+                return accept;
+            }
+            accept
+        }
+
+        DialogFrame {
+            area-width: root.width;
+            area-height: root.height;
+            default-width: 600px;
+            default-height: Math.min(body.preferred-height, root.height - 40px);
+            least-width: 420px;
+            least-height: 220px;
+
+            body := VerticalLayout {
+                padding: 16px;
+                spacing: 10px;
+
+                DialogHeader {
+                    icon: IconId.status-warning;
+                    tint: Theme.accent;
+                    title: Relocate.records-title;
+                    text: "The files moved, but RustView could not move their records. Move them in RustView (the old entries show there as missing files), or move the files back.";
+                    closable: true;
+                    close-tooltip: "Close";
+                    close => { Relocate.records-close(); }
+                }
+
+                SmoothScrollArea {
+                    vertical-stretch: 1;
+                    min-height: 60px;
+                    preferred-height: rows.preferred-height;
+
+                    rows := VerticalLayout {
+                        spacing: 8px;
+                        alignment: start;
+
+                        for record in Relocate.records: VerticalLayout {
+                            spacing: 2px;
+
+                            MiddleText {
+                                text: record.from;
+                                color: Theme.text-muted;
+                            }
+
+                            MiddleText {
+                                text: "→ " + record.to;
+                                color: Theme.text;
+                            }
+
+                            Text {
+                                text: record.reason;
+                                color: Theme.status-corrupt;
+                                font-size: 11px;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+
+                    DialogButton {
+                        text: "Copy the Paths";
+                        clicked => { Relocate.records-copy(); }
+                    }
+
+                    DialogButton {
+                        text: "OK";
+                        primary: true;
+                        clicked => { Relocate.records-close(); }
+                    }
+                }
+            }
+        }
+    }
+}

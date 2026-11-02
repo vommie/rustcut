@@ -81,7 +81,8 @@ impl QueueView {
                 self.processing = Some(p);
                 false
             }
-            QueueEvent::Done { .. } => false,
+            // The status bar's move segment follows these itself (`ui::relocate`).
+            QueueEvent::Done { .. } | QueueEvent::Relocation(_) | QueueEvent::Relocated(_) => false,
         };
         self.totals.update(&self.rows, &self.progress, now_ms);
         ended

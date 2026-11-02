@@ -18,6 +18,8 @@ pub enum QueueAction {
     EditTags,
     Play,
     Reveal,
+    /// Move the target files to another folder (P12 block 7, Q-P12f).
+    MoveTarget,
     Hold,
     Release,
     Retry,
@@ -50,6 +52,7 @@ impl QueueAction {
             Self::EditTags => "tags".into(),
             Self::Play => "play".into(),
             Self::Reveal => "reveal".into(),
+            Self::MoveTarget => "move_target".into(),
             Self::Hold => "hold".into(),
             Self::Release => "release".into(),
             Self::Retry => "retry".into(),
@@ -79,6 +82,7 @@ impl QueueAction {
             "tags" => Self::EditTags,
             "play" => Self::Play,
             "reveal" => Self::Reveal,
+            "move_target" => Self::MoveTarget,
             "hold" => Self::Hold,
             "release" => Self::Release,
             "retry" => Self::Retry,
@@ -111,6 +115,7 @@ impl QueueAction {
             | Self::Details
             | Self::EditTags
             | Self::Reveal
+            | Self::MoveTarget
             | Self::MoveTop
             | Self::MoveUp
             | Self::MoveDown
@@ -199,6 +204,9 @@ pub fn queue_menu(
         MenuItem::Separator,
         entry(QueueAction::Play, "Play Output", Icon::PlayFile).into(),
         entry(QueueAction::Reveal, "Show in Folder", Icon::RevealFile).into(),
+        entry(QueueAction::MoveTarget, "Move Target File ...", Icon::JobMove)
+            .tooltip("Another folder (and, for one job, another name); a finished file moves with its RustView record")
+            .into(),
         MenuItem::Separator,
     ];
     let holds = targets(&QueueAction::Hold, selected).len();

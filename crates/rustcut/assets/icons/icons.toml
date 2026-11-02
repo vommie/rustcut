@@ -247,6 +247,7 @@ job_states = { tabler = "list-check", doc = "The job states of the queue's filte
 copy = { tabler = "copy", doc = "Copy to the clipboard" }
 log_follow = { tabler = "arrow-autofit-down", doc = "Stay at the newest line" }
 job_details = { tabler = "file-description", doc = "Show the job in the Job panel" }
+job_move = { tabler = "folder-symlink", doc = "Move the target file of jobs to another folder (P12 block 7)" }
 
 # --- Settings window -----------------------------------------------------------------------------------------------
 settings_reset = { tabler = "restore", doc = "Put the options of a settings page back to their defaults" }
