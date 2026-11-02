@@ -36,7 +36,7 @@ allow = [
     "Unlicense",
     # ffmpeg-next and ffmpeg-sys-next (the thumbnail helper).
     "WTFPL",
-    # Slint is used under its royalty-free desktop license (attribution required, see README and the About page).
+    # Slint offers three licenses; the built program uses GPL-3.0-only (about.toml), this one stays allowed (attribution, see the About page).
     "LicenseRef-Slint-Royalty-free-2.0",
 ]
 # Narrow exceptions: only these crates may use these licenses.

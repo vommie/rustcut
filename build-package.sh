@@ -70,7 +70,9 @@ for want in usr/bin/rustcut \
   usr/share/icons/hicolor/scalable/apps/rustcut.svg \
   usr/share/icons/hicolor/16x16/apps/rustcut.png \
   usr/share/icons/hicolor/512x512/apps/rustcut.png \
-  usr/share/licenses/rustcut/LICENSE; do
+  usr/share/licenses/rustcut/LICENSE \
+  usr/share/licenses/rustcut/ATTRIBUTION.md \
+  usr/share/licenses/rustcut/GPL-3.0-only.txt; do
   grep -qx "$want" <<<"$content" || problems+=("missing $want")
 done
 if bsdtar -xOf "dist/$pkg" usr/bin/rustcut | grep -qa SLINT_MCP_PORT; then

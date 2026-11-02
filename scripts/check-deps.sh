@@ -96,6 +96,7 @@ check optional cmd:rsvg-convert          librsvg            "renders the app ico
 
 section "Quality checks"
 check optional cmd:cargo-audit cargo-audit "checks dependencies for known vulnerabilities"
+check optional cmd:cargo-about cargo-about "writes ATTRIBUTION.md and checks that it is current"
 check optional cmd:cargo-deny  cargo-deny  "checks licenses, bans and advisories (deny.toml)"
 
 section "Visual tests (only needed to take screenshots of the running app)"
