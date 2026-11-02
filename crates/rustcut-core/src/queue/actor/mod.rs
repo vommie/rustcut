@@ -117,7 +117,14 @@ async fn run(
                     return;
                 }
             },
-            Some(report) = reports.recv() => actor.report(report).await,
+            Some(report) = reports.recv() => {
+                // The sync actor reports a record before it answers its move (a refused move marks the record as not
+                // RustCut's): those records are stored before the move's outcome is handled.
+                if matches!(report, Report::RecordMoved { .. }) {
+                    actor.take_records(&mut records).await;
+                }
+                actor.report(report).await;
+            }
             record = sync::next_record(&mut records) => match record {
                 Some((id, record)) => actor.sync_reported(id, record).await,
                 None => records = None,
@@ -351,14 +358,19 @@ impl Actor {
         }
     }
 
-    /// Stops every render; the jobs wait again at the next start. Records the sync actor reported before are stored.
-    async fn shutdown(&mut self, reports: &mut mpsc::UnboundedReceiver<Report>, records: &mut Option<SyncRecords>) {
-        self.stopping = true;
+    /// Stores every record the sync actor reported so far.
+    async fn take_records(&mut self, records: &mut Option<SyncRecords>) {
         if let Some(records) = records {
             while let Ok((id, record)) = records.try_recv() {
                 self.sync_reported(id, record).await;
             }
         }
+    }
+
+    /// Stops every render; the jobs wait again at the next start. Records the sync actor reported before are stored.
+    async fn shutdown(&mut self, reports: &mut mpsc::UnboundedReceiver<Report>, records: &mut Option<SyncRecords>) {
+        self.stopping = true;
+        self.take_records(records).await;
         let moving = self.stop_relocation();
         if self.workers.is_empty() && !moving {
             tracing::info!("[Queue] Stopped");

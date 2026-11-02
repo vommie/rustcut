@@ -109,9 +109,11 @@ enum Answer {
     /// A lookup was answered (the reply went out inside the future); the error tells about the connection.
     Lookup(Option<RustViewError>),
     /// A record that followed its file was answered; on an error the record at the new path is not known to be RustCut's.
+    /// The loop sends the reply after it marked the record.
     Moved {
         id: JobId,
-        error: Option<RustViewError>,
+        answer: Result<MoveMedia, RustViewError>,
+        reply: Reply<Result<MoveMedia, RustViewError>>,
     },
     Hash {
         md5: String,
