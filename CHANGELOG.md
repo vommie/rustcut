@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.104] - 2026-11-02
+
 ### Added
 
 - "Edit Tags and Rating" works for several jobs at once (queue menu and the queue's tag button), like a selection of
@@ -1426,7 +1428,8 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.85...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.104...HEAD
+[0.0.104]: https://github.com/vommie/rustcut/compare/v0.0.85...v0.0.104
 [0.0.85]: https://github.com/vommie/rustcut/compare/v0.0.76...v0.0.85
 [0.0.76]: https://github.com/vommie/rustcut/compare/v0.0.75...v0.0.76
 [0.0.75]: https://github.com/vommie/rustcut/compare/v0.0.71...v0.0.75
