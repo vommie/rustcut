@@ -234,11 +234,12 @@ impl FolderSelect {
         }
     }
 
-    /// What a field shows for a folder that is no entry of the tree (a typed path, a loaded job's folder).
+    /// What a field shows for a folder that is no entry of the tree (a typed path, a loaded job's folder). The letter
+    /// follows the label, so "Job target" shows the "J" of its row in the list.
     pub fn loose_field(path: &Path, label: String) -> FolderFieldView {
         FolderFieldView {
             picture: FolderPictureView {
-                initial: view::initial(&rustcut_core::folders::default_name(path)).into(),
+                initial: view::initial(&label).into(),
                 ..FolderPictureView::default()
             },
             label: label.into(),
@@ -293,7 +294,7 @@ impl FolderSelect {
                 name: JOB_TARGET_NAME.into(),
                 context: context.as_str().into(),
                 picture: FolderPictureView {
-                    initial: "J".into(),
+                    initial: view::initial(JOB_TARGET_NAME).into(),
                     ..FolderPictureView::default()
                 },
                 current: current == JOB_TARGET,
@@ -495,5 +496,15 @@ mod tests {
         ];
         assert!((row_top(&rows, 2) - 50.0).abs() < f32::EPSILON);
         assert!(row_top(&rows, 0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn a_loose_field_takes_the_letter_of_its_label() {
+        let path = Path::new("/videos/p12check");
+        let field = FolderSelect::loose_field(path, JOB_TARGET_NAME.to_owned());
+        assert_eq!(field.picture.initial, "J", "the same letter as the Job target row");
+        assert_eq!(field.tooltip, "/videos/p12check");
+        let named = FolderSelect::loose_field(path, rustcut_core::folders::default_name(path));
+        assert_eq!(named.picture.initial, "P");
     }
 }

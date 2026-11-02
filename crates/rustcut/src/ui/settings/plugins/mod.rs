@@ -413,15 +413,51 @@ impl SettingsBridge {
         }
     }
 
-    /// Files dropped on a plugin page: every plugin file is installed.
+    /// Files dropped on a plugin page: every plugin file is installed; other files are named in one message, since
+    /// the page invited the drop.
     pub(in crate::ui::settings) fn plugins_dropped(&self, paths: Vec<std::path::PathBuf>) {
         let ext = rustcut_core::plugins::package_extension();
+        let mut refused = Vec::new();
         for path in paths {
             if path.extension().is_some_and(|e| e == ext) {
                 self.plugin_install(path, false);
             } else {
                 tracing::info!("[Plugins] Not a plugin file: {}", path.display());
+                refused.push(
+                    path.file_name()
+                        .map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned()),
+                );
             }
         }
+        if let Some(title) = not_plugin_title(&refused) {
+            notices::post(Notice::new(Kind::PluginInstallFailed, title).detail(format!("Plugin files end in .{ext}.")));
+        }
+    }
+}
+
+/// The message's title for dropped files that are no plugin files (none: no message).
+fn not_plugin_title(names: &[String]) -> Option<String> {
+    match names {
+        [] => None,
+        [one] => Some(format!("{one} is not a plugin file")),
+        many => Some(format!("{} files are not plugin files", many.len())),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dropped_files_that_are_no_plugins_are_named() {
+        assert_eq!(not_plugin_title(&[]), None);
+        assert_eq!(
+            not_plugin_title(&["notes.toml".to_owned()]).as_deref(),
+            Some("notes.toml is not a plugin file")
+        );
+        assert_eq!(
+            not_plugin_title(&["a.toml".to_owned(), "b.mp4".to_owned()]).as_deref(),
+            Some("2 files are not plugin files")
+        );
     }
 }

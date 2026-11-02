@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.104] - 2026-11-02
+
 ### Added
 
 - "Edit Tags and Rating" works for several jobs at once (queue menu and the queue's tag button), like a selection of
@@ -199,6 +201,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A loaded job whose folder is not among the target folders shows "Job target" with the letter "J" in the folder field,
+  the same as its row in the folder list (it showed the first letter of the folder's own name) (0.0.104).
+- Dropping a file that is not a plugin file onto Settings > Plugins now says so ("notes.toml is not a plugin file");
+  before, the page invited the drop and then did nothing (0.0.104).
 - Text fields scroll with their cursor: in the target's name (Job Finalization) and every other text field, typing past
   the end, the arrow keys, Home and End now move the text along instead of always showing its start.
 - Moving a job's target file twice in quick succession could take along a RustView entry that is not RustCut's: when
@@ -1422,7 +1428,8 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.85...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.104...HEAD
+[0.0.104]: https://github.com/vommie/rustcut/compare/v0.0.85...v0.0.104
 [0.0.85]: https://github.com/vommie/rustcut/compare/v0.0.76...v0.0.85
 [0.0.76]: https://github.com/vommie/rustcut/compare/v0.0.75...v0.0.76
 [0.0.75]: https://github.com/vommie/rustcut/compare/v0.0.71...v0.0.75
