@@ -8,6 +8,7 @@ import { Playback, PlayerPopup } from "player_types.slint";
 import { Flyout } from "flyout.slint";
 import { TransportButton } from "player_transport.slint";
 import { Shortcuts } from "shortcuts.slint";
+import { TextLine } from "controls_text_line.slint";
 
 /// A vertical bar for a value from 0 to 1, with the magnets of `PlayerSeekBar`; the top is 1.
 component VerticalVolume inherits Rectangle {
@@ -172,15 +173,13 @@ export component PlayerPopups inherits Rectangle {
             border-color: self.invalid ? Theme.status-corrupt : Theme.primary;
             background: Theme.background;
 
-            input := TextInput {
+            input := TextLine {
                 x: 6px;
                 width: parent.width - 12px;
                 height: parent.height;
-                single-line: true;
                 color: Theme.text;
                 font-family: "monospace";
                 font-size: 12px;
-                vertical-alignment: center;
                 selection-background-color: Theme.primary.with-alpha(0.4);
 
                 init => {

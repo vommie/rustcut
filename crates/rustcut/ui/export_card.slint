@@ -14,6 +14,7 @@ import { TooltipHost } from "tooltip.slint";
 import { Export } from "export_types.slint";
 import { BubbleAnchor } from "bubble.slint";
 import { Playback } from "player_types.slint";
+import { TextLine } from "controls_text_line.slint";
 
 /// The name: shows the text, a click turns it into a field whose every edit updates the file name at once.
 component NameField inherits Rectangle {
@@ -82,16 +83,14 @@ component NameField inherits Rectangle {
         }
     }
 
-    input := TextInput {
+    input := TextLine {
         x: 5px;
         width: parent.width - 10px - root.suffix-width;
         height: parent.height;
         visible: root.editing;
         enabled: root.editing;
-        single-line: true;
         color: Theme.text;
         font-size: 12px;
-        vertical-alignment: center;
         selection-background-color: Theme.primary.with-alpha(0.4);
 
         edited => { root.edited(self.text); }

@@ -12,6 +12,7 @@ import { PlayerSeekBar } from "player_seek_bar.slint";
 import { Shortcuts } from "shortcuts.slint";
 import { OptionRowView, Probe, RenderSettings } from "render_types.slint";
 import { Playback } from "player_types.slint";
+import { TextLine } from "controls_text_line.slint";
 
 /// A stack of option rows.
 component OptionRows inherits VerticalLayout {
@@ -77,14 +78,12 @@ component NameField inherits Rectangle {
         }
     }
 
-    input := TextInput {
+    input := TextLine {
         x: 5px;
         width: parent.width - 10px;
         height: parent.height;
-        single-line: true;
         color: Theme.text;
         font-size: 12px;
-        vertical-alignment: center;
         selection-background-color: Theme.primary.with-alpha(0.4);
 
         accepted => { root.confirm(); }

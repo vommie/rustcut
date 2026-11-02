@@ -7,6 +7,7 @@ import { TooltipArea } from "tooltip.slint";
 import { IconButton, MiddleText } from "controls.slint";
 import { CollapsiblePanel } from "collapsible_panel.slint";
 import { ConflictOptionView, Export, PreviewView } from "export_types.slint";
+import { TextLine } from "controls_text_line.slint";
 
 /// A text button of a dialog's footer.
 export component DialogButton inherits Rectangle {
@@ -168,15 +169,13 @@ export component OptionRow inherits Rectangle {
                     border-width: 1px;
                     border-color: input.has-focus ? Theme.primary : Theme.border;
 
-                    input := TextInput {
+                    input := TextLine {
                         x: 5px;
                         width: parent.width - 10px;
                         height: parent.height;
-                        single-line: true;
                         text: root.typed;
                         color: Theme.text;
                         font-size: 12px;
-                        vertical-alignment: center;
                         selection-background-color: Theme.primary.with-alpha(0.4);
 
                         edited => { root.typed-changed(self.text); }

@@ -4,6 +4,7 @@
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
+import { TextLine } from "controls_text_line.slint";
 
 export component SettingsSearch inherits Rectangle {
     // The text it starts with (the kept search).
@@ -44,13 +45,11 @@ export component SettingsSearch inherits Rectangle {
                 vertical-alignment: center;
             }
 
-            input := TextInput {
+            input := TextLine {
                 width: parent.width;
                 height: parent.height;
-                single-line: true;
                 color: Theme.text;
                 font-size: 12px;
-                vertical-alignment: center;
                 init => { self.text = root.initial; }
                 edited => { root.edited(self.text); }
             }

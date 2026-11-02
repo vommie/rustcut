@@ -20,3 +20,28 @@ where
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    /// Every text field is a `TextLine` (`ui/controls_text_line.slint`): a bare `TextInput` never scrolls to its cursor
+    /// (user report 2026-11-02: typing past the end, the arrows and End left the text standing at its start).
+    #[test]
+    fn text_fields_follow_their_cursor() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("ui");
+        let mut bare = Vec::new();
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.extension().is_none_or(|e| e != "slint") || path.ends_with("controls_text_line.slint") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            for (n, line) in text.lines().enumerate() {
+                let code = line.split("//").next().unwrap_or_default();
+                if code.contains("TextInput {") || code.contains("TextInput{") {
+                    bare.push(format!("{}:{}", path.display(), n + 1));
+                }
+            }
+        }
+        assert!(bare.is_empty(), "use TextLine instead of a bare TextInput: {bare:?}");
+    }
+}

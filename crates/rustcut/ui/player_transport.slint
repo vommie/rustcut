@@ -33,12 +33,15 @@ export component TransportButton inherits Rectangle {
     width: root.chevron ? 42px : 30px;
     height: 30px;
     border-radius: 4px;
+    // A button that unfolds a menu always shows its frame, like the other drop-down buttons (user request 2026-11-02:
+    // the normalization button was not recognizable as a button while it was off and not hovered).
     background: !root.enabled ? transparent
         : touch.pressed ? Theme.surface-selected
         : root.checked ? Theme.primary.with-alpha(0.22)
-        : touch.has-hover ? Theme.surface-hover : transparent;
-    border-width: root.checked ? 1px : 0px;
-    border-color: Theme.primary;
+        : touch.has-hover ? Theme.surface-hover
+        : root.chevron ? Theme.surface : transparent;
+    border-width: root.checked || root.chevron ? 1px : 0px;
+    border-color: root.checked ? Theme.primary : Theme.border;
 
     host := TooltipHost {
         text: root.tooltip;

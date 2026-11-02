@@ -10,6 +10,7 @@ import { TooltipHost } from "tooltip.slint";
 import { BubbleAnchor } from "bubble.slint";
 import { ControlMetrics } from "controls_base.slint";
 import { UpDownHalf } from "controls_updown.slint";
+import { TextLine } from "controls_text_line.slint";
 
 /// A number that turns into a text field on click (Enter keeps, Escape cancels, leaving keeps a valid value). The
 /// arrows step it (Shift: ten steps); the wheel steps it while the field is open. Free text (`alignment: left`) has no
@@ -184,17 +185,15 @@ export component NumberField inherits Rectangle {
         }
     }
 
-    input := TextInput {
+    input := TextLine {
         x: 5px;
         width: root.text-right - 5px;
         height: parent.height;
         visible: root.editing;
         enabled: root.editing;
-        single-line: true;
         color: Theme.text;
         font-size: 12px;
         horizontal-alignment: root.alignment;
-        vertical-alignment: center;
         selection-background-color: Theme.primary.with-alpha(0.4);
 
         accepted => { root.finish(true); }
