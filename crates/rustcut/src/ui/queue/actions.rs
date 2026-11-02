@@ -432,6 +432,7 @@ impl QueueBridge {
             filtered,
             can_up,
             can_down,
+            rustview: self.hooks.borrow().labels_ready.as_ref().is_some_and(|ready| ready()),
         };
         let items = if on_row {
             let profiles = self.hooks.borrow().profiles.as_ref().map(|p| p()).unwrap_or_default();
@@ -475,6 +476,20 @@ impl QueueBridge {
                 let name = first.and_then(|id| self.row(id)).map(|r| r.name);
                 if let (Some(id), Some(name), Some(hook)) = (first, name, self.hooks.borrow().edit_tags.as_ref()) {
                     hook(id, name);
+                }
+            }
+            QueueAction::LoadLabels => {
+                let gathered = super::labels::gather(&rows);
+                if !gathered.is_empty()
+                    && let Some(hook) = self.hooks.borrow().load_labels.as_ref()
+                {
+                    tracing::info!(
+                        jobs = gathered.jobs,
+                        tags = gathered.tags.len(),
+                        rating = ?gathered.rating,
+                        "[Queue] Tags and rating of jobs loaded into the Tag & Rate panel"
+                    );
+                    hook(gathered.tags, gathered.rating);
                 }
             }
             QueueAction::Play => {

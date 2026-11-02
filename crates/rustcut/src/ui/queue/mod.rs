@@ -9,6 +9,7 @@ mod card;
 mod columns;
 mod drag;
 mod filter;
+mod labels;
 mod menu;
 mod pause;
 mod refresh;
@@ -111,6 +112,9 @@ pub type ProfileHook = Box<dyn Fn(&str) -> Option<RenderProfile>>;
 /// Every job's id and source.
 pub type JobsHook = Box<dyn Fn(Vec<(i64, std::path::PathBuf)>)>;
 
+/// "Load Tags and Rating": the tag ids and the rating for the Tag & Rate panel.
+pub type LoadLabelsHook = Box<dyn Fn(Vec<u32>, Option<u8>)>;
+
 /// The move dialog's hook: the selected jobs (P12 block 7).
 pub type MoveTargetsHook = Box<dyn Fn(&[JobSummary])>;
 
@@ -138,6 +142,10 @@ pub struct QueueHooks {
     /// A job's render ended (finished, failed or canceled; not a later edit of a done job): its notification.
     pub job_done: Option<JobDoneHook>,
     pub profiles: Option<ProfilesHook>,
+    /// RustView's tags are loaded (the menu's "Load Tags and Rating" is on).
+    pub labels_ready: Option<Box<dyn Fn() -> bool>>,
+    /// "Load Tags and Rating": the tags and the rating go into the Tag & Rate panel's current choice.
+    pub load_labels: Option<LoadLabelsHook>,
     /// RustView's name of a tag id (the job card names a job's tags; the Tag & Rate panel's tree).
     pub tag_name: Option<Box<dyn Fn(u32) -> Option<String>>>,
     pub profile: Option<ProfileHook>,

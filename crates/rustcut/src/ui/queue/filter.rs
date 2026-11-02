@@ -371,6 +371,7 @@ pub(crate) mod tests {
             finished_at: None,
             sync: SyncState::NotSynced,
             relocation: None,
+            metadata: None,
         }
     }
 

@@ -201,3 +201,42 @@ fn regex_filter_falls_back_and_state_round_trips() {
     restored.save_into(&mut again);
     assert_eq!(again, saved);
 }
+
+#[test]
+fn loaded_labels_replace_the_choice_and_keep_locked_tags() {
+    let mut p = panel();
+    p.toggle_lock(4);
+    p.click_tag(3);
+    p.click_rating(1);
+    p.take_labels(&[2, 99, 4, 2], Some(5));
+    assert_eq!(
+        (p.draft.tags.clone(), p.draft.rating),
+        (vec![4, 2], Some(5)),
+        "the locked tag first, unknown ids dropped, each once; the old choice is gone"
+    );
+    p.take_labels(&[], Some(0));
+    assert_eq!((p.draft.tags.clone(), p.draft.rating), (vec![4], Some(0)));
+    let original = JobMetadata {
+        tags: vec![3],
+        rating: Some(1),
+        source_hash: None,
+        without_rustview: false,
+    };
+    p.begin_edit(JobId(7), "Clip".into(), original);
+    p.take_labels(&[2], Some(3));
+    assert_eq!(
+        p.choice(),
+        &Choice {
+            tags: vec![2],
+            rating: Some(3)
+        },
+        "an edited job takes them, without locks"
+    );
+    assert_eq!(
+        (p.draft.tags.clone(), p.draft.rating),
+        (vec![4], Some(0)),
+        "the draft waits"
+    );
+    let (_, edited) = p.edited().unwrap();
+    assert_eq!((edited.tags, edited.rating), (vec![2], Some(3)));
+}

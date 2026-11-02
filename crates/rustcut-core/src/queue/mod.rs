@@ -60,6 +60,9 @@ pub struct JobSummary {
     pub sync: SyncState,
     /// The job's target file waits to move to this path (after its render, or behind other moves; P12 block 7).
     pub relocation: Option<PathBuf>,
+    /// The job's RustView tags and rating (`None` when this version cannot read its spec): the queue's menu loads them
+    /// into the Tag & Rate panel.
+    pub metadata: Option<JobMetadata>,
 }
 
 /// Progress of a rendering job (coalesced by the UI to about 10 Hz).

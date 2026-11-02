@@ -16,6 +16,8 @@ pub enum QueueAction {
     Details,
     ShowLog,
     EditTags,
+    /// The jobs' tags and rating into the Tag & Rate panel's current choice (several jobs: every tag, the highest rating).
+    LoadLabels,
     Play,
     Reveal,
     /// Move the target files to another folder (P12 block 7, Q-P12f).
@@ -50,6 +52,7 @@ impl QueueAction {
             Self::Details => "details".into(),
             Self::ShowLog => "log".into(),
             Self::EditTags => "tags".into(),
+            Self::LoadLabels => "load_labels".into(),
             Self::Play => "play".into(),
             Self::Reveal => "reveal".into(),
             Self::MoveTarget => "move_target".into(),
@@ -80,6 +83,7 @@ impl QueueAction {
             "details" => Self::Details,
             "log" => Self::ShowLog,
             "tags" => Self::EditTags,
+            "load_labels" => Self::LoadLabels,
             "play" => Self::Play,
             "reveal" => Self::Reveal,
             "move_target" => Self::MoveTarget,
@@ -114,6 +118,7 @@ impl QueueAction {
             Self::Edit
             | Self::Details
             | Self::EditTags
+            | Self::LoadLabels
             | Self::Reveal
             | Self::MoveTarget
             | Self::MoveTop
@@ -180,6 +185,8 @@ pub struct ListFacts {
     /// The selection can move one place up, down.
     pub can_up: bool,
     pub can_down: bool,
+    /// RustView's tags are loaded: the Tag & Rate panel can take a job's tags and rating.
+    pub rustview: bool,
 }
 
 /// The context menu for `selected`; `profiles` are the render profiles (id, name) for "Render Again With".
@@ -201,6 +208,7 @@ pub fn queue_menu(
         entry(QueueAction::Details, "Show in the Job Panel", Icon::JobDetails).into(),
         entry(QueueAction::ShowLog, "Show Log", Icon::PanelLogs).into(),
         entry(QueueAction::EditTags, "Edit Tags and Rating", Icon::JobTags).into(),
+        load_labels(selected, facts.rustview),
         MenuItem::Separator,
         entry(QueueAction::Play, "Play Output", Icon::PlayFile).into(),
         entry(QueueAction::Reveal, "Show in Folder", Icon::RevealFile).into(),
@@ -284,6 +292,19 @@ pub fn queue_menu(
     items
 }
 
+/// "Load Tags and Rating", named by what the jobs hold; off without RustView's tags or without anything to load.
+fn load_labels(selected: &[&JobSummary], rustview: bool) -> MenuItem {
+    let gathered = super::labels::gather(selected);
+    MenuAction::new(
+        QueueAction::LoadLabels.id(),
+        counted(super::labels::title(&gathered), gathered.jobs, selected.len()),
+        Some(Icon::JobLoadLabels),
+    )
+    .enabled(rustview && !gathered.is_empty())
+    .tooltip(super::labels::tooltip(&gathered, rustview, selected.len()))
+    .into()
+}
+
 /// The menu of the list's empty space: what applies to every job.
 pub fn list_menu(facts: ListFacts, keys: &MenuKeys) -> Vec<MenuItem> {
     let mut items: Vec<MenuItem> = vec![
@@ -350,6 +371,7 @@ mod tests {
             filtered: false,
             can_up: false,
             can_down: false,
+            rustview: true,
         };
         let menu = queue_menu(&all, facts, &profiles, &MenuKeys::default());
         let t = titles(&menu);
@@ -397,6 +419,76 @@ mod tests {
         assert!(t.contains(&("Hold".into(), false)), "nothing to hold or release");
     }
 
+    fn labeled(id: i64, tags: &[u32], rating: Option<u8>) -> JobSummary {
+        JobSummary {
+            metadata: Some(rustcut_core::job::JobMetadata {
+                tags: tags.to_vec(),
+                rating,
+                source_hash: None,
+                without_rustview: false,
+            }),
+            ..row(id, JobState::Finished, "a")
+        }
+    }
+
+    #[test]
+    fn load_labels_names_what_it_loads_and_counts_the_jobs() {
+        let facts = ListFacts {
+            shown: 9,
+            rustview: true,
+            ..ListFacts::default()
+        };
+        let entry = |rows: &[&JobSummary], facts: ListFacts| {
+            let menu = queue_menu(rows, facts, &[], &MenuKeys::default());
+            let item = menu
+                .iter()
+                .find_map(|i| match i {
+                    MenuItem::Action(a) if a.id == QueueAction::LoadLabels.id() => Some(a.clone()),
+                    _ => None,
+                })
+                .unwrap();
+            (item.title, item.enabled)
+        };
+        let (a, b, c) = (
+            labeled(1, &[4], Some(2)),
+            labeled(2, &[], None),
+            labeled(3, &[5, 6], Some(5)),
+        );
+        assert_eq!(entry(&[&a], facts), ("Load Tag and Rating".into(), true));
+        assert_eq!(
+            entry(&[&b], facts),
+            ("Load Tags and Rating".into(), false),
+            "nothing to load"
+        );
+        assert_eq!(
+            entry(&[&a, &b, &c], facts),
+            ("Load Tags and Rating (2 jobs)".into(), true)
+        );
+        let off = ListFacts {
+            rustview: false,
+            ..facts
+        };
+        assert_eq!(
+            entry(&[&a], off),
+            ("Load Tag and Rating".into(), false),
+            "RustView's tags are not loaded"
+        );
+        let menu = queue_menu(&[&a], facts, &[], &MenuKeys::default());
+        let order: Vec<String> = menu
+            .iter()
+            .filter_map(|i| match i {
+                MenuItem::Action(a) => Some(a.id.clone()),
+                _ => None,
+            })
+            .collect();
+        let tags = order.iter().position(|id| id == "tags").unwrap();
+        assert_eq!(
+            order.get(tags + 1).map(String::as_str),
+            Some("load_labels"),
+            "under Edit Tags and Rating"
+        );
+    }
+
     #[test]
     fn the_empty_space_menu() {
         let facts = ListFacts {
@@ -427,6 +519,7 @@ mod tests {
             QueueAction::RetryWith("my-hevc".into()),
             QueueAction::RetryWith(CURRENT_SETTINGS.into()),
             QueueAction::RemoveFinished,
+            QueueAction::LoadLabels,
         ] {
             assert_eq!(QueueAction::from_id(&action.id()), Some(action));
         }

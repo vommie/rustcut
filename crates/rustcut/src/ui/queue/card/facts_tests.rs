@@ -27,6 +27,7 @@ fn summary(state: JobState) -> JobSummary {
         finished_at: Some(NOW - 48_000),
         sync: SyncState::Synced,
         relocation: None,
+        metadata: None,
     }
 }
 
