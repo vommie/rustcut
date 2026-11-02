@@ -239,6 +239,20 @@ impl TagsBridge {
         self.state.borrow().name(id).map(str::to_owned)
     }
 
+    /// RustView's tags are there: the queue's "Load Tags and Rating" can act.
+    pub fn labels_ready(&self) -> bool {
+        self.state.borrow().has_tree() && *self.connection.borrow() != ConnectionState::Disabled
+    }
+
+    /// The queue's "Load Tags and Rating": the jobs' tags and rating become the panel's current choice (of the job
+    /// being edited, else of the next job); the panel shows.
+    pub fn load_labels(&self, tags: &[u32], rating: Option<u8>) {
+        self.state.borrow_mut().take_labels(tags, rating);
+        self.rating_mark.replace(None);
+        self.reveal();
+        self.publish();
+    }
+
     /// A job loaded into the editor: its tags and rating become the panel's choice.
     pub fn load_draft(&self, choice: Choice) {
         self.state.borrow_mut().load_draft(choice);

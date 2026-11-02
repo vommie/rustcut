@@ -287,6 +287,16 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         });
         let names = Rc::downgrade(&tags);
         queue.hooks().tag_name = Some(Box::new(move |id| names.upgrade().and_then(|tags| tags.tag_name(id))));
+        let ready = Rc::downgrade(&tags);
+        queue.hooks().labels_ready = Some(Box::new(move || {
+            ready.upgrade().is_some_and(|tags| tags.labels_ready())
+        }));
+        let load = Rc::downgrade(&tags);
+        queue.hooks().load_labels = Some(Box::new(move |ids, rating| {
+            if let Some(tags) = load.upgrade() {
+                tags.load_labels(&ids, rating);
+            }
+        }));
         let tags_weak = Rc::downgrade(&tags);
         queue.hooks().edit_tags = Some(Box::new(move |id, name| {
             if let Some(tags) = tags_weak.upgrade() {

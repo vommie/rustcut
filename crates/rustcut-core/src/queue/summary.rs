@@ -54,6 +54,10 @@ pub fn summarize(record: &JobRecord) -> JobSummary {
         finished_at: record.finished_at,
         sync,
         relocation: crate::queue::Relocation::from_column(record.relocation.as_deref()).map(|r| r.to),
+        metadata: match &record.spec {
+            SpecSlot::Decoded(spec) => Some(spec.metadata.clone()),
+            SpecSlot::Unreadable { .. } => None,
+        },
     }
 }
 

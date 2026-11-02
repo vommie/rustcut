@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Queue menu > "Load Tags and Rating" (under "Edit Tags and Rating"): puts the job's tags and rating into the Tag & Rate
+  panel's current choice (the next job's, or the job you are editing there), so you can reuse them. Its name says what it
+  loads ("Load Tag", "Load Rating", "Load Tags and Rating", ...). With several jobs selected it takes every tag any of
+  them has and the highest rating ("(3 jobs)" counts the jobs that have any). Locked tags stay. It is grayed out when the
+  jobs have neither, or while RustView's tags are not loaded; its tooltip says why or what it sets.
 - Job card: when the pointer rests on a queue job, a compact card beside the queue shows the job at a glance instead of
   the old four-line tooltip: a small picture of the job, its name and state, its rating (the colored box) left of its
   tags (two rows at most, then "+N"), the target and the source as full paths cut in the middle, length and sections,

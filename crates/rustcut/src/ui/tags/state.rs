@@ -424,6 +424,31 @@ impl TagPanel {
         self.draft = choice;
     }
 
+    /// The queue's "Load Tags and Rating": `tags` (those RustView knows) and `rating` become the current choice, of the
+    /// queued job being edited or else of the draft, which keeps its locked tags first.
+    pub fn take_labels(&mut self, tags: &[u32], rating: Option<u8>) {
+        let known: Vec<u32> = tags
+            .iter()
+            .copied()
+            .filter(|id| self.knows(*id) != Some(false))
+            .collect();
+        if let Some(editing) = self.editing.as_mut() {
+            let mut choice = Choice {
+                tags: Vec::new(),
+                rating,
+            };
+            choice.add(&known);
+            editing.choice = choice;
+            return;
+        }
+        let mut choice = Choice {
+            tags: self.locked.clone(),
+            rating,
+        };
+        choice.add(&known);
+        self.draft = choice;
+    }
+
     /// Starts editing a queued job's entry; the draft waits meanwhile.
     pub fn begin_edit(&mut self, id: JobId, name: String, metadata: JobMetadata) {
         let choice = Choice {

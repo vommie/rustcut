@@ -102,6 +102,7 @@ mod tests {
             finished_at: None,
             sync: SyncState::default(),
             relocation: None,
+            metadata: None,
         };
         assert_eq!(finished_text(&row), "clip - 01.mkv in /videos/out");
         assert_eq!(failed_text(&row, "exit code 1"), "clip - 01.mkv: exit code 1");
