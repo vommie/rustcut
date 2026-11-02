@@ -88,7 +88,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- Licenses: `ATTRIBUTION.md` and `LICENSES/` hold what the licenses require; the package installs them to
+- Licenses: `ATTRIBUTION.md` and `LICENSES/` hold what the licenses require, also for the libwebp code compiled in; the package installs them to
   `/usr/share/licenses/rustcut/`, and the About page says where. The source stays MIT; the built program as a whole is
   under the GPL-3.0, because it links libmpv and FFmpeg.
 - The Normalization button's "made for speech" symbol is now a pair of lips, drawn in the style of the other symbols. RustCut no

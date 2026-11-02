@@ -6,7 +6,8 @@
 
 The MIT, BSD, ISC and Unicode licenses ask to keep the copyright lines and the license text with every copy, also in a binary, so
 each text stands once with its lines; the crates' names are not required. Zlib, BSL-1.0, 0BSD, Unlicense, WTFPL and CC0 ask nothing
-of a binary. Apache-2.0 asks for its text (`LICENSES/`) and no crate here has a NOTICE file; the head names what GPL, LGPL and MPL ask for.
+of a binary. Apache-2.0 asks for its text (`LICENSES/`) and no crate here has a NOTICE file; the head names what GPL, LGPL and MPL ask for,
+and the notices of C code that crates compile in (cargo-about does not see it; `BUNDLED` makes an update of such a crate fail the check).
 """
 import collections
 import json
@@ -19,6 +20,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 TARGET = ROOT / "ATTRIBUTION.md"
 # The licenses that ask for copyright lines and their text in a binary.
 REQUIRED = ("BSD-2-Clause", "BSD-3-Clause", "ISC", "MIT", "Unicode-3.0")
+# Crates that compile bundled C code whose notices the head carries by hand. A new version fails the check until the head is
+# compared with the new bundled code and the version here is raised.
+BUNDLED = {"libwebp-sys": "0.9.6", "libsqlite3-sys": "0.38.2"}
 # Not crates, but in the programs under the MIT License.
 EXTRA_MIT = ("Copyright (c) 2020-2026 Paweł Kuna", "Copyright (c) The Rust Project Developers")
 COPYRIGHT = re.compile(r"^\W*(copyright\b|©|\(c\)\s*\d)", re.IGNORECASE)
@@ -41,7 +45,13 @@ def collect():
         ["cargo", "about", "generate", "--locked", "--no-default-features", "--workspace", "--format", "json"],
         cwd=ROOT, stderr=subprocess.DEVNULL)
     groups = collections.defaultdict(lambda: {"name": "", "texts": collections.Counter(), "lines": set()})
-    for license in json.loads(raw)["licenses"]:
+    data = json.loads(raw)
+    versions = {crate["package"]["name"]: crate["package"]["version"] for crate in data["crates"]}
+    for name, reviewed in BUNDLED.items():
+        if versions.get(name) != reviewed:
+            sys.exit(f"{name} is {versions.get(name)}, the head was reviewed for {reviewed}: compare its bundled C code's notices "
+                     "with scripts/attribution-head.md, then raise BUNDLED in scripts/attribution.py")
+    for license in data["licenses"]:
         key = license["id"]
         if key not in REQUIRED or all(use["crate"]["name"].startswith("rustcut") for use in license["used_by"]):
             continue
