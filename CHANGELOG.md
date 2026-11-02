@@ -124,6 +124,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The queue's list (with its column titles) and the Sections list now stand on the same darker, recessed ground as
+  the tag tree and the tag history, so every list reads as one deeper area; the buttons and the summary stay outside.
 - Settings: every option's label and control share one line, the description stands below over the whole width, and
   card titles and descriptions start at the same edge as the options.
 - The target folder field of Job Finalization is now one component that other places use too (the move dialog).

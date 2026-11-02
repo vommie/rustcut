@@ -1,0 +1,14 @@
+// The recessed ground of a list (P12 block 9, user request 2026-11-02): the tag tree, the tag history, the queue's
+// list and the Sections list stand on it, darker than the card around them, so a list reads as one deeper area.
+// Change the look here only: every list inherits it, so they cannot drift apart again.
+
+import { Theme } from "styles.slint";
+
+/// A list's recessed ground: the window's darkest surface, a 1 px border and rounded corners. Rows on it use
+/// `Theme.surface-hover` for hover and `Theme.surface-selected` for the selection.
+export component ListWell inherits Rectangle {
+    background: Theme.background;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: Theme.border;
+}

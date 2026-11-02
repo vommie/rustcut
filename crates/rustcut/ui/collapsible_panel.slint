@@ -1,12 +1,13 @@
 // Started as a copy of RustView's crates/rustview/ui/collapsible_panel.slint. RustCut's own since 0.0.72 (no parity check any more, user decision 2026-10-27): change it here freely.
 
 import { Theme } from "styles.slint";
+import { ListWell } from "controls_list_well.slint";
 import { AppIcon, IconId, IconSize, IconSlot } from "icons.slint";
 
 /// Generic, modular, and reusable collapsible container for sidebar panels and docks.
 /// Encapsulates consistent theme styling, interactive header bar, title, optional count badge,
 /// animated toggle chevron icon, and smooth height animation with zero-lag drag mode.
-export component CollapsiblePanel inherits Rectangle {
+export component CollapsiblePanel inherits ListWell {
     in property <string> title: "";
     in property <string> count-badge: "";
     in-out property <bool> is-collapsed: false;
@@ -19,10 +20,6 @@ export component CollapsiblePanel inherits Rectangle {
     height: root.is-collapsed ? root.header-height : (root.header-height + root.body-height);
     animate height { duration: root.is-dragging ? 0ms : 180ms; easing: ease-in-out; }
 
-    background: Theme.background;
-    border-radius: 4px;
-    border-width: 1px;
-    border-color: Theme.border;
     clip: true;
 
     VerticalLayout {
