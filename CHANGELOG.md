@@ -88,6 +88,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Dependencies updated to their newest versions (zbus 6, parking_lot 0.13, resvg and usvg 0.49, x11rb 0.14, Tabler icons 3.50).
 - The conflict dialog's pictures come through the thumbnail helper, which is much faster; ffmpeg stays as the fallback.
 - Settings: "Even out the loudness" became the choice "Normalization". An old setting is taken over (on = Loudness); the
   settings file is backed up first (migration `normalization-choice`, settings version 10).

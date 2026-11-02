@@ -149,7 +149,7 @@ impl Drop for Server {
 }
 
 async fn handle(conn: AsyncStream, on_request: &(dyn Fn(Request) + Send + Sync)) {
-    let (reader, mut writer) = conn.split();
+    let (reader, mut writer) = tokio::io::split(conn);
     let mut reader = tokio::io::BufReader::new(tokio::io::AsyncReadExt::take(reader, MAX_REQUEST));
     let mut line = String::new();
     let reply = match tokio::time::timeout(REQUEST_TIMEOUT, reader.read_line(&mut line)).await {

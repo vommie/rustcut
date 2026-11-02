@@ -3,8 +3,7 @@
 //! The D-Bus connections are made when first needed; a bus that is missing is logged once and the rest goes on.
 
 use rustcut_core::actor::{Handle, Mailbox, Reply, mailbox};
-use zbus::Connection;
-use zbus::zvariant::OwnedFd;
+use zbus::{Connection, OwnedFd};
 
 use super::logind::{self, PowerAction};
 use super::taskbar::{self, Badge};
