@@ -31,3 +31,21 @@ pub(super) fn forward(prefix: &str, level: libmpv2::LogLevel, text: &str) {
         _ => tracing::trace!(module = prefix, "[Player] mpv: {text}"),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::CStr;
+
+    #[test]
+    fn a_client_keeps_its_name() {
+        // libmpv2 6.0.0 freed the name before mpv read it, so mpv took a freed block for the name: mostly noise, but about
+        // one start in 200 an empty string, for which `mpv_create_client` returns null and the app died (fixed in 6.0.1).
+        let core = libmpv2::Mpv::with_initializer(|_| Ok(())).unwrap();
+        let client = core.create_client(Some("rustcut_events")).unwrap();
+        // SAFETY: `client.ctx` is a live handle.
+        let name = unsafe { libmpv2_sys::mpv_client_name(client.ctx.as_ptr()) };
+        // SAFETY: the name is NUL-terminated and stays valid while `client` lives (`client.h`).
+        let name = unsafe { CStr::from_ptr(name) };
+        assert_eq!(name.to_str(), Ok("rustcut_events"));
+    }
+}

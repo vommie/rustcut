@@ -6,7 +6,7 @@ default-members = ["crates/rustcut-core", "crates/rustcut-player", "crates/rustc
 [workspace.package]
 # Single source of truth for the app version: the About page, the package script and the PKGBUILD read it from here.
 # Claude bumps the patch number whenever a state is testable; major and minor belong to the user.
-version = "0.0.93"
+version = "0.0.94"
 edition = "2024"
 # The lowest toolchain known to work (rusqlite_migration needs 1.95). rust-toolchain.toml pins `stable`.
 rust-version = "1.95"
@@ -61,8 +61,8 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 # Lexical path normalization (`a/./b/../c` -> `a/c`) without touching the drive.
 path-clean = "1"
 # libmpv bindings (LGPL-2.1, linked dynamically like RustView); the default `render` feature brings the render API that draws
-# into an OpenGL framebuffer (ADR-2).
-libmpv2 = "6"
+# into an OpenGL framebuffer (ADR-2). 6.0.1 and later keep a client's name alive: with 6.0.0 about one start in 200 aborted.
+libmpv2 = "7"
 # The raw libmpv functions libmpv2 does not wrap (`mpv_request_log_messages`), used in one documented `unsafe` block.
 libmpv2-sys = "4"
 # OpenGL bindings for the player's framebuffer texture on Slint's context.
