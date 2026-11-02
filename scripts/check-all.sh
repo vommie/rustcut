@@ -67,6 +67,9 @@ fi
 if needs cargo-audit cargo-audit "Vulnerability scan (cargo audit)"; then
   step "Vulnerability scan (cargo audit)" cargo audit --quiet
 fi
+if needs cargo-about cargo-about "ATTRIBUTION.md is up to date"; then
+  step "ATTRIBUTION.md is up to date" scripts/attribution.py --check
+fi
 if needs cargo-deny cargo-deny "Licenses, bans and sources (cargo deny)"; then
   step "Licenses, bans and sources (cargo deny)" cargo deny --log-level error check
 fi

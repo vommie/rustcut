@@ -14,7 +14,7 @@ export component SettingsAbout inherits VerticalLayout {
         description: "A video cutter: mark sections, apply filters, queue render jobs, and tag and rate the results in RustView. MIT License, Copyright (c) 2026 vommie.";
 
         Text {
-            text: "Videos play through mpv (libmpv) and render through FFmpeg; tags and ratings go to RustView. Icons: Tabler Icons (MIT) and Remix Icon (Apache-2.0).";
+            text: "Videos play through mpv (libmpv) and render through FFmpeg; tags and ratings go to RustView. Icons: Tabler Icons by Paweł Kuna (MIT).\n\nThe built program as a whole is under the GPL-3.0, because it links libmpv and FFmpeg. License notices: /usr/share/licenses/rustcut/ATTRIBUTION.md";
             font-size: 11px;
             color: Theme.text-muted;
             wrap: word-wrap;
@@ -34,7 +34,7 @@ export component SettingsAbout inherits VerticalLayout {
 
     SettingsCard {
         title: "Built with Slint";
-        description: "The user interface is built with Slint, used under the Slint Royalty-free License 2.0.";
+        description: "The user interface is built with Slint by SixtyFPS GmbH, used here under the GPL-3.0.";
 
         AboutSlint {
             height: 88px;

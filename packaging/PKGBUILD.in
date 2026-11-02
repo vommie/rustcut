@@ -6,7 +6,7 @@ pkgrel=@PKGREL@
 pkgdesc='Local video cutter: mark sections, filter, render through a queue, tag and rate in RustView (Rust, Slint, mpv, FFmpeg)'
 arch=('x86_64')
 url='https://github.com/vommie/rustcut'
-license=('MIT')
+license=('MIT' 'GPL-3.0-only')
 # mpv is the player (libmpv), ffmpeg renders, probes and verifies (Arch's ffmpeg brings x264, x265, SVT-AV1, libaom,
 # rav1e and vid.stab for deshake). namcap calls most of the others "may not be needed" because nothing links them: ffmpeg
 # runs as a process, the windowing layer loads the X11, Wayland and OpenGL libraries at run time, and the D-Bus
@@ -73,6 +73,8 @@ package() {
     install -Dm644 "packaging/icons/$pkgname-$size.png" "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/$pkgname.png"
   done
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 ATTRIBUTION.md -t "$pkgdir/usr/share/licenses/$pkgname/"
+  install -Dm644 LICENSES/*.txt -t "$pkgdir/usr/share/licenses/$pkgname/"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
   install -Dm644 CHANGELOG.md "$pkgdir/usr/share/doc/$pkgname/CHANGELOG.md"
 }

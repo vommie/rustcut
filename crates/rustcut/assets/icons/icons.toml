@@ -287,5 +287,5 @@ time_section_loop = { tabler = "repeat", doc = "Open the section in mpv as an A-
 normalize_none = { tabler = "circle-off", doc = "Normalization: none" }
 normalize_loudness = { tabler = "arrow-autofit-height", doc = "Normalization: everything about equally loud" }
 normalize_dynamic = { tabler = "activity", doc = "Normalization: evens out slowly" }
-normalize_speech = { custom = "speak-line.svg", doc = "Normalization: made for speech (Remix Icon speak-line)" }
+normalize_speech = { custom = "lips.svg", doc = "Normalization: made for speech (own drawing in Tabler's style)" }
 normalize_compressor = { tabler = "fold", doc = "Normalization: pushes down the loud parts" }

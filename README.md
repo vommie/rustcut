@@ -44,4 +44,8 @@ and lints the package. The rules for contributors are in `CLAUDE.md`.
 
 ## License
 
-MIT, see `LICENSE`.
+RustCut's own source code is under the MIT License, see `LICENSE`.
+
+The built program as a whole is under the GPL-3.0: it links the system's libmpv and FFmpeg libraries, which are usually built
+under the GPL (Arch and Manjaro do), and it uses [Slint](https://slint.dev) under its GPL-3.0 option. `ATTRIBUTION.md` and `LICENSES/` hold the notices the
+licenses require; the package installs them to `/usr/share/licenses/rustcut/`.

@@ -88,6 +88,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Licenses: `ATTRIBUTION.md` and `LICENSES/` hold what the licenses require; the package installs them to
+  `/usr/share/licenses/rustcut/`, and the About page says where. The source stays MIT; the built program as a whole is
+  under the GPL-3.0, because it links libmpv and FFmpeg.
+- The Normalization button's "made for speech" symbol is now a pair of lips, drawn in the style of the other symbols. RustCut no
+  longer uses Remix Icon.
 - Dependencies updated to their newest versions (zbus 6, parking_lot 0.13, resvg and usvg 0.49, x11rb 0.14, Tabler icons 3.50).
 - The conflict dialog's pictures come through the thumbnail helper, which is much faster; ffmpeg stays as the fallback.
 - Settings: "Even out the loudness" became the choice "Normalization". An old setting is taken over (on = Loudness); the
