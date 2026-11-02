@@ -148,6 +148,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The normalization button in the player's control bar always shows its frame (around the symbol and the arrow), also
+  while normalization is off and the pointer is elsewhere, so it reads as a button like the other drop-down buttons.
 - The queue's list (with its column titles) and the Sections list now stand on the same darker, recessed ground as
   the tag tree and the tag history, so every list reads as one deeper area; the buttons and the summary stay outside.
 - Settings: every option's label and control share one line, the description stands below over the whole width, and
@@ -197,6 +199,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Text fields scroll with their cursor: in the target's name (Job Finalization) and every other text field, typing past
+  the end, the arrow keys, Home and End now move the text along instead of always showing its start.
 - Moving a job's target file twice in quick succession could take along a RustView entry that is not RustCut's: when
   RustView refused to move the job's entry because another entry already sat at the new place, a second move right
   after could move that other entry. RustCut now knows the entry is not its own before it reports the first move's

@@ -4,6 +4,7 @@ import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { TooltipHost } from "tooltip.slint";
 import { TypingKeys } from "typing_keys.slint";
+import { TextLine } from "controls_text_line.slint";
 
 /// Generic, modular, and feature-rich Search & Filter Field component API for Slint.
 /// Features built-in inline Regex toggle button, interactive Clear/Reset button,
@@ -123,7 +124,7 @@ export component SearchField inherits Rectangle {
                 overflow: elide;
             }
 
-            input := TextInput {
+            input := TextLine {
                 x: 0px;
                 y: 0px;
                 width: 100%;
@@ -135,9 +136,7 @@ export component SearchField inherits Rectangle {
                     : Theme.text-muted;
                 selection-background-color: Theme.primary;
                 selection-foreground-color: #000000;
-                vertical-alignment: center;
                 horizontal-alignment: left;
-                single-line: true;
                 enabled: root.is-enabled;
 
                 edited => {

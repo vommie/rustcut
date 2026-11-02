@@ -14,6 +14,7 @@ import { TooltipHost } from "tooltip.slint";
 import { BubbleAnchor } from "bubble.slint";
 import { JumpFlash } from "jump.slint";
 import { DragArea, DragGhost, DragMotion, DragState, DropGap } from "drag.slint";
+import { TextLine } from "controls_text_line.slint";
 
 export struct SectionRowView {
     number: int,
@@ -176,17 +177,15 @@ export component TimeField inherits Rectangle {
         }
     }
 
-    input := TextInput {
+    input := TextLine {
         x: 5px;
         width: parent.width - 10px;
         height: parent.height;
         visible: root.editing;
         enabled: root.editing;
-        single-line: true;
         color: Theme.text;
         font-family: "monospace";
         font-size: 12px;
-        vertical-alignment: center;
         selection-background-color: Theme.primary.with-alpha(0.4);
 
         accepted => { root.finish(true); }

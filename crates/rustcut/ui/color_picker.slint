@@ -19,6 +19,7 @@
 import { Theme } from "styles.slint";
 import { TooltipHost } from "tooltip.slint";
 import { ChannelField, CheckerPattern, ColorCodec, PickerHandle } from "color_picker_parts.slint";
+import { TextLine } from "controls_text_line.slint";
 
 export { ColorCodec }
 
@@ -347,14 +348,12 @@ export component ColorPicker inherits Rectangle {
                 border-color: hex.has-focus ? Theme.primary : Theme.border;
                 background: Theme.surface-variant;
 
-                hex := TextInput {
+                hex := TextLine {
                     x: 8px;
                     width: parent.width - 16px;
                     height: parent.height;
                     font-size: 12px;
                     color: Theme.text;
-                    vertical-alignment: center;
-                    single-line: true;
                     selection-background-color: Theme.primary;
                     selection-foreground-color: Theme.background;
 

@@ -6,6 +6,7 @@
 // Part 1 of 3 (split at RustCut's file size limit): the hex codec and the small pieces the picker is built from.
 
 import { Theme } from "styles.slint";
+import { TextLine } from "controls_text_line.slint";
 
 export global ColorCodec {
     pure callback to-hex(color, bool /* with alpha */) -> string;
@@ -96,13 +97,11 @@ export component ChannelField inherits Rectangle {
         padding-right: 8px;
         spacing: 2px;
 
-        input := TextInput {
+        input := TextLine {
             horizontal-stretch: 1;
             font-size: 12px;
             color: Theme.text;
-            vertical-alignment: center;
             input-type: InputType.number;
-            single-line: true;
             selection-background-color: Theme.primary;
             selection-foreground-color: Theme.background;
 
