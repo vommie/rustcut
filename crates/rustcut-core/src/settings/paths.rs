@@ -80,6 +80,16 @@ impl AppPaths {
         self.data_dir.join("passlog")
     }
 
+    /// Installed plugins, one folder per plugin id (P12 block 8).
+    pub fn plugins_dir(&self) -> PathBuf {
+        self.data_dir.join("plugins")
+    }
+
+    /// The compiled code of plugins: rebuilt from the plugins when missing.
+    pub fn plugin_cache_dir(&self) -> PathBuf {
+        self.cache_dir.join("plugins")
+    }
+
     pub fn log_dir(&self) -> PathBuf {
         self.state_dir.join("logs")
     }

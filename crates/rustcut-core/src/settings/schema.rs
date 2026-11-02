@@ -13,6 +13,7 @@ use super::file::{MigrationStep, VersionedFile};
 use super::filters::FilterDefaults;
 use super::notices::{NoticeSettings, migrate_notice_options};
 use super::player::{MAX_HIDE_POINTER_MS, MIN_HIDE_POINTER_MS, PlayerSettings};
+use super::plugins::PluginSettings;
 use super::thumbnails::ThumbnailSettings;
 use super::wheel::FolderWheelSettings;
 use crate::folders::FolderTree;
@@ -45,6 +46,9 @@ pub struct Settings {
     pub hashing: HashingSettings,
     /// How messages appear (settings version 2, M6.5).
     pub notices: NoticeSettings,
+    /// Plugins: the master switch, their order, development folders and each plugin's switch, limits and values
+    /// (P12 block 8; older files have none: the defaults).
+    pub plugins: PluginSettings,
     /// Key bindings by action id (`set_start = ["I", "Home"]`); a missing action keeps its default, an empty list unbinds
     /// it. Owned, validated and sanitized by the app's keymap (key names are Slint's); the core only stores it. A value
     /// that is neither a string nor a list of strings reads as missing, so a typo never resets the other settings.
@@ -514,6 +518,9 @@ impl VersionedFile for Settings {
         let mut notes = Vec::new();
         if self.thumbnails.sanitize() {
             notes.push("thumbnails: values brought into range".to_owned());
+        }
+        if self.plugins.sanitize() {
+            notes.push("plugins: limits brought into range, unusable ids dropped".to_owned());
         }
         let mut fix = |note: &str, broken: bool| {
             if broken {

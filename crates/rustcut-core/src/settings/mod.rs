@@ -9,6 +9,7 @@ mod folders;
 mod notices;
 mod paths;
 mod player;
+mod plugins;
 mod schema;
 #[cfg(test)]
 mod schema_tests;
@@ -30,6 +31,7 @@ pub use notices::{
 };
 pub use paths::AppPaths;
 pub use player::{MAX_HIDE_POINTER_MS, MIN_HIDE_POINTER_MS, Normalization, PlayerSettings};
+pub use plugins::{PLUGIN_MEMORY_MB, PLUGIN_TIME_LIMIT_MS, PluginEntry, PluginSettings};
 pub use schema::{
     AdvancedSettings, AppearanceSettings, AutoSection, DesktopSettings, EditorSettings, ExportSettings,
     GeneralSettings, HashingSettings, OnJobLoad, QueueSettings, RenderSettings, RustViewSettings, Settings,

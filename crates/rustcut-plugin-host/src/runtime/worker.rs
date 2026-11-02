@@ -38,7 +38,8 @@ enum Job {
     Limits(Limits),
 }
 
-/// A plugin's thread. Dropping it lets the thread end after the call it is running.
+/// A plugin's thread; cheap to clone. Dropping the last clone lets the thread end after the call it is running.
+#[derive(Clone)]
 pub struct Worker {
     jobs: mpsc::Sender<Job>,
 }
