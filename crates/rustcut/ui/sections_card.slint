@@ -9,7 +9,7 @@
 import { Theme } from "styles.slint";
 import { IconId, IconSize } from "icons.slint";
 import { Shortcuts } from "shortcuts.slint";
-import { IconButton } from "controls.slint";
+import { IconButton, ListWell } from "controls.slint";
 import { TooltipHost } from "tooltip.slint";
 import { BubbleAnchor } from "bubble.slint";
 import { JumpFlash } from "jump.slint";
@@ -406,97 +406,100 @@ export component SectionsCardBody inherits Rectangle {
 
         CurrentSection { }
 
-        // Without sections the card ends under the current section (no hint text, user review 2026-10-27).
-        if Sections.rows.length > 0: Rectangle {
-            height: 1px;
-            background: Theme.border;
-        }
+        // Without sections the card ends under the current section (no hint text, user review 2026-10-27). The
+        // titles and the rows stand recessed on the darker ground of the tag tree and the history (P12 block 9).
+        if Sections.rows.length > 0: ListWell {
+            VerticalLayout {
+                padding: 2px;
+                spacing: 6px;
 
-        if Sections.rows.length > 0: HorizontalLayout {
-            padding-left: 4px;
-            spacing: 2px;
-            height: 14px;
+                HorizontalLayout {
+                    padding-left: 4px;
+                    spacing: 2px;
+                    height: 14px;
 
-            ColumnTitle {
-                text: "#";
-                width: 18px;
-            }
-
-            for title in ["Start", "End"]: Rectangle {
-                width: Sections.time-width;
-
-                // Over the times, after the field's inner padding.
-                ColumnTitle {
-                    x: 5px;
-                    height: parent.height;
-                    text: title;
-                }
-            }
-
-            ColumnTitle {
-                text: "Duration";
-                horizontal-stretch: 1;
-                horizontal-alignment: right;
-            }
-
-            // The delete buttons' column (with its gap) has no caption.
-            Rectangle {
-                width: 32px;
-            }
-        }
-
-        if Sections.rows.length > 0: list-area := Rectangle {
-            height: list.preferred-height;
-
-            // The card stack scrolled under the pointer: the pointer is measured again (`DragState.scrolls`).
-            property <int> scrolls: DragState.scrolls;
-            changed scrolls => {
-                if Sections.dragging {
-                    Sections.drag-move(DragState.pointer-y - list.absolute-position.y);
-                }
-            }
-
-            list := VerticalLayout {
-                width: parent.width;
-                height: parent.height;
-                alignment: start;
-                spacing: 2px;
-
-                for row[index] in Sections.rows: SectionRowItem {
-                    item: row;
-                    index: index;
-                    drag-shift: index < Sections.drag-shifts.length ? Sections.drag-shifts[index] : 0px;
-                    lifted: Sections.dragging && row.selected;
-                    // Drag & drop (P9.4): window coordinates turn into the list's coordinates.
-                    drag-started(y) => {
-                        DragState.pointer-y = y;
-                        Sections.drag-start(index, y - list.absolute-position.y, root.row-step, Sections.row-height);
+                    ColumnTitle {
+                        text: "#";
+                        width: 18px;
                     }
-                    drag-moved(y) => {
-                        DragState.pointer-y = y;
-                        Sections.drag-move(y - list.absolute-position.y);
+
+                    for title in ["Start", "End"]: Rectangle {
+                        width: Sections.time-width;
+
+                        // Over the times, after the field's inner padding.
+                        ColumnTitle {
+                            x: 5px;
+                            height: parent.height;
+                            text: title;
+                        }
                     }
-                    drag-ended => { Sections.drag-end(); }
+
+                    ColumnTitle {
+                        text: "Duration";
+                        horizontal-stretch: 1;
+                        horizontal-alignment: right;
+                    }
+
+                    // The delete buttons' column (with its gap) has no caption.
+                    Rectangle {
+                        width: 32px;
+                    }
                 }
-            }
 
-            // Where the dragged sections would land (the other rows moved aside).
-            if Sections.dragging: DropGap {
-                x: 0px;
-                y: Sections.drag-gap-y;
-                width: parent.width;
-                height: Math.max(0px, Sections.drag-gap-height - 2px);
-            }
+                list-area := Rectangle {
+                    height: list.preferred-height;
 
-            // The dragged sections under the pointer.
-            if Sections.dragging: DragGhost {
-                x: 0px;
-                y: Sections.drag-ghost-y;
-                width: parent.width;
-                height: Sections.row-height;
-                title: Sections.drag-title;
-                detail: Sections.drag-detail;
-                count: Sections.drag-count;
+                    // The card stack scrolled under the pointer: the pointer is measured again (`DragState.scrolls`).
+                    property <int> scrolls: DragState.scrolls;
+                    changed scrolls => {
+                        if Sections.dragging {
+                            Sections.drag-move(DragState.pointer-y - list.absolute-position.y);
+                        }
+                    }
+
+                    list := VerticalLayout {
+                        width: parent.width;
+                        height: parent.height;
+                        alignment: start;
+                        spacing: 2px;
+
+                        for row[index] in Sections.rows: SectionRowItem {
+                            item: row;
+                            index: index;
+                            drag-shift: index < Sections.drag-shifts.length ? Sections.drag-shifts[index] : 0px;
+                            lifted: Sections.dragging && row.selected;
+                            // Drag & drop (P9.4): window coordinates turn into the list's coordinates.
+                            drag-started(y) => {
+                                DragState.pointer-y = y;
+                                Sections.drag-start(index, y - list.absolute-position.y, root.row-step, Sections.row-height);
+                            }
+                            drag-moved(y) => {
+                                DragState.pointer-y = y;
+                                Sections.drag-move(y - list.absolute-position.y);
+                            }
+                            drag-ended => { Sections.drag-end(); }
+                        }
+                    }
+
+                    // Where the dragged sections would land (the other rows moved aside).
+                    if Sections.dragging: DropGap {
+                        x: 0px;
+                        y: Sections.drag-gap-y;
+                        width: parent.width;
+                        height: Math.max(0px, Sections.drag-gap-height - 2px);
+                    }
+
+                    // The dragged sections under the pointer.
+                    if Sections.dragging: DragGhost {
+                        x: 0px;
+                        y: Sections.drag-ghost-y;
+                        width: parent.width;
+                        height: Sections.row-height;
+                        title: Sections.drag-title;
+                        detail: Sections.drag-detail;
+                        count: Sections.drag-count;
+                    }
+                }
             }
         }
     }

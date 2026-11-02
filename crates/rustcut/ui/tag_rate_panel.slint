@@ -20,16 +20,13 @@ import { TagTreeList } from "tag_tree.slint";
 import { CompactTagTreeList } from "tag_tree_compact.slint";
 import { TagHistoryPanel } from "tag_history_panel.slint";
 import { ResizerBar } from "resizer_bar.slint";
+import { ListWell } from "controls_list_well.slint";
 
 /// RustView's state while it is unavailable or switched off, in the tree's place (user request Q-P8b): RustView's gray
 /// symbol, the state in one short line (P9.8), a button to the RustView settings at the option behind the state whose
 /// tooltip names the error, and Retry. Connecting and connected show nothing: the tree area says "Loading" until the
 /// tags arrive.
-component ConnectionCard inherits Rectangle {
-    border-radius: 4px;
-    border-width: 1px;
-    border-color: Theme.border;
-    background: Theme.background;
+component ConnectionCard inherits ListWell {
 
     VerticalLayout {
         padding: 12px;
@@ -438,12 +435,7 @@ export component TagRatePanel inherits Rectangle {
                 root-context-menu(x, y) => { TagRate.tree-menu(self.absolute-position.x + x, self.absolute-position.y + y); }
             }
 
-            if !self.card && !TagRate.has-tree: Rectangle {
-                border-radius: 4px;
-                border-width: 1px;
-                border-color: Theme.border;
-                background: Theme.background;
-            }
+            if !self.card && !TagRate.has-tree: ListWell { }
 
             if !self.card && (!TagRate.has-tree || TagRate.columns.length == 0): VerticalLayout {
                 x: 12px;

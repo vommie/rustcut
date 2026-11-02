@@ -7,7 +7,7 @@
 import { ListView } from "std-widgets.slint";
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
-import { IconButton, UpDownButton } from "controls.slint";
+import { IconButton, ListWell, UpDownButton } from "controls.slint";
 import { Export } from "export_types.slint";
 import { Queue, QueueTotalView } from "queue_types.slint";
 import { TooltipArea } from "tooltip.slint";
@@ -203,126 +203,138 @@ export component QueuePanel inherits Rectangle {
             }
         }
 
-        if !Queue.compact: QueueHeader { }
-
-        list-area := Rectangle {
+        // The list stands recessed on the darker ground the tag tree and the history have (P12 block 9); the
+        // column titles belong to it, the buttons above and the summary below do not.
+        ListWell {
             vertical-stretch: 1;
+            clip: true;
 
-            changed width => {
-                Queue.width-changed(self.width);
-            }
+            VerticalLayout {
+                padding: 2px;
+                spacing: 0px;
 
-            // A ListView creates only the rows in view (review 2: hundreds of jobs; measured in ~/claude/slint-lab:
-            // 0.6 ms per frame with 10 000 rows, a plain `for` needed 96 ms). It does not pan with a mouse drag, so a
-            // drag of jobs keeps the pointer.
-            flick := ListView {
-                // A jump mark reached a job of this list: it scrolls into view (`jump.slint`).
-                property <int> jump: Jump.target-serial;
-                changed jump => {
-                    if Jump.inside(self.absolute-position.x, self.width, self.absolute-position.y + self.content-y, root.content-height) {
-                        self.content-y = Jump.scroll-to(self.absolute-position.y + self.content-y, self.content-y, self.visible-height, root.content-height);
+                if !Queue.compact: QueueHeader { }
+
+                list-area := Rectangle {
+                    vertical-stretch: 1;
+
+                    changed width => {
+                        Queue.width-changed(self.width);
                     }
-                }
 
-                // The rows never grow wider than the list (a long name is cut, the state stays visible).
-                horizontal-scrollbar-policy: always-off;
+                    // A ListView creates only the rows in view (review 2: hundreds of jobs; measured in
+                    // ~/claude/slint-lab: 0.6 ms per frame with 10 000 rows, a plain `for` needed 96 ms). It does not
+                    // pan with a mouse drag, so a drag of jobs keeps the pointer.
+                    flick := ListView {
+                        // A jump mark reached a job of this list: it scrolls into view (`jump.slint`).
+                        property <int> jump: Jump.target-serial;
+                        changed jump => {
+                            if Jump.inside(self.absolute-position.x, self.width, self.absolute-position.y + self.content-y, root.content-height) {
+                                self.content-y = Jump.scroll-to(self.absolute-position.y + self.content-y, self.content-y, self.visible-height, root.content-height);
+                            }
+                        }
 
-                changed content-y => {
-                    root.follow = self.content-y <= root.bottom-y + 1px;
-                }
-                changed content-height => {
-                    if root.follow && Queue.follow-new {
-                        self.content-y = root.bottom-y;
+                        // The rows never grow wider than the list (a long name is cut, the state stays visible).
+                        horizontal-scrollbar-policy: always-off;
+
+                        changed content-y => {
+                            root.follow = self.content-y <= root.bottom-y + 1px;
+                        }
+                        changed content-height => {
+                            if root.follow && Queue.follow-new {
+                                self.content-y = root.bottom-y;
+                            }
+                        }
+                        changed visible-height => {
+                            if root.follow && Queue.follow-new {
+                                self.content-y = root.bottom-y;
+                            }
+                        }
+
+                        for job[i] in Queue.rows: Rectangle {
+                            width: flick.visible-width;
+                            height: root.row-step;
+
+                            QueueRow {
+                                x: 0;
+                                y: 0;
+                                width: parent.width;
+                                job: job;
+                                index: i;
+                                state-words: root.state-words;
+                                drag-shift: i < Queue.drag-shifts.length ? Queue.drag-shifts[i] : 0px;
+                                lifted: Queue.dragging && job.selected;
+                                // Drag & drop (P9.4): window coordinates turn into the list's content coordinates.
+                                drag-started(y) => {
+                                    Queue.drag-start(i, y - flick.absolute-position.y - flick.content-y, root.row-step, Queue.row-height);
+                                }
+                                drag-moved(y) => {
+                                    root.drag-pointer = y - flick.absolute-position.y;
+                                    Queue.drag-move(y - flick.absolute-position.y - flick.content-y);
+                                }
+                                drag-ended => { Queue.drag-end(); }
+                            }
+                        }
                     }
-                }
-                changed visible-height => {
-                    if root.follow && Queue.follow-new {
-                        self.content-y = root.bottom-y;
+
+                    // Where the dragged jobs would land (the other rows moved aside).
+                    if Queue.dragging: DropGap {
+                        x: 4px;
+                        y: Queue.drag-gap-y + flick.content-y;
+                        width: parent.width - 8px;
+                        height: Math.max(0px, Queue.drag-gap-height - 2px);
                     }
-                }
 
-                for job[i] in Queue.rows: Rectangle {
-                    width: flick.visible-width;
-                    height: root.row-step;
+                    // The dragged jobs under the pointer.
+                    if Queue.dragging: DragGhost {
+                        x: 4px;
+                        y: Queue.drag-ghost-y + flick.content-y;
+                        width: parent.width - 8px;
+                        height: Queue.row-height;
+                        title: Queue.drag-title;
+                        detail: Queue.drag-detail;
+                        count: Queue.drag-count;
+                    }
 
-                    QueueRow {
-                        x: 0;
-                        y: 0;
+                    // Near the top and bottom edge the list scrolls along, faster toward the edge.
+                    Timer {
+                        interval: 16ms;
+                        running: Queue.dragging;
+                        triggered => {
+                            let step = DragLogic.scroll-step(root.drag-pointer, flick.visible-height);
+                            let to = Math.max(Math.min(0px, flick.visible-height - root.content-height),
+                                Math.min(0px, flick.content-y - step));
+                            // Only a real move: setting the same place again would end the row's pointer grab.
+                            if to != flick.content-y {
+                                flick.content-y = to;
+                                Queue.drag-move(root.drag-pointer - flick.content-y);
+                            }
+                        }
+                    }
+
+                    if Queue.rows.length == 0: Text {
+                        y: 12px;
                         width: parent.width;
-                        job: job;
-                        index: i;
-                        state-words: root.state-words;
-                        drag-shift: i < Queue.drag-shifts.length ? Queue.drag-shifts[i] : 0px;
-                        lifted: Queue.dragging && job.selected;
-                        // Drag & drop (P9.4): window coordinates turn into the list's content coordinates.
-                        drag-started(y) => {
-                            Queue.drag-start(i, y - flick.absolute-position.y - flick.content-y, root.row-step, Queue.row-height);
+                        text: Queue.empty-text;
+                        color: Theme.status-deleted;
+                        font-size: 11px;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                    }
+
+                    // Below the rows: a click clears the selection, a right click opens the menu for every job.
+                    TouchArea {
+                        y: root.content-height + flick.content-y;
+                        height: Math.max(0px, parent.height - self.y);
+                        pointer-event(event) => {
+                            if event.kind == PointerEventKind.down && event.button == PointerEventButton.right {
+                                Queue.context-menu(-1, self.absolute-position.x + self.mouse-x,
+                                    self.absolute-position.y + self.mouse-y);
+                            }
                         }
-                        drag-moved(y) => {
-                            root.drag-pointer = y - flick.absolute-position.y;
-                            Queue.drag-move(y - flick.absolute-position.y - flick.content-y);
-                        }
-                        drag-ended => { Queue.drag-end(); }
+                        clicked => { Queue.clear-selection(); }
                     }
                 }
-            }
-
-            // Where the dragged jobs would land (the other rows moved aside).
-            if Queue.dragging: DropGap {
-                x: 4px;
-                y: Queue.drag-gap-y + flick.content-y;
-                width: parent.width - 8px;
-                height: Math.max(0px, Queue.drag-gap-height - 2px);
-            }
-
-            // The dragged jobs under the pointer.
-            if Queue.dragging: DragGhost {
-                x: 4px;
-                y: Queue.drag-ghost-y + flick.content-y;
-                width: parent.width - 8px;
-                height: Queue.row-height;
-                title: Queue.drag-title;
-                detail: Queue.drag-detail;
-                count: Queue.drag-count;
-            }
-
-            // Near the top and bottom edge the list scrolls along, faster toward the edge.
-            Timer {
-                interval: 16ms;
-                running: Queue.dragging;
-                triggered => {
-                    let step = DragLogic.scroll-step(root.drag-pointer, flick.visible-height);
-                    let to = Math.max(Math.min(0px, flick.visible-height - root.content-height),
-                        Math.min(0px, flick.content-y - step));
-                    // Only a real move: setting the same place again would end the row's pointer grab.
-                    if to != flick.content-y {
-                        flick.content-y = to;
-                        Queue.drag-move(root.drag-pointer - flick.content-y);
-                    }
-                }
-            }
-
-            if Queue.rows.length == 0: Text {
-                y: 12px;
-                width: parent.width;
-                text: Queue.empty-text;
-                color: Theme.status-deleted;
-                font-size: 11px;
-                horizontal-alignment: center;
-                wrap: word-wrap;
-            }
-
-            // Below the rows: a click clears the selection, a right click opens the menu for every job.
-            TouchArea {
-                y: root.content-height + flick.content-y;
-                height: Math.max(0px, parent.height - self.y);
-                pointer-event(event) => {
-                    if event.kind == PointerEventKind.down && event.button == PointerEventButton.right {
-                        Queue.context-menu(-1, self.absolute-position.x + self.mouse-x,
-                            self.absolute-position.y + self.mouse-y);
-                    }
-                }
-                clicked => { Queue.clear-selection(); }
             }
         }
 
