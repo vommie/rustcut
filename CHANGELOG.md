@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Every target folder keeps an id of its own: after you delete the folder that was added last, a new folder no longer
+  gets its id, so a plugin rule or a remembered choice that pointed at the deleted folder does not silently point at
+  the new one. `config.toml` remembers the highest id given out (`[export.folders] last_id`); older files start above
+  their highest id (0.0.105).
+
 ## [0.0.104] - 2026-11-02
 
 ### Added

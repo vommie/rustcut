@@ -372,3 +372,30 @@ fn a_place_holds_what_it_leads_to() {
     assert!(Slot::More(vec![other, g]).holds(&t, f), "More ... with its group");
     assert!(!Slot::Empty.holds(&t, f));
 }
+
+#[test]
+fn an_id_is_never_given_twice() {
+    let mut t = sample();
+    assert_eq!(t.next_id(), id(8));
+    let new = t.add_folder(Path::new("/v/new"), Spot::End).unwrap();
+    assert_eq!(new, id(8));
+    assert!(t.remove(new).is_ok(), "the entry with the highest id goes");
+    let again = t.add_folder(Path::new("/v/again"), Spot::End).unwrap();
+    assert_eq!(again, id(9), "the deleted entry's id stays unused");
+    let group = t.add_group("Later", Spot::End).unwrap();
+    assert_eq!(group, id(10));
+    let text = toml::to_string(&t).unwrap();
+    assert!(text.contains("last_id = 10"), "{text}");
+    let back: FolderTree = toml::from_str(&text).unwrap();
+    assert_eq!(back.next_id(), id(11), "the counter survives a restart");
+}
+
+#[test]
+fn a_file_without_the_counter_starts_above_its_ids() {
+    let old = "[[entries]]\nid = 3\nname = \"a\"\npath = \"/a\"\n\n[[entries]]\nid = 7\nname = \"b\"\npath = \"/b\"\n";
+    let mut t: FolderTree = toml::from_str(old).unwrap();
+    assert_eq!(t.last_id, 0, "written before 0.0.105");
+    assert!(t.sanitize().is_empty(), "nothing to repair");
+    assert_eq!(t.last_id, 7);
+    assert_eq!(t.add_folder(Path::new("/c"), Spot::End).unwrap(), id(8));
+}

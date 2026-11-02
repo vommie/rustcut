@@ -53,7 +53,7 @@ impl FolderTree {
         if self.find_path(path).is_some() {
             return Err(EditError::DuplicatePath);
         }
-        let id = self.next_id();
+        let id = self.take_id();
         self.insert(FolderNode::folder(id, path), spot)?;
         Ok(id)
     }
@@ -63,7 +63,7 @@ impl FolderTree {
         if name.is_empty() {
             return Err(EditError::EmptyName);
         }
-        let id = self.next_id();
+        let id = self.take_id();
         self.insert(FolderNode::group(id, name), spot)?;
         Ok(id)
     }

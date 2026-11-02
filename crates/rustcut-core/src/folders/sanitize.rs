@@ -67,6 +67,7 @@ impl FolderTree {
             true
         };
         retain_deep(&mut self.entries, &mut |n| pass(n, &mut fix));
+        self.last_id = self.last_id.max(self.highest_id());
         notes
     }
 }
