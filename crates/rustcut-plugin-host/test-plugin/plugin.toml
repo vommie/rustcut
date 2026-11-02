@@ -1,0 +1,27 @@
+id = "test-plugin"
+name = "Test Plugin"
+version = "0.1.0"
+api = "1.0"
+description = "Misbehaves on request: fails, panics, runs too long or eats memory (RustCut's own tests)."
+authors = ["vommie"]
+license = "MIT"
+icon = "flask"
+wasm = "target/wasm32-wasip2/release/rustcut_test_plugin.wasm"
+
+[[cards]]
+title = "Behavior"
+description = "What the plugin does with every event."
+
+[[cards.fields]]
+key = "mode"
+label = "Mode"
+help = "ok: a toast and the video's folder as the target. fail: an error. panic: a crash. slow: an endless loop (stopped at the time limit). memory: allocates until the memory limit stops it."
+kind = "choice"
+default = "ok"
+options = [
+    { value = "ok", label = "OK" },
+    { value = "fail", label = "Fail" },
+    { value = "panic", label = "Panic" },
+    { value = "slow", label = "Slow" },
+    { value = "memory", label = "Memory" },
+]
