@@ -200,6 +200,7 @@ impl QueueBridge {
         for hook in &self.hooks.borrow().status {
             hook(status);
         }
+        self.card_refresh();
         if let Some((finished, failed)) = done
             && let Some(hook) = self.hooks.borrow().done.as_ref()
         {
@@ -254,7 +255,6 @@ impl ShownRow {
             kind: t.kind,
             progress: t.progress,
             detail: t.detail.as_str().into(),
-            tooltip: t.tooltip.as_str().into(),
             cells: ModelRc::new(VecModel::from(
                 t.cells
                     .iter()

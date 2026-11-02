@@ -169,6 +169,20 @@ fn visible_part(anchor: Rect, area_width: f32, area_height: f32) -> Rect {
     }
 }
 
+/// `anchor` cut to the rows of `clip` (a list): a row scrolled half out is its visible half, a row scrolled out above or
+/// below shrinks to the list's top or bottom edge, so a bubble beside it points there (the job card, P12 block 10).
+pub fn clip_rows(anchor: Rect, clip: Rect) -> Rect {
+    let top = finite(clip.y);
+    let bottom = finite(clip.bottom()).max(top);
+    let y0 = finite(anchor.y).clamp(top, bottom);
+    let y1 = finite(anchor.bottom()).clamp(y0, bottom);
+    Rect {
+        y: y0,
+        height: y1 - y0,
+        ..anchor
+    }
+}
+
 /// Layout passes can hand over NaN or infinities for an element that is not laid out yet.
 fn finite(value: f32) -> f32 {
     if value.is_finite() { value } else { 0.0 }

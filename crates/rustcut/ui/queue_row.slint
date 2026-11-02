@@ -8,6 +8,7 @@
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
 import { TooltipHost } from "tooltip.slint";
+import { JobCard } from "job_card_types.slint";
 import { MiddleText } from "controls_text.slint";
 import { IconButton } from "controls.slint";
 import { Queue, QueueColumnView, QueueRowView } from "queue_types.slint";
@@ -92,10 +93,6 @@ export component QueueRow inherits Rectangle {
             : touch.has-hover && !root.dragging ? Theme.surface-hover : transparent;
         border-width: root.job.editing ? 1px : 0px;
         border-color: Theme.accent.with-alpha(0.75);
-
-        host := TooltipHost {
-            text: root.job.tooltip;
-        }
 
         // The job the Job and Logs panels show.
         if root.job.current: Rectangle {
@@ -248,7 +245,7 @@ export component QueueRow inherits Rectangle {
     touch := TouchArea {
         pointer-event(event) => {
             if event.kind == PointerEventKind.down {
-                host.press();
+                JobCard.pressed();
                 if event.button == PointerEventButton.right {
                     if !root.job.selected {
                         Queue.select(root.job.id, false, false);
@@ -290,12 +287,27 @@ export component QueueRow inherits Rectangle {
         double-clicked => {
             Queue.double-clicked(root.job.id);
         }
+        // The job card (P12 block 10) instead of a tooltip.
         changed has-hover => {
             if self.has-hover {
-                host.enter();
-            } else {
-                host.leave();
+                root.hovered-id = root.job.id;
+                JobCard.hovered(root.job.id, true);
+            } else if root.hovered-id >= 0 {
+                JobCard.hovered(root.hovered-id, false);
+                root.hovered-id = -1;
             }
+        }
+    }
+
+    // The list reuses its rows: a row under a resting pointer that now shows another job tells the card.
+    property <int> hovered-id: -1;
+    changed job => {
+        if touch.has-hover && root.hovered-id != root.job.id {
+            if root.hovered-id >= 0 {
+                JobCard.hovered(root.hovered-id, false);
+            }
+            root.hovered-id = root.job.id;
+            JobCard.hovered(root.job.id, true);
         }
     }
 

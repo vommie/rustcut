@@ -26,7 +26,6 @@ pub struct RowText {
     /// 0 to 1 while rendering or when finished, negative otherwise.
     pub progress: f32,
     pub detail: String,
-    pub tooltip: String,
     /// Its file waits to move (P12 block 7).
     pub moving: bool,
     /// The table's cells, one per shown column.
@@ -56,28 +55,6 @@ pub fn row_text(row: &JobSummary, progress: Option<&JobProgress>, size: Option<u
             parts.join(" · ")
         }
     };
-    // The state leads: a narrow queue shows only its symbol (user review 2026-10-27).
-    let mut tooltip = format!(
-        "Job {} (attempt {}): {}\n{}\nfrom {}",
-        row.id,
-        row.attempt,
-        state_text(&row.state, fraction),
-        row.target.display(),
-        row.source.display()
-    );
-    if let Some(note) = &row.note {
-        tooltip.push('\n');
-        tooltip.push_str(note);
-    }
-    if let Some(to) = &row.relocation {
-        tooltip.push('\n');
-        tooltip.push_str(if row.state.kind().is_active() {
-            "Moves after its render to "
-        } else {
-            "Moves to "
-        });
-        tooltip.push_str(&to.display().to_string());
-    }
     let state = state_text(&row.state, fraction);
     let percent = match row.state.kind() {
         JobStateKind::Rendering | JobStateKind::Paused if !matches!(row.state, JobState::Rendering { pass: 0, .. }) => {
@@ -116,14 +93,13 @@ pub fn row_text(row: &JobSummary, progress: Option<&JobProgress>, size: Option<u
         kind: kind_number(row.state.kind()),
         progress: progress_value,
         detail,
-        tooltip,
         moving: row.relocation.is_some(),
         cells,
     }
 }
 
 /// The table's state cell: a running render ends with its percentage.
-fn state_text(state: &JobState, fraction: Option<f64>) -> String {
+pub fn state_text(state: &JobState, fraction: Option<f64>) -> String {
     match state {
         JobState::Rendering { pass: 0, .. } => state_title(state),
         JobState::Rendering { .. } | JobState::Paused { .. } => {

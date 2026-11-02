@@ -5,6 +5,7 @@
 //! the current job through hooks.
 
 mod actions;
+mod card;
 mod columns;
 mod drag;
 mod filter;
@@ -137,6 +138,8 @@ pub struct QueueHooks {
     /// A job's render ended (finished, failed or canceled; not a later edit of a done job): its notification.
     pub job_done: Option<JobDoneHook>,
     pub profiles: Option<ProfilesHook>,
+    /// RustView's name of a tag id (the job card names a job's tags; the Tag & Rate panel's tree).
+    pub tag_name: Option<Box<dyn Fn(u32) -> Option<String>>>,
     pub profile: Option<ProfileHook>,
     /// The pause changed (not at the start): the app saves it at once (user decision Q-P8b).
     pub paused_changed: Option<Box<dyn Fn(bool)>>,
@@ -168,6 +171,9 @@ pub struct QueueBridge {
     /// Dragging jobs (P9.4, `drag.rs`) and how far each shown row moves aside meanwhile.
     drag: RefCell<Option<drag::QueueDrag>>,
     drag_shifts: Rc<VecModel<f32>>,
+    /// The job card of the row the pointer rests on (P12 block 10).
+    card: card::Card,
+    dispatcher: UiDispatcher,
 }
 
 impl QueueBridge {
@@ -222,6 +228,8 @@ impl QueueBridge {
             paused_before: saved.paused,
             drag: RefCell::new(None),
             drag_shifts: Rc::new(VecModel::default()),
+            card: card::Card::default(),
+            dispatcher: ui.clone(),
         });
         BRIDGE.with(|b| *b.borrow_mut() = Rc::downgrade(&bridge));
         let q = window.global::<Queue<'_>>();
@@ -237,6 +245,7 @@ impl QueueBridge {
         q.set_key_move_down(bridge.keys.move_down.as_str().into());
         actions::connect(&bridge, window);
         drag::connect(&bridge, window);
+        card::connect(window);
         runtime.spawn(follow(
             service.clone(),
             Arc::clone(&bridge.shared),

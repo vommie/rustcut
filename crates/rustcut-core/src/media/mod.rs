@@ -7,6 +7,7 @@ mod crop_search;
 mod detect;
 mod ffprobe;
 mod formats;
+mod job_picture;
 mod model;
 mod pixel;
 mod preview;
@@ -22,6 +23,7 @@ pub use detect::{
 };
 pub use ffprobe::{DecodeError, decode, decode_timing};
 pub use formats::{VIDEO_FORMATS, is_video_file, video_extensions};
+pub use job_picture::{PICTURE_HEIGHT, PICTURE_WIDTH, WEBP_QUALITY, job_picture_args, make_job_picture};
 pub use model::{
     AudioStream, ColorInfo, Container, FieldOrder, FrameRateMode, FrameTiming, MediaInfo, Ratio, Stream, StreamKind,
     VideoStream,

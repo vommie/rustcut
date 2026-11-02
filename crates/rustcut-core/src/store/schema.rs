@@ -9,7 +9,7 @@ use rusqlite_migration::{M, Migrations, SchemaVersion};
 use super::StoreError;
 
 /// Schema version this build writes.
-pub const SCHEMA_VERSION: usize = 2;
+pub const SCHEMA_VERSION: usize = 3;
 
 const V1: &str = r"
 CREATE TABLE jobs (
@@ -49,8 +49,21 @@ const V2: &str = r"
 ALTER TABLE jobs ADD COLUMN relocation TEXT;
 ";
 
+/// P12 block 10 (0.0.100): the job's own picture for the queue's job card (user decision 2026-11-02: made when the job is
+/// saved, from the start of its first section, turned and cropped like the output; never the timeline's thumbnail
+/// cache). It goes with its job.
+const V3: &str = r"
+CREATE TABLE job_pictures (
+    job_id   INTEGER PRIMARY KEY REFERENCES jobs (id) ON DELETE CASCADE,
+    format   TEXT    NOT NULL,
+    width    INTEGER NOT NULL,
+    height   INTEGER NOT NULL,
+    picture  BLOB    NOT NULL
+) STRICT;
+";
+
 fn migrations() -> Migrations<'static> {
-    Migrations::new(vec![M::up(V1), M::up(V2)])
+    Migrations::new(vec![M::up(V1), M::up(V2), M::up(V3)])
 }
 
 /// Brings the database to [`SCHEMA_VERSION`]. `file` = (database path, backup folder) for databases on disk.
@@ -175,6 +188,45 @@ mod tests {
         let old = Connection::open(std::fs::read_dir(&backups).unwrap().next().unwrap().unwrap().path()).unwrap();
         let version: i64 = old.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
         assert_eq!(version, 1, "the backup is the old database");
+    }
+
+    #[test]
+    fn a_version_2_database_gets_the_picture_table_after_a_backup() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("queue.sqlite");
+        let backups = dir.path().join("backups");
+        {
+            let mut conn = Connection::open(&path).unwrap();
+            Migrations::new(vec![M::up(V1), M::up(V2)])
+                .to_latest(&mut conn)
+                .unwrap();
+            conn.execute(
+                "INSERT INTO jobs (position, state, state_detail, created_at, source_path, target_path, spec_version, spec, relocation) \
+                 VALUES (1, 'waiting', '\"waiting\"', 5, '/in/a.mkv', '/out/a.mkv', 1, '{}', NULL)",
+                [],
+            )
+            .unwrap();
+        }
+        let mut conn = Connection::open(&path).unwrap();
+        migrate(&mut conn, Some((&path, &backups))).unwrap();
+        let (target, pictures): (String, i64) = conn
+            .query_row(
+                "SELECT target_path, (SELECT COUNT(*) FROM job_pictures) FROM jobs",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            (target.as_str(), pictures),
+            ("/out/a.mkv", 0),
+            "the job stays, without a picture"
+        );
+        let copies: Vec<_> = std::fs::read_dir(&backups)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(copies.len(), 1, "backed up before the step");
+        assert!(copies[0].to_string_lossy().starts_with("queue.sqlite.v2."));
     }
 
     #[test]

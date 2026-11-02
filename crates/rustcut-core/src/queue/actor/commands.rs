@@ -117,6 +117,7 @@ impl Actor {
                 };
                 let _ = reply.send(answer);
             }
+            QueueCommand::Picture { id, reply } => self.picture(id, reply).await,
             // Handled by the loop before it gets here.
             QueueCommand::Shutdown { reply } => {
                 let _ = reply.send(());
@@ -133,6 +134,9 @@ impl Actor {
         let id = record.id;
         tracing::info!(job = id.0, target = %record.target_path.display(), hold, "[Queue] Job added");
         self.events.publish(QueueEvent::Added(Box::new(summarize(&record))));
+        if let SpecSlot::Decoded(spec) = &record.spec {
+            self.make_picture(id, spec);
+        }
         self.model.push(record);
         self.sync_job(id, SyncPhase::Enqueued);
         self.kick().await;
@@ -146,6 +150,7 @@ impl Actor {
             return Err(QueueError::NotEditable { id, state: kind });
         }
         validate(&spec)?;
+        self.make_picture(id, &spec);
         self.store_spec(id, spec).await?;
         self.sync_job(id, SyncPhase::Edited);
         self.kick().await;

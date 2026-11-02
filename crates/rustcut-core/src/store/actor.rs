@@ -3,7 +3,7 @@
 
 use std::thread::JoinHandle;
 
-use super::{JobRecord, LogLine, LogStream, Store, StoreError};
+use super::{JobPicture, JobRecord, LogLine, LogStream, Store, StoreError};
 use crate::actor::{Handle, Reply, mailbox};
 use crate::job::{JobId, JobSpec, JobState};
 
@@ -53,6 +53,16 @@ pub enum StoreCommand {
         id: JobId,
         relocation: Option<String>,
         reply: Answer<()>,
+    },
+    /// The job's own picture for the queue's job card (P12 block 10).
+    SetPicture {
+        id: JobId,
+        picture: JobPicture,
+        reply: Answer<()>,
+    },
+    Picture {
+        id: JobId,
+        reply: Answer<Option<JobPicture>>,
     },
     RecoverInterrupted {
         note: String,
@@ -118,6 +128,12 @@ pub fn spawn_store(mut store: Store) -> std::io::Result<(StoreHandle, JoinHandle
                     }
                     StoreCommand::SetSync { id, sync, reply } => {
                         let _ = reply.send(store.set_sync(id, sync.as_deref()));
+                    }
+                    StoreCommand::SetPicture { id, picture, reply } => {
+                        let _ = reply.send(store.set_picture(id, &picture));
+                    }
+                    StoreCommand::Picture { id, reply } => {
+                        let _ = reply.send(store.picture(id));
                     }
                     StoreCommand::RecoverInterrupted { note, reply } => {
                         let _ = reply.send(store.recover_interrupted(&note));

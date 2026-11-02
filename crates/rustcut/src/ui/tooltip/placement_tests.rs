@@ -3,7 +3,7 @@
 
 use proptest::prelude::*;
 
-use super::placement::{ARROW, ARROW_HALF, GAP, MARGIN, Placement, RADIUS, Rect, Side, place};
+use super::placement::{ARROW, ARROW_HALF, GAP, MARGIN, Placement, RADIUS, Rect, Side, clip_rows, place};
 
 const W: f32 = 1280.0;
 const H: f32 = 800.0;
@@ -224,4 +224,51 @@ proptest! {
             prop_assert!(p.arrow <= edge - (RADIUS + ARROW_HALF).min(edge / 2.0) + 0.51, "{:?}", p);
         }
     }
+}
+
+#[test]
+fn a_row_scrolled_out_points_at_the_lists_edge() {
+    let list = Rect {
+        x: 10.0,
+        y: 100.0,
+        width: 200.0,
+        height: 300.0,
+    };
+    let row = |y| Rect {
+        x: 10.0,
+        y,
+        width: 200.0,
+        height: 26.0,
+    };
+    assert_eq!(clip_rows(row(150.0), list), row(150.0), "inside: unchanged");
+    assert_eq!(
+        clip_rows(row(90.0), list),
+        Rect {
+            y: 100.0,
+            height: 16.0,
+            ..row(0.0)
+        },
+        "half out: its visible half"
+    );
+    assert_eq!(
+        clip_rows(row(20.0), list),
+        Rect {
+            y: 100.0,
+            height: 0.0,
+            ..row(0.0)
+        },
+        "above: the top edge"
+    );
+    assert_eq!(
+        clip_rows(row(500.0), list),
+        Rect {
+            y: 400.0,
+            height: 0.0,
+            ..row(0.0)
+        },
+        "below: the bottom edge"
+    );
+    let p = place(clip_rows(row(500.0), list), 300.0, 200.0, 1200.0, 800.0, true);
+    assert_eq!(p.side, Side::Right);
+    assert_eq!(p.y + p.arrow, 400.0, "the arrow points at the bottom edge");
 }

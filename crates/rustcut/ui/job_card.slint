@@ -1,0 +1,385 @@
+// The job card (P12 block 10, Q-P12h): when the pointer rests on a queue row, a card beside the list tells the job at a
+// glance: the job's own picture, name and state, the rating (RustCut's rating box, never stars) left of the tag pills
+// (two rows at most, then "+N"), the render's bar and speed or the failure in red, then the place, source, cut, output,
+// time and RustView rows, and a quiet footer with the number, the creation time and the attempt. Rust
+// (`src/ui/queue/card/`) decides what it says and when it shows; the queue panel reports where its list is
+// (`JobCardAnchor`), and the card stands beside the job's row like a bubble whose arrow points at it (at the list's top
+// or bottom edge when the job scrolled out). It takes no pointer and hides while something is dragged or a menu is open.
+
+import { Theme } from "styles.slint";
+import { AppIcon, IconId } from "icons.slint";
+import { MiddleText } from "controls_text.slint";
+import { RatingButton } from "rating_bar.slint";
+import { QueueColors } from "queue_row.slint";
+import { Queue } from "queue_types.slint";
+import { TipArrow } from "tooltip_layer.slint";
+import { GlobalTooltip, TipPlacement, TipRect, TipSide, TooltipSettings } from "tooltip.slint";
+import { JobCard, JobCardPill, JobCardRow, JobCardView } from "job_card_types.slint";
+import { DragState } from "drag.slint";
+import { ContextMenu } from "context_menu.slint";
+import { AppMenu } from "menu_bar.slint";
+
+// A tag; its natural width goes to Rust, which places the pills.
+component CardPill inherits Rectangle {
+    in property <string> text;
+    in property <bool> more;
+
+    height: 18px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: Theme.border;
+    background: root.more ? transparent : Theme.surface-variant;
+    clip: true;
+
+    init => { JobCard.pill-measured(root.text, measure.preferred-width + 12px); }
+    changed text => { JobCard.pill-measured(root.text, measure.preferred-width + 12px); }
+
+    measure := Text {
+        visible: false;
+        text: root.text;
+        font-size: 11px;
+    }
+
+    Text {
+        x: 6px;
+        width: parent.width - 12px;
+        height: parent.height;
+        text: root.text;
+        color: root.more ? TooltipSettings.muted : TooltipSettings.text;
+        font-size: 11px;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+}
+
+component Line inherits Rectangle {
+    height: 1px;
+    background: TooltipSettings.border;
+}
+
+export global CardTones {
+    pure public function of(tone: int) -> color {
+        if tone == 1 { return TooltipSettings.muted; }
+        if tone == 2 { return Theme.status-corrupt; }
+        if tone == 3 { return Theme.primary; }
+        return TooltipSettings.text;
+    }
+}
+
+component CardRow inherits HorizontalLayout {
+    in property <JobCardRow> entry;
+    in property <[IconId]> filters;
+
+    spacing: 6px;
+    height: 16px;
+
+    VerticalLayout {
+        alignment: center;
+
+        AppIcon {
+            icon: root.entry.icon;
+            size: 13px;
+            color: root.entry.tone == 0 ? TooltipSettings.muted : CardTones.of(root.entry.tone);
+        }
+    }
+
+    if root.entry.path: MiddleText {
+        horizontal-stretch: 1;
+        text: root.entry.text;
+        color: CardTones.of(root.entry.tone);
+        font-size: 11px;
+    }
+
+    if !root.entry.path: Text {
+        horizontal-stretch: 1;
+        text: root.entry.text;
+        color: CardTones.of(root.entry.tone);
+        font-size: 11px;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    if root.entry.right != "": Text {
+        horizontal-stretch: 0;
+        text: root.entry.right;
+        color: TooltipSettings.muted;
+        font-size: 11px;
+        vertical-alignment: center;
+    }
+
+    if root.entry.filters && root.filters.length > 0: HorizontalLayout {
+        horizontal-stretch: 0;
+        spacing: 3px;
+
+        for icon in root.filters: VerticalLayout {
+            alignment: center;
+
+            AppIcon {
+                icon: icon;
+                size: 13px;
+                color: TooltipSettings.muted;
+            }
+        }
+    }
+}
+
+export component JobCardLayer inherits Rectangle {
+    property <bool> active: JobCard.shown && TooltipSettings.enabled && !DragState.active && !Queue.dragging
+        && !ContextMenu.open && AppMenu.open < 0 && !Queue.filter-open && !GlobalTooltip.is-visible;
+    property <JobCardView> view: JobCard.view;
+    property <length> card-width: 300px;
+    property <length> pad: 9px;
+    property <length> inner: root.card-width - 2 * root.pad;
+    property <color> state-color: QueueColors.of(root.view.kind);
+
+    // The row and the list in layer coordinates (the layer starts below the menu bar).
+    property <TipRect> anchor: {
+        x: JobCard.list.x - root.absolute-position.x,
+        y: JobCard.list.y + JobCard.content-y + JobCard.index * JobCard.row-step - root.absolute-position.y,
+        width: JobCard.list.width,
+        height: JobCard.row-height,
+    };
+    property <TipRect> list-rect: {
+        x: JobCard.list.x - root.absolute-position.x,
+        y: JobCard.list.y - root.absolute-position.y,
+        width: JobCard.list.width,
+        height: JobCard.list.height,
+    };
+    property <TipPlacement> placement: JobCard.place(root.anchor, root.list-rect, card.width, card.height, root.width,
+        root.height);
+
+    visible: root.active || card.opacity > 0;
+    background: transparent;
+
+    card := Rectangle {
+        x: root.placement.x;
+        y: root.placement.y;
+        width: root.card-width;
+        height: content.preferred-height;
+        opacity: root.active ? 1 : 0;
+        background: TooltipSettings.background;
+        border-radius: 6px;
+        border-width: 1px;
+        border-color: TooltipSettings.border;
+
+        animate opacity { duration: root.active ? 110ms : 80ms; easing: ease-out; }
+
+        TipArrow {
+            side: root.placement.side;
+            arrow: root.placement.arrow;
+            fill: TooltipSettings.background;
+            stroke: TooltipSettings.border;
+            bubble-width: card.width;
+            bubble-height: card.height;
+        }
+
+        content := VerticalLayout {
+            padding: root.pad;
+            padding-top: 8px;
+            padding-bottom: 8px;
+            spacing: 6px;
+
+            // The head: the job's picture (gray until it is there, so nothing jumps), name and state.
+            HorizontalLayout {
+                spacing: 8px;
+
+                Rectangle {
+                    width: 80px;
+                    height: 45px;
+                    border-radius: 3px;
+                    background: Theme.surface-variant;
+                    clip: true;
+
+                    if root.view.has-picture: Image {
+                        width: parent.width;
+                        height: parent.height;
+                        source: root.view.picture;
+                        image-fit: contain;
+                    }
+
+                    if root.view.no-picture: AppIcon {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        icon: IconId.card-no-picture;
+                        size: 16px;
+                        color: TooltipSettings.muted;
+                    }
+                }
+
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    alignment: center;
+                    spacing: 4px;
+
+                    MiddleText {
+                        text: root.view.name;
+                        color: TooltipSettings.text;
+                        font-size: 12px;
+                        font-weight: 700;
+                    }
+
+                    HorizontalLayout {
+                        spacing: 4px;
+                        alignment: start;
+
+                        VerticalLayout {
+                            alignment: center;
+
+                            AppIcon {
+                                icon: QueueColors.icon(root.view.kind);
+                                size: 13px;
+                                color: root.state-color;
+                            }
+                        }
+
+                        Text {
+                            text: root.view.state;
+                            color: root.state-color;
+                            font-size: 11px;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+
+            // The rating left of the tags, as in the save toast.
+            if root.view.rating >= 0 || root.view.hint != "" || root.view.pills.length > 0: HorizontalLayout {
+                spacing: 6px;
+                alignment: start;
+
+                if root.view.rating >= 0: VerticalLayout {
+                    alignment: start;
+
+                    RatingButton {
+                        width: 18px;
+                        height: 18px;
+                        rating: root.view.rating;
+                        is-selected: true;
+                        display-only: true;
+                    }
+                }
+
+                if root.view.hint != "": Text {
+                    height: 18px;
+                    text: root.view.hint;
+                    color: TooltipSettings.muted;
+                    font-size: 11px;
+                    vertical-alignment: center;
+                }
+
+                if root.view.pills.length > 0: Rectangle {
+                    width: root.view.pills-width;
+                    height: root.view.pills-height;
+
+                    for pill in root.view.pills: CardPill {
+                        x: pill.x;
+                        y: pill.y;
+                        width: pill.width;
+                        text: pill.text;
+                        more: pill.more;
+                    }
+                }
+            }
+
+            // A render: a thin bar, its speed and what is left.
+            if root.view.has-progress: VerticalLayout {
+                spacing: 3px;
+
+                Rectangle {
+                    height: 3px;
+                    border-radius: 1.5px;
+                    background: Theme.surface-selected;
+
+                    Rectangle {
+                        x: 0;
+                        width: parent.width * Math.clamp(root.view.progress, 0, 1);
+                        border-radius: 1.5px;
+                        background: root.state-color;
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 6px;
+
+                    Text {
+                        horizontal-stretch: 1;
+                        text: root.view.progress-left;
+                        color: TooltipSettings.muted;
+                        font-size: 11px;
+                        overflow: elide;
+                    }
+
+                    Text {
+                        text: root.view.progress-right;
+                        color: TooltipSettings.muted;
+                        font-size: 11px;
+                    }
+                }
+            }
+
+            // A failure: the reason in red.
+            if root.view.error != "": HorizontalLayout {
+                spacing: 6px;
+
+                VerticalLayout {
+                    alignment: start;
+
+                    AppIcon {
+                        icon: IconId.card-failed;
+                        size: 13px;
+                        color: Theme.status-corrupt;
+                    }
+                }
+
+                Text {
+                    horizontal-stretch: 1;
+                    width: root.inner - 19px;
+                    text: root.view.error;
+                    color: Theme.status-corrupt;
+                    font-size: 11px;
+                    wrap: word-wrap;
+                }
+            }
+
+            Line { }
+
+            for line in root.view.rows: CardRow {
+                entry: line;
+                filters: root.view.filters;
+            }
+
+            Line { }
+
+            Text {
+                text: root.view.footer;
+                color: TooltipSettings.muted;
+                font-size: 10.5px;
+                overflow: elide;
+            }
+
+            if root.view.note != "": HorizontalLayout {
+                spacing: 6px;
+
+                VerticalLayout {
+                    alignment: start;
+
+                    AppIcon {
+                        icon: IconId.card-note;
+                        size: 13px;
+                        color: TooltipSettings.accent;
+                    }
+                }
+
+                Text {
+                    horizontal-stretch: 1;
+                    width: root.inner - 19px;
+                    text: root.view.note;
+                    color: TooltipSettings.accent;
+                    font-size: 11px;
+                    wrap: word-wrap;
+                }
+            }
+        }
+    }
+}

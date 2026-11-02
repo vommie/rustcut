@@ -17,7 +17,7 @@ use crate::render::RenderEnv;
 use crate::render::RenderProfile;
 use crate::rustview::SyncState;
 use crate::settings::WhenDone;
-use crate::store::LogLine;
+use crate::store::{JobPicture, LogLine};
 use crate::time::Timestamp;
 
 pub use actor::{
@@ -207,6 +207,12 @@ pub enum QueueCommand {
     Spec {
         id: JobId,
         reply: Reply<Result<Box<JobSpec>, QueueError>>,
+    },
+    /// The job's own picture for the queue's job card (P12 block 10): the stored one, or it is made now (saved jobs get
+    /// theirs right away; this answers when it is there). `None` when it cannot be made (no source, no ffmpeg).
+    Picture {
+        id: JobId,
+        reply: Reply<Option<JobPicture>>,
     },
     /// Reads every job from the store again, as at the start (the store was replaced, M6.5d); refused while a job
     /// renders. The answer is the number of jobs.

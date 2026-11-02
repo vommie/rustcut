@@ -9,6 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Job card: when the pointer rests on a queue job, a compact card beside the queue shows the job at a glance instead of
+  the old four-line tooltip: a small picture of the job, its name and state, its rating (the colored box) left of its
+  tags (two rows at most, then "+N"), the target and the source as full paths cut in the middle, length and sections,
+  the output size in pixels with the active filters as symbols, the profile and the file size, when it renders or how
+  long it took, and the number, the creation time, the attempt, the RustView state and the note. A rendering job shows a
+  thin bar, its speed and the time left and follows live; a failed job its reason in red; a job whose file waits to move
+  its new place. The card points at its job like a bubble (at the queue's top or bottom edge when the job scrolled out),
+  moves along at once when you go to the next job, and stays away while you drag jobs or a menu is open.
+- Every job gets its own small picture (the start of its first section, turned and cropped like the output), made in the
+  background when the job is saved and kept with the job in the queue database. Jobs saved before get theirs the first
+  time the card shows them. It does not depend on the seek bar's thumbnails.
+
 - Plugins: small add-ons that react to what happens in RustCut and do something for you, each in a sandbox (no files,
   no network, a time and a memory limit), so a broken or slow plugin never blocks or breaks RustCut. A plugin is a
   `.rcplugin` file; Settings > Plugins installs it (or drop the file onto that page), lists every plugin with its state,
@@ -167,6 +179,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `queue.sqlite` goes from schema 1 to 2 (a column for unfinished moves). The database is backed up first
   (`backups/queue.sqlite.v1.<time>.bak`); an older RustCut refuses the new file and leaves it alone.
+- `queue.sqlite` goes from schema 2 to 3 (`job-pictures`: a table for the jobs' own pictures, WebP). The database is backed
+  up first (`backups/queue.sqlite.v2.<time>.bak`); the jobs stay as they are and get their pictures when the card first
+  shows them.
 
 ### Fixed
 

@@ -15,6 +15,7 @@ import { MenuTints } from "context_menu.slint";
 import { QueueColors, QueueHeader, QueueRow } from "queue_row.slint";
 import { Jump } from "jump.slint";
 import { DragGhost, DragLogic, DropGap } from "drag.slint";
+import { JobCard, JobCardAnchor } from "job_card_types.slint";
 
 /// A state's symbol in its color with the count in a small badge at its upper right; the tooltip says it in words.
 component TotalSymbol inherits Rectangle {
@@ -275,6 +276,19 @@ export component QueuePanel inherits Rectangle {
                                 drag-ended => { Queue.drag-end(); }
                             }
                         }
+                    }
+
+                    // The job card (P12 block 10) stands beside the job's row: where the list is while it shows.
+                    if JobCard.shown: JobCardAnchor {
+                        list: {
+                            x: flick.absolute-position.x,
+                            y: flick.absolute-position.y,
+                            width: flick.visible-width,
+                            height: flick.visible-height,
+                        };
+                        content-y: flick.content-y;
+                        row-step: root.row-step;
+                        row-height: Queue.row-height;
                     }
 
                     // Where the dragged jobs would land (the other rows moved aside).
