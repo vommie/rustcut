@@ -14,6 +14,8 @@ export struct TextSplit {
 
 export global TextLogic {
     pure callback split-middle(/* text */ string) -> TextSplit;
+    // The positions of the entries a long choice list's search keeps (`util::choice::search`).
+    pure callback search(/* items */ [string], /* query */ string) -> [int];
 }
 
 /// A path or file name cut in the middle when it does not fit.

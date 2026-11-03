@@ -25,21 +25,30 @@ component PluginCell inherits HorizontalLayout {
     // The field takes the column's width; a folder's browse button and the marks' room stand beside it.
     property <length> marks: (root.cell.kind == 1 ? 30px : 0px) + (root.marked ? 18px : 0px);
 
-    if root.cell.kind == 0 || root.cell.kind == 1: NumberField {
+    // Every control stands in the middle of the row's height (user report 2026-11-03: the rating boxes sat at its top).
+    if root.cell.kind == 0 || root.cell.kind == 1: VerticalLayout {
         width: Math.max(40px, root.width - root.marks);
-        spin: false;
-        text: root.cell.text;
-        placeholder: root.cell.placeholder;
-        enabled: root.cell.enabled;
-        alignment: left;
-        committed(text) => { return PluginsUi.cell-text(root.table, root.row-index, root.column, text); }
+        alignment: center;
+
+        NumberField {
+            spin: false;
+            text: root.cell.text;
+            placeholder: root.cell.placeholder;
+            enabled: root.cell.enabled;
+            alignment: left;
+            committed(text) => { return PluginsUi.cell-text(root.table, root.row-index, root.column, text); }
+        }
     }
 
-    if root.cell.kind == 1: IconButton {
-        icon: IconId.browse;
-        tooltip: "Choose a folder";
-        enabled: root.cell.enabled;
-        clicked => { PluginsUi.cell-pick(root.table, root.row-index, root.column); }
+    if root.cell.kind == 1: VerticalLayout {
+        alignment: center;
+
+        IconButton {
+            icon: IconId.browse;
+            tooltip: "Choose a folder";
+            enabled: root.cell.enabled;
+            clicked => { PluginsUi.cell-pick(root.table, root.row-index, root.column); }
+        }
     }
 
     if root.cell.kind == 2: VerticalLayout {
@@ -58,21 +67,31 @@ component PluginCell inherits HorizontalLayout {
         }
     }
 
-    if root.cell.kind == 3 || root.cell.kind == 4 || root.cell.kind == 5: ChoiceButton {
+    if root.cell.kind == 3 || root.cell.kind == 4 || root.cell.kind == 5: VerticalLayout {
         width: Math.max(40px, root.width - root.marks);
-        stretch-fully: true;
-        items: root.cell.items;
-        current: root.cell.index;
-        enabled: root.cell.enabled;
-        tooltip: root.cell.issue != "" ? root.cell.issue : root.cell.items.length > root.cell.index ? root.cell.items[root.cell.index] : "";
-        selected(index) => { PluginsUi.cell-choose(root.table, root.row-index, root.column, index); }
+        alignment: center;
+
+        ChoiceButton {
+            stretch-fully: true;
+            items: root.cell.items;
+            current: root.cell.index;
+            enabled: root.cell.enabled;
+            // A tag's or target folder's list grows with the library: it always has a search field.
+            searchable: root.cell.kind == 4 || root.cell.kind == 5 || root.cell.items.length > 12;
+            tooltip: root.cell.issue != "" ? root.cell.issue : root.cell.items.length > root.cell.index ? root.cell.items[root.cell.index] : "";
+            selected(index) => { PluginsUi.cell-choose(root.table, root.row-index, root.column, index); }
+        }
     }
 
-    if root.cell.kind == 6: RatingBar {
-        selected-rating: root.cell.stars;
-        is-assign-mode: true;
-        has-selection: root.cell.enabled;
-        rating-selected(stars) => { PluginsUi.cell-rate(root.table, root.row-index, root.column, stars); }
+    if root.cell.kind == 6: VerticalLayout {
+        alignment: center;
+
+        RatingBar {
+            selected-rating: root.cell.stars;
+            is-assign-mode: true;
+            has-selection: root.cell.enabled;
+            rating-selected(stars) => { PluginsUi.cell-rate(root.table, root.row-index, root.column, stars); }
+        }
     }
 
     if root.marked: TooltipArea {

@@ -28,6 +28,7 @@ pub(super) fn row_view(r: &view::RowView) -> SettingRowView {
         suffix: r.suffix.into(),
         hold: r.hold,
         segmented: r.kind == view::RowKind::Choice && crate::util::choice::segmented(&r.items),
+        searchable: false,
         enabled: r.enabled,
         indent: r.indent,
         error: r.error.as_str().into(),

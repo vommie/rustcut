@@ -321,6 +321,7 @@ fn field_block(
             let (items, index) = choices.items(kind, &value);
             r.kind = 1;
             r.index = i32::try_from(index).unwrap_or(0);
+            r.searchable = !matches!(kind, FieldKind::Rating { .. });
             r.items = texts(&items);
         }
         FieldKind::Table { .. } => {}
