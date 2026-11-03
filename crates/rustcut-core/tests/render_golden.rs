@@ -188,6 +188,21 @@ async fn sections_keep_both_audio_tracks_and_their_languages() {
     assert!(log.to_text().contains("[Render] Verified"));
 }
 
+/// Thirty short sections cut between frames: each keeps the frames its edges touch, so the file is longer than their
+/// sum by more than the general tolerance; the check must still pass (user report 2026-11-03: "the rendered file is
+/// ... long instead of ...").
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn many_sections_cut_between_frames_pass_the_check() {
+    let fx = Fixture::new();
+    let sections: Vec<(i64, i64)> = (0..30).map(|i| (370 + i * 600, 670 + i * 600)).collect();
+    let spec = fx.spec("basic_h264_720p.mp4", &sections, "many sections");
+    let (result, log) = render_simply(&fx, &spec).await;
+    let done = result.unwrap_or_else(|e| panic!("{e}\n{}", log.to_text()));
+    let info = probe(&done.path, &ProbeOptions::default()).await.unwrap();
+    let length = millis(info.duration());
+    assert!((9_000..=11_400).contains(&length), "30 x 0.3 s came out {length} ms");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_rotated_source_is_cropped_in_its_shown_orientation() {
     let fx = Fixture::new();

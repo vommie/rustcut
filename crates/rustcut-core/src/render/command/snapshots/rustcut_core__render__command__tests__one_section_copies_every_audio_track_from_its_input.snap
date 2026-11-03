@@ -4,7 +4,7 @@ expression: describe(&plan)
 ---
 target: /videos/out/Clip - 01.mkv
 temp: /videos/out/.Clip - 01.rustcut-part.mkv
-expected: Expectation { duration: Timestamp(3000000), audio_streams: 2, size: Size { width: 1920, height: 1080 } }
+expected: Expectation { duration: Timestamp(3000000), edge_slack: Timestamp(200000), audio_streams: 2, size: Size { width: 1920, height: 1080 } }
 transforms: None
 passlog: None
 encode (3000000):

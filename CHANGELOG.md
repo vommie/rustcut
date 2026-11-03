@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- "Previous frame" (`,` / Page Up) now steps back past a keyframe in every file. In some files, MPEG-TS and AVCHD
+  (`.ts`, `.mts`, `.m2ts`) among them, the player could step back to a keyframe but never past it. When that happens,
+  RustCut now has the player seek further back before the frame and steps again; it keeps that distance for the file,
+  so the following steps work right away (0.0.107).
+- A job with many sections no longer fails with "the rendered file is ... long instead of ...". Each section keeps the
+  frames its edges touch, so the file is a little longer than the sections' sum, and from about a dozen short sections
+  on that was more than the check allowed. The check now allows up to a frame at each edge of every section (0.0.107).
+
 ## [0.0.106] - 2026-11-03
 
 ### Changed
