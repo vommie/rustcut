@@ -118,6 +118,8 @@ pub(super) fn run(client: &Mpv, on_event: &dyn Fn(PlayerEvent), commands: &Sende
     // mpv's first error message since the current file started: the detail of a failure (the first one names the cause,
     // later ones repeat it in general words).
     let mut first_error: Option<String> = None;
+    // The last `time-pos`, for a failed step back (the command thread never reads a property).
+    let mut position = 0.0;
     loop {
         let event = match client.wait_event(-1.0) {
             // libmpv2 turns an end of file with an error into `Err(Raw(code))`; this app makes no asynchronous requests,
@@ -142,6 +144,9 @@ pub(super) fn run(client: &Mpv, on_event: &dyn Fn(PlayerEvent), commands: &Sende
                 {
                     first_error = Some(text.trim_end().to_owned());
                 }
+                if is_backstep_failure(prefix, text) {
+                    commands.send(Command::BackstepFailed { at: position }).ok();
+                }
                 super::log::forward(prefix, log_level, text);
                 continue;
             }
@@ -165,6 +170,7 @@ pub(super) fn run(client: &Mpv, on_event: &dyn Fn(PlayerEvent), commands: &Sende
                 };
                 // Fails only when the command thread is gone (shutdown).
                 match property {
+                    Property::Position(seconds) => position = seconds,
                     Property::Duration(seconds) => {
                         commands.send(Command::Duration(seconds)).ok();
                     }
@@ -217,6 +223,11 @@ fn is_hwdec_probe(module: &str) -> bool {
 }
 
 /// The typed form of a property change; `None` for unexpected names or formats.
+/// mpv's warning that a step back found no frame before the current one (`video.c`).
+fn is_backstep_failure(prefix: &str, text: &str) -> bool {
+    prefix == "cplayer" && text.trim_end() == "Backstep failed."
+}
+
 fn property(name: &str, change: &PropertyData<'_>) -> Option<Property> {
     Some(match (name, change) {
         ("time-pos", PropertyData::Double(v)) => Property::Position(*v),
@@ -273,6 +284,13 @@ mod tests {
         assert_eq!(EndReason::from_raw(4), EndReason::Error);
         assert_eq!(EndReason::from_raw(5), EndReason::Other);
         assert_eq!(EndReason::from_raw(99), EndReason::Other);
+    }
+
+    #[test]
+    fn a_failed_step_back_is_recognized() {
+        assert!(is_backstep_failure("cplayer", "Backstep failed.\n"));
+        assert!(!is_backstep_failure("ffmpeg/video", "Backstep failed.\n"));
+        assert!(!is_backstep_failure("cplayer", "Backstep failed? no"));
     }
 
     #[test]
