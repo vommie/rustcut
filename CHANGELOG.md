@@ -7,7 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- A long choice list (more than twelve entries) has a search field above its entries that has the keyboard at once:
+  type to narrow the list (every word counts, case does not), Up/Down (or Page Up/Down) move the highlight, Enter picks
+  it, Escape closes the list. The list shows fifteen entries at a time and scrolls with its scroll bar and the mouse
+  wheel; it opens with the current choice in view and checked (0.0.106).
+- A plugin's tag and target folder choices (Settings > Plugins, e.g. Auto-Rate's "Tag" and Auto-Folder's "Target
+  folder") always have that search field, however few tags or folders there are yet (0.0.106).
+
 ### Fixed
+
+- Plugin settings: a long tag or target folder list ran past the bottom of the Settings window and could not be scrolled,
+  so its last entries could not be picked (0.0.106).
+- Plugin settings: every control of a rule's row stands in the middle of the row; the rating boxes sat at its top
+  (0.0.106).
 
 - Every target folder keeps an id of its own: after you delete the folder that was added last, a new folder no longer
   gets its id, so a plugin rule or a remembered choice that pointed at the deleted folder does not silently point at

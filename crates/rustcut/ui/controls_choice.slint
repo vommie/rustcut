@@ -1,7 +1,8 @@
 // Choices shared by every panel and the Settings window (P9.1, review notes 08#1, 09#1, 09#2): a choice button that
 // stretches up to the common width, cuts its text with "…" and opens a list as wide as its longest entry, and a
-// segmented choice for at most three short entries (decided by Rust, `util::choice::segmented`), and a choice of several
-// values (Ctrl+click, P9.6).
+// segmented choice for at most three short entries (decided by Rust, `util::choice::segmented`). A list of more than
+// twelve entries has a search field that takes the keys at once and scrolls (user report 2026-11-03: a plugin's tag
+// and target folder lists). The choice of several values (Ctrl+click, P9.6) is in `controls_multi_choice.slint`.
 
 import { DropChevron } from "controls_drop_chevron.slint";
 import { Theme } from "styles.slint";
@@ -9,6 +10,9 @@ import { AppIcon, IconId, IconSize } from "icons.slint";
 import { TipRow, TooltipHost } from "tooltip.slint";
 import { BubbleAnchor } from "bubble.slint";
 import { ControlMetrics } from "controls_base.slint";
+import { TextLogic } from "controls_text.slint";
+import { SearchField } from "search_field.slint";
+import { ListView } from "std-widgets.slint";
 
 /// The current choice of a list; a click opens the list below it.
 export component ChoiceButton inherits Rectangle {
@@ -28,9 +32,42 @@ export component ChoiceButton inherits Rectangle {
     in property <bool> stretch-fully;
     // Only the icon and the arrow (the crop's aspect lock in the Filters card, P9.13): the tooltip names the choice.
     in property <bool> compact;
+    // A long list: a search field above the entries, which scroll (user report 2026-11-03).
+    in property <bool> searchable: root.items.length > 12;
     callback selected(int);
 
     property <IconId> shown-icon: root.item-icons.length > root.current ? root.item-icons[root.current] : root.icon;
+
+    // The long list: what is searched, the entries it keeps (positions in `items`; Rust, `util::choice::search`), how
+    // many it shows and the highlighted one (a position among those shown).
+    property <string> query;
+    property <[int]> kept: root.query == "" ? [] : TextLogic.search(root.items, root.query);
+    property <int> shown: root.query == "" ? root.items.length : root.kept.length;
+    property <int> highlight;
+    property <length> pitch: 22px;
+    // Fifteen entries show at once; the rest scroll.
+    property <length> list-height: Math.min(15 * root.pitch, Math.max(1, root.shown) * root.pitch);
+
+    pure function entry-at(position: int) -> int {
+        return root.query == "" ? position : root.kept[position];
+    }
+
+    function open() {
+        if root.searchable {
+            root.query = "";
+            root.highlight = Math.max(0, root.current);
+            long-popup.show();
+        } else {
+            popup.show();
+        }
+    }
+
+    function pick-highlight() {
+        if root.shown > 0 {
+            root.selected(root.entry-at(root.highlight));
+        }
+        long-popup.close();
+    }
 
     height: 24px;
     // Stretches up to the common width; a narrow sidebar cuts the chosen text.
@@ -59,7 +96,7 @@ export component ChoiceButton inherits Rectangle {
         mouse-cursor: MouseCursor.pointer;
         clicked => {
             host.press();
-            popup.show();
+            root.open();
         }
         changed has-hover => {
             if self.has-hover {
@@ -153,6 +190,164 @@ export component ChoiceButton inherits Rectangle {
             }
         }
     }
+
+    // The long list: the search field has the keys as soon as it opens (typing searches, Up/Down move the highlight,
+    // Page Up/Down by ten, Enter picks, Escape closes); the entries scroll with the scroll bar and the wheel. As wide as
+    // its longest entry up to a limit (longer ones are cut), at least as wide as the button.
+    long-popup := PopupWindow {
+        x: 0;
+        y: root.height + 2px;
+        width: panel.width;
+        height: panel.height;
+        close-policy: close-on-click-outside;
+
+        // Measures the longest entry; never shown.
+        measure := VerticalLayout {
+            visible: false;
+
+            for item in root.items: Text {
+                text: item;
+                font-size: 12px;
+            }
+        }
+
+        panel := Rectangle {
+            width: Math.max(root.width, Math.min(480px, measure.preferred-width + 72px));
+            height: 8px + 24px + 6px + root.list-height + 8px;
+            background: Theme.surface;
+            border-radius: 4px;
+            border-width: 1px;
+            border-color: Theme.border;
+
+            keys := FocusScope {
+                init => {
+                    search.focus-input();
+                }
+
+                // The list's keys come before the search field's.
+                capture-key-pressed(event) => {
+                    if event.text == Key.Escape {
+                        long-popup.close();
+                        return accept;
+                    }
+                    if event.text == Key.Return {
+                        root.pick-highlight();
+                        return accept;
+                    }
+                    if event.text == Key.UpArrow || event.text == Key.PageUp {
+                        root.highlight = Math.max(0, root.highlight - (event.text == Key.UpArrow ? 1 : 10));
+                        return accept;
+                    }
+                    if event.text == Key.DownArrow || event.text == Key.PageDown {
+                        root.highlight = Math.max(0, Math.min(root.shown - 1,
+                            root.highlight + (event.text == Key.DownArrow ? 1 : 10)));
+                        return accept;
+                    }
+                    return reject;
+                }
+
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 6px;
+
+                    search := SearchField {
+                        field-width: panel.width - 16px;
+                        placeholder-text: "Search";
+                        enable-regex-toggle: false;
+                        enable-escape-clear: false;
+                        show-search-icon: true;
+                        clear-tooltip: "Clear the search";
+                        search-changed(text) => {
+                            root.query = text;
+                            root.highlight = 0;
+                        }
+                        cleared => {
+                            root.query = "";
+                            root.highlight = 0;
+                        }
+                    }
+
+                    if root.shown == 0: Text {
+                        height: root.pitch;
+                        text: "Nothing matches.";
+                        color: Theme.text-muted;
+                        font-size: 12px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    if root.shown > 0: ListView {
+                        height: root.list-height;
+
+                        // Keys move the highlight: it stays in view.
+                        property <length> top: root.highlight * root.pitch;
+                        changed top => {
+                            if self.top + self.content-y < 0 {
+                                self.content-y = -self.top;
+                            } else if self.top + root.pitch + self.content-y > self.visible-height {
+                                self.content-y = self.visible-height - self.top - root.pitch;
+                            }
+                        }
+                        // The current entry opens in the middle of the list.
+                        init => {
+                            self.content-y = Math.max(root.list-height - root.shown * root.pitch,
+                                Math.min(0px, root.list-height / 2 - self.top - root.pitch / 2));
+                        }
+
+                        for position in root.shown: Rectangle {
+                            property <int> index: root.entry-at(position);
+                            height: root.pitch;
+                            border-radius: 3px;
+                            background: position == root.highlight ? Theme.surface-selected
+                                : entry-touch.has-hover ? Theme.surface-hover : transparent;
+
+                            entry-touch := TouchArea {
+                                clicked => {
+                                    root.highlight = position;
+                                    root.pick-highlight();
+                                }
+                            }
+
+                            HorizontalLayout {
+                                padding-left: 4px;
+                                padding-right: 12px;
+                                spacing: 4px;
+
+                                // The current choice is checked.
+                                Rectangle {
+                                    width: 14px;
+
+                                    if index == root.current: AppIcon {
+                                        icon: IconId.check;
+                                        size: IconSize.sm;
+                                        color: Theme.primary;
+                                    }
+                                }
+
+                                if root.item-icons.length > index: VerticalLayout {
+                                    alignment: center;
+                                    AppIcon {
+                                        icon: root.item-icons[index];
+                                        size: IconSize.sm;
+                                        color: Theme.text-muted;
+                                    }
+                                }
+
+                                Text {
+                                    text: root.items[index];
+                                    color: Theme.text;
+                                    font-size: 12px;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                    horizontal-stretch: 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// At most three short choices side by side, the chosen one pressed in (D-P9j). Every part is equally wide, so the
@@ -240,175 +435,6 @@ export component SegmentedChoice inherits Rectangle {
                     horizontal-alignment: center;
                     vertical-alignment: center;
                     overflow: elide;
-                }
-            }
-        }
-    }
-}
-
-/// One entry of a `MultiChoiceButton`: its text, a muted detail on the right (a count), whether it is picked, and a
-/// tone (-1 = none) whose symbol and color the owner gives (`tone-icon`, `tone-color`; the queue's job states).
-export struct MultiChoiceItem {
-    label: string,
-    detail: string,
-    on: bool,
-    tone: int,
-}
-
-/// A choice of several values (the queue's filter menu, P9.6): the first entry (`everything`) picks none, a click on an
-/// entry picks only it and closes the list, Ctrl+click adds or takes off one value and leaves the list open (Q-P9).
-/// The owner says what the button shows (`text`).
-export component MultiChoiceButton inherits Rectangle {
-    in property <[MultiChoiceItem]> items;
-    in property <string> text;
-    in property <string> everything;
-    in property <string> tooltip;
-    in property <bool> enabled: true;
-    in property <IconId> icon: IconId.none;
-    // An entry was clicked (-1 = `everything`), with Ctrl or without.
-    callback picked(/* entry */ int, /* control */ bool);
-    // The symbol and color of an entry's tone (shown in a column before the labels when an entry has one).
-    pure callback tone-icon(int) -> IconId;
-    pure callback tone-color(int) -> color;
-
-    property <bool> any-on: root.text != root.everything;
-
-    height: 24px;
-    min-width: 48px;
-    horizontal-stretch: 1;
-    border-radius: 4px;
-    background: !root.enabled ? transparent : touch.pressed ? Theme.surface-selected
-        : touch.has-hover ? Theme.surface-hover : Theme.surface;
-    border-width: 1px;
-    border-color: root.any-on && root.enabled ? Theme.primary.with-alpha(0.7) : Theme.border;
-
-    host := TooltipHost {
-        text: root.tooltip;
-    }
-
-    touch := TouchArea {
-        enabled: root.enabled;
-        mouse-cursor: MouseCursor.pointer;
-        clicked => {
-            host.press();
-            popup.show();
-        }
-        changed has-hover => {
-            if self.has-hover {
-                host.enter();
-            } else {
-                host.leave();
-            }
-        }
-    }
-
-    HorizontalLayout {
-        padding-left: 6px;
-        padding-right: 4px;
-        spacing: 4px;
-
-        if root.icon != IconId.none: VerticalLayout {
-            alignment: center;
-            AppIcon {
-                icon: root.icon;
-                size: IconSize.sm;
-                color: !root.enabled ? Theme.status-deleted : root.any-on ? Theme.primary : Theme.text-muted;
-            }
-        }
-
-        Text {
-            text: root.text;
-            color: !root.enabled ? Theme.status-deleted : root.any-on ? Theme.text : Theme.text-muted;
-            font-size: 12px;
-            vertical-alignment: center;
-            overflow: elide;
-            horizontal-stretch: 1;
-            min-width: 16px;
-        }
-
-        DropChevron { }
-    }
-
-    // As wide as its longest entry, at least as wide as the button; a Ctrl+click keeps it open.
-    popup := PopupWindow {
-        x: 0;
-        y: root.height + 2px;
-        width: Math.max(root.width, list.preferred-width);
-        height: list.preferred-height;
-        close-policy: close-on-click-outside;
-
-        Rectangle {
-            background: Theme.surface;
-            border-radius: 4px;
-            border-width: 1px;
-            border-color: Theme.border;
-
-            list := VerticalLayout {
-                padding: 3px;
-                spacing: 1px;
-
-                for index in root.items.length + 1: entry := Rectangle {
-                    property <bool> on: index == 0 ? !root.any-on : root.items[index - 1].on;
-                    property <bool> control;
-                    height: 22px;
-                    border-radius: 3px;
-                    background: item-touch.has-hover ? Theme.surface-hover : transparent;
-
-                    item-touch := TouchArea {
-                        pointer-event(event) => {
-                            if event.kind == PointerEventKind.down {
-                                entry.control = event.modifiers.control;
-                            }
-                        }
-                        clicked => {
-                            root.picked(index - 1, entry.control && index > 0);
-                            if !entry.control || index == 0 {
-                                popup.close();
-                            }
-                        }
-                    }
-
-                    HorizontalLayout {
-                        padding-left: 6px;
-                        padding-right: 10px;
-                        spacing: 6px;
-
-                        Rectangle {
-                            width: 14px;
-
-                            if entry.on: AppIcon {
-                                y: (parent.height - self.height) / 2;
-                                icon: IconId.check;
-                                size: IconSize.sm;
-                                color: Theme.primary;
-                            }
-                        }
-
-                        if index > 0 && root.items[index - 1].tone >= 0: VerticalLayout {
-                            alignment: center;
-
-                            AppIcon {
-                                icon: root.tone-icon(root.items[index - 1].tone);
-                                size: IconSize.sm;
-                                color: root.tone-color(root.items[index - 1].tone);
-                            }
-                        }
-
-                        Text {
-                            text: index == 0 ? root.everything : root.items[index - 1].label;
-                            color: Theme.text;
-                            font-size: 12px;
-                            vertical-alignment: center;
-                            horizontal-stretch: 1;
-                        }
-
-                        if index > 0: Text {
-                            text: root.items[index - 1].detail;
-                            color: Theme.text-muted;
-                            font-size: 11px;
-                            vertical-alignment: center;
-                        }
-                    }
                 }
             }
         }

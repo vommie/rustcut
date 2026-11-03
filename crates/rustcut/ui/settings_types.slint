@@ -24,6 +24,8 @@ export struct SettingRowView {
     hold: bool,
     // A choice of at most three short entries, drawn side by side (`util::choice::segmented`).
     segmented: bool,
+    // A choice whose list has a search field however short it is (a plugin's tag or target folder: lists that grow).
+    searchable: bool,
     enabled: bool,
     indent: bool,
     // Why the last typed text was refused.

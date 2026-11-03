@@ -118,6 +118,10 @@ longer exists gets a warning at its cell ("Folder 7 (no longer exists)" stays li
 a `path` folder that does not exist on disk gets one too, unless the text looks like a pattern (it holds one of
 `^$*+?()[]{}|\`).
 
+A `tag` or `target` field's list has a search field above its entries and scrolls, however many tags or folders the
+user has: the search has the keyboard as soon as the list opens, Up/Down and Enter pick, Escape closes. A `choice` of
+more than twelve options would get the same, so no plugin declares or draws any of it.
+
 ## Events, context and actions
 
 | Event | When |

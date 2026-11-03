@@ -120,6 +120,7 @@ export component SettingsRow inherits Rectangle {
                         item-icons: root.option.item-icons;
                         current: root.option.index;
                         enabled: root.option.enabled;
+                        searchable: root.option.searchable || root.option.items.length > 12;
                         selected(index) => { SettingsUi.choose(root.option.key, index); }
                     }
 
