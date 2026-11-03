@@ -37,6 +37,18 @@ pub fn duration_tolerance(expected: Timestamp) -> Timestamp {
     Timestamp::from_micros(expected.as_micros() / 50).max(MIN_DURATION_TOLERANCE)
 }
 
+/// Whether a file of `found` length is plausible: shorter by at most the tolerance, longer by at most the tolerance
+/// plus the sections' edge frames ([`Expectation::edge_slack`]).
+fn plausible_duration(found: Timestamp, expected: &Expectation) -> bool {
+    let tolerance = duration_tolerance(expected.duration);
+    found >= expected.duration.saturating_sub(tolerance)
+        && found
+            <= expected
+                .duration
+                .saturating_add(tolerance)
+                .saturating_add(expected.edge_slack)
+}
+
 /// Checks what ffprobe found in a rendered file of `bytes` bytes against the plan.
 pub fn check(info: &MediaInfo, bytes: u64, expected: &Expectation) -> Result<(), VerifyError> {
     if bytes == 0 {
@@ -61,7 +73,7 @@ pub fn check(info: &MediaInfo, bytes: u64, expected: &Expectation) -> Result<(),
         }
     }
     let duration = info.duration().ok_or(VerifyError::NoDuration)?;
-    if duration.abs_diff(expected.duration) > duration_tolerance(expected.duration) {
+    if !plausible_duration(duration, expected) {
         return Err(VerifyError::Duration {
             expected: expected.duration.format(Precision::Millis),
             found: duration.format(Precision::Millis),
@@ -130,6 +142,7 @@ mod tests {
 
     const EXPECTED: Expectation = Expectation {
         duration: Timestamp::from_secs(10),
+        edge_slack: Timestamp::ZERO,
         audio_streams: 2,
         size: Size::new(1280, 720),
     };
@@ -140,6 +153,21 @@ mod tests {
         // Within the 500 ms minimum tolerance.
         assert_eq!(check(&rendered(1280, 720, 2, Some(10_480)), 5, &EXPECTED), Ok(()));
         assert_eq!(duration_tolerance(Timestamp::from_secs(100)), Timestamp::from_secs(2));
+    }
+
+    #[test]
+    fn many_sections_may_be_a_frame_longer_at_each_edge() {
+        // 40 sections of 0.25 s of a 25 fps video came out 11.2 s long (user report 2026-11-03).
+        let expected = Expectation {
+            duration: Timestamp::from_secs(10),
+            edge_slack: Timestamp::from_millis(40 * 2 * 40),
+            ..EXPECTED
+        };
+        assert_eq!(check(&rendered(1280, 720, 2, Some(11_200)), 5, &expected), Ok(()));
+        assert_eq!(check(&rendered(1280, 720, 2, Some(13_700)), 5, &expected), Ok(()));
+        assert!(check(&rendered(1280, 720, 2, Some(13_800)), 5, &expected).is_err());
+        // The slack only allows longer files: a short one is still a defect.
+        assert!(check(&rendered(1280, 720, 2, Some(9_400)), 5, &expected).is_err());
     }
 
     #[test]

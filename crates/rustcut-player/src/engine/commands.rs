@@ -34,6 +34,11 @@ pub(crate) enum Command {
     FrameStep {
         back: bool,
     },
+    /// mpv could not step back from `at` seconds (its "Backstep failed."; from the event thread): the demuxer landed on
+    /// the keyframe after the step's target, so no earlier frame was decoded (MPEG-TS, user report 2026-11-03).
+    BackstepFailed {
+        at: f64,
+    },
     SetMuted(bool),
     /// Volume in percent (100 = unchanged).
     SetVolume(f64),
@@ -97,6 +102,9 @@ pub(crate) struct Session {
     /// mpv's observed `pause` and `eof-reached`.
     paused: bool,
     at_end: bool,
+    /// How far before a target mpv's demuxer seeks (`hr-seek-demuxer-offset`, seconds): 0 until stepping back failed in
+    /// this file, then raised until it works; a new file starts at 0 again.
+    demuxer_offset: f64,
 }
 
 impl Session {
@@ -113,6 +121,7 @@ impl Session {
             vf: VideoFilter::default(),
             paused: true,
             at_end: false,
+            demuxer_offset: 0.0,
         }
     }
 
@@ -191,6 +200,7 @@ impl Session {
                     Vec::new(),
                 )]
             }
+            Command::BackstepFailed { at } => self.backstep_failed(at),
             Command::SetMuted(muted) => vec![Op::Flag("mute", muted)],
             Command::SetVolume(volume) => vec![Op::Double("volume", volume.clamp(0.0, super::MAX_VOLUME))],
             Command::SetSpeed(speed) => vec![Op::Double("speed", speed.clamp(MIN_SPEED, MAX_SPEED))],
@@ -202,6 +212,10 @@ impl Session {
     fn load(&mut self, load: Load) -> Vec<Op> {
         self.duration = None;
         let mut ops = Vec::new();
+        if self.demuxer_offset > 0.0 {
+            self.demuxer_offset = 0.0;
+            ops.push(Op::Double("hr-seek-demuxer-offset", 0.0));
+        }
         if let Some(play) = load.play {
             ops.push(Op::Flag("pause", !play));
         }
@@ -215,6 +229,38 @@ impl Session {
         tracing::info!(path = %load.path.display(), start = ?load.start, "[Player] Loading");
         ops.push(Op::Command("loadfile", args));
         ops
+    }
+
+    /// Some demuxers (MPEG-TS) seek to the keyframe after the time they are asked for, so mpv's step back (which asks
+    /// for half a second before the frame) can reach a keyframe but never pass it. Each failure doubles how far before
+    /// the target the demuxer is asked to seek, and the step is tried again; the offset stays for the file.
+    fn backstep_failed(&mut self, at: f64) -> Vec<Op> {
+        // Within mpv's own half second of the start there is no frame before: nothing to retry.
+        if at <= BACKSTEP_MARGIN {
+            return Vec::new();
+        }
+        if self.demuxer_offset >= MAX_DEMUXER_OFFSET {
+            tracing::warn!(
+                at,
+                offset = self.demuxer_offset,
+                "[Player] Stepping back failed although the demuxer seeks far back"
+            );
+            return Vec::new();
+        }
+        self.demuxer_offset = if self.demuxer_offset > 0.0 {
+            (self.demuxer_offset * 2.0).min(MAX_DEMUXER_OFFSET)
+        } else {
+            FIRST_DEMUXER_OFFSET
+        };
+        tracing::info!(
+            at,
+            offset = self.demuxer_offset,
+            "[Player] The demuxer landed after the step's target; seeking further back"
+        );
+        vec![
+            Op::Double("hr-seek-demuxer-offset", self.demuxer_offset),
+            Op::Command("frame-back-step", Vec::new()),
+        ]
     }
 
     fn video_ops(&mut self, filter: VideoFilter) -> Vec<Op> {
@@ -243,6 +289,12 @@ impl Session {
         vec![Op::Text("af", chain)]
     }
 }
+
+/// How far before its target mpv's step back seeks by itself (`playloop.c`: at least 0.5 s for a step).
+const BACKSTEP_MARGIN: f64 = 0.5;
+/// The demuxer offsets a failed step back tries: the first, doubled after each failure up to the last.
+const FIRST_DEMUXER_OFFSET: f64 = 1.0;
+const MAX_DEMUXER_OFFSET: f64 = 32.0;
 
 /// mpv's limits of the `speed` property.
 const MIN_SPEED: f64 = 0.01;
@@ -322,6 +374,39 @@ mod tests {
             Op::Command("loadfile", args) => Some(args),
             _ => None,
         })
+    }
+
+    #[test]
+    fn a_failed_step_back_seeks_further_back_and_steps_again() {
+        let mut s = Session::new(PreviewQuality::Auto, AudioOptions::default());
+        let step = Op::Command("frame-back-step", vec![]);
+        assert_eq!(
+            s.handle(Command::BackstepFailed { at: 10.0 }),
+            vec![Op::Double("hr-seek-demuxer-offset", 1.0), step.clone()]
+        );
+        assert_eq!(
+            s.handle(Command::BackstepFailed { at: 10.0 }),
+            vec![Op::Double("hr-seek-demuxer-offset", 2.0), step]
+        );
+        for _ in 0..4 {
+            s.handle(Command::BackstepFailed { at: 10.0 });
+        }
+        assert_eq!(s.demuxer_offset, MAX_DEMUXER_OFFSET);
+        // At the limit nothing is tried again (no endless loop).
+        assert!(s.handle(Command::BackstepFailed { at: 10.0 }).is_empty());
+        // A new file starts with mpv's default again.
+        s.handle(Command::SurfaceReady { software: false });
+        let ops = s.handle(open("/v/b.ts"));
+        assert_eq!(ops.first(), Some(&Op::Double("hr-seek-demuxer-offset", 0.0)));
+        assert_eq!(s.demuxer_offset, 0.0);
+    }
+
+    #[test]
+    fn a_step_back_at_the_start_is_not_retried() {
+        let mut s = Session::new(PreviewQuality::Auto, AudioOptions::default());
+        assert!(s.handle(Command::BackstepFailed { at: 0.0 }).is_empty());
+        assert!(s.handle(Command::BackstepFailed { at: 0.4 }).is_empty());
+        assert_eq!(s.demuxer_offset, 0.0);
     }
 
     #[test]

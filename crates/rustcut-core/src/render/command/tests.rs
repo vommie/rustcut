@@ -178,6 +178,8 @@ fn three_sections_two_tracks_with_filters() {
     let plan = build(&spec, &source(1920, 1080, 0, 2), &HardwareContext::default()).unwrap();
     assert_eq!(plan.expected.audio_streams, 2);
     assert_eq!(plan.expected.duration, Timestamp::from_millis(5_750));
+    // Two frames per section; the sample source has no frame rate, so 100 ms each.
+    assert_eq!(plan.expected.edge_slack, Timestamp::from_millis(600));
     assert_eq!(plan.expected.size, Size::new(1040, 1860));
     insta::assert_snapshot!(describe(&plan));
 }

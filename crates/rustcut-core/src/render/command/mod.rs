@@ -87,6 +87,10 @@ pub struct PlannedPass {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Expectation {
     pub duration: Timestamp,
+    /// How much longer than `duration` the file may be on top of the general tolerance: each section keeps the frames its
+    /// edges touch, so it can come out up to a frame longer at each edge (user report 2026-11-03: twelve sections of a
+    /// 25 fps video were 0.5 s too long for the check).
+    pub edge_slack: Timestamp,
     pub audio_streams: usize,
     pub size: Size,
 }
@@ -141,6 +145,7 @@ pub fn temp_path(folder: &Path, stem: &str, extension: &str) -> PathBuf {
 pub fn plan(input: PlanInput<'_>) -> Result<RenderPlan, PlanError> {
     let spec = input.spec;
     let (sections, duration) = usable_sections(spec, input.source)?;
+    let slack = edge_slack(sections.len(), input.source);
     let (_, video) = input.source.primary_video().ok_or(PlanError::NoVideo)?;
     let (width, height) = video.oriented_size().ok_or(PlanError::UnknownSize)?;
     // ffmpeg turns the frames by the display rotation before the filters, so the chain sees the oriented size.
@@ -239,12 +244,29 @@ pub fn plan(input: PlanInput<'_>) -> Result<RenderPlan, PlanError> {
         passes,
         expected: Expectation {
             duration,
+            edge_slack: slack,
             audio_streams: audio_tracks,
             size: spec.filters.final_size(source_size, spec.final_multiple)?,
         },
         transforms,
         passlog,
     })
+}
+
+/// Two frames of the source per section (one at each edge); a source without a known frame rate counts 10 fps.
+fn edge_slack(sections: usize, source: &MediaInfo) -> Timestamp {
+    let frame = source
+        .primary_video()
+        .and_then(|(_, video)| {
+            [video.avg_frame_rate, video.frame_rate]
+                .into_iter()
+                .flatten()
+                .map(crate::time::FrameRate::frame_duration)
+                .max()
+        })
+        .unwrap_or(Timestamp::from_millis(100));
+    let edges = i64::try_from(sections.saturating_mul(2)).unwrap_or(i64::MAX);
+    Timestamp::from_micros(frame.as_micros().saturating_mul(edges))
 }
 
 /// The sections inside the source (cut at its end) and their total length.
