@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.107] - 2026-11-03
+
 ### Fixed
 
 - "Previous frame" (`,` / Page Up) now steps back past a keyframe in every file. In some files, MPEG-TS and AVCHD
@@ -1461,7 +1463,8 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.106...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.107...HEAD
+[0.0.107]: https://github.com/vommie/rustcut/compare/v0.0.106...v0.0.107
 [0.0.106]: https://github.com/vommie/rustcut/compare/v0.0.104...v0.0.106
 [0.0.104]: https://github.com/vommie/rustcut/compare/v0.0.85...v0.0.104
 [0.0.85]: https://github.com/vommie/rustcut/compare/v0.0.76...v0.0.85
