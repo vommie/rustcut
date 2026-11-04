@@ -2,6 +2,8 @@
 
 mod place;
 mod relocate;
+mod sidecar;
 
 pub use place::{Place, place};
 pub use relocate::{Interrupted, Method, RelocateError, needs_copy, relocate, settle_interrupted, temp_path};
+pub use sidecar::carry_sidecar;

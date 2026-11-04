@@ -398,6 +398,9 @@ impl Actor {
                     }
                 };
                 let result = files::relocate(&journal.from, &journal.to, journal.overwrite, &mut progress, &cancel);
+                if result.is_ok() {
+                    files::carry_sidecar(&journal.from, &journal.to);
+                }
                 let _ = reports.send(Report::MoveEnded { id, result });
             });
             return;

@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/md5-sidecar",
     "crates/rustcut-core",
     "crates/rustcut-player",
     "crates/rustcut",
@@ -10,6 +11,7 @@ members = [
     "crates/rustcut-plugin-host",
 ]
 default-members = [
+    "crates/md5-sidecar",
     "crates/rustcut-core",
     "crates/rustcut-player",
     "crates/rustcut",
@@ -24,7 +26,7 @@ exclude = ["crates/rustcut-plugin-host/test-plugin"]
 [workspace.package]
 # Single source of truth for the app version: the About page, the package script and the PKGBUILD read it from here.
 # Claude bumps the patch number whenever a state is testable; major and minor belong to the user.
-version = "0.0.107"
+version = "0.0.108"
 edition = "2024"
 # The lowest toolchain known to work (wasmtime 50 needs 1.97). rust-toolchain.toml pins `stable`.
 rust-version = "1.97"
@@ -43,6 +45,9 @@ publish = false
 # Benchmarks (M6.3): statistics-driven micro-benchmarks with HTML reports.
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support", "plotters", "html_reports"] }
 rustcut-core = { path = "crates/rustcut-core" }
+# The md5 sidecar rules shared with RustKnown and RustTransferFrom, vendored byte-identical from RustKnown
+# (crates/md5-sidecar/SPEC.md, scripts/sync-md5-sidecar.sh).
+md5-sidecar = { path = "crates/md5-sidecar" }
 # Where a program named without a path is found in PATH (Settings rows of programs, 0.0.67).
 which = "8"
 # Packs the log files of earlier days (.log.gz, 0.0.67).
@@ -74,6 +79,8 @@ rusqlite_migration = "2"
 toml = "1"
 # Settings and UI state are written to a temporary file and renamed, so a crash never leaves half a file.
 atomic-write-file = "0.3"
+# The freedesktop trash: an orphaned md5 sidecar at a moved file's new place goes there (md5-sidecar rule 6).
+trash = "5"
 # XDG config, data and state folders.
 directories = "6"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }

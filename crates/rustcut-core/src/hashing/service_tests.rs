@@ -290,19 +290,15 @@ async fn a_computed_hash_goes_into_a_new_sidecar_and_an_existing_one_stays() {
     assert_eq!(hash(video.clone()).await, Ok(reference_md5(&data)));
     let sidecar = dir.path().join(".Urlaub 1.mkv.md5");
     let text = std::fs::read_to_string(&sidecar).unwrap();
-    assert_eq!(
-        text,
-        format!("{}  Urlaub 1.mkv\n", reference_md5(&data)),
-        "md5sum's format"
-    );
+    assert_eq!(text, reference_md5(&data), "the bare hash (md5-sidecar rule 2)");
     let leftovers: Vec<_> = std::fs::read_dir(dir.path())
         .unwrap()
         .filter_map(|e| e.ok()?.file_name().into_string().ok())
-        .filter(|n| n.contains("rustcut-part"))
+        .filter(|n| n.contains("rustcut-part") || n.starts_with(".."))
         .collect();
     assert!(leftovers.is_empty(), "{leftovers:?}");
 
-    // A sidecar that exists (here a wrong one written by another program) is never replaced: it is the answer.
+    // A sidecar that is not older than its video (here a wrong one written by another program) is the answer and stays.
     let third = write_file(dir.path(), "third.mkv", b"third");
     write_file(
         dir.path(),
@@ -314,6 +310,23 @@ async fn a_computed_hash_goes_into_a_new_sidecar_and_an_existing_one_stays() {
         std::fs::read_to_string(dir.path().join(".third.mkv.md5")).unwrap(),
         "0123456789abcdef0123456789abcdef  third.mkv\n"
     );
+
+    // One older than its video does not count: the video is hashed and the sidecar rewritten.
+    let fourth = write_file(dir.path(), "fourth.mkv", b"fourth");
+    let stale = write_file(
+        dir.path(),
+        ".fourth.mkv.md5",
+        b"0123456789abcdef0123456789abcdef  fourth.mkv\n",
+    );
+    let video_time = std::fs::metadata(&fourth).unwrap().modified().unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&stale)
+        .unwrap()
+        .set_modified(video_time - Duration::from_secs(60))
+        .unwrap();
+    assert_eq!(hash(fourth).await, Ok(reference_md5(b"fourth")));
+    assert_eq!(std::fs::read_to_string(&stale).unwrap(), reference_md5(b"fourth"));
     service
         .handle
         .request(|reply| HashCommand::Shutdown { reply })
@@ -323,15 +336,19 @@ async fn a_computed_hash_goes_into_a_new_sidecar_and_an_existing_one_stays() {
 }
 
 #[test]
-fn a_sidecar_that_appears_meanwhile_is_kept() {
+fn a_sidecar_with_the_right_hash_stays_and_a_changed_video_gets_none() {
     let dir = tempfile::tempdir().unwrap();
     let video = write_file(dir.path(), "clip.mkv", b"x");
-    assert!(write_new_sidecar(&video, &"a".repeat(32)).unwrap().is_some());
+    let stamp = Stamp::of(&video).ok();
+    let md5 = reference_md5(b"x");
+    assert_eq!(store_sidecar(&video, &md5, stamp), Ok(Written::Created));
     assert_eq!(
-        write_new_sidecar(&video, &"b".repeat(32)),
-        Ok(None),
+        store_sidecar(&video, &md5, stamp),
+        Ok(Written::Unchanged),
         "the first one stays"
     );
-    let text = std::fs::read_to_string(dir.path().join(".clip.mkv.md5")).unwrap();
-    assert!(text.starts_with(&"a".repeat(32)));
+    assert_eq!(std::fs::read_to_string(dir.path().join(".clip.mkv.md5")).unwrap(), md5);
+    write_file(dir.path(), "clip.mkv", b"changed while hashed");
+    assert!(store_sidecar(&video, &reference_md5(b"y"), stamp).is_err());
+    assert_eq!(std::fs::read_to_string(dir.path().join(".clip.mkv.md5")).unwrap(), md5);
 }

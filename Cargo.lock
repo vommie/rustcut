@@ -3848,6 +3848,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "md5-sidecar"
+version = "1.0.0"
+dependencies = [
+ "atomic-write-file",
+ "rustix 1.1.6",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5708,7 +5719,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut"
-version = "0.0.107"
+version = "0.0.108"
 dependencies = [
  "arboard",
  "az",
@@ -5747,7 +5758,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-core"
-version = "0.0.107"
+version = "0.0.108"
 dependencies = [
  "atomic-write-file",
  "az",
@@ -5763,6 +5774,7 @@ dependencies = [
  "ioprio",
  "isolang",
  "md-5",
+ "md5-sidecar",
  "minijinja",
  "notify",
  "parking_lot 0.13.0",
@@ -5787,6 +5799,7 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
+ "trash",
  "usvg 0.49.0",
  "webp",
  "which",
@@ -5794,7 +5807,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-player"
-version = "0.0.107"
+version = "0.0.108"
 dependencies = [
  "glow",
  "hdrhistogram",
@@ -5819,7 +5832,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-plugin-host"
-version = "0.0.107"
+version = "0.0.108"
 dependencies = [
  "regex",
  "semver",
@@ -5837,7 +5850,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-thumbs"
-version = "0.0.107"
+version = "0.0.108"
 dependencies = [
  "ffmpeg-next",
  "ioprio",
@@ -5851,7 +5864,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-thumbs-protocol"
-version = "0.0.107"
+version = "0.0.108"
 dependencies = [
  "serde",
  "serde_json",
@@ -6956,6 +6969,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "trash"
+version = "5.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be89b3fe156965d29ac4f8522f3a640c655affdd9f21cb4f36857f0c92c00317"
+dependencies = [
+ "chrono",
+ "libc",
+ "log",
+ "objc2 0.6.5",
+ "objc2-foundation 0.3.2",
+ "once_cell",
+ "percent-encoding",
+ "scopeguard",
+ "urlencoding",
+ "windows",
+]
+
+[[package]]
 name = "tree_magic_mini"
 version = "3.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7095,6 +7126,12 @@ dependencies = [
  "serde",
  "serde_derive",
 ]
+
+[[package]]
+name = "urlencoding"
+version = "2.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "daf8dba3b7eb870caf1ddeed7bc9d2a049f3cfdfae7cb521b087cc33ae4c49da"
 
 [[package]]
 name = "usvg"

@@ -57,17 +57,16 @@ pub enum HashEvent {
     },
 }
 
-/// The sidecar of `video`: `.<file name>.md5` in the same folder (PyCutRv and RustView convention). RustCut reads it but
-/// never deletes it (PyCutRv bug 11).
+/// The sidecar of `video`: `.<file name>.md5` in the same folder (md5-sidecar rule 1, shared with RustKnown and
+/// RustTransferFrom). RustCut never deletes a source's sidecar (PyCutRv bug 11).
 pub fn sidecar_path(video: &Path) -> Option<PathBuf> {
-    let name = video.file_name()?.to_str()?;
-    Some(video.with_file_name(format!(".{name}.md5")))
+    md5_sidecar::path_for(video)
 }
 
-/// The MD5 in a sidecar: `md5sum` output (`<hash>  <name>`) or the bare hash; lower-cased, `None` when it is not 32 hex digits.
+/// The MD5 in a sidecar (md5-sidecar rule 3): the bare hash or `md5sum` output (`<hash>  <name>`); lower-cased, `None`
+/// when it does not start with 32 hex digits.
 pub fn parse_sidecar(text: &str) -> Option<String> {
-    let hash = text.split_whitespace().next()?;
-    (hash.len() == 32 && hash.bytes().all(|b| b.is_ascii_hexdigit())).then(|| hash.to_ascii_lowercase())
+    md5_sidecar::parse(text.as_bytes()).ok().map(|hash| hash.to_string())
 }
 
 #[cfg(test)]

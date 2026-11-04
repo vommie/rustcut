@@ -1,0 +1,26 @@
+# The md5 sidecar rules shared by RustCut, RustTransferTo, RustTransferFrom and RustKnownClean (SPEC.md).
+#
+# The canonical copy lives in RustKnownClean (`crates/md5-sidecar`); every other app vendors it byte-identical with
+# `scripts/sync-md5-sidecar.sh`, and `scripts/check-all.sh` reports drift. Change it only there.
+[package]
+name = "md5-sidecar"
+description = "md5 sidecars (`.<video>.md5`): one format, one freshness rule and one way to move them, for every app"
+# The major number follows the version of the rules in SPEC.md.
+version = "1.0.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# Temporary file in the same folder, fsync, rename, fsync of the folder.
+atomic-write-file.workspace = true
+# `renameat2(RENAME_NOREPLACE)` and opening a sidecar without following a symbolic link.
+rustix = { workspace = true, features = ["fs"] }
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- md5 sidecars (`.<video>.md5`) follow one set of rules shared with RustKnown and RustTransferFrom (the `md5-sidecar`
+  crate, `crates/md5-sidecar/SPEC.md`):
+  - A sidecar RustCut writes holds only the 32 hex digits of the MD5, no file name and no line end (before:
+    `<md5>  <name>`), so it stays right when the video is renamed. Existing sidecars in the old form keep being read;
+    nothing is rewritten for that.
+  - A sidecar counts only when it is not older than its video. An older one means the video changed since: RustCut
+    hashes the video and, with "Write sidecar" on, rewrites the sidecar. Before, every sidecar was trusted.
+  - A sidecar is written only when the video did not change while it was hashed. One that already holds the right
+    hash is left alone; one that holds another hash or no hash is replaced.
+  - Videos whose name is not valid UTF-8 get a sidecar too.
+  - When RustCut moves a finished job's file to another folder, the file's sidecar moves with it; a sidecar already at
+    the new place that belongs to no file there goes to the trash.
+
 ## [0.0.107] - 2026-11-03
 
 ### Fixed
