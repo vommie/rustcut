@@ -403,6 +403,7 @@ THIS SOFTWARE.
 - Copyright 2016 Nika Layzell
 - Copyright 2017 the Resvg Authors
 - Copyright 2018 Developers of the Rand project
+- Copyright 2019 Artúr Barnabás Kovács
 - Copyright 2019 as-raw-xcb-connection Contributers
 - Copyright 2019 x11rb Contributers
 - Copyright 2020 the Parley Authors
@@ -414,6 +415,8 @@ THIS SOFTWARE.
 - Copyright © 2019–2026 Trevor Spiteri
 - Copyright © 2021 The pdf-rs contributers.
 - Copyright © 2022 Kirill Chibisov
+- © 2016 Bertram Truong
+- © 2021 Kornel Lesiński
 
 ```
 Permission is hereby granted, free of charge, to any

@@ -3,13 +3,14 @@
 //! MD5 is computed in 1 MiB chunks with a cancel check between chunks and progress at most every [`PROGRESS_INTERVAL`].
 //! One file is hashed at a time (two parallel reads of big files only slow each other down); requests for the file being
 //! hashed or already waiting share its result. Computed hashes are remembered for the session by size and modification
-//! time, so opening a file again costs nothing; with `SetWriteSidecar(true)` a computed hash also goes into a new sidecar
-//! next to the video, the place other programs share (user decision 2026-10-24; an existing sidecar is never replaced).
+//! time, so opening a file again costs nothing; with `SetWriteSidecar(true)` a computed hash also goes into the sidecar
+//! next to the video, the place other programs share (user decision 2026-10-24). Sidecars follow the rules shared with
+//! RustKnown and RustTransferFrom (crate `md5-sidecar`, 2026-11-04): only a sidecar that is not older than its video
+//! answers, a written one holds the bare hash, and one with the right hash is never rewritten.
 //! A read tells the kernel it is sequential (`posix_fadvise`: larger read-ahead) and runs at the lowest best-effort drive
 //! priority, so the player reading the same video comes first.
 
 use std::collections::{HashMap, VecDeque};
-use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,7 +19,9 @@ use std::time::{Duration, Instant, SystemTime};
 use md5::{Digest as _, Md5};
 use tokio::task::JoinHandle;
 
-use super::{HashCommand, HashError, HashEvent, parse_sidecar, sidecar_path};
+use md5_sidecar::{Lookup, Md5Hex, Stamp, Written};
+
+use super::{HashCommand, HashError, HashEvent, sidecar_path};
 use crate::actor::{EventBus, Handle, Mailbox, Reply, mailbox};
 
 pub type HashHandle = Handle<HashCommand>;
@@ -27,8 +30,6 @@ pub type HashHandle = Handle<HashCommand>;
 pub const PROGRESS_INTERVAL: Duration = Duration::from_millis(50);
 /// Read size: big enough for full disk speed, small enough that a cancel takes effect at once.
 const CHUNK: usize = 1024 * 1024;
-/// A sidecar holds 32 hex digits and maybe a file name; anything longer is not one.
-const MAX_SIDECAR: u64 = 4096;
 /// How long a shutdown waits for a running read to notice the cancel.
 const SHUTDOWN_WAIT: Duration = Duration::from_secs(2);
 
@@ -262,15 +263,17 @@ fn hash_file(
         path: path.to_path_buf(),
         error: error.to_string(),
     };
-    if let Some(md5) = read_sidecar(path) {
+    let file = std::fs::File::open(path).map_err(io)?;
+    let meta = file.metadata().map_err(io)?;
+    let (len, modified) = (meta.len(), meta.modified().ok());
+    if let Some(md5) = read_sidecar(path, modified) {
         return Ok(Hashed {
             md5,
             from_sidecar: true,
         });
     }
-    let file = std::fs::File::open(path).map_err(io)?;
-    let meta = file.metadata().map_err(io)?;
-    let (len, modified) = (meta.len(), meta.modified().ok());
+    // Taken before the bytes are read: a video that changes while it is hashed gets no sidecar.
+    let stamp = Stamp::from_metadata(&meta).ok();
     if let Some(known) = memory
         .lock()
         .get(path)
@@ -293,9 +296,11 @@ fn hash_file(
         })?
     };
     if write_sidecar {
-        match write_new_sidecar(path, &md5) {
-            Ok(Some(sidecar)) => tracing::info!(sidecar = %sidecar.display(), "[Hash] Sidecar written"),
-            Ok(None) => tracing::debug!(path = %path.display(), "[Hash] A sidecar appeared meanwhile; kept"),
+        match store_sidecar(path, &md5, stamp) {
+            Ok(Written::Unchanged) => {
+                tracing::debug!(path = %path.display(), "[Hash] The sidecar already holds this hash; kept");
+            }
+            Ok(_) => tracing::info!(path = %path.display(), "[Hash] Sidecar written"),
             Err(e) => tracing::warn!(path = %path.display(), error = %e, "[Hash] Sidecar not written"),
         }
     }
@@ -313,50 +318,40 @@ fn hash_file(
     })
 }
 
-/// The sidecar's hash; `None` when there is none or it does not hold one (logged).
-fn read_sidecar(video: &Path) -> Option<String> {
-    let sidecar = sidecar_path(video)?;
-    let file = std::fs::File::open(&sidecar).ok()?;
-    let mut text = String::new();
-    if let Err(e) = file.take(MAX_SIDECAR).read_to_string(&mut text) {
-        tracing::warn!(sidecar = %sidecar.display(), error = %e, "[Hash] Sidecar not readable; computing instead");
-        return None;
+/// The sidecar's hash when it is valid and not older than the video (md5-sidecar rules 3 and 4); `None` otherwise
+/// (logged). `modified` is the video's modification time.
+fn read_sidecar(video: &Path, modified: Option<SystemTime>) -> Option<String> {
+    let found = match modified {
+        Some(modified) => md5_sidecar::lookup_at(video, modified),
+        None => md5_sidecar::lookup(video),
+    };
+    let sidecar = sidecar_path(video).unwrap_or_default();
+    match found {
+        Ok(Lookup::Fresh(hash)) => Some(hash.to_string()),
+        Ok(Lookup::Missing) => None,
+        Ok(Lookup::Stale(_)) => {
+            tracing::info!(sidecar = %sidecar.display(), "[Hash] Sidecar older than the video; computing instead");
+            None
+        }
+        Ok(Lookup::Invalid(why)) => {
+            tracing::warn!(sidecar = %sidecar.display(), reason = %why, "[Hash] Sidecar holds no MD5; computing instead");
+            None
+        }
+        Err(e) => {
+            tracing::warn!(sidecar = %sidecar.display(), error = %e, "[Hash] Sidecar not readable; computing instead");
+            None
+        }
     }
-    let hash = parse_sidecar(&text);
-    if hash.is_none() {
-        tracing::warn!(sidecar = %sidecar.display(), "[Hash] Sidecar holds no MD5; computing instead");
-    }
-    hash
 }
 
-/// Writes `.<name>.md5` next to `video` in md5sum's format (`<md5>  <name>`, so `md5sum -c` checks it), through a hidden
-/// temp file and a rename that never replaces: an existing sidecar stays (`Ok(None)`). Blocking.
-fn write_new_sidecar(video: &Path, md5: &str) -> Result<Option<PathBuf>, String> {
-    let sidecar = sidecar_path(video).ok_or("the file name is not UTF-8")?;
-    if sidecar.symlink_metadata().is_ok() {
-        return Ok(None);
-    }
-    let name = video
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or("the file name is not UTF-8")?;
-    let temp = sidecar.with_file_name(format!(".{name}.md5.rustcut-part"));
-    let written = (|| {
-        let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&temp)?;
-        std::io::Write::write_all(&mut file, format!("{md5}  {name}\n").as_bytes())?;
-        file.sync_all()
-    })();
-    if let Err(e) = written {
-        let _ = std::fs::remove_file(&temp);
-        return Err(e.to_string());
-    }
-    let renamed = crate::render::rename_no_replace(&temp, &sidecar);
-    let _ = std::fs::remove_file(&temp);
-    match renamed {
-        Ok(()) => Ok(Some(sidecar)),
-        Err(crate::render::FinalizeError::TargetExists(_)) => Ok(None),
-        Err(e) => Err(e.to_string()),
-    }
+/// Writes `video`'s sidecar (md5-sidecar rule 5): the bare 32 hex digits, atomically. A sidecar that already holds this
+/// hash and is not older than the video stays; a missing, invalid or older one is written; one with another hash is
+/// replaced (the new hash comes from the bytes). `stamp` was taken before the bytes were read, so a video that changed
+/// meanwhile gets none. Blocking.
+fn store_sidecar(video: &Path, md5: &str, stamp: Option<Stamp>) -> Result<Written, String> {
+    let hash: Md5Hex = md5.parse().map_err(|e: md5_sidecar::Invalid| e.to_string())?;
+    let stamp = stamp.ok_or("the video's modification time is unknown")?;
+    md5_sidecar::write(video, hash, stamp).map_err(|e| e.to_string())
 }
 
 /// The calling thread at the lowest best-effort drive priority until dropped: a blocking-pool thread gets its old

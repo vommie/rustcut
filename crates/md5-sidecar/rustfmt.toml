@@ -1,0 +1,3 @@
+# The same settings as every app that vendors this crate, here too so the copies stay byte-identical after `cargo fmt`.
+edition = "2024"
+max_width = 120

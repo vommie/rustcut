@@ -56,6 +56,7 @@ step "Clippy with warnings denied" cargo cl
 step "Tests (core, player, app)" cargo t
 step "Cargo.lock is up to date" cargo metadata --locked --format-version 1 --no-deps >/dev/null
 step "Changelog documents this version" scripts/release.sh --check
+step "md5-sidecar crate matches its canonical copy (RustKnown)" scripts/sync-md5-sidecar.sh --check
 
 if needs desktop-file-validate desktop-file-utils "Desktop file validation"; then
   step "Desktop file validation" desktop-file-validate packaging/io.github.vommie.rustcut.desktop
