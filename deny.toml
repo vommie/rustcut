@@ -15,6 +15,7 @@ ignore = [
     { id = "RUSTSEC-2026-0370", reason = "zvariant: unmaintained notice for the zbus stack that Slint's accessibility (accesskit/atspi) uses" },
     { id = "RUSTSEC-2026-0371", reason = "zbus_names: same zbus stack notice" },
     { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: same zbus stack notice" },
+    { id = "RUSTSEC-2026-0441", reason = "pin-utils comes from spin_on in Slint (slint-macros, slint-build); no replacement is available to this project" },
 ]
 
 [licenses]

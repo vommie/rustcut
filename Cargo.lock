@@ -346,6 +346,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ashpd"
+version = "0.13.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb8421aaa9644a5faf26735f258b669b15f063313ef8f8e2bdb28912a1a6f111"
+dependencies = [
+ "enumflags2",
+ "futures-util",
+ "getrandom 0.4.3",
+ "serde",
+ "tokio",
+ "zbus 5.19.0",
+]
+
+[[package]]
 name = "async-broadcast"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5719,9 +5733,10 @@ dependencies = [
 
 [[package]]
 name = "rustcut"
-version = "0.0.108"
+version = "0.0.109"
 dependencies = [
  "arboard",
+ "ashpd",
  "az",
  "chrono",
  "clap",
@@ -5729,6 +5744,7 @@ dependencies = [
  "directories",
  "flate2",
  "fnv",
+ "futures-util",
  "humansize",
  "interprocess",
  "notify-rust",
@@ -5758,7 +5774,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-core"
-version = "0.0.108"
+version = "0.0.109"
 dependencies = [
  "atomic-write-file",
  "az",
@@ -5807,7 +5823,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-player"
-version = "0.0.108"
+version = "0.0.109"
 dependencies = [
  "glow",
  "hdrhistogram",
@@ -5832,7 +5848,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-plugin-host"
-version = "0.0.108"
+version = "0.0.109"
 dependencies = [
  "regex",
  "semver",
@@ -5850,7 +5866,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-thumbs"
-version = "0.0.108"
+version = "0.0.109"
 dependencies = [
  "ffmpeg-next",
  "ioprio",
@@ -5864,7 +5880,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-thumbs-protocol"
-version = "0.0.108"
+version = "0.0.109"
 dependencies = [
  "serde",
  "serde_json",
@@ -6827,6 +6843,7 @@ dependencies = [
  "signal-hook-registry",
  "socket2",
  "tokio-macros",
+ "tracing",
  "windows-sys 0.61.2",
 ]
 
@@ -8717,6 +8734,7 @@ dependencies = [
  "rustix 1.1.6",
  "serde",
  "serde_repr",
+ "tokio",
  "tracing",
  "uds_windows",
  "uuid",

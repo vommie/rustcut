@@ -7,6 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.109] - 2026-11-06
+
+### Added
+
+- A light theme (Catppuccin Latte, the same colors as RustView's): Settings > Appearance > Theme chooses System, Dark or
+  Light. System follows KDE's color scheme through the desktop portal (on X11 and Wayland) and switches at once when it
+  changes; without an answer RustCut stays dark. New setting `appearance.theme` (`system` by default; older settings
+  files start with it, no migration). The overlays on the video stay dark.
+
 ## [0.0.108] - 2026-11-04
 
 ### Changed
@@ -1480,7 +1489,8 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.108...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.109...HEAD
+[0.0.109]: https://github.com/vommie/rustcut/compare/v0.0.108...v0.0.109
 [0.0.108]: https://github.com/vommie/rustcut/compare/v0.0.107...v0.0.108
 [0.0.107]: https://github.com/vommie/rustcut/compare/v0.0.106...v0.0.107
 [0.0.106]: https://github.com/vommie/rustcut/compare/v0.0.104...v0.0.106

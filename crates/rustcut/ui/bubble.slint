@@ -1,3 +1,4 @@
+import { Theme } from "styles.slint";
 // Bubbles at an input (M6.5c, user decision Q-N10): a closable message anchored at the element it is about (a field
 // whose text is refused, the export card's name, a section row, a Codecs option), drawn like a tooltip with the
 // level's colored stripe (look A). An element embeds a `BubbleAnchor` with its key; a `BubbleLayer` over each scroll
@@ -104,8 +105,8 @@ component BubbleIconButton inherits Rectangle {
     height: 20px;
     border-radius: 3px;
     border-width: 1px;
-    border-color: touch.has-hover ? NoticeLook.color(0) : #ffffff33;
-    background: touch.has-hover ? #ffffff1a : transparent;
+    border-color: touch.has-hover ? NoticeLook.color(0) : Theme.border-strong;
+    background: touch.has-hover ? Theme.surface-hover : transparent;
 
     host := TooltipHost {
         text: root.tooltip;
@@ -360,7 +361,7 @@ component BubbleCard inherits Rectangle {
             width: root.close-size;
             height: root.close-size;
             border-radius: 3px;
-            background: close-touch.has-hover ? #ffffff1a : transparent;
+            background: close-touch.has-hover ? Theme.surface-hover : transparent;
 
             AppIcon {
                 x: (parent.width - self.width) / 2;

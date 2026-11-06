@@ -53,7 +53,7 @@ export component SettingsScroll inherits Rectangle {
             border-radius: root.bar-size / 2;
             background: bar-touch.pressed ? Theme.accent : (
                 bar-touch.has-hover && bar-touch.mouse-y >= track.thumb-y && bar-touch.mouse-y <= track.thumb-y + track.thumb-h
-                ? Theme.primary : #585b70);
+                ? Theme.primary : Theme.border-strong);
         }
 
         bar-touch := TouchArea {

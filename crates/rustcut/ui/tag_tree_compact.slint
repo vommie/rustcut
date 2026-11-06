@@ -32,8 +32,8 @@ export global CompactTreeMetrics {
     // A row about 20 % darker than `Theme.surface-variant` and its hover a little lighter than `Theme.surface-hover`
     // (the user, 2026-10-27, after testing RustCut 0.0.70; the hover also stands out from the lines, which are
     // `Theme.border` = the old hover color).
-    out property <color> row-background: #1b1b2a;
-    out property <color> row-hover: #383a4f;
+    out property <color> row-background: Theme.tree-row;
+    out property <color> row-hover: Theme.tree-row-hover;
 }
 
 /// Plus (collapsed) or minus (expanded) without a box, as whole-pixel bars (never an SVG); the whole slot of the row
@@ -114,19 +114,19 @@ export component CompactTagTreeItem {
 
     // The colors of `TagTreeItem`.
     property <color> fill: root.tag.is-selected ? Theme.surface-selected : (
-        root.tag.is-assigned ? (root.tag.is-dimmed ? #a6e3a118 : #a6e3a128) : (
-            root.tag.is-partial ? (root.tag.is-dimmed ? #f9e2af15 : #f9e2af22) : (
-                tag-touch.has-hover ? CompactTreeMetrics.row-hover : (root.tag.is-dimmed ? #1e1e2e66 : CompactTreeMetrics.row-background)
+        root.tag.is-assigned ? (root.tag.is-dimmed ? Theme.status-ok.with-alpha(0.094) : Theme.status-ok.with-alpha(0.157)) : (
+            root.tag.is-partial ? (root.tag.is-dimmed ? Theme.accent.with-alpha(0.082) : Theme.accent.with-alpha(0.133)) : (
+                tag-touch.has-hover ? CompactTreeMetrics.row-hover : (root.tag.is-dimmed ? Theme.surface.with-alpha(0.4) : CompactTreeMetrics.row-background)
             )
         )
     );
     property <color> frame: root.tag.is-selected ? Theme.primary : (
-        root.tag.is-assigned ? (root.tag.is-dimmed ? #a6e3a188 : #a6e3a1) : (
-            root.tag.is-partial ? (root.tag.is-dimmed ? #f9e2af88 : #f9e2af) : transparent
+        root.tag.is-assigned ? (root.tag.is-dimmed ? Theme.status-ok.with-alpha(0.533) : Theme.status-ok) : (
+            root.tag.is-partial ? (root.tag.is-dimmed ? Theme.accent.with-alpha(0.533) : Theme.accent) : transparent
         )
     );
     property <color> ink: root.tag.is-selected ? Theme.primary : (
-        root.tag.is-assigned ? #a6e3a1 : (root.tag.is-partial ? #f9e2af : Theme.text)
+        root.tag.is-assigned ? Theme.status-ok : (root.tag.is-partial ? Theme.accent : Theme.text)
     );
     property <int> weight: (root.tag.is-selected || root.tag.is-assigned || root.tag.depth == 0) ? 700 : 400;
     property <bool> marked: root.tag.is-assigned || root.tag.is-partial;
@@ -134,9 +134,9 @@ export component CompactTagTreeItem {
     // RustCut begin: a locked tag (user decision Q-G2) is red like in `TagTreeItem`'s RustCut block, with the check.
     states [
         locked when root.tag.is-locked: {
-            fill: root.tag.is-dimmed ? #f38ba818 : #f38ba828;
-            frame: root.tag.is-dimmed ? #f38ba888 : #f38ba8;
-            ink: #f38ba8;
+            fill: root.tag.is-dimmed ? Theme.status-corrupt.with-alpha(0.094) : Theme.status-corrupt.with-alpha(0.157);
+            frame: root.tag.is-dimmed ? Theme.status-corrupt.with-alpha(0.533) : Theme.status-corrupt;
+            ink: Theme.status-corrupt;
             weight: 700;
             marked: true;
         }

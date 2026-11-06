@@ -16,8 +16,8 @@ export component ResizerBar inherits Rectangle {
     in property <color> idle-line-color: Theme.border;
     in property <color> hover-line-color: Theme.primary;
     in property <color> active-line-color: Theme.accent;
-    in property <color> hover-background: #89b4fa14;
-    in property <color> active-background: #89b4fa2c;
+    in property <color> hover-background: Theme.primary.with-alpha(0.078);
+    in property <color> active-background: Theme.primary.with-alpha(0.173);
 
     // Event Callbacks API (Pure Hooks)
     callback drag-started();

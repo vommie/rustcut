@@ -153,6 +153,9 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     let runtime = start_runtime()?;
     let ui = UiDispatcher::new(SlintSink, runtime.handle().clone());
     window::select_backend()?;
+    // The look before the first window exists: Settings > Appearance > Theme, then the desktop's scheme once it answers.
+    crate::ui::theme::set_mode(loaded.settings.appearance.theme);
+    crate::desktop::color_scheme::watch(runtime.handle(), crate::ui::theme::set_system);
     let main = MainWindow::new()?;
     main.set_app_name(APP_NAME.into());
     main.set_app_version(VERSION.into());

@@ -31,6 +31,7 @@ pub mod sections;
 pub mod settings;
 pub mod status;
 pub mod tags;
+pub mod theme;
 pub mod thumbs;
 pub mod timeline;
 pub mod tooltip;
