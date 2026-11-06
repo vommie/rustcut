@@ -1,3 +1,4 @@
+import { Theme } from "styles.slint";
 // The tooltip bubble (M5.5): one per window, on the highest level, drawn for `GlobalTooltip` (tooltip.slint). Short
 // tips are one line, long ones wrap at `TooltipSettings.max-width` (Q-H2); a title, rows and a note make a rich tip;
 // the hold badge and the key caps sit on their own line at the bottom (Q-H1). `TooltipLogic.place` puts the bubble
@@ -18,9 +19,9 @@ component KeyCap inherits Rectangle {
     height: 18px;
     width: Math.max(18px, root.icon != IconId.none ? 18px : label.preferred-width + 10px);
     border-radius: 4px;
-    background: #313244;
+    background: Theme.surface-hover;
     border-width: 1px;
-    border-color: #585b70;
+    border-color: Theme.border-strong;
 
     // The key's lower edge, a little darker, so it reads as a key.
     Rectangle {
@@ -28,7 +29,7 @@ component KeyCap inherits Rectangle {
         height: 1px;
         x: 2px;
         width: parent.width - 4px;
-        background: #11111b88;
+        background: Theme.chrome.with-alpha(0.533);
     }
 
     if root.icon != IconId.none: AppIcon {
@@ -362,7 +363,7 @@ export component TooltipLayer inherits Rectangle {
 
             if root.has-footer: Rectangle {
                 height: 1px;
-                background: #ffffff14;
+                background: Theme.border;
             }
 
             if root.has-footer: HorizontalLayout {

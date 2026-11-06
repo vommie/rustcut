@@ -73,7 +73,7 @@ export component SearchField inherits Rectangle {
     border-radius: root.corner-radius;
     border-width: 1px;
 
-    background: !root.is-enabled ? #1e1e2e44 : (
+    background: !root.is-enabled ? Theme.surface.with-alpha(0.267) : (
         root.custom-bg != transparent ? root.custom-bg : Theme.surface-variant
     );
 

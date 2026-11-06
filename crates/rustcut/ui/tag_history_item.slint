@@ -29,10 +29,10 @@ export component TagHistoryItemView inherits Rectangle {
     // RustCut end
 
     background: !root.is-enabled ? Theme.surface : root.item.is-assigned ? (
-        root.lit ? #a6e3a133 : #a6e3a122
+        root.lit ? Theme.status-ok.with-alpha(0.2) : Theme.status-ok.with-alpha(0.133)
     ) : (
         root.item.is-partial ? (
-            root.lit ? #f9e2af33 : #f9e2af22
+            root.lit ? Theme.accent.with-alpha(0.2) : Theme.accent.with-alpha(0.133)
         ) : (
             root.lit ? Theme.surface-hover : Theme.surface-variant
         )
@@ -40,10 +40,10 @@ export component TagHistoryItemView inherits Rectangle {
 
     border-width: 1px;
     border-color: !root.is-enabled ? Theme.border : root.item.is-assigned ? (
-        root.lit ? #a6e3a1 : #a6e3a1aa
+        root.lit ? Theme.status-ok : Theme.status-ok.with-alpha(0.667)
     ) : (
         root.item.is-partial ? (
-            root.lit ? #f9e2af : #f9e2afaa
+            root.lit ? Theme.accent : Theme.accent.with-alpha(0.667)
         ) : (
             root.lit ? Theme.primary : Theme.border
         )
@@ -93,7 +93,7 @@ export component TagHistoryItemView inherits Rectangle {
         if root.item.is-assigned || root.item.is-partial : IconSlot {
             icon: root.item.is-assigned ? IconId.check : IconId.partial;
             size: IconSize.sm;
-            color: !root.is-enabled ? Theme.text-disabled : root.item.is-assigned ? #a6e3a1 : #f9e2af;
+            color: !root.is-enabled ? Theme.text-disabled : root.item.is-assigned ? Theme.status-ok : Theme.accent;
         }
 
         // Zero-jitter bold text measurement box
@@ -115,8 +115,8 @@ export component TagHistoryItemView inherits Rectangle {
                 font-size: 11px;
                 font-weight: root.item.is-bold ? 700 : 400;
                 font-italic: root.item.is-italic;
-                color: !root.is-enabled ? Theme.text-disabled : root.item.is-assigned ? #a6e3a1 : (
-                    root.item.is-partial ? #f9e2af : (
+                color: !root.is-enabled ? Theme.text-disabled : root.item.is-assigned ? Theme.status-ok : (
+                    root.item.is-partial ? Theme.accent : (
                         root.lit ? Theme.primary : Theme.text
                     )
                 );

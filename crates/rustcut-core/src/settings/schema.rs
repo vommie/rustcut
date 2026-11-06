@@ -366,6 +366,8 @@ pub struct AppearanceSettings {
     pub tooltips: bool,
     /// How long the pointer rests before a tooltip shows, in milliseconds.
     pub tooltip_delay_ms: u16,
+    /// Dark, light or the desktop's color scheme (added in 0.0.109; older files follow the system).
+    pub theme: super::ThemeMode,
 }
 
 impl AppearanceSettings {
@@ -378,6 +380,7 @@ impl Default for AppearanceSettings {
         Self {
             tooltips: true,
             tooltip_delay_ms: 600,
+            theme: super::ThemeMode::default(),
         }
     }
 }

@@ -34,7 +34,7 @@ export global MenuTints {
     pure public function of(tint: int) -> color {
         if tint == 1 { return Theme.status-ok; }
         if tint == 2 { return Theme.accent; }
-        if tint == 3 { return #fab387; }
+        if tint == 3 { return Theme.status-warn; }
         if tint == 4 { return Theme.status-corrupt; }
         return Theme.text;
     }

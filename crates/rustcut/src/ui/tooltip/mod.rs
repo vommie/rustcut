@@ -15,9 +15,13 @@ use crate::{IconId, TipKey, TipKeys, TipPlacement, TipRect, TipSide, TooltipLogi
 /// Answers `TooltipLogic`'s callbacks for `window`.
 pub fn install<C>(window: &C)
 where
-    C: ComponentHandle,
+    C: ComponentHandle + 'static,
     for<'a> TooltipLogic<'a>: slint::Global<'a, C>,
+    for<'a> crate::Theme<'a>: slint::Global<'a, C>,
+    for<'a> crate::Palette<'a>: slint::Global<'a, C>,
 {
+    // Every window passes through here, so it also gets the theme (and keeps it up to date).
+    crate::ui::theme::install(window);
     let logic = window.global::<TooltipLogic<'_>>();
     logic.on_key_caps(|text| key_caps(&text));
     logic.on_place(|anchor, width, height, area_width, area_height, beside| {

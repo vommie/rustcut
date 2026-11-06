@@ -1,6 +1,6 @@
 //! General, Desktop Integration, Appearance and Advanced & Logs.
 
-use rustcut_core::settings::{GeneralSettings, Settings, TaskbarShows};
+use rustcut_core::settings::{GeneralSettings, Settings, TaskbarShows, ThemeMode};
 
 use super::Card;
 use crate::ui::settings::field::{Field, Kind, Value, WRONG_VALUE, always, choice, number, path_field, switch};
@@ -126,28 +126,46 @@ pub static DESKTOP: &[Card] = &[
     },
 ];
 
-pub static APPEARANCE: &[Card] = &[Card {
-    title: "Tooltips",
-    description: "Every button explains itself in a tooltip, with its key.",
-    fields: &[
-        switch!(
-            "appearance.tooltips",
-            "Show tooltips",
-            "Off: no tooltips anywhere (the descriptions in this window stay).",
-            appearance.tooltips
-        ),
-        number!(
-            "appearance.tooltip_delay_ms",
-            "Delay",
-            "How long the pointer rests on a button before its tooltip shows.",
-            appearance.tooltip_delay_ms: u16,
-            0..=5000,
-            100,
-            "ms"
-        )
-        .under(|s| s.appearance.tooltips),
-    ],
-}];
+pub static APPEARANCE: &[Card] = &[
+    Card {
+        title: "Theme",
+        description: "Dark or light, the same in RustView. System follows KDE's color scheme (System Settings > Colors), \
+                      also when it changes while RustCut runs.",
+        fields: &[choice!(
+            "appearance.theme",
+            "Colors",
+            "System: like the desktop; without an answer from it RustCut stays dark.",
+            appearance.theme,
+            [
+                (ThemeMode::System, "System"),
+                (ThemeMode::Dark, "Dark"),
+                (ThemeMode::Light, "Light")
+            ]
+        )],
+    },
+    Card {
+        title: "Tooltips",
+        description: "Every button explains itself in a tooltip, with its key.",
+        fields: &[
+            switch!(
+                "appearance.tooltips",
+                "Show tooltips",
+                "Off: no tooltips anywhere (the descriptions in this window stay).",
+                appearance.tooltips
+            ),
+            number!(
+                "appearance.tooltip_delay_ms",
+                "Delay",
+                "How long the pointer rests on a button before its tooltip shows.",
+                appearance.tooltip_delay_ms: u16,
+                0..=5000,
+                100,
+                "ms"
+            )
+            .under(|s| s.appearance.tooltips),
+        ],
+    },
+];
 
 fn set_log_level(s: &mut Settings, v: Value) -> Result<(), String> {
     let text = v.as_text()?;

@@ -13,6 +13,7 @@ mod plugins;
 mod schema;
 #[cfg(test)]
 mod schema_tests;
+mod theme;
 mod thumbnails;
 mod ui_state;
 #[cfg(test)]
@@ -37,6 +38,7 @@ pub use schema::{
     GeneralSettings, HashingSettings, OnJobLoad, QueueSettings, RenderSettings, RustViewSettings, Settings,
     TaskbarShows, TraySettings, WarningSettings, WhenDone, WriteTiming,
 };
+pub use theme::{SystemScheme, ThemeMode, resolve_dark};
 pub use thumbnails::{
     MAX_THUMB_DELAY_MS, MAX_THUMB_PORTRAIT_PERCENT, MAX_THUMB_WORKERS, MIN_THUMB_PORTRAIT_PERCENT, ThumbDensity,
     ThumbLook, ThumbMissing, ThumbPlace, ThumbPortrait, ThumbProgress, ThumbZone, ThumbnailSettings,

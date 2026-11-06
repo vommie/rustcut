@@ -347,6 +347,7 @@ THIS SOFTWARE.
 - Copyright (c) 2020 Andrew D. Straw
 - Copyright (c) 2020 Andrey Zheleznov <zheland.net@gmail.com>
 - Copyright (c) 2020 Ashish Myles and contributors
+- Copyright (c) 2020 Bilal Elmoussaoui
 - Copyright (c) 2020 Chad Brokaw
 - Copyright (c) 2020 Diggory Blake
 - Copyright (c) 2020 Jared Forth

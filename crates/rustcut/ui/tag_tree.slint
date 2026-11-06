@@ -27,9 +27,9 @@ export component TagTreeItem inherits Rectangle {
     property <length> indent-per-level: 7px;
 
     background: root.tag.is-selected ? Theme.surface-selected : (
-        root.tag.is-assigned ? (root.tag.is-dimmed ? #a6e3a118 : #a6e3a128) : (
-            root.tag.is-partial ? (root.tag.is-dimmed ? #f9e2af15 : #f9e2af22) : (
-                tag-touch.has-hover ? Theme.surface-hover : (root.tag.is-dimmed ? #1e1e2e66 : Theme.surface-variant)
+        root.tag.is-assigned ? (root.tag.is-dimmed ? Theme.status-ok.with-alpha(0.094) : Theme.status-ok.with-alpha(0.157)) : (
+            root.tag.is-partial ? (root.tag.is-dimmed ? Theme.accent.with-alpha(0.082) : Theme.accent.with-alpha(0.133)) : (
+                tag-touch.has-hover ? Theme.surface-hover : (root.tag.is-dimmed ? Theme.surface.with-alpha(0.4) : Theme.surface-variant)
             )
         )
     );
@@ -38,8 +38,8 @@ export component TagTreeItem inherits Rectangle {
     border-width: 1px;
 
     border-color: root.tag.is-selected ? Theme.primary : (
-        root.tag.is-assigned ? (root.tag.is-dimmed ? #a6e3a188 : #a6e3a1) : (
-            root.tag.is-partial ? (root.tag.is-dimmed ? #f9e2af88 : #f9e2af) : Theme.border
+        root.tag.is-assigned ? (root.tag.is-dimmed ? Theme.status-ok.with-alpha(0.533) : Theme.status-ok) : (
+            root.tag.is-partial ? (root.tag.is-dimmed ? Theme.accent.with-alpha(0.533) : Theme.accent) : Theme.border
         )
     );
 
@@ -85,14 +85,14 @@ export component TagTreeItem inherits Rectangle {
         if root.tag.is-assigned || root.tag.is-partial : IconSlot {
             icon: root.tag.is-assigned ? IconId.check : IconId.partial;
             size: IconSize.sm;
-            color: root.tag.is-assigned ? #a6e3a1 : #f9e2af;
+            color: root.tag.is-assigned ? Theme.status-ok : Theme.accent;
         }
 
         Text {
             text: root.tag.name;
             color: root.tag.is-selected ? Theme.primary : (
-                root.tag.is-assigned ? #a6e3a1 : (
-                    root.tag.is-partial ? #f9e2af : Theme.text
+                root.tag.is-assigned ? Theme.status-ok : (
+                    root.tag.is-partial ? Theme.accent : Theme.text
                 )
             );
 
@@ -112,8 +112,8 @@ export component TagTreeItem inherits Rectangle {
     // the expand button is this one's).
     states [
         locked when root.tag.is-locked: {
-            background: root.tag.is-dimmed ? #f38ba818 : #f38ba828;
-            border-color: root.tag.is-dimmed ? #f38ba888 : #f38ba8;
+            background: root.tag.is-dimmed ? Theme.status-corrupt.with-alpha(0.094) : Theme.status-corrupt.with-alpha(0.157);
+            border-color: root.tag.is-dimmed ? Theme.status-corrupt.with-alpha(0.533) : Theme.status-corrupt;
         }
     ]
 
@@ -150,12 +150,12 @@ export component TagTreeItem inherits Rectangle {
             if root.tag.is-assigned: IconSlot {
                 icon: IconId.check;
                 size: IconSize.sm;
-                color: #f38ba8;
+                color: Theme.status-corrupt;
             }
 
             Text {
                 text: root.tag.name;
-                color: #f38ba8;
+                color: Theme.status-corrupt;
                 font-weight: 700;
                 font-size: 11px;
                 vertical-alignment: center;

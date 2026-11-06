@@ -2,38 +2,53 @@
 // design, ADR-10). The ported tag tree and rating bar import this global under the same name. RustView-only tokens
 // (thumbnail badges, thumbnail aspect helper) are left out; RustCut-only tokens go below the copied block.
 
+// Dark: Catppuccin Mocha, light: Catppuccin Latte (questionnaire 2026-11-06-rustview-light-theme; RustView has the same
+// tokens and values). Rust sets `dark` in every window (`src/ui/theme.rs`: Settings > Appearance > Theme). Colors drawn
+// over the video stay dark in both.
 export global Theme {
-    // Dark Palette (KDE Breeze / Catppuccin inspired)
-    out property <color> background: #181825;
-    // Background of the fullscreen when the theme decides (a light palette defines its own value here).
+    in-out property <bool> dark: true;
+    // Dark: Catppuccin Mocha; light: Catppuccin Latte.
+    out property <color> background: root.dark ? #181825 : #eff1f5;
+    // Behind media (the video): dark in both themes.
     out property <color> fullscreen-background: #11111b;
-    out property <color> surface: #1e1e2e;
-    out property <color> surface-variant: #252538;
-    out property <color> surface-hover: #313244;
-    out property <color> surface-selected: #45475a;
-    out property <color> surface-selected-hover: #52556d;
-    out property <color> border: #313244;
-    out property <color> text: #cdd6f4;
-    out property <color> text-muted: #a6adc8;
-    out property <color> primary: #89b4fa;
-    out property <color> accent: #f9e2af;
+    out property <color> surface: root.dark ? #1e1e2e : #ffffff;
+    out property <color> surface-variant: root.dark ? #252538 : #e6e9ef;
+    out property <color> surface-hover: root.dark ? #313244 : #dce0e8;
+    out property <color> surface-selected: root.dark ? #45475a : #ccd0da;
+    out property <color> surface-selected-hover: root.dark ? #52556d : #bcc0cc;
+    out property <color> border: root.dark ? #313244 : #ccd0da;
+    out property <color> text: root.dark ? #cdd6f4 : #4c4f69;
+    out property <color> text-muted: root.dark ? #a6adc8 : #6c6f85;
+    out property <color> primary: root.dark ? #89b4fa : #1e66f5;
+    out property <color> accent: root.dark ? #f9e2af : #df8e1d;
+
+    // The bar behind tabs in RustView's main window (darker than the window).
+    out property <color> chrome: root.dark ? #11111b : #dce0e8;
+    // A warning, pending work and running work, the stronger line of a key cap or a scroll thumb, the rows of the compact
+    // tag tree.
+    out property <color> status-warn: root.dark ? #fab387 : #fe640b;
+    out property <color> status-pending: root.dark ? #89dceb : #04a5e5;
+    out property <color> status-info: root.dark ? #cba6f7 : #8839ef;
+    out property <color> border-strong: root.dark ? #585b70 : #acb0be;
+    out property <color> tree-row: root.dark ? #1b1b2a : #e6e9ef;
+    out property <color> tree-row-hover: root.dark ? #383a4f : #dce0e8;
 
     // Status / Flags Colors (Catppuccin Palette)
-    out property <color> status-ok: #a6e3a1;         // Green
-    out property <color> status-corrupt: #f38ba8;    // Red
-    out property <color> status-deleted: #6c7086;    // Overlay Gray
-    out property <color> corrupt-border: #f38ba8;
-    out property <color> corrupt-bg: #f38ba818;
-    out property <color> deleted-border: #6c7086;
-    out property <color> deleted-bg: #31324460;
+    out property <color> status-ok: root.dark ? #a6e3a1 : #40a02b;         // Green
+    out property <color> status-corrupt: root.dark ? #f38ba8 : #d20f39;    // Red
+    out property <color> status-deleted: root.dark ? #6c7086 : #9ca0b0;    // Overlay Gray
+    out property <color> corrupt-border: root.dark ? #f38ba8 : #d20f39;
+    out property <color> corrupt-bg: root.dark ? #f38ba818 : #d20f3918;
+    out property <color> deleted-border: root.dark ? #6c7086 : #9ca0b0;
+    out property <color> deleted-bg: root.dark ? #31324460 : #ccd0da60;
 
     // Rating Color Scales (Matching PyView)
-    out property <color> rating-0: #dddddd;
-    out property <color> rating-1: #eeaaaa;
-    out property <color> rating-2: #ffcc88;
-    out property <color> rating-3: #88ee88;
-    out property <color> rating-4: #6688ee;
-    out property <color> rating-5: #cc88ee;
+    out property <color> rating-0: root.dark ? #dddddd : #8c8fa1;
+    out property <color> rating-1: root.dark ? #eeaaaa : #e64553;
+    out property <color> rating-2: root.dark ? #ffcc88 : #fe640b;
+    out property <color> rating-3: root.dark ? #88ee88 : #40a02b;
+    out property <color> rating-4: root.dark ? #6688ee : #1e66f5;
+    out property <color> rating-5: root.dark ? #cc88ee : #8839ef;
 
     /// Returns the semantic theme color for a rating value (0..5).
     pure public function rating-color(rating: int) -> color {
@@ -52,5 +67,5 @@ export global Theme {
     out property <length> status-bar-height: 26px;
     // Text and symbols of an element that cannot be used now (a gray of its own, never only transparency: faint
     // means "older" in the tag history).
-    out property <color> text-disabled: #6c7086;
+    out property <color> text-disabled: root.dark ? #6c7086 : #9ca0b0;
 }

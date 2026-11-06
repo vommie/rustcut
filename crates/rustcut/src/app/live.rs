@@ -57,8 +57,9 @@ pub struct Parts {
     pub ui: UiDispatcher,
 }
 
-/// The hold time, the tooltips and the queue list's following of the main window.
+/// The theme, the hold time, the tooltips and the queue list's following of the main window.
 pub fn look(main: &MainWindow, settings: &Settings) {
+    crate::ui::theme::set_mode(settings.appearance.theme);
     main.global::<HoldConfirm<'_>>()
         .set_duration(i64::from(settings.general.hold_to_confirm_ms));
     let tooltips = main.global::<TooltipSettings<'_>>();
