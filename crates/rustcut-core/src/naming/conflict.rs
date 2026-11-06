@@ -110,6 +110,13 @@ impl QueuedTarget {
             JobStateKind::Waiting | JobStateKind::Held | JobStateKind::Rendering | JobStateKind::Paused
         )
     }
+
+    /// The job's name is not free for another job: it will write its target, or it can be rendered again (a failed or
+    /// canceled job; a free name offered from it failed once it ran again, user report 2026-11-06). A finished job's
+    /// file is in the folder itself.
+    pub const fn claims(&self) -> bool {
+        self.pending() || matches!(self.state, JobStateKind::Failed | JobStateKind::Canceled)
+    }
 }
 
 /// What stands in the way of a target.
@@ -192,7 +199,7 @@ pub fn check(input: &CheckInput<'_>) -> Conflicts {
     }
 }
 
-/// Whether a file name in `folder` is used: on the drive or by a job of the queue that will still write it.
+/// Whether a file name in `folder` is used: on the drive or claimed by a job of the queue ([`QueuedTarget::claims`]).
 pub struct Taken<'a> {
     pub folder: &'a Path,
     pub scan: &'a FolderScan,
@@ -205,7 +212,7 @@ impl Taken<'_> {
             return true;
         }
         let path = self.folder.join(file);
-        self.queue.iter().any(|q| q.pending() && same_path(&q.target, &path))
+        self.queue.iter().any(|q| q.claims() && same_path(&q.target, &path))
     }
 
     /// `stem.ext` is free.
@@ -435,6 +442,53 @@ mod tests {
     }
 
     #[test]
+    fn the_offered_number_is_the_first_free_one_and_never_a_taken_one() {
+        // User report 2026-11-06: saving "1 - 01.mkv" offered "1 (2) - 01.mkv", which the render then found taken.
+        let folder = scan(&["1 - 01.mkv", "1 (1) - 01.mkv", "1 (3) - 01.mkv"]);
+        let with = |queue: &[QueuedTarget]| {
+            let taken = Taken {
+                folder: Path::new("/out"),
+                scan: &folder,
+                queue,
+            };
+            free_variant(&namer(DEFAULT_TEMPLATE, "1"), Container::Mkv, &taken)
+        };
+        assert_eq!(
+            with(&[]),
+            Some(free("1 (2) - 01", Some("1 (2)"))),
+            "the gap between (1) and (3)"
+        );
+        // A job that can still write "1 (2) - 01.mkv" claims it, whatever state it is in; a finished one wrote its file.
+        for state in [
+            JobStateKind::Waiting,
+            JobStateKind::Held,
+            JobStateKind::Rendering,
+            JobStateKind::Paused,
+            JobStateKind::Failed,
+            JobStateKind::Canceled,
+        ] {
+            let queue = [queued(5, "/out/1 (2) - 01.mkv", state)];
+            assert_eq!(with(&queue), Some(free("1 (4) - 01", Some("1 (4)"))), "{state:?}");
+        }
+        let finished = [queued(5, "/out/1 (2) - 01.mkv", JobStateKind::Finished)];
+        assert_eq!(
+            with(&finished),
+            Some(free("1 (2) - 01", Some("1 (2)"))),
+            "its file is gone"
+        );
+        // The name of the session already carries a number ("1 (3)" after an earlier "(n)"): the first free one still.
+        let taken = Taken {
+            folder: Path::new("/out"),
+            scan: &folder,
+            queue: &[],
+        };
+        assert_eq!(
+            free_variant(&namer(DEFAULT_TEMPLATE, "1 (3)"), Container::Mkv, &taken),
+            Some(free("1 (2) - 01", Some("1 (2)")))
+        );
+    }
+
+    #[test]
     fn the_number_of_a_variant_goes_into_the_base_name() {
         let folder = scan(&["Clip - 01.mkv", "Clip (1) - 01.mkv", "Clip - 01 (1).mkv"]);
         let taken = Taken {
@@ -449,8 +503,8 @@ mod tests {
         );
         assert_eq!(
             free_variant(&namer(DEFAULT_TEMPLATE, "Clip (4)"), Container::Mkv, &taken),
-            Some(free("Clip (5) - 01", Some("Clip (5)"))),
-            "a name with a number goes on counting"
+            Some(free("Clip (2) - 01", Some("Clip (2)"))),
+            "a name with a number gets the first free one"
         );
         assert_eq!(
             free_variant(&namer("{{ source }} {{ counter }}", "Clip"), Container::Mkv, &taken),

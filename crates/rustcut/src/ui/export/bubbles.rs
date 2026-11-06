@@ -8,7 +8,7 @@ use std::path::Path;
 use std::rc::Weak;
 
 use rustcut_core::media::is_video_file;
-use rustcut_core::naming::{FolderScan, QueuedTarget, Taken, next_free_counter_except, series};
+use rustcut_core::naming::{FolderScan, QueuedTarget, Taken, free_variant, next_free_counter_except, series};
 
 use super::ExportBridge;
 use super::check::{At, CardCheck, Level as CheckLevel};
@@ -62,15 +62,10 @@ pub fn conflict_fix(
                 .map(|(n, _)| Fix::Number(n));
         }
     }
-    let base = st.name.trim();
-    (1..1_000).find_map(|n| {
-        let mut probe = st.clone();
-        probe.name = format!("{base} ({n})");
-        let (stem, _) = probe.file(facts).ok()?;
-        taken
-            .stem_free(&stem, facts.container)
-            .then_some(Fix::Variant(probe.name))
-    })
+    // The conflict dialog's rule: the first free number, in place of one the name already carries.
+    free_variant(&st.namer(facts), facts.container, &taken)
+        .and_then(|free| free.name)
+        .map(Fix::Variant)
 }
 
 const fn key(at: At) -> &'static str {
@@ -217,6 +212,28 @@ mod tests {
         let folder = PathBuf::from("/out");
         let (st, facts) = card(false);
         let files = scan(&["Holiday.mkv", "Holiday (1).mkv", "Other - 01.mkv"]);
+        assert_eq!(
+            conflict_fix(&st, &facts, &folder, &files, &[]),
+            Some(Fix::Variant("Holiday (2)".into()))
+        );
+    }
+
+    #[test]
+    fn the_bubble_takes_the_first_free_number_like_the_dialog() {
+        // "Holiday (1)" got a conflict: the bubble offered "Holiday (1) (1)" before; a canceled job claims "(2)".
+        let folder = PathBuf::from("/out");
+        let (mut st, facts) = card(false);
+        st.name = "Holiday (1)".into();
+        let files = scan(&["Holiday (1).mkv", "Holiday (3).mkv"]);
+        let queue = [QueuedTarget {
+            id: rustcut_core::job::JobId(7),
+            target: folder.join("Holiday (2).mkv"),
+            state: rustcut_core::job::JobStateKind::Canceled,
+        }];
+        assert_eq!(
+            conflict_fix(&st, &facts, &folder, &files, &queue),
+            Some(Fix::Variant("Holiday (4)".into()))
+        );
         assert_eq!(
             conflict_fix(&st, &facts, &folder, &files, &[]),
             Some(Fix::Variant("Holiday (2)".into()))

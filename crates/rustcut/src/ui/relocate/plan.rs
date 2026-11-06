@@ -41,6 +41,30 @@ pub enum Folder {
     Path(PathBuf),
 }
 
+impl Folder {
+    /// The folder a typed path names (`home` expands a leading `~/`); an empty field chooses nothing.
+    pub fn typed(text: &str, home: Option<&Path>) -> Self {
+        let text = text.trim();
+        if text.is_empty() {
+            return Self::None;
+        }
+        match (text.strip_prefix("~/"), home) {
+            (_, Some(home)) if text == "~" => Self::Path(home.to_path_buf()),
+            (Some(rest), Some(home)) => Self::Path(home.join(rest)),
+            _ => Self::Path(PathBuf::from(text)),
+        }
+    }
+
+    /// [`Self::typed`] for a path that is still being typed: a path that is not whole yet chooses nothing (its
+    /// "Incomplete path" waits for Enter).
+    pub fn typing(text: &str, home: Option<&Path>) -> Self {
+        match Self::typed(text, home) {
+            Self::Path(path) if !path.is_absolute() => Self::None,
+            folder => folder,
+        }
+    }
+}
+
 /// What the runtime found out (filled in after every change; missing entries count as not checked yet).
 #[derive(Debug, Clone, Default)]
 pub struct Facts {
@@ -292,7 +316,7 @@ pub fn plan(
             let path = dest.join(file);
             queue
                 .iter()
-                .any(|q| !moved.contains(&q.id) && q.pending() && same_path(&q.target, &path))
+                .any(|q| !moved.contains(&q.id) && q.claims() && same_path(&q.target, &path))
         };
         // The job's own file at its old place does not stand in its way (a new name in the same folder).
         let exists = |file: &str| scan.names.contains(file) && !same_path(&dest.join(file), &job.target);
@@ -402,6 +426,52 @@ mod tests {
 
     fn to(path: &str) -> Folder {
         Folder::Path(path.into())
+    }
+
+    #[test]
+    fn a_typed_path_names_its_folder_while_it_is_typed() {
+        let home = Some(Path::new("/home/u"));
+        assert_eq!(Folder::typed("  ", home), Folder::None);
+        assert_eq!(Folder::typed("~/Videos ", home), to("/home/u/Videos"));
+        assert_eq!(Folder::typed("~", home), to("/home/u"));
+        assert_eq!(
+            Folder::typed("Videos", home),
+            to("Videos"),
+            "Enter reports it as incomplete"
+        );
+        assert_eq!(Folder::typing("/v/Clips", home), to("/v/Clips"));
+        assert_eq!(Folder::typing("~/Clips", home), to("/home/u/Clips"));
+        assert_eq!(Folder::typing("Vid", home), Folder::None, "no error while it is typed");
+        assert_eq!(Folder::typing("~/x", None), Folder::None);
+    }
+
+    #[test]
+    fn a_name_taken_in_the_chosen_folder_is_a_conflict_for_one_job_and_for_several() {
+        // User report 2026-11-06: the dialog must say at once that the name is taken there.
+        let one = [job(1, "1 - 01", JobStateKind::Finished)];
+        let mut f = facts("/v", &["1 - 01.mkv", "1 - 01 (1).mkv"]);
+        f.files.insert(JobId(1), Some((10, false)));
+        let p = plan(&one, &to("/v"), Some("1 - 01"), &[], &f, Resolution::AddNumber);
+        assert_eq!(p.conflicts.len(), 1, "{p:?}");
+        assert_eq!(p.conflicts[0].numbered, "1 - 01 (2).mkv");
+        assert!(p.conflicts[0].file_exists);
+        // Another job's target counts like a file: two waiting jobs, a third one writes "b.mkv" there.
+        let several = [job(1, "a", JobStateKind::Waiting), job(2, "b", JobStateKind::Waiting)];
+        let queue = [QueuedTarget {
+            id: JobId(3),
+            target: "/v/b.mkv".into(),
+            state: JobStateKind::Held,
+        }];
+        let p = plan(
+            &several,
+            &to("/v"),
+            None,
+            &queue,
+            &facts("/v", &["a.mkv"]),
+            Resolution::AddNumber,
+        );
+        let taken: Vec<(&str, bool)> = p.conflicts.iter().map(|c| (c.file.as_str(), c.file_exists)).collect();
+        assert_eq!(taken, [("a.mkv", true), ("b.mkv", false)]);
     }
 
     #[test]

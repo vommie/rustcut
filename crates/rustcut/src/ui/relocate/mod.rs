@@ -51,6 +51,8 @@ struct Dialog {
     entry: Option<FolderId>,
     /// The typed name of a single job.
     name: Option<String>,
+    /// The path field's text while it is typed (it shows as typed, `~/` not expanded).
+    typed_path: Option<String>,
     resolution: Resolution,
     facts: Facts,
     plan: Plan,
@@ -142,6 +144,7 @@ impl RelocateBridge {
             folder,
             entry: None,
             name,
+            typed_path: None,
             resolution: Resolution::AddNumber,
             facts: Facts::default(),
             plan: Plan::default(),
@@ -278,7 +281,7 @@ impl RelocateBridge {
         ui.set_text(states_text(&d.jobs).into());
         let (field, path) = self.field(d);
         ui.set_folder_field(field);
-        ui.set_path(path.into());
+        ui.set_path(d.typed_path.clone().unwrap_or(path).into());
         ui.set_path_placeholder(
             if d.folder == Folder::Source {
                 "Next to each source video"
@@ -399,10 +402,20 @@ impl RelocateBridge {
 
     fn set_folder(&self, folder: Folder, entry: Option<FolderId>) {
         if let Some(d) = self.dialog.borrow_mut().as_mut() {
-            // Whether a file goes to another drive depends on the folder: checked again.
-            d.facts.files.clear();
-            d.folder = folder;
-            d.entry = entry;
+            choose(d, folder, entry, None);
+        }
+        self.changed();
+    }
+
+    /// The path field is being typed in: its folder is checked at once, while the field keeps the typed text.
+    fn path_typed(&self, text: &str) {
+        let folder = Folder::typing(text, home().as_deref());
+        if let Some(d) = self.dialog.borrow_mut().as_mut() {
+            if d.folder == folder {
+                d.typed_path = Some(text.to_owned());
+                return;
+            }
+            choose(d, folder, None, Some(text.to_owned()));
         }
         self.changed();
     }
@@ -936,6 +949,16 @@ struct Request {
     files: Vec<(JobId, PathBuf, PathBuf)>,
 }
 
+/// A new folder: what was read about the drives may be old (a file may have appeared since), so its names, its space
+/// and whether a file goes to another drive are read again.
+fn choose(d: &mut Dialog, folder: Folder, entry: Option<FolderId>, typed_path: Option<String>) {
+    d.facts.files.clear();
+    d.facts.scans.clear();
+    d.folder = folder;
+    d.entry = entry;
+    d.typed_path = typed_path;
+}
+
 /// The checks the current choice still needs (`None` = everything is known).
 fn unknown(d: &Dialog) -> Option<Request> {
     let request = request_for(d, false);
@@ -1008,16 +1031,17 @@ fn connect(bridge: &Rc<RelocateBridge>, window: &MainWindow) {
     let weak = Rc::downgrade(bridge);
     ui.on_path_committed(move |text| {
         let Some(b) = weak.upgrade() else { return false };
-        let text = text.trim();
-        let folder = if text.is_empty() {
-            Folder::None
-        } else {
-            Folder::Path(PathBuf::from(shellexpand_home(text)))
-        };
-        b.set_folder(folder, None);
+        b.set_folder(Folder::typed(&text, home().as_deref()), None);
         true
     });
-    ui.on_path_typed(|_| {});
+    // The typed folder is checked while it is typed, so a taken name shows before Enter or Move (user report
+    // 2026-11-06).
+    let weak = Rc::downgrade(bridge);
+    ui.on_path_typed(move |text| {
+        if let Some(b) = weak.upgrade() {
+            b.path_typed(&text);
+        }
+    });
     let weak = Rc::downgrade(bridge);
     ui.on_name_committed(move |text| {
         let Some(b) = weak.upgrade() else { return false };
@@ -1088,11 +1112,8 @@ fn connect(bridge: &Rc<RelocateBridge>, window: &MainWindow) {
 }
 
 /// `~/x` as the home folder's `x`.
-fn shellexpand_home(text: &str) -> String {
-    match (text.strip_prefix("~/"), std::env::var_os("HOME")) {
-        (Some(rest), Some(home)) => Path::new(&home).join(rest).display().to_string(),
-        _ => text.to_owned(),
-    }
+fn home() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(PathBuf::from)
 }
 
 /// Follows the queue's move events: the progress coalesced, the outcomes in order.
