@@ -1,5 +1,5 @@
 # A plugin for RustCut's own tests: it misbehaves on request (fails, panics, runs too long, eats memory).
-# Its own workspace, built for wasm32-wasip2 by the host's tests and by rc-testenv.
+# Its own workspace, built for wasm32-wasip2 by the host's tests and by the maintainer's local test environment (not in the repository).
 [package]
 name = "rustcut-test-plugin"
 version = "0.1.0"

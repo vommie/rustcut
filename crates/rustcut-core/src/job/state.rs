@@ -1,4 +1,4 @@
-//! The job state machine (HANDOFF section 5): Waiting -> (Held) -> Rendering <-> Paused -> Finished | Failed | Canceled;
+//! The job state machine: Waiting -> (Held) -> Rendering <-> Paused -> Finished | Failed | Canceled;
 //! a finished, failed or canceled job goes back to Waiting only as a new attempt (retry/requeue).
 
 use std::fmt;

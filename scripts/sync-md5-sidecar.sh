@@ -5,13 +5,13 @@
 #   scripts/sync-md5-sidecar.sh          replace this repo's crates/md5-sidecar with the canonical copy
 #   scripts/sync-md5-sidecar.sh --check  only compare (scripts/check-all.sh); exit 1 on drift
 #
-# The canonical copy is $MD5_SIDECAR_CANONICAL or ~/claude/rustknown/crates/md5-sidecar. Without it (another machine)
+# The canonical copy is $MD5_SIDECAR_CANONICAL or `crates/md5-sidecar` of a RustKnownClean checkout next to this repository (`../rustknown`). Without it (another machine)
 # the script says so and exits 0: the check is skipped. In the repo that holds the canonical copy there is nothing to do.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 here="$PWD/crates/md5-sidecar"
-canonical="${MD5_SIDECAR_CANONICAL:-$HOME/claude/rustknown/crates/md5-sidecar}"
+canonical="${MD5_SIDECAR_CANONICAL:-$PWD/../rustknown/crates/md5-sidecar}"
 check=0
 case "${1:-}" in
   --check) check=1 ;;

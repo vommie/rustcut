@@ -1,4 +1,4 @@
-//! RustCut player: libmpv's render API drawing into an OpenGL texture on Slint's context (ADR-2 in `HANDOFF.md`).
+//! RustCut player: libmpv's render API drawing into an OpenGL texture on Slint's context (ADR-2).
 //!
 //! - [`Player`] owns the mpv core: options, the command thread (every libmpv call except rendering) and the event thread with
 //!   the observed properties (safe code only).

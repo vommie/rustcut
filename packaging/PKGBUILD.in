@@ -51,7 +51,7 @@ build() {
   cargo build --frozen --release -p rustcut -p rustcut-thumbs --no-default-features
 }
 
-# Only with `build-package.sh --check`: the golden tests need the PyCutRv test media (see CLAUDE.md).
+# Only with `build-package.sh --check`: the golden tests need the PyCutRv test media (see AGENTS.md).
 check() {
   cd "$pkgname-$pkgver"
   export RUSTUP_TOOLCHAIN=stable

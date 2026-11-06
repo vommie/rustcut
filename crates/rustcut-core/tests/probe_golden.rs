@@ -1,4 +1,4 @@
-//! The real ffprobe over PyCutRv's test media (`~/claude/pycutrv-testenv/golden/source/`, or `RUSTCUT_GOLDEN_MEDIA`):
+//! The real ffprobe over PyCutRv's test media (the folder `RUSTCUT_GOLDEN_MEDIA` names, by default `pycutrv-testenv/golden/source/` next to the repository):
 //! every file's Media Info text is a snapshot, and the special cases (rotation, odd size, two audio tracks, no audio,
 //! interlaced, broken files, a variable frame rate) are asserted directly. ffprobe and the test media are required; the
 //! tests fail with what is missing.
@@ -20,15 +20,12 @@ use rustcut_core::time::Timestamp;
 
 fn golden_dir() -> PathBuf {
     let dir = std::env::var_os("RUSTCUT_GOLDEN_MEDIA").map_or_else(
-        || {
-            let home = std::env::var_os("HOME").expect("HOME is set");
-            Path::new(&home).join("claude/pycutrv-testenv/golden/source")
-        },
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pycutrv-testenv/golden/source"),
         PathBuf::from,
     );
     assert!(
         dir.is_dir(),
-        "the test media are missing: {} (set RUSTCUT_GOLDEN_MEDIA to the folder with PyCutRv's golden sources)",
+        "the test media are missing: {} (set RUSTCUT_GOLDEN_MEDIA or place the PyCutRv test media next to the repository)",
         dir.display()
     );
     dir

@@ -20,3 +20,17 @@ packaging/*.pkg.tar.zst
 *.sqlite-wal
 *.sqlite-shm
 *.trf
+
+# Local agent and development files: they stay on the maintainer's machine, never in the public repository
+/CLAUDE.md
+/CLAUDE.local.md
+HANDOFF*.md
+HANDON*.md
+/.claude/
+/.mcp.json
+/docs/p12-user-issues.md
+/docs/ui-review-*.md
+/docs/testenv.md
+/scripts/rc-testenv
+/scripts/testenv/
+/scripts/readme-shots.sh

@@ -1,5 +1,5 @@
 //! The real ffprobe and ffmpeg behind the previews (M5.4): a picture and a description of PyCutRv's test media
-//! (`~/claude/pycutrv-testenv/golden/source/`, or `RUSTCUT_GOLDEN_MEDIA`), a portrait picture through the source's
+//! (the folder `RUSTCUT_GOLDEN_MEDIA` names, by default `pycutrv-testenv/golden/source/` next to the repository), a portrait picture through the source's
 //! rotation, a broken file, the cache by path + size + time, and requests that run on the runtime's threads. ffmpeg and
 //! the test media are required; the tests fail with what is missing.
 #![allow(
@@ -18,15 +18,12 @@ use rustcut_core::media::{PreviewOptions, PreviewPrograms, PreviewService, THUMB
 
 fn golden_dir() -> PathBuf {
     let dir = std::env::var_os("RUSTCUT_GOLDEN_MEDIA").map_or_else(
-        || {
-            let home = std::env::var_os("HOME").expect("HOME is set");
-            Path::new(&home).join("claude/pycutrv-testenv/golden/source")
-        },
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pycutrv-testenv/golden/source"),
         PathBuf::from,
     );
     assert!(
         dir.is_dir(),
-        "the test media are missing: {} (set RUSTCUT_GOLDEN_MEDIA to the folder with PyCutRv's golden sources)",
+        "the test media are missing: {} (set RUSTCUT_GOLDEN_MEDIA or place the PyCutRv test media next to the repository)",
         dir.display()
     );
     dir

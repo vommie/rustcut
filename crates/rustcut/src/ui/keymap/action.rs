@@ -295,7 +295,7 @@ impl Action {
             Self::Rate3 => &["Control+Digit3"],
             Self::Rate4 => &["Control+Digit4"],
             Self::Rate5 => &["Control+Digit5"],
-            // The queue (M4.1, HANDOFF 8.Q): Ctrl with the keys that move elsewhere.
+            // The queue (M4.1): Ctrl with the keys that move elsewhere.
             Self::QueueMoveUp => &["Control+UpArrow"],
             Self::QueueMoveDown => &["Control+DownArrow"],
             Self::QueueMoveTop => &["Control+Home"],

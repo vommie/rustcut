@@ -4,8 +4,8 @@ A fast local video cutter for Arch Linux / KDE Plasma, written in Rust with a Sl
 apply filters (crop, deinterlace, resize, orientation, deshake, ...), render them through a queue with professional encoding profiles
 (x264, x265, AV1), and tag and rate the clips directly in the [RustView](https://github.com/vommie/rustview) library.
 
-RustCut is the successor of PyCutRv. Status: early releases (0.0.x) on the GitHub releases page; see `HANDOFF.md` for
-the plan and the current state, `CHANGELOG.md` for what changed.
+RustCut is the successor of PyCutRv. Status: early releases (0.0.x) on the GitHub releases page; see `CHANGELOG.md` for
+what changed.
 
 ![The main window: sections on the timeline, the filters, a queue with one job rendering, tags and a rating for the
 next job](docs/screenshots/main.png)
@@ -40,7 +40,7 @@ is missing. RustCut needs `mpv` and `ffmpeg`; Tag & Rate needs RustView (a packa
 
 `cargo run -p rustcut -- [FILE...]` starts RustCut (`--home DIR` keeps its settings, queue and logs in `DIR`).
 `scripts/check-all.sh --fast` runs formatting, clippy, the tests and the dependency checks; without `--fast` it also builds
-and lints the package. The rules for contributors are in `CLAUDE.md`.
+and lints the package. The rules for contributors are in `AGENTS.md`.
 
 ## License
 

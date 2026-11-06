@@ -3,8 +3,8 @@
 //! check lets through, every filter and every test video (cases in `render_matrix/cases.rs`). Each render is verified by
 //! the engine and then probed: the video codec, the size the filter chain predicts, the audio tracks and their codec.
 //!
-//! Gated: it takes minutes, so it is ignored unless `rc-testenv test matrix [--full]` runs it. Variables:
-//! `RUSTCUT_GOLDEN_MEDIA` the media folder (rc-testenv: the environment's `source/`), `RUSTCUT_MATRIX=full` the full
+//! Gated: it takes minutes, so it is ignored unless the maintainer's local test environment runs it (`test matrix [--full]`; not in the repository). Variables:
+//! `RUSTCUT_GOLDEN_MEDIA` the media folder (the local test environment's `source/`), `RUSTCUT_MATRIX=full` the full
 //! cross product (every profile on every video, every filter with every profile; hours), `RUSTCUT_MATRIX_JOBS`
 //! renders at once (default 2), `RUSTCUT_MATRIX_FILTER` only cases whose group or name contains it,
 //! `RUSTCUT_MATRIX_REPORT` a file for the Markdown table of results.
@@ -38,7 +38,7 @@ use tokio::sync::{Semaphore, watch};
 
 fn media_dir() -> PathBuf {
     std::env::var_os("RUSTCUT_GOLDEN_MEDIA").map_or_else(
-        || Path::new(&std::env::var_os("HOME").expect("HOME is set")).join("claude/pycutrv-testenv/golden/source"),
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pycutrv-testenv/golden/source"),
         PathBuf::from,
     )
 }
@@ -251,7 +251,7 @@ fn report(rows: &[Row], refused: &[String], hardware: &[String], full: bool, tot
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "the render matrix takes minutes: rc-testenv test matrix [--full]"]
+#[ignore = "the render matrix takes minutes: run it with the local test environment's `test matrix [--full]`"]
 async fn the_render_matrix() {
     let media = media_dir();
     assert!(

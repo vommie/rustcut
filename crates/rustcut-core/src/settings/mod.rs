@@ -1,5 +1,5 @@
 //! Settings (`config.toml`) and UI state (`ui-state.toml`): typed schemas with defaults, sanitizing, versioned migrations
-//! with an automatic backup first, and atomic writes (ADR-5, CLAUDE.md rule 9).
+//! with an automatic backup first, and atomic writes (ADR-5, see AGENTS.md).
 
 mod dialog_ui;
 mod dialogs;

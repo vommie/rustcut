@@ -23,8 +23,10 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_DIR = Path.home() / "claude/rustcut-testenv/scratch/thumbs-bench"
-SOURCE = Path.home() / "claude/rustcut-testenv/source"
+# The working folder and the test videos sit in a folder next to the repository (override: RUSTCUT_THUMB_LAB_ROOT).
+LAB_ROOT = Path(os.environ.get("RUSTCUT_THUMB_LAB_ROOT") or HERE.parent.parent.parent / "rustcut-testenv")
+DEFAULT_DIR = LAB_ROOT / "scratch/thumbs-bench"
+SOURCE = LAB_ROOT / "source"
 WIDTH = 320
 
 
