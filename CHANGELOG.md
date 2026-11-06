@@ -7,6 +7,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- "Target file already exists": "Add (n)" offers the first free number and never a taken one. A name is taken by a file
+  in the folder and also by a job of the queue that can still write it: waiting, held, rendering and paused jobs as
+  before, and now failed and canceled ones too, because they can be rendered again (before, their name was offered,
+  and the render of one of the two jobs then failed with "exists already"). A name that already carries a number gets
+  the first free one ("Clip (3)" with "Clip (1)" taken becomes "Clip (2)", not "Clip (4)"). Save reads the folder
+  once more right before the job is queued; when the chosen name was taken meanwhile, the dialog stays open with fresh
+  choices. The conflict bubble at the name field follows the same rule (it offered "Clip (1) (1)" for "Clip (1)").
+- "Move Target File" checks a typed folder while it is typed: a name that is taken there (a file, or another job's
+  target) shows at once, not only after Enter or Move. A folder chosen again is read again, so a file that appeared
+  meanwhile counts. Failed and canceled jobs' targets count as taken here too.
+
 ## [0.0.109] - 2026-11-06
 
 ### Added

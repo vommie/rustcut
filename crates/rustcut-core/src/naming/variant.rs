@@ -34,13 +34,14 @@ pub fn file_name(stem: &str, container: Container) -> String {
     format!("{stem}.{}", container.extension())
 }
 
-/// The first `Base (n)` that `is_taken` rejects not, starting after the number `stem` already carries (PyCutRv's
-/// "auto-rename"). `None` when 9 999 variants are taken.
+/// The first `Base (n)` that `is_taken` does not reject, counting from 1 (a number `stem` already carries is replaced:
+/// "Clip (3)" with "Clip (1)" taken gives "Clip (2)", user report 2026-11-06: the first free number). `None` when 9 999
+/// variants are taken.
 pub fn next_free_variant(stem: &str, mut is_taken: impl FnMut(&str) -> bool) -> Option<String> {
-    let (base, start) = split_variant(stem).unwrap_or((stem, 0));
-    (start.saturating_add(1)..10_000)
+    let base = split_variant(stem).map_or(stem, |(base, _)| base);
+    (1..10_000)
         .map(|n| format!("{base} ({n})"))
-        .find(|candidate| !is_taken(candidate))
+        .find(|candidate| candidate != stem && !is_taken(candidate))
 }
 
 /// `"Name (3)"` -> `("Name", 3)`.
@@ -78,13 +79,20 @@ mod tests {
     }
 
     #[test]
-    fn variants_continue_the_number() {
+    fn variants_take_the_first_free_number() {
         let taken = ["Clip (1)", "Clip (2)"];
         assert_eq!(
             next_free_variant("Clip", |c| taken.contains(&c)).as_deref(),
             Some("Clip (3)")
         );
-        assert_eq!(next_free_variant("Clip (5)", |_| false).as_deref(), Some("Clip (6)"));
+        // The number a name carries is replaced by the first free one (user report 2026-11-06), never by itself.
+        assert_eq!(next_free_variant("Clip (5)", |_| false).as_deref(), Some("Clip (1)"));
+        assert_eq!(next_free_variant("Clip (1)", |_| false).as_deref(), Some("Clip (2)"));
+        let gap = ["Clip (1)", "Clip (3)"];
+        assert_eq!(
+            next_free_variant("Clip (3)", |c| gap.contains(&c)).as_deref(),
+            Some("Clip (2)")
+        );
         assert_eq!(
             next_free_variant("Clip (x)", |_| false).as_deref(),
             Some("Clip (x) (1)")

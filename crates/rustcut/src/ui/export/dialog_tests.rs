@@ -424,3 +424,29 @@ fn keys_are_green_for_the_iterated_number_and_red_for_replacing() {
     assert_eq!(key_tint(Choice::RemoveQueued, true, false), 2);
     assert_eq!(key_tint(Choice::Variant, false, true), 0);
 }
+
+#[test]
+fn n_and_the_silent_way_never_offer_a_name_a_job_can_still_write() {
+    // User report 2026-11-06: the offered "(n)" was taken, and the render failed on it. "Clip (1).mkv" exists; a
+    // canceled job (it can be rendered again) claims "Clip (2).mkv", a failed one "Clip (3).mkv".
+    let mut st = export(false);
+    st.template = "{{ name }}".to_owned();
+    let job = |id: i64, file: &str, state: JobStateKind| QueuedTarget {
+        id: JobId(id),
+        target: PathBuf::from("/out").join(file),
+        state,
+    };
+    let queue = vec![
+        job(4, "Clip (2).mkv", JobStateKind::Canceled),
+        job(5, "Clip (3).mkv", JobStateKind::Failed),
+        job(6, "Clip (5).mkv", JobStateKind::Finished),
+    ];
+    let d = dialog(&st, exists(), queue);
+    assert_eq!(d.options[0].choice, Choice::Variant);
+    assert_eq!(d.options[0].file, "Clip (4).mkv");
+    assert_eq!(
+        silent_outcome(&d, &st).unwrap().stem,
+        "Clip (4)",
+        "the silent way takes the same name"
+    );
+}

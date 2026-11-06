@@ -9,7 +9,10 @@ use std::rc::Rc;
 use rustcut_core::edit::Size;
 use rustcut_core::job::{JOB_SPEC_VERSION, JobId, JobMetadata, JobSpec, SourceSummary, TargetSpec};
 use rustcut_core::media::MediaInfo;
-use rustcut_core::naming::{CheckInput, ExistingFile, check, existing_file, file_name, same_path, scan_folder};
+use rustcut_core::naming::{
+    CheckInput, Conflicts, ExistingFile, FolderScan, QueuedTarget, Taken, check, existing_file, file_name, same_path,
+    scan_folder,
+};
 use rustcut_core::queue::{QueueCommand, QueueError};
 use slint::ComponentHandle as _;
 
@@ -171,24 +174,12 @@ impl ExportBridge {
     }
 
     /// The folder was read: queue the job, or ask how to get around the conflict.
-    fn decide(self: &Rc<Self>, draft: Draft, scan: rustcut_core::naming::FolderScan, exists: Option<ExistingFile>) {
+    fn decide(self: &Rc<Self>, draft: Draft, scan: FolderScan, exists: Option<ExistingFile>) {
         let warnings = self.warnings.borrow().clone();
         let target = draft.folder.join(file_name(&draft.stem, draft.facts.container));
         // The loaded job counts like any other: a copy writing its file is a conflict Save asks about (Q-P8b).
-        let queue = self.queue.upgrade().map(|q| q.targets()).unwrap_or_default();
-        let (base, source) = {
-            let st = self.state.borrow();
-            (st.name.clone(), st.source.clone())
-        };
-        let conflicts = check(&CheckInput {
-            target: &target,
-            base: &base,
-            source: source.as_deref(),
-            scan: &scan,
-            exists,
-            queue: &queue,
-            warnings: &warnings,
-        });
+        let queue = self.queue_targets();
+        let conflicts = self.conflicts(&draft, &scan, exists, &queue);
         let silent = exists.is_some() && !warnings.target_exists;
         if !silent && !conflicts.needs_decision() {
             let outcome = Outcome {
@@ -201,22 +192,7 @@ impl ExportBridge {
             self.enqueue(draft, outcome);
             return;
         }
-        // The dialog shows the existing file even when its warning is off (the silent way needs its choices).
-        let mut shown = conflicts;
-        shown.exists = exists;
-        let dialog = {
-            let st = self.state.borrow();
-            ConflictDialog::new(DialogInput {
-                folder: &draft.folder,
-                stem: &draft.stem,
-                conflicts: shown,
-                scan,
-                queue,
-                export: &st,
-                facts: &draft.facts,
-                settings: &self.dialog_settings.borrow(),
-            })
-        };
+        let dialog = self.conflict_dialog(&draft, conflicts, exists, scan, queue);
         if silent {
             let st = self.state.borrow();
             let outcome = silent_outcome(&dialog, &st);
@@ -243,6 +219,135 @@ impl ExportBridge {
         self.publish_dialog();
         self.start_previews();
         self.publish();
+    }
+
+    /// Every job's target as the queue panel knows it.
+    fn queue_targets(&self) -> Vec<QueuedTarget> {
+        self.queue.upgrade().map(|q| q.targets()).unwrap_or_default()
+    }
+
+    /// What stands in the way of the draft's target.
+    fn conflicts(
+        &self,
+        draft: &Draft,
+        scan: &FolderScan,
+        exists: Option<ExistingFile>,
+        queue: &[QueuedTarget],
+    ) -> Conflicts {
+        let target = draft.folder.join(file_name(&draft.stem, draft.facts.container));
+        let st = self.state.borrow();
+        check(&CheckInput {
+            target: &target,
+            base: &st.name,
+            source: st.source.as_deref(),
+            scan,
+            exists,
+            queue,
+            warnings: &self.warnings.borrow(),
+        })
+    }
+
+    /// The conflict dialog for the draft. It shows the existing file even when its warning is off (the silent way
+    /// needs its choices).
+    fn conflict_dialog(
+        &self,
+        draft: &Draft,
+        mut conflicts: Conflicts,
+        exists: Option<ExistingFile>,
+        scan: FolderScan,
+        queue: Vec<QueuedTarget>,
+    ) -> ConflictDialog {
+        conflicts.exists = exists;
+        let st = self.state.borrow();
+        ConflictDialog::new(DialogInput {
+            folder: &draft.folder,
+            stem: &draft.stem,
+            conflicts,
+            scan,
+            queue,
+            export: &st,
+            facts: &draft.facts,
+            settings: &self.dialog_settings.borrow(),
+        })
+    }
+
+    /// Save on a new name of the dialog: the folder is read once more right before the job is queued, because a file
+    /// or another job may have taken the name since the dialog opened (user report 2026-11-06: the render then failed
+    /// on an offered name). A name taken meanwhile keeps the dialog open with fresh choices, the same one picked.
+    fn recheck(self: &Rc<Self>, outcome: Outcome) {
+        let Some((folder, target, file)) = self.pending.borrow().as_ref().and_then(|p| p.draft.as_ref()).map(|d| {
+            (
+                d.folder.clone(),
+                d.folder.join(file_name(&d.stem, d.facts.container)),
+                file_name(&outcome.stem, d.facts.container),
+            )
+        }) else {
+            return;
+        };
+        self.saving.set(true);
+        self.publish();
+        let task = self
+            .runtime
+            .spawn(async move { (scan_folder(&folder).await, existing_file(&target).await) });
+        let weak = Rc::downgrade(self);
+        let spawned = slint::spawn_local(async move {
+            let found = task.await;
+            let Some(bridge) = weak.upgrade() else { return };
+            bridge.saving.set(false);
+            // Canceled while the folder was read.
+            let Some(Pending {
+                dialog,
+                draft: Some(draft),
+            }) = bridge.pending.borrow_mut().take()
+            else {
+                bridge.publish();
+                return;
+            };
+            let queue = bridge.queue_targets();
+            let (scan, exists) = match found {
+                Ok(found) => found,
+                Err(e) => {
+                    // The render checks the target again before it writes anything.
+                    tracing::warn!(error = %e, "[Export] The target folder could not be read again; saving");
+                    bridge.publish_dialog();
+                    bridge.enqueue(draft, outcome);
+                    return;
+                }
+            };
+            let taken = Taken {
+                folder: &draft.folder,
+                scan: &scan,
+                queue: &queue,
+            };
+            if !taken.name(&file) {
+                bridge.publish_dialog();
+                if let Some(window) = bridge.window.upgrade() {
+                    window.invoke_focus_keys();
+                }
+                bridge.enqueue(draft, outcome);
+                return;
+            }
+            tracing::info!(file = %file, "[Export] The chosen name was taken meanwhile; asking again");
+            let conflicts = bridge.conflicts(&draft, &scan, exists, &queue);
+            let mut fresh = bridge.conflict_dialog(&draft, conflicts, exists, scan, queue);
+            fresh.type_name(&dialog.typed);
+            if let Some(index) = dialog
+                .current()
+                .and_then(|picked| fresh.options.iter().position(|o| o.choice == picked.choice))
+            {
+                fresh.select(index);
+            }
+            *bridge.pending.borrow_mut() = Some(Pending {
+                dialog: fresh,
+                draft: Some(draft),
+            });
+            bridge.publish_dialog();
+            bridge.publish();
+        });
+        if let Err(e) = spawned {
+            self.saving.set(false);
+            tracing::error!(error = %e, "[Export] The event loop is gone; not saved");
+        }
     }
 
     /// Hands the job to the queue (after removing the jobs the dialog chose to remove).
@@ -366,6 +471,10 @@ impl ExportBridge {
     }
 
     fn confirm(self: &Rc<Self>) {
+        // The folder is being read again (`recheck`).
+        if self.saving.get() {
+            return;
+        }
         let Some(pending) = self.pending.borrow_mut().take() else {
             return;
         };
@@ -381,6 +490,15 @@ impl ExportBridge {
             });
             return;
         };
+        // A new name is checked once more; the taken one (Overwrite, Save anyway) was the user's choice.
+        if !outcome.overwrite && outcome.stem != draft.stem {
+            *self.pending.borrow_mut() = Some(Pending {
+                dialog: pending.dialog,
+                draft: Some(draft),
+            });
+            self.recheck(outcome);
+            return;
+        }
         self.publish_dialog();
         if let Some(window) = self.window.upgrade() {
             window.invoke_focus_keys();
