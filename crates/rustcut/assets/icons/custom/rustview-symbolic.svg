@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-  <!-- RustView's symbolic app icon (~/claude/rustview/packaging/rustview-symbolic.svg, same author), monochrome. -->
+  <!-- RustView's symbolic app icon (from RustView's packaging/rustview-symbolic.svg, same author), monochrome. -->
   <g fill="#000000">
     <path transform="translate(8 8) scale(1 1)" d="M-5.3 -6.9H-2.3A1.6 1.6 0 0 1 -0.7 -5.3V-4.243A4.3 4.3 0 0 0 -4.243 -0.7H-5.3A1.6 1.6 0 0 1 -6.9 -2.3V-5.3A1.6 1.6 0 0 1 -5.3 -6.9Z"/>
     <path transform="translate(8 8) scale(-1 1)" d="M-5.3 -6.9H-2.3A1.6 1.6 0 0 1 -0.7 -5.3V-4.243A4.3 4.3 0 0 0 -4.243 -0.7H-5.3A1.6 1.6 0 0 1 -6.9 -2.3V-5.3A1.6 1.6 0 0 1 -5.3 -6.9Z"/>

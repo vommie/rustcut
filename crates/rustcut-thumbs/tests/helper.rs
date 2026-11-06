@@ -10,7 +10,7 @@ use rustcut_thumbs_protocol::{Command, Job, Reply, Start, read_reply};
 
 fn media(name: &str) -> String {
     let root = std::env::var_os("RUSTCUT_GOLDEN_MEDIA").map_or_else(
-        || PathBuf::from(std::env::var_os("HOME").unwrap()).join("claude/pycutrv-testenv/golden/source"),
+        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../pycutrv-testenv/golden/source"),
         PathBuf::from,
     );
     let path = root.join(name);

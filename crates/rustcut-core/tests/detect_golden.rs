@@ -1,6 +1,6 @@
 //! The real ffmpeg's detection filters: auto-crop on a generated letterboxed clip (also through a rotation before the
 //! crop, with black scenes between, with dark gray bars, on chosen sides and inside sections), and the interlace check on PyCutRv's interlaced and progressive test media
-//! (`~/claude/pycutrv-testenv/golden/source/`, or `RUSTCUT_GOLDEN_MEDIA`). ffmpeg and the test media are required; the
+//! (the folder `RUSTCUT_GOLDEN_MEDIA` names, by default `pycutrv-testenv/golden/source/` next to the repository). ffmpeg and the test media are required; the
 //! tests fail with what is missing.
 #![allow(
     clippy::unwrap_used,
@@ -22,15 +22,12 @@ use rustcut_core::time::Timestamp;
 
 fn golden_dir() -> PathBuf {
     let dir = std::env::var_os("RUSTCUT_GOLDEN_MEDIA").map_or_else(
-        || {
-            let home = std::env::var_os("HOME").expect("HOME is set");
-            Path::new(&home).join("claude/pycutrv-testenv/golden/source")
-        },
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pycutrv-testenv/golden/source"),
         PathBuf::from,
     );
     assert!(
         dir.is_dir(),
-        "the test media are missing: {} (set RUSTCUT_GOLDEN_MEDIA to the folder with PyCutRv's golden sources)",
+        "the test media are missing: {} (set RUSTCUT_GOLDEN_MEDIA or place the PyCutRv test media next to the repository)",
         dir.display()
     );
     dir

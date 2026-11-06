@@ -1,4 +1,4 @@
-//! The Settings window (M4.2, HANDOFF section 8.S), styled like RustView's: a sidebar of pages, cards of options, and
+//! The Settings window (M4.2), styled like RustView's: a sidebar of pages, cards of options, and
 //! the editors of the named target folders, the render profiles and the keymap. Every change goes through
 //! `app::SettingsWriter::update` at once (D-S1): there is no Save button and no unsaved state, and the other bridges
 //! apply what they can while RustCut runs (`app/live.rs`); a row whose value applies at the next start says so.

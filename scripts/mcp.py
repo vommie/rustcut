@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Talks to the Slint MCP server of a running RustCut (debug builds have the default `slint-mcp` feature; the app listens
-when started with SLINT_MCP_PORT, as `rc-testenv session` does). Standard library only.
+when started with SLINT_MCP_PORT, as the maintainer's local test environment does). Standard library only.
 
     scripts/mcp.py [--port P] tools                     list the server's tools
     scripts/mcp.py [--port P] call TOOL [JSON]          call a tool, print its result

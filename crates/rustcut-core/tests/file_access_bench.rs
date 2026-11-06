@@ -1,6 +1,6 @@
 //! Measurements of RustCut's file access (user request 2026-10-24: as little drive work as possible). Ignored in the
 //! normal run; `cargo test --release -p rustcut-core --test file_access_bench -- --ignored --nocapture` prints the
-//! numbers recorded in HANDOFF.
+//! numbers recorded in the project notes.
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,

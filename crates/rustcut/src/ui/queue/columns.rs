@@ -1,4 +1,4 @@
-//! The queue list's columns (HANDOFF 8.Q): which ones fit into the panel's width and where they sit. In a narrow
+//! The queue list's columns: which ones fit into the panel's width and where they sit. In a narrow
 //! sidebar the list shows compact two-line rows; as the panel gets wider (or its group is maximized) it becomes a
 //! table, and columns join in the order of their priority. The name stretches; the other columns keep the widths the
 //! user dragged them to (`UiState.queue.columns`), but for the held delete button at the right end, which has no

@@ -1,5 +1,5 @@
-//! The render engine against the real ffmpeg and PyCutRv's test media (`~/claude/pycutrv-testenv/golden/source/`, or
-//! `RUSTCUT_GOLDEN_MEDIA`): several sections with two audio tracks, a rotated source with a crop, an odd size, a source
+//! The render engine against the real ffmpeg and PyCutRv's test media (the folder
+//! `RUSTCUT_GOLDEN_MEDIA` names, by default `pycutrv-testenv/golden/source/` next to the repository): several sections with two audio tracks, a rotated source with a crop, an odd size, a source
 //! whose audio ends early, a hostile file name, two-pass deshake, cancel, pause, failures that must leave an existing
 //! target alone, and the encoder capability check. ffmpeg (with libx264, libsvtav1, vid.stab) and the media are
 //! required; the tests fail with what is missing.
@@ -28,13 +28,13 @@ use tokio::sync::watch;
 
 fn golden(name: &str) -> PathBuf {
     let dir = std::env::var_os("RUSTCUT_GOLDEN_MEDIA").map_or_else(
-        || Path::new(&std::env::var_os("HOME").expect("HOME is set")).join("claude/pycutrv-testenv/golden/source"),
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pycutrv-testenv/golden/source"),
         PathBuf::from,
     );
     let path = dir.join(name);
     assert!(
         path.is_file(),
-        "the test medium is missing: {} (set RUSTCUT_GOLDEN_MEDIA to the folder with PyCutRv's golden sources)",
+        "the test medium is missing: {} (set RUSTCUT_GOLDEN_MEDIA or place the PyCutRv test media next to the repository)",
         path.display()
     );
     path
@@ -468,7 +468,7 @@ async fn the_capability_check_finds_the_software_encoders() {
     }
     assert!(caps.vidstab, "vid.stab is required (sudo pacman -S vid.stab)");
     assert_eq!(caps.encoders.len(), VideoEncoder::ALL.len());
-    // Hardware encoders: listed by this ffmpeg build, offered only when the test encode passed. In a VM without a GPU
+    // Hardware encoders: listed by this ffmpeg build, offered only when the test encode passed. On a virtualized test machine without a GPU
     // they all fail, and none of that is an error of the check.
     for status in &caps.encoders {
         let backend = status.encoder.spec().backend;

@@ -1,4 +1,4 @@
-// The queue panel (src/ui/queue/ fills `Queue`; HANDOFF 8.Q, M4.1, P9.6): the processing switches and the filter button
+// The queue panel (src/ui/queue/ fills `Queue`; M4.1, P9.6): the processing switches and the filter button
 // (its menu is `queue_filter.slint`) on top, the list (compact two-line rows in a narrow sidebar, a table with more
 // columns as it gets wider), the queue's summary with the overall progress of the current run under it, and the
 // actions for the selected jobs. Several jobs can be selected (Ctrl, Shift), dragged to another place, and reached
@@ -223,8 +223,8 @@ export component QueuePanel inherits Rectangle {
                         Queue.width-changed(self.width);
                     }
 
-                    // A ListView creates only the rows in view (review 2: hundreds of jobs; measured in
-                    // ~/claude/slint-lab: 0.6 ms per frame with 10 000 rows, a plain `for` needed 96 ms). It does not
+                    // A ListView creates only the rows in view (review 2: hundreds of jobs; measured:
+                    // 0.6 ms per frame with 10 000 rows, a plain `for` needed 96 ms). It does not
                     // pan with a mouse drag, so a drag of jobs keeps the pointer.
                     flick := ListView {
                         // A jump mark reached a job of this list: it scrolls into view (`jump.slint`).

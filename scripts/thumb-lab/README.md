@@ -12,7 +12,7 @@ python3 scripts/thumb-lab/lab.py all --extra /path/to/a/real/video.mkv
 python3 scripts/thumb-lab/lab.py report
 ```
 
-`--dir` sets the working folder (default `~/claude/rustcut-testenv/scratch/thumbs-bench`, which also holds the test videos;
+`--dir` sets the working folder (default `scratch/thumbs-bench` in the `rustcut-testenv` folder next to the repository, or in `RUSTCUT_THUMB_LAB_ROOT`; it also holds the test videos;
 `lab.py media` derives the container variants from `h264_1080p_1h_gop10.mp4`). `--quick` shortens a run, `--extra` adds any
 video to the groups. Groups: `engines` (the approaches side by side), `tuning` (threads, workers, loop filter, scaler, width),
 `order` (visiting order on a cold cache, a full pass), `edge` (containers, few keyframes, the short test media), `formats`

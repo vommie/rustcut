@@ -49,7 +49,7 @@ gleich agieren"). This crate is the only implementation; the apps vendor it byte
 8. A zero-byte video may have a sidecar (`d41d8cd98f00b204e9800998ecf8427e`, `ZERO_BYTE_MD5`) but never counts as
    known (`Md5Hex::is_zero_byte`).
 9. **One implementation.** This crate, vendored byte-identical into every app as `crates/md5-sidecar`. The canonical
-   copy is `~/claude/rustknown/crates/md5-sidecar` (RustKnownClean); change it only there, then run
+   copy is `crates/md5-sidecar` in the RustKnownClean repository; change it only there, then run
    `scripts/sync-md5-sidecar.sh` in each app. Each app's `scripts/check-all.sh` runs `scripts/sync-md5-sidecar.sh
    --check` and fails on drift; without the canonical copy (another machine) it reports the check as skipped.
    A change of the rules raises `SPEC_VERSION` and the crate's major version.

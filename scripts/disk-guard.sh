@@ -4,7 +4,7 @@
 # that holds target/, it deletes target/debug/incremental (the compiler's incremental caches: the next build takes a few
 # minutes longer, nothing else is lost) and says so loudly. With enough space it does nothing and prints nothing.
 #
-#   scripts/disk-guard.sh            check and clean up (check-all.sh and rc-testenv run it before they build)
+#   scripts/disk-guard.sh            check and clean up (check-all.sh and the maintainer's local test environment run it before they build)
 #   scripts/disk-guard.sh --dry-run  only say what would happen
 set -uo pipefail
 repo="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"

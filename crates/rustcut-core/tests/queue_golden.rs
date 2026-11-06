@@ -1,5 +1,5 @@
-//! The queue engine with the real ffmpeg, the real store and PyCutRv's test media (`~/claude/pycutrv-testenv/golden/
-//! source/`, or `RUSTCUT_GOLDEN_MEDIA`): two jobs rendered end to end one after the other with their logs stored, two
+//! The queue engine with the real ffmpeg, the real store and PyCutRv's test media (the folder `RUSTCUT_GOLDEN_MEDIA`
+//! names, by default `pycutrv-testenv/golden/source/` next to the repository): two jobs rendered end to end one after the other with their logs stored, two
 //! jobs with the same target never at the same time even with free workers, and a render stopped by the shutdown
 //! waiting again at the next start. ffmpeg (with libx264) and the media are required; the tests fail with what is
 //! missing.
@@ -29,13 +29,13 @@ use tokio::sync::broadcast;
 
 fn golden(name: &str) -> PathBuf {
     let dir = std::env::var_os("RUSTCUT_GOLDEN_MEDIA").map_or_else(
-        || Path::new(&std::env::var_os("HOME").expect("HOME is set")).join("claude/pycutrv-testenv/golden/source"),
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pycutrv-testenv/golden/source"),
         PathBuf::from,
     );
     let path = dir.join(name);
     assert!(
         path.is_file(),
-        "the test medium is missing: {} (set RUSTCUT_GOLDEN_MEDIA to the folder with PyCutRv's golden sources)",
+        "the test medium is missing: {} (set RUSTCUT_GOLDEN_MEDIA or place the PyCutRv test media next to the repository)",
         path.display()
     );
     path

@@ -1,6 +1,6 @@
 //! Previews of media files (M5.4): what a file is (size, date, ffprobe's description) and one picture of it, made by
 //! ffmpeg on the runtime. The conflict dialog shows them for the existing target and the similar names in its folder;
-//! the timeline's filmstrip can use the same service later (HANDOFF section 13).
+//! the timeline's filmstrip can use the same service later.
 //!
 //! A few files at a time (`PreviewOptions::parallel`, settings `dialogs.conflict.parallel_pictures`); a batch reads its
 //! first file (the existing target) before the others. The picture is the keyframe at or before the chosen place,

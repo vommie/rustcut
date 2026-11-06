@@ -1,4 +1,4 @@
-//! The pages of the Settings window in the order of its sidebar (HANDOFF section 8.S).
+//! The pages of the Settings window in the order of its sidebar.
 
 /// One page of the Settings window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

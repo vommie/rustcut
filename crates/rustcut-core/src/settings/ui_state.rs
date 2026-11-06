@@ -1,4 +1,4 @@
-//! `ui-state.toml`: what the user arranged in the window (CLAUDE.md rule 7). Written when it changes (debounced by the app) and
+//! `ui-state.toml`: what the user arranged in the window (see AGENTS.md). Written when it changes (debounced by the app) and
 //! on quit; restored before the first frame.
 
 use serde::{Deserialize, Serialize};

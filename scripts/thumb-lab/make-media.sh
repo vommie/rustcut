@@ -1,8 +1,9 @@
 #!/bin/bash
 # Long test media for the thumbnail measurements: encodes a short noisy clip, then loops it by stream copy.
 set -u
-cd "${1:-$HOME/claude/rustcut-testenv/scratch/thumbs-bench}"
-SRC=$HOME/claude/rustcut-testenv/source
+ROOT=${RUSTCUT_THUMB_LAB_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)/rustcut-testenv}
+cd "${1:-$ROOT/scratch/thumbs-bench}"
+SRC=$ROOT/source
 F="ffmpeg -hide_banner -loglevel error -y"
 $F -stream_loop 359 -i $SRC/hd_h264_1080p.mp4 -c copy -map 0:v -map 0:a? h264_1080p_1h_gop10.mp4
 $F -i h264_1080p_1h_gop10.mp4 -c copy -map 0 h264_1080p_1h_gop10.mkv

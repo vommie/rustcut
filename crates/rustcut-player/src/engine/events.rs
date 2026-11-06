@@ -216,8 +216,8 @@ fn failed_end(code: i32, detail: Option<String>, surface: bool) -> PlayerEvent {
     }
 }
 
-/// Hardware decoders that are not available log errors while mpv probes them (`hwdec=auto-copy`: Vulkan, CUDA, VAAPI in a
-/// VM); those modules never explain why a file cannot be played.
+/// Hardware decoders that are not available log errors while mpv probes them (`hwdec=auto-copy`: Vulkan, CUDA, VAAPI on a
+/// virtualized test machine); those modules never explain why a file cannot be played.
 fn is_hwdec_probe(module: &str) -> bool {
     matches!(module, "ffmpeg" | "vaapi" | "vulkan" | "cuda")
 }

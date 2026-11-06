@@ -25,7 +25,7 @@ workspace = true
 
 [features]
 # Slint's embedded MCP server for development and debugging: started with `SLINT_MCP_PORT=<port>`, it answers on
-# http://127.0.0.1:<port>/mcp (element tree, properties, screenshots, clicks, drags; `scripts/mcp.py`, CLAUDE.md). Without
+# http://127.0.0.1:<port>/mcp (element tree, properties, screenshots, clicks, drags; `scripts/mcp.py`). Without
 # the variable nothing listens. Release packages (P5) build with `--no-default-features`.
 default = ["slint-mcp"]
 slint-mcp = ["slint/mcp"]
