@@ -6,4 +6,5 @@ ignore = [
     "RUSTSEC-2026-0370", # zvariant (zbus stack)
     "RUSTSEC-2026-0371", # zbus_names (zbus stack)
     "RUSTSEC-2026-0372", # zvariant_derive (zbus stack)
+    "RUSTSEC-2026-0441", # pin-utils via spin_on (Slint)
 ]
