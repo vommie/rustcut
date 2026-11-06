@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.110] - 2026-11-06
+
 ### Fixed
 
 - "Target file already exists": "Add (n)" offers the first free number and never a taken one. A name is taken by a file
@@ -1502,7 +1504,8 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.109...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.110...HEAD
+[0.0.110]: https://github.com/vommie/rustcut/compare/v0.0.109...v0.0.110
 [0.0.109]: https://github.com/vommie/rustcut/compare/v0.0.108...v0.0.109
 [0.0.108]: https://github.com/vommie/rustcut/compare/v0.0.107...v0.0.108
 [0.0.107]: https://github.com/vommie/rustcut/compare/v0.0.106...v0.0.107
