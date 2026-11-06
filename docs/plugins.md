@@ -7,11 +7,11 @@ limit per plugin. A plugin that fails, crashes or runs too long never blocks or 
 
 This guide is for plugin authors. The contract itself is
 [`crates/rustcut-plugin-api/wit/rustcut-plugin.wit`](../crates/rustcut-plugin-api/wit/rustcut-plugin.wit); the
-plugins of the user live in the repository `rustcut-plugins` (Auto-Folder and Auto-Rate are the examples).
+plugins of the user live in the repository [`rustcut-plugins`](https://github.com/vommie/rustcut-plugins) (Auto-Folder and Auto-Rate are the examples).
 
 ## Quick start
 
-In a clone of `rustcut-plugins` (Rust stable through rustup; `rust-toolchain.toml` adds the `wasm32-wasip2` target):
+In a clone of [`rustcut-plugins`](https://github.com/vommie/rustcut-plugins) (Rust stable through rustup; `rust-toolchain.toml` adds the `wasm32-wasip2` target):
 
 ```bash
 cargo xtask new auto-name --name "Auto-Name"

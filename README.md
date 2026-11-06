@@ -28,7 +28,8 @@ rating for the next job](docs/screenshots/main.png)
   RustView with their tags and rating.
 - **Target folders and the folder wheel:** favorite folders with icons, colors and their own place on a wheel you open with the middle
   mouse button over the video.
-- **Plugins** as WebAssembly components (see [docs/plugins.md](docs/plugins.md)) that can suggest targets, tags and ratings.
+- **Plugins** as WebAssembly components that can suggest targets, tags and ratings: ready-made ones (Auto-Folder, Auto-Rate)
+  in [rustcut-plugins](https://github.com/vommie/rustcut-plugins), how to write one in [docs/plugins.md](docs/plugins.md).
 - **Everything persists:** the dock layout, panels, filters, the queue and every choice survive a restart.
 
 | | |
