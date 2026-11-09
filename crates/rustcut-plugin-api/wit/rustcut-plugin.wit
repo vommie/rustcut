@@ -1,8 +1,11 @@
 // The contract between RustCut and its plugins. A plugin is a WebAssembly component of the world `plugin`.
 //
-// Versioning: the package version is the plugin API version. A minor version only adds (new events, actions, fields
-// at the end of a variant); a plugin built against 1.0 runs on every 1.x RustCut. A major version may break, and
-// RustCut keeps loading the previous major for a while. docs/plugins.md in RustCut's repository explains everything.
+// Versioning: the package version is the plugin API version. A minor version only adds host functions, imported
+// interfaces or types no export uses; a plugin built against 1.0 runs on every 1.x RustCut. The types the exports pass
+// (`event`, `context`, `action`, `issue` and every type inside them) are frozen within a major version: wasmtime checks
+// an export's types exactly, so a new case, field or export keeps every older plugin from loading. Those changes need
+// a new major version, and RustCut keeps loading the previous major for a while. docs/plugins.md in RustCut's
+// repository explains everything.
 package rustcut:plugin@1.1.0;
 
 /// What RustCut offers a plugin to call.

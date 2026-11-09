@@ -189,9 +189,12 @@ A plugin file (`<id>-<version>.rcplugin`) is a tar archive compressed with zstd,
 ## Versions
 
 The plugin API follows semantic versioning (the WIT package `rustcut:plugin@1.1.0`, the crate `rustcut-plugin-api`,
-tags `plugin-api-vX.Y.Z` in RustCut's repository). A minor version only adds (events, actions, fields); RustCut runs
-every plugin of its major version whose `api` is not newer than its own. A plugin keeps its own version, changelog
-and release tags (`<id>-v<version>`) in `rustcut-plugins`.
+tags `plugin-api-vX.Y.Z` in RustCut's repository). A minor version only adds host functions, imported interfaces or
+types that no export uses; RustCut runs every plugin of its major version whose `api` is not newer than its own. New
+events, actions, record fields, enum cases or exports change the types of `configure`, `handle` and `check`, which
+wasmtime checks exactly when it loads a plugin (a plugin built against 1.0 would no longer load), so they wait for the
+next major version. A plugin keeps its own version, changelog and release tags (`<id>-v<version>`) in
+`rustcut-plugins`.
 
 | API | What it added |
 |---|---|
