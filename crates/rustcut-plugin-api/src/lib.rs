@@ -58,7 +58,7 @@ pub use bindings::rustcut::plugin::types::{
 };
 
 /// The plugin API version this kit implements.
-pub const API_VERSION: &str = "1.0.0";
+pub const API_VERSION: &str = "1.1.0";
 
 /// Writes a line into the plugin log. Outside RustCut (native unit tests) it goes to stderr.
 pub fn log(level: Level, message: &str) {
@@ -66,6 +66,25 @@ pub fn log(level: Level, message: &str) {
     bindings::rustcut::plugin::host::log(level, message);
     #[cfg(not(target_arch = "wasm32"))]
     eprintln!("[{level:?}] {message}");
+}
+
+/// Since API 1.1: the id of the folder of Settings > Target Folders that is the target now (0 is "Next to the source"),
+/// or `None` when the target is no folder of that list (a loaded job's own folder). Call it inside `handle`; outside
+/// RustCut (native unit tests) it is `None`. A plugin that calls it needs `api = "1.1"` in its `plugin.toml`.
+#[must_use]
+pub fn target_folder() -> Option<u32> {
+    #[cfg(target_arch = "wasm32")]
+    return bindings::rustcut::plugin::host::target_folder();
+    #[cfg(not(target_arch = "wasm32"))]
+    None
+}
+
+/// Since API 1.1: the `SetTarget` and `SetRating` actions this call of `handle` returns get no plugin mark (RustCut
+/// still applies them). Call it inside `handle`; outside RustCut (native unit tests) it does nothing. A plugin that
+/// calls it needs `api = "1.1"` in its `plugin.toml`.
+pub fn hide_marks() {
+    #[cfg(target_arch = "wasm32")]
+    bindings::rustcut::plugin::host::hide_marks();
 }
 
 /// Reads the settings JSON that RustCut passes to `configure` and `check` into the plugin's own type.

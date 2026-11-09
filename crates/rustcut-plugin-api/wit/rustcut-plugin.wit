@@ -3,7 +3,7 @@
 // Versioning: the package version is the plugin API version. A minor version only adds (new events, actions, fields
 // at the end of a variant); a plugin built against 1.0 runs on every 1.x RustCut. A major version may break, and
 // RustCut keeps loading the previous major for a while. docs/plugins.md in RustCut's repository explains everything.
-package rustcut:plugin@1.0.0;
+package rustcut:plugin@1.1.0;
 
 /// What RustCut offers a plugin to call.
 interface host {
@@ -17,6 +17,16 @@ interface host {
 
     /// Writes a line into the plugin log (the Logs panel, source "Plugins", and RustCut's log file).
     log: func(level: level, message: string);
+
+    /// Since 1.1. The folder of Settings > Target Folders that is the target of Job Finalization when the event
+    /// happened, by its id (0 is "Next to the source"); none when the target is no folder of that list (a loaded
+    /// job's own folder) or outside `handle`. Earlier actions of other plugins for the same event count.
+    target-folder: func() -> option<u32>;
+
+    /// Since 1.1. The `set-target` and `set-rating` actions this call of `handle` returns get no plugin mark: RustCut
+    /// applies them and removes an earlier mark at the same place, but shows no plugin icon there. Outside `handle`
+    /// it does nothing.
+    hide-marks: func();
 }
 
 /// The values RustCut and a plugin exchange.

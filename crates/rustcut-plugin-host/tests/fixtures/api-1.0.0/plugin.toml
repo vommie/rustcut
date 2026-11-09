@@ -1,0 +1,30 @@
+# test-plugin/ as of the tag plugin-api-v1.0.0, built for wasm32-wasip2 (release) and kept as it is: a plugin built
+# against API 1.0 must keep loading and answering on every 1.x host (tests/sandbox.rs).
+id = "test-plugin"
+name = "Test Plugin"
+version = "0.1.0"
+api = "1.0"
+description = "The test plugin as built against plugin API 1.0.0 (RustCut's tests: older plugins keep working)."
+authors = ["vommie"]
+license = "MIT"
+icon = "flask"
+wasm = "plugin.wasm"
+
+[[cards]]
+title = "Behavior"
+description = "The test plugin as built against plugin API 1.0.0 (RustCut's tests: older plugins keep working)."
+
+[[cards.fields]]
+key = "mode"
+label = "Mode"
+help = "ok: a toast and the video's folder as the target. fail: an error. panic: a crash. slow: an endless loop (stopped at the time limit). memory: allocates until the memory limit stops it. refuse: refuses its settings."
+kind = "choice"
+default = "ok"
+options = [
+    { value = "ok", label = "OK" },
+    { value = "fail", label = "Fail" },
+    { value = "panic", label = "Panic" },
+    { value = "slow", label = "Slow" },
+    { value = "memory", label = "Memory" },
+    { value = "refuse", label = "Refuse" },
+]

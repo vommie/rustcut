@@ -54,6 +54,10 @@ export_plugin!(Hello);
   (a warning mark with the message as its tooltip). It must not change anything.
 - `rustcut_plugin_api::log(level, text)` writes a line into the plugin log. What a plugin prints on stdout or stderr
   (a panic's message, too) lands there as well.
+- Since API 1.1, inside `handle`: `rustcut_plugin_api::target_folder()` is the id of the folder of Settings > Target
+  Folders that is the target now (0 = "Next to the source", `None` for a loaded job's own folder), the same kind of
+  id as a `target` setting holds; `rustcut_plugin_api::hide_marks()` keeps the plugin marks away from what this call's
+  actions set. Both need `api = "1.1"` in `plugin.toml`; outside RustCut (native tests) they are `None` and do nothing.
 
 ## plugin.toml
 
@@ -131,12 +135,15 @@ more than twelve options would get the same, so no plugin declares or draws any 
 | `tag-assigned(tag)` / `tag-removed(tag)` | The user clicked a tag in the Tag & Rate panel (tree or history). |
 
 The `context` holds the open video's path, the rating, the assigned tags (each with `id`, `name` and `path` from the
-root: `["Treasure chest", "Great"]`) and the current target folder's path.
+root: `["Treasure chest", "Great"]`) and the current target folder's path; since API 1.1 the host's `target-folder`
+(`rustcut_plugin_api::target_folder()`) gives the same target as an id, to compare with a `target` setting (Auto-Folder
+sets nothing when the rule's folder is the target already).
 
 | Action | What RustCut does |
 |---|---|
 | `set-target(folder(id) or path(p), reason)` | Sets Job Finalization's target folder, with a plugin mark at the field ("Set by Auto-Folder (reason)"; a click opens the plugin's page). A folder id that is not in the tree gets a banner instead; a folder missing on disk gets a banner and is created by the render. |
 | `set-rating(stars, reason)` | Sets the rating, with a mark at the rating bar, when something can be rated (a video and "Active" on, or a queued job edited). |
+| (since 1.1) `hide-marks()` in `handle` | The `set-target` and `set-rating` actions of this call apply without a plugin mark, and an earlier plugin's mark at the same place goes (it would name the wrong plugin). Auto-Rate's "Show mark" switch uses it. |
 | `notify(notice)` | A toast or a banner (`place`), its title after the plugin's name; `none` only writes the plugin log. |
 
 Rules RustCut applies, so plugins need not:
@@ -181,10 +188,15 @@ A plugin file (`<id>-<version>.rcplugin`) is a tar archive compressed with zstd,
 
 ## Versions
 
-The plugin API follows semantic versioning (the WIT package `rustcut:plugin@1.0.0`, the crate `rustcut-plugin-api`,
+The plugin API follows semantic versioning (the WIT package `rustcut:plugin@1.1.0`, the crate `rustcut-plugin-api`,
 tags `plugin-api-vX.Y.Z` in RustCut's repository). A minor version only adds (events, actions, fields); RustCut runs
 every plugin of its major version whose `api` is not newer than its own. A plugin keeps its own version, changelog
 and release tags (`<id>-v<version>`) in `rustcut-plugins`.
+
+| API | What it added |
+|---|---|
+| 1.0 | The events `video-opened`, `tag-assigned`, `tag-removed`; the actions `set-target`, `set-rating`, `notify`; the host's `log`. |
+| 1.1 | The host's `target-folder` and `hide-marks` (new functions only, so a plugin built against 1.0 links unchanged; RustCut's host tests load a 1.0 build). |
 
 ## Testing
 

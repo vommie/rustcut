@@ -16,7 +16,7 @@ pub mod schema_limits {
 }
 
 /// The plugin API version this RustCut implements (the WIT package version of `rustcut-plugin-api`).
-pub const API_VERSION: semver::Version = semver::Version::new(1, 0, 0);
+pub const API_VERSION: semver::Version = semver::Version::new(1, 1, 0);
 
 /// The manifest's file name inside a plugin folder and a plugin file.
 pub const MANIFEST_FILE: &str = "plugin.toml";

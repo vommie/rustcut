@@ -46,7 +46,8 @@ pub(super) fn context_to_wit(context: &Context) -> wit::Context {
     }
 }
 
-pub(super) fn action_from_wit(action: wit::Action) -> Action {
+/// `mark`: whether the plugin left the marks on (it did not call `hide-marks` in this call).
+pub(super) fn action_from_wit(action: wit::Action, mark: bool) -> Action {
     match action {
         wit::Action::SetTarget(set) => Action::SetTarget {
             target: match set.target {
@@ -54,10 +55,12 @@ pub(super) fn action_from_wit(action: wit::Action) -> Action {
                 wit::Target::Path(path) => Target::Path(PathBuf::from(path)),
             },
             reason: set.reason,
+            mark,
         },
         wit::Action::SetRating(set) => Action::SetRating {
             stars: set.stars,
             reason: set.reason,
+            mark,
         },
         wit::Action::Notify(notice) => Action::Notify(Notice {
             place: match notice.place {
