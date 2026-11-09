@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.111] - 2026-11-09
+
 ### Added
 
 - Plugin API 1.1 (`plugin-api-v1.1.0`): a plugin can read the current target folder as the id of a folder of Settings
@@ -1521,7 +1523,8 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.110...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.111...HEAD
+[0.0.111]: https://github.com/vommie/rustcut/compare/v0.0.110...v0.0.111
 [0.0.110]: https://github.com/vommie/rustcut/compare/v0.0.109...v0.0.110
 [0.0.109]: https://github.com/vommie/rustcut/compare/v0.0.108...v0.0.109
 [0.0.108]: https://github.com/vommie/rustcut/compare/v0.0.107...v0.0.108
