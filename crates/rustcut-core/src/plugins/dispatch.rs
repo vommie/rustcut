@@ -2,7 +2,7 @@
 //! order. A later plugin's context carries what the earlier ones changed.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -108,13 +108,23 @@ pub(super) fn apply(context: &mut Context, action: &Action, folders: &BTreeMap<u
         Action::SetTarget {
             target: Target::Path(path),
             ..
-        } => context.target = Some(path.clone()),
+        } => {
+            context.target = Some(path.clone());
+            context.target_folder = None;
+        }
         Action::SetTarget {
             target: Target::Folder(id),
             ..
         } => {
-            if let Some(path) = folders.get(id) {
-                context.target = Some(path.clone());
+            // 0 is "Next to the source": the video's own folder.
+            let path = if *id == 0 {
+                context.video.as_deref().and_then(Path::parent).map(Path::to_path_buf)
+            } else {
+                folders.get(id).cloned()
+            };
+            if let Some(path) = path {
+                context.target = Some(path);
+                context.target_folder = Some(*id);
             }
         }
         Action::SetRating { stars, .. } => context.rating = Some((*stars).min(5)),

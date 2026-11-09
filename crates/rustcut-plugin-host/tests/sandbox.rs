@@ -195,3 +195,55 @@ fn a_file_that_is_no_component_is_refused() {
     let manifest = Manifest::parse("id = \"bad\"\nname = \"Bad\"\nversion = \"1.0.0\"\napi = \"1.0\"\n").unwrap();
     assert!(runtime().load(tmp.path(), manifest).is_err());
 }
+
+#[test]
+fn api_1_1_hides_marks_and_tells_the_target_folder_for_one_call() {
+    let mut plugin = instance("quiet", Limits::default());
+    let (event, mut context) = opened();
+    context.target_folder = Some(4);
+    let actions = plugin.handle(&event, &context).unwrap();
+    assert!(
+        matches!(
+            &actions[0],
+            Action::SetRating {
+                stars: 3,
+                mark: false,
+                ..
+            }
+        ),
+        "{actions:?}"
+    );
+    assert!(
+        matches!(&actions[1], Action::Notify(n) if n.detail == "folder Some(4)"),
+        "{actions:?}"
+    );
+    context.target_folder = None;
+    let actions = plugin.handle(&event, &context).unwrap();
+    assert!(
+        matches!(&actions[1], Action::Notify(n) if n.detail == "folder None"),
+        "{actions:?}"
+    );
+    // A plugin that does not hide its marks keeps them, also after a quiet call on the same instance.
+    plugin.configure(&json!({ "mode": "ok" })).unwrap();
+    let actions = plugin.handle(&event, &context).unwrap();
+    assert!(
+        matches!(&actions[1], Action::SetTarget { mark: true, .. }),
+        "{actions:?}"
+    );
+}
+
+#[test]
+fn a_plugin_built_against_api_1_0_still_loads_and_answers() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/api-1.0.0");
+    let manifest = Manifest::read(&dir).unwrap();
+    assert_eq!(manifest.api, "1.0");
+    let loaded = runtime().load(&dir, manifest).unwrap();
+    let mut plugin = Instance::new(&loaded, Limits::default()).unwrap();
+    plugin.configure(&json!({ "mode": "ok" })).unwrap();
+    let (event, context) = opened();
+    let actions = plugin.handle(&event, &context).unwrap();
+    assert!(
+        matches!(&actions[1], Action::SetTarget { target: Target::Path(p), mark: true, .. } if p == Path::new("/videos/holiday")),
+        "{actions:?}"
+    );
+}

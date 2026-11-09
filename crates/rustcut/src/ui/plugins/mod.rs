@@ -143,6 +143,7 @@ impl PluginsBridge {
             rating,
             tags,
             target: export.as_ref().and_then(|e| e.target_folder()),
+            target_folder: export.as_ref().and_then(|e| e.target_folder_id()),
         }
     }
 

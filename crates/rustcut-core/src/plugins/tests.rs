@@ -26,15 +26,18 @@ fn actions_change_what_the_next_plugin_sees() {
         &Action::SetTarget {
             target: Target::Folder(4),
             reason: String::new(),
+            mark: true,
         },
         &folders,
     );
     assert_eq!(context.target, Some(PathBuf::from("/videos/sport")));
+    assert_eq!(context.target_folder, Some(4));
     apply(
         &mut context,
         &Action::SetTarget {
             target: Target::Folder(9),
             reason: String::new(),
+            mark: true,
         },
         &folders,
     );
@@ -48,15 +51,34 @@ fn actions_change_what_the_next_plugin_sees() {
         &Action::SetTarget {
             target: Target::Path("/x".into()),
             reason: String::new(),
+            mark: true,
         },
         &folders,
     );
     assert_eq!(context.target, Some(PathBuf::from("/x")));
+    assert_eq!(context.target_folder, None, "a path is no folder of the list");
+    context.video = Some("/videos/holiday/beach.mp4".into());
+    apply(
+        &mut context,
+        &Action::SetTarget {
+            target: Target::Folder(0),
+            reason: String::new(),
+            mark: false,
+        },
+        &folders,
+    );
+    assert_eq!(
+        context.target,
+        Some(PathBuf::from("/videos/holiday")),
+        "0 is next to the source"
+    );
+    assert_eq!(context.target_folder, Some(0));
     apply(
         &mut context,
         &Action::SetRating {
             stars: 9,
             reason: String::new(),
+            mark: true,
         },
         &folders,
     );

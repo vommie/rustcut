@@ -64,6 +64,14 @@ pub(super) struct State {
     table: ResourceTable,
     limiter: Limiter,
     log: Vec<LogLine>,
+    call: Call,
+}
+
+/// What the host's functions know during one call of `handle` (API 1.1); empty outside it.
+#[derive(Debug, Default)]
+struct Call {
+    target_folder: Option<u32>,
+    hide_marks: bool,
 }
 
 impl WasiView for State {
@@ -80,6 +88,14 @@ impl bindings::rustcut::plugin::types::Host for State {}
 impl host::Host for State {
     fn log(&mut self, level: host::Level, message: String) {
         push_line(&mut self.log, convert::level(level), &message);
+    }
+
+    fn target_folder(&mut self) -> Option<u32> {
+        self.call.target_folder
+    }
+
+    fn hide_marks(&mut self) {
+        self.call.hide_marks = true;
     }
 }
 
@@ -141,6 +157,7 @@ impl Instance {
             table: ResourceTable::new(),
             limiter,
             log: Vec::new(),
+            call: Call::default(),
         };
         let mut store = Store::new(&loaded.inner.engine, state);
         store.limiter(|state| &mut state.limiter);
@@ -179,12 +196,21 @@ impl Instance {
     /// # Errors
     /// See [`Instance::configure`].
     pub fn handle(&mut self, event: &Event, context: &Context) -> Result<Vec<Action>, CallError> {
+        let target_folder = context.target_folder;
         let event = convert::event_to_wit(event);
         let context = convert::context_to_wit(context);
-        let actions = self
-            .call(|plugin, store| plugin.call_handle(store, &event, &context))?
-            .map_err(CallError::Failed)?;
-        Ok(actions.into_iter().map(convert::action_from_wit).collect())
+        self.store.data_mut().call = Call {
+            target_folder,
+            hide_marks: false,
+        };
+        let answer = self.call(|plugin, store| plugin.call_handle(store, &event, &context));
+        let call = std::mem::take(&mut self.store.data_mut().call);
+        let actions = answer?.map_err(CallError::Failed)?;
+        let mark = !call.hide_marks;
+        Ok(actions
+            .into_iter()
+            .map(|action| convert::action_from_wit(action, mark))
+            .collect())
     }
 
     /// Lets the plugin check settings the user is editing.

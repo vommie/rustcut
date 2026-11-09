@@ -17,19 +17,26 @@ impl PluginsBridge {
 
     fn apply_one(&self, outcome: &Outcome, action: &Action) {
         let id = outcome.id.as_str();
-        let mark = |reason: &str| PluginMark {
-            id: id.to_owned(),
-            plugin: outcome.name.clone(),
-            reason: tidy(reason),
+        // A plugin may hide its marks (API 1.1): the action applies without one.
+        let mark = |reason: &str, shown: bool| {
+            shown.then(|| PluginMark {
+                id: id.to_owned(),
+                plugin: outcome.name.clone(),
+                reason: tidy(reason),
+            })
         };
         match action {
-            Action::SetTarget { target, reason } => {
+            Action::SetTarget {
+                target,
+                reason,
+                mark: shown,
+            } => {
                 let Some(export) = self.export.upgrade() else { return };
                 let (folder, path) = match target {
                     Target::Folder(folder) => (Some(*folder), None),
                     Target::Path(path) => (None, Some(path.as_path())),
                 };
-                match export.plugin_target(folder, path, mark(reason)) {
+                match export.plugin_target(folder, path, mark(reason, *shown)) {
                     PluginTarget::Set(folder) => {
                         tracing::info!("[Plugins] {id}: target folder set ({reason})");
                         if let Some(folder) = folder {
@@ -54,9 +61,13 @@ impl PluginsBridge {
                     }
                 }
             }
-            Action::SetRating { stars, reason } => {
+            Action::SetRating {
+                stars,
+                reason,
+                mark: shown,
+            } => {
                 let Some(tags) = self.tags.upgrade() else { return };
-                if tags.plugin_rating(*stars, mark(reason)) {
+                if tags.plugin_rating(*stars, mark(reason, *shown)) {
                     tracing::info!("[Plugins] {id}: rating set to {stars} ({reason})");
                 } else {
                     tracing::info!("[Plugins] {id}: no rating set, nothing can be rated now");

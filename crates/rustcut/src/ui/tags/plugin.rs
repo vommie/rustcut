@@ -58,8 +58,9 @@ impl TagsBridge {
         (choice.rating, tags)
     }
 
-    /// A plugin's rating; `false` when nothing can be rated now (no video, "Active" off, no job edited).
-    pub fn plugin_rating(&self, stars: u8, mark: PluginMark) -> bool {
+    /// A plugin's rating; `false` when nothing can be rated now (no video, "Active" off, no job edited). Without a
+    /// `mark` (the plugin hid it) an earlier plugin's mark goes too: it would name the wrong plugin.
+    pub fn plugin_rating(&self, stars: u8, mark: Option<PluginMark>) -> bool {
         let has_video = self
             .window
             .upgrade()
@@ -70,7 +71,7 @@ impl TagsBridge {
         }
         state.set_rating(stars);
         drop(state);
-        self.rating_mark.replace(Some(mark));
+        self.rating_mark.replace(mark);
         self.publish();
         true
     }

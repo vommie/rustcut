@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use rustcut_core::folders::FolderId;
 
 use super::ExportBridge;
+use super::target::Target;
 
 /// Who set the target, and why.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,8 +41,9 @@ pub enum PluginTarget {
 }
 
 impl ExportBridge {
-    /// A plugin's target: a folder of the tree by id, or any folder (a loose target, like a loaded job's).
-    pub fn plugin_target(&self, folder: Option<u32>, path: Option<&Path>, mark: PluginMark) -> PluginTarget {
+    /// A plugin's target: a folder of the tree by id, or any folder (a loose target, like a loaded job's). Without a
+    /// `mark` (the plugin hid it) an earlier plugin's mark goes too.
+    pub fn plugin_target(&self, folder: Option<u32>, path: Option<&Path>, mark: Option<PluginMark>) -> PluginTarget {
         if self.user_target.get() {
             return PluginTarget::UserChose;
         }
@@ -64,7 +66,7 @@ impl ExportBridge {
                 st.target.load(path, source.as_deref());
             }
         }
-        self.plugin_mark.replace(Some(mark));
+        self.plugin_mark.replace(mark);
         self.rescan();
         self.publish();
         let st = self.state.borrow();
@@ -75,6 +77,14 @@ impl ExportBridge {
     pub fn target_folder(&self) -> Option<PathBuf> {
         let st = self.state.borrow();
         st.target.folder(st.source.as_deref())
+    }
+
+    /// The target as a folder of the tree, by id (0 = next to the source); `None` for a loaded job's own folder.
+    pub fn target_folder_id(&self) -> Option<u32> {
+        match &self.state.borrow().target.target {
+            Target::Entry(id) => Some(id.0),
+            Target::Loose(_) => None,
+        }
     }
 
     /// The open video's path.

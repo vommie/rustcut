@@ -7,6 +7,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Plugin API 1.1 (`plugin-api-v1.1.0`): a plugin can read the current target folder as the id of a folder of Settings
+  > Target Folders (0 for "Next to the source"), so it can see that its folder is already set, and it can set the
+  rating or the target folder without its plugin mark (an earlier plugin's mark at that place goes then, so no mark
+  names the wrong plugin). Plugins built against 1.0 keep working unchanged. Auto-Rate's new "Show mark" switch and
+  Auto-Folder's quiet repeat of an already set folder use it. The author's guide (`docs/plugins.md`) lists both.
+
+### Fixed
+
+- Plugins: a plugin that sets "Next to the source" as the target now shows the later plugins that folder in their
+  context (before, they still saw the previous target).
+
 ## [0.0.110] - 2026-11-06
 
 ### Fixed

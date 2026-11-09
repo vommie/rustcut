@@ -1,8 +1,11 @@
 //! RustCut's test plugin. Its `mode` setting decides what `handle` does:
 //! `ok` (a notice and, with a video, a target), `fail` (an error), `panic`, `slow` (an endless loop),
-//! `memory` (allocates until it is stopped).
+//! `memory` (allocates until it is stopped), `quiet` (API 1.1: hides its marks, sets 3 stars and tells the target
+//! folder id it reads from the host).
 
-use rustcut_plugin_api::{Action, Context, Event, Issue, Level, Notice, Place, Plugin, SetTarget, Target, export_plugin};
+use rustcut_plugin_api::{
+    Action, Context, Event, Issue, Level, Notice, Place, Plugin, SetRating, SetTarget, Target, export_plugin,
+};
 use std::sync::Mutex;
 
 #[derive(serde::Deserialize, Default, Clone)]
@@ -37,6 +40,14 @@ impl Plugin for TestPlugin {
                     n = std::hint::black_box(n.wrapping_add(1));
                 }
             }
+            "quiet" => {
+                rustcut_plugin_api::hide_marks();
+                let folder = rustcut_plugin_api::target_folder();
+                Ok(vec![
+                    Action::SetRating(SetRating { stars: 3, reason: "quiet".into() }),
+                    Action::Notify(Notice::new(Place::None, Level::Info, "Test plugin", format!("folder {folder:?}"))),
+                ])
+            }
             "memory" => {
                 let mut blocks = Vec::new();
                 loop {
@@ -61,7 +72,7 @@ impl Plugin for TestPlugin {
 
     fn check(settings: String) -> Vec<Issue> {
         match rustcut_plugin_api::parse_settings::<Settings>(&settings) {
-            Ok(s) if !["", "ok", "fail", "panic", "slow", "memory", "refuse"].contains(&s.mode.as_str()) => vec![Issue {
+            Ok(s) if !["", "ok", "fail", "panic", "slow", "memory", "refuse", "quiet"].contains(&s.mode.as_str()) => vec![Issue {
                 field: "mode".into(),
                 row: None,
                 level: Level::Warning,

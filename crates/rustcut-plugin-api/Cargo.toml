@@ -2,7 +2,7 @@
 name = "rustcut-plugin-api"
 description = "The RustCut plugin API: the WIT contract and a small kit for writing plugins in Rust"
 # The plugin API's own version (the WIT package version), independent of RustCut's. Tagged as plugin-api-vX.Y.Z.
-version = "1.0.0"
+version = "1.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

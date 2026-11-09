@@ -29,7 +29,8 @@ fn ids_follow_the_rules() {
 fn api_versions_decide_compatibility() {
     let with = |api: &str| Manifest::parse(&MINIMAL.replace("api = \"1.0\"", &format!("api = \"{api}\""))).unwrap();
     assert!(with("1.0.0").api_compatible());
-    assert!(!with("1.1").api_compatible());
+    assert!(with("1.1").api_compatible());
+    assert!(!with("1.2").api_compatible());
     assert!(!with("2.0").api_compatible());
     assert!(!with("0.9").api_compatible());
     assert!(Manifest::parse(&MINIMAL.replace("api = \"1.0\"", "api = \"one\"")).is_err());

@@ -28,6 +28,9 @@ pub struct Context {
     pub rating: Option<u8>,
     pub tags: Vec<Tag>,
     pub target: Option<PathBuf>,
+    /// The id of the folder of Settings > Target Folders that is the target (0 = next to the source); `None` for a
+    /// target outside that list. Plugins read it through the host's `target-folder` (API 1.1).
+    pub target_folder: Option<u32>,
 }
 
 /// Who opened a video.
@@ -86,8 +89,18 @@ pub enum Target {
 /// What RustCut should do after an event.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
-    SetTarget { target: Target, reason: String },
-    SetRating { stars: u8, reason: String },
+    /// `mark`: whether RustCut shows the plugin's mark at the folder field (off after the host's `hide-marks`).
+    SetTarget {
+        target: Target,
+        reason: String,
+        mark: bool,
+    },
+    /// `mark`: whether RustCut shows the plugin's mark at the rating (off after the host's `hide-marks`).
+    SetRating {
+        stars: u8,
+        reason: String,
+        mark: bool,
+    },
     Notify(Notice),
 }
 
