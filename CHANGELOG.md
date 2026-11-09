@@ -17,6 +17,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Plugin author's guide (`docs/plugins.md`, "Versions") and the WIT header: they promised that a minor API version may
+  add events, actions and record fields; a plugin built against an older minor version would then no longer load. A
+  minor version now only adds host functions, imported interfaces or types no export uses; new events, actions and
+  fields wait for the next major version.
 - Plugins: a plugin that sets "Next to the source" as the target now shows the later plugins that folder in their
   context (before, they still saw the previous target).
 
