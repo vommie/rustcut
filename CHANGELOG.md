@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [0.0.112] - 2026-11-15
 
+### Security
+
+- The SQLite built into RustCut (queue, folder pictures, thumbnails) is updated to fix CVE-2026-119375
+  (RUSTSEC-2026-0459). No migration; the databases stay as they are.
+
 ### Fixed
 
 - "Target file already exists" offered a name that existed ("1 (1) - 01.mp4"), and the render then failed with "exists

@@ -192,7 +192,8 @@ fn migrate(conn: &mut Connection, backups: Option<&Path>) -> Result<(), PictureE
         std::fs::create_dir_all(backups).map_err(store_error)?;
         let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
         let target = backups.join(format!("pictures.sqlite.v{current}.{stamp}.bak"));
-        conn.backup(rusqlite::MAIN_DB, &target, None).map_err(store_error)?;
+        conn.backup(rusqlite::MAIN_DB, &target, None::<fn(rusqlite::backup::Progress)>)
+            .map_err(store_error)?;
         tracing::info!(backup = %target.display(), "[Pictures] Database backed up before the migration");
     }
     migrations.to_latest(conn).map_err(store_error)?;

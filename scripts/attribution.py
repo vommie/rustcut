@@ -22,7 +22,7 @@ TARGET = ROOT / "ATTRIBUTION.md"
 REQUIRED = ("BSD-2-Clause", "BSD-3-Clause", "ISC", "MIT", "Unicode-3.0")
 # Crates that compile bundled C code whose notices the head carries by hand. A new version fails the check until the head is
 # compared with the new bundled code and the version here is raised.
-BUNDLED = {"libwebp-sys": "0.9.6", "libsqlite3-sys": "0.38.2"}
+BUNDLED = {"libwebp-sys": "0.9.6", "libsqlite3-sys": "0.39.1"}
 # Not crates, but in the programs under the MIT License.
 EXTRA_MIT = ("Copyright (c) 2020-2026 Paweł Kuna", "Copyright (c) The Rust Project Developers")
 COPYRIGHT = re.compile(r"^\W*(copyright\b|©|\(c\)\s*\d)", re.IGNORECASE)

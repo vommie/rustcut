@@ -73,9 +73,10 @@ regex = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "signal", "io-util", "net", "process", "fs"] }
 parking_lot = "0.13"
 # Queue, job history and job logs (ADR-5). `backup` copies the database before a migration.
-# 0.40, not 0.41: rusqlite_migration 2.6.0 (the newest) requires it, and both must share one SQLite.
-rusqlite = { version = "0.40", features = ["bundled", "backup"] }
-rusqlite_migration = "2"
+# 0.41, not 0.43: rusqlite_migration 2.7.0 (the newest) requires it, and both must share one SQLite (0.41 brings
+# libsqlite3-sys 0.39, which fixes RUSTSEC-2026-0459).
+rusqlite = { version = "0.41", features = ["bundled", "backup"] }
+rusqlite_migration = "2.7"
 toml = "1"
 # Settings and UI state are written to a temporary file and renamed, so a crash never leaves half a file.
 atomic-write-file = "0.3"
