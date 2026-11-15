@@ -50,7 +50,13 @@ pub fn conflict_fix(
     scan: &FolderScan,
     queue: &[QueuedTarget],
 ) -> Option<Fix> {
-    let taken = Taken { folder, scan, queue };
+    // The card's listing only (UI thread); Save checks the drive.
+    let taken = Taken {
+        folder,
+        scan,
+        queue,
+        disk: None,
+    };
     if st.template_uses_counter() {
         let numbered = series(scan.names.iter().filter(|n| is_video_file(n)), |n| {
             st.stem_with(facts, Some(n)).ok()

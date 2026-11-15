@@ -190,7 +190,13 @@ async fn run_plan(
     updates: &mut (impl FnMut(RenderUpdate) + Send),
 ) -> Result<RenderedFile, RenderError> {
     ensure_folder(&spec.target.folder).await?;
-    if !spec.target.overwrite && tokio::fs::try_exists(&plan.target).await.unwrap_or(true) {
+    // The same test the conflict dialog makes for every name it offers (`naming::on_disk`).
+    let target = plan.target.clone();
+    if !spec.target.overwrite
+        && tokio::task::spawn_blocking(move || crate::naming::on_disk(&target))
+            .await
+            .unwrap_or(true)
+    {
         return Err(RenderError::TargetExists(plan.target.clone()));
     }
     for folder in plan

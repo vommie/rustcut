@@ -9,15 +9,13 @@ use std::rc::Rc;
 use rustcut_core::edit::Size;
 use rustcut_core::job::{JOB_SPEC_VERSION, JobId, JobMetadata, JobSpec, SourceSummary, TargetSpec};
 use rustcut_core::media::MediaInfo;
-use rustcut_core::naming::{
-    CheckInput, Conflicts, ExistingFile, FolderScan, QueuedTarget, Taken, check, existing_file, file_name, same_path,
-    scan_folder,
-};
+use rustcut_core::naming::{QueuedTarget, file_name, same_path};
 use rustcut_core::queue::{QueueCommand, QueueError};
 use slint::ComponentHandle as _;
 
 use super::ExportBridge;
-use super::dialog::{ConflictDialog, DialogInput, Outcome, silent_outcome};
+use super::dialog::{ConflictDialog, Outcome, silent_outcome};
+use super::prepare::{Prepare, Prepared};
 use super::state::JobFacts;
 use crate::ui::jump::JumpTarget;
 use crate::ui::notices::{self, JobLabels, Kind, Notice};
@@ -69,16 +67,13 @@ impl ExportBridge {
     pub(super) fn check_target(self: &Rc<Self>, draft: Draft) {
         self.saving.set(true);
         self.publish();
-        let folder = draft.folder.clone();
-        let target = draft.folder.join(file_name(&draft.stem, draft.facts.container));
-        let task = self
-            .runtime
-            .spawn(async move { (scan_folder(&folder).await, existing_file(&target).await) });
+        let job = self.prepare(&draft);
+        let task = self.runtime.spawn_blocking(move || job.run(None));
         let weak = Rc::downgrade(self);
         let spawned = slint::spawn_local(async move {
             let Some(bridge) = weak.upgrade() else { return };
             match task.await {
-                Ok((scan, exists)) => bridge.decide(draft, scan, exists),
+                Ok(found) => bridge.decide(draft, found),
                 Err(e) => {
                     bridge.saving.set(false);
                     Self::tell(
@@ -174,13 +169,15 @@ impl ExportBridge {
     }
 
     /// The folder was read: queue the job, or ask how to get around the conflict.
-    fn decide(self: &Rc<Self>, draft: Draft, scan: FolderScan, exists: Option<ExistingFile>) {
-        let warnings = self.warnings.borrow().clone();
+    fn decide(self: &Rc<Self>, draft: Draft, found: Prepared) {
+        let Prepared {
+            conflicts,
+            exists,
+            dialog,
+            ..
+        } = found;
         let target = draft.folder.join(file_name(&draft.stem, draft.facts.container));
-        // The loaded job counts like any other: a copy writing its file is a conflict Save asks about (Q-P8b).
-        let queue = self.queue_targets();
-        let conflicts = self.conflicts(&draft, &scan, exists, &queue);
-        let silent = exists.is_some() && !warnings.target_exists;
+        let silent = exists.is_some() && !self.warnings.borrow().target_exists;
         if !silent && !conflicts.needs_decision() {
             let outcome = Outcome {
                 stem: draft.stem.clone(),
@@ -192,7 +189,6 @@ impl ExportBridge {
             self.enqueue(draft, outcome);
             return;
         }
-        let dialog = self.conflict_dialog(&draft, conflicts, exists, scan, queue);
         if silent {
             let st = self.state.borrow();
             let outcome = silent_outcome(&dialog, &st);
@@ -226,69 +222,39 @@ impl ExportBridge {
         self.queue.upgrade().map(|q| q.targets()).unwrap_or_default()
     }
 
-    /// What stands in the way of the draft's target.
-    fn conflicts(
-        &self,
-        draft: &Draft,
-        scan: &FolderScan,
-        exists: Option<ExistingFile>,
-        queue: &[QueuedTarget],
-    ) -> Conflicts {
-        let target = draft.folder.join(file_name(&draft.stem, draft.facts.container));
-        let st = self.state.borrow();
-        check(&CheckInput {
-            target: &target,
-            base: &st.name,
-            source: st.source.as_deref(),
-            scan,
-            exists,
-            queue,
-            warnings: &self.warnings.borrow(),
-        })
-    }
-
-    /// The conflict dialog for the draft. It shows the existing file even when its warning is off (the silent way
-    /// needs its choices).
-    fn conflict_dialog(
-        &self,
-        draft: &Draft,
-        mut conflicts: Conflicts,
-        exists: Option<ExistingFile>,
-        scan: FolderScan,
-        queue: Vec<QueuedTarget>,
-    ) -> ConflictDialog {
-        conflicts.exists = exists;
-        let st = self.state.borrow();
-        ConflictDialog::new(DialogInput {
-            folder: &draft.folder,
-            stem: &draft.stem,
-            conflicts,
-            scan,
-            queue,
-            export: &st,
-            facts: &draft.facts,
-            settings: &self.dialog_settings.borrow(),
-        })
+    /// What the check off the UI thread needs, copied from the card. The loaded job counts like any other: a copy
+    /// writing its file is a conflict Save asks about (Q-P8b).
+    fn prepare(&self, draft: &Draft) -> Prepare {
+        Prepare {
+            folder: draft.folder.clone(),
+            stem: draft.stem.clone(),
+            facts: draft.facts.clone(),
+            export: self.state.borrow().clone(),
+            warnings: self.warnings.borrow().clone(),
+            settings: self.dialog_settings.borrow().clone(),
+            queue: self.queue_targets(),
+        }
     }
 
     /// Save on a new name of the dialog: the folder is read once more right before the job is queued, because a file
     /// or another job may have taken the name since the dialog opened (user report 2026-11-06: the render then failed
     /// on an offered name). A name taken meanwhile keeps the dialog open with fresh choices, the same one picked.
     fn recheck(self: &Rc<Self>, outcome: Outcome) {
-        let Some((folder, target, file)) = self.pending.borrow().as_ref().and_then(|p| p.draft.as_ref()).map(|d| {
-            (
-                d.folder.clone(),
-                d.folder.join(file_name(&d.stem, d.facts.container)),
-                file_name(&outcome.stem, d.facts.container),
-            )
-        }) else {
+        let Some((job, file)) = self
+            .pending
+            .borrow()
+            .as_ref()
+            .and_then(|p| p.draft.as_ref())
+            .map(|d| (self.prepare(d), file_name(&outcome.stem, d.facts.container)))
+        else {
             return;
         };
         self.saving.set(true);
         self.publish();
-        let task = self
-            .runtime
-            .spawn(async move { (scan_folder(&folder).await, existing_file(&target).await) });
+        let task = self.runtime.spawn_blocking(move || {
+            let found = job.run(Some(&file));
+            (found, file)
+        });
         let weak = Rc::downgrade(self);
         let spawned = slint::spawn_local(async move {
             let found = task.await;
@@ -303,8 +269,7 @@ impl ExportBridge {
                 bridge.publish();
                 return;
             };
-            let queue = bridge.queue_targets();
-            let (scan, exists) = match found {
+            let (found, file) = match found {
                 Ok(found) => found,
                 Err(e) => {
                     // The render checks the target again before it writes anything.
@@ -314,12 +279,7 @@ impl ExportBridge {
                     return;
                 }
             };
-            let taken = Taken {
-                folder: &draft.folder,
-                scan: &scan,
-                queue: &queue,
-            };
-            if !taken.name(&file) {
+            if found.chosen_free {
                 bridge.publish_dialog();
                 if let Some(window) = bridge.window.upgrade() {
                     window.invoke_focus_keys();
@@ -328,8 +288,7 @@ impl ExportBridge {
                 return;
             }
             tracing::info!(file = %file, "[Export] The chosen name was taken meanwhile; asking again");
-            let conflicts = bridge.conflicts(&draft, &scan, exists, &queue);
-            let mut fresh = bridge.conflict_dialog(&draft, conflicts, exists, scan, queue);
+            let mut fresh = found.dialog;
             fresh.type_name(&dialog.typed);
             if let Some(index) = dialog
                 .current()
