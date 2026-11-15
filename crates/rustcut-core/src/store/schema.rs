@@ -100,7 +100,7 @@ fn backup(conn: &Connection, path: &Path, backup_dir: &Path, from: usize) -> Res
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
     let target = backup_dir.join(format!("{name}.v{from}.{stamp}.bak"));
     std::fs::create_dir_all(backup_dir).map_err(|e| StoreError::Backup(e.to_string()))?;
-    conn.backup(rusqlite::MAIN_DB, &target, None)
+    conn.backup(rusqlite::MAIN_DB, &target, None::<fn(rusqlite::backup::Progress)>)
         .map_err(|e| StoreError::Backup(e.to_string()))?;
     tracing::info!(backup = %target.display(), "[Store] Database backed up before the migration");
     Ok(())

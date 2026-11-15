@@ -204,7 +204,7 @@ fn migrate(conn: &mut Connection, backups: Option<&Path>) -> Result<(), ThumbSto
         std::fs::create_dir_all(backups)?;
         let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
         let target = backups.join(format!("tl_thumbs.db.v{current}.{stamp}.bak"));
-        conn.backup(rusqlite::MAIN_DB, &target, None)?;
+        conn.backup(rusqlite::MAIN_DB, &target, None::<fn(rusqlite::backup::Progress)>)?;
         tracing::info!(backup = %target.display(), "[Thumbs] Database backed up before the migration");
     }
     migrations.to_latest(conn)?;
