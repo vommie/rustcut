@@ -82,6 +82,7 @@ impl ExportBridge {
                 export: &st,
                 facts,
                 settings: &self.dialog_settings.borrow(),
+                disk: None,
             })
             .browsing()
         };

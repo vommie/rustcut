@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- "Target file already exists" offered a name that existed ("1 (1) - 01.mp4"), and the render then failed with "exists
+  already". RustCut read only the first 50 000 names of a folder, so in a large folder the files beyond were unknown.
+  The whole folder is read now, and every name the dialog offers is also checked on the drive with the same test the
+  render makes before it writes (also "Next free number", the silent way with the warning off, and the check again at
+  Save). The Move Target File dialog reads the whole folder too.
+
 ## [0.0.111] - 2026-11-09
 
 ### Added

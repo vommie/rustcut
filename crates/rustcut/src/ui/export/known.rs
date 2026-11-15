@@ -149,6 +149,7 @@ impl ExportBridge {
                 export: &st,
                 facts: &facts,
                 settings: &self.dialog_settings.borrow(),
+                disk: None,
             })
             .knowing(known)
         };

@@ -144,6 +144,9 @@ pub struct DialogInput<'a> {
     pub export: &'a ExportState,
     pub facts: &'a JobFacts,
     pub settings: &'a ConflictDialogSettings,
+    /// The render's test of a file (`naming::on_disk`) while the dialog is made off the UI thread: every offered name
+    /// is checked on the drive too, so a listing that misses a file never offers it (user report 2026-11-15).
+    pub disk: Option<&'a dyn Fn(&Path) -> bool>,
 }
 
 impl ConflictDialog {
@@ -194,8 +197,15 @@ impl ConflictDialog {
             scan: input.scan,
             queue: input.queue,
         };
-        dialog.options = dialog.build(input.stem, input.export, input.facts, input.settings.preselect, &used);
-        dialog.update_rename();
+        dialog.options = dialog.build(
+            input.stem,
+            input.export,
+            input.facts,
+            input.settings.preselect,
+            &used,
+            input.disk,
+        );
+        dialog.update_rename(input.disk);
         dialog.selected = dialog.preselected(input.settings.preselect);
         dialog
     }
@@ -227,11 +237,12 @@ impl ConflictDialog {
         self
     }
 
-    fn taken(&self) -> Taken<'_> {
+    fn taken<'a>(&'a self, disk: Option<&'a dyn Fn(&Path) -> bool>) -> Taken<'a> {
         Taken {
             folder: &self.folder,
             scan: &self.scan,
             queue: &self.queue,
+            disk,
         }
     }
 
@@ -242,8 +253,9 @@ impl ConflictDialog {
         facts: &JobFacts,
         preselect: ConflictPreselect,
         used: &[u32],
+        disk: Option<&dyn Fn(&Path) -> bool>,
     ) -> Vec<DialogOption> {
-        let taken = self.taken();
+        let taken = self.taken(disk);
         let next = export.template_uses_counter().then(|| {
             let start = export.active_counter().unwrap_or(0);
             let found = next_free_counter_except(start, self.container, &taken, used, |n| {
@@ -488,11 +500,12 @@ impl ConflictDialog {
     /// The typed name changed: its file name and whether it is free.
     pub fn type_name(&mut self, text: &str) {
         text.clone_into(&mut self.typed);
-        self.update_rename();
+        // On the UI thread: the listing only; Save checks the typed name on the drive (`save.rs`, `recheck`).
+        self.update_rename(None);
     }
 
-    fn update_rename(&mut self) {
-        let result = typed_name(&self.typed, &self.namer, self.container, &self.taken());
+    fn update_rename(&mut self, disk: Option<&dyn Fn(&Path) -> bool>) {
+        let result = typed_name(&self.typed, &self.namer, self.container, &self.taken(disk));
         let container = self.container;
         let Some(option) = self.options.iter_mut().find(|o| o.choice == Choice::Rename) else {
             return;

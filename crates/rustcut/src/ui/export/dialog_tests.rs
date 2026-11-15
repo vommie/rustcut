@@ -61,6 +61,7 @@ fn dialog_with(
         export: st,
         facts: &facts(),
         settings,
+        disk: None,
     })
 }
 

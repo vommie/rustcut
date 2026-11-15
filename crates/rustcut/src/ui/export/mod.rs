@@ -18,6 +18,7 @@ mod job_check;
 mod known;
 mod metadata;
 mod plugin;
+mod prepare;
 mod previews;
 mod save;
 mod state;

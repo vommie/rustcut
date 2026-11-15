@@ -13,8 +13,6 @@ use crate::job::{JobId, JobStateKind};
 use crate::render::Container;
 use crate::settings::WarningSettings;
 
-/// Folder entries read at most (a huge download folder must not stall the check).
-pub const MAX_SCANNED: usize = 50_000;
 /// Similar names listed at most.
 pub const MAX_SIMILAR: usize = 50;
 /// Counter values tried when looking for the next free number.
@@ -27,7 +25,8 @@ pub struct FolderScan {
     pub readable: bool,
     /// The folder does not exist yet.
     pub missing: bool,
-    /// File names in the folder (not sorted; at most [`MAX_SCANNED`]).
+    /// File names in the folder (not sorted). Every entry is read: a listing cut short made the conflict dialog offer
+    /// names that existed (user report 2026-11-15, a folder of more than 50 000 files).
     pub names: HashSet<String>,
 }
 
@@ -63,19 +62,14 @@ pub fn scan_folder_now(folder: &Path) -> FolderScan {
     };
     let mut names = HashSet::new();
     for entry in entries {
-        if names.len() >= MAX_SCANNED {
-            break;
-        }
         match entry {
             Ok(entry) => {
                 if let Some(name) = entry.file_name().to_str() {
                     names.insert(name.to_owned());
                 }
             }
-            Err(e) => {
-                tracing::debug!(folder = %folder.display(), error = %e, "[Export] Folder scan stopped");
-                break;
-            }
+            // One entry that cannot be read is left out; the rest of the folder still counts.
+            Err(e) => tracing::debug!(folder = %folder.display(), error = %e, "[Export] Folder entry skipped"),
         }
     }
     FolderScan {
@@ -83,6 +77,15 @@ pub fn scan_folder_now(folder: &Path) -> FolderScan {
         missing: false,
         names,
     }
+}
+
+/// [`existing_file`] on the calling thread (never the UI thread).
+pub fn existing_file_now(path: &Path) -> Option<ExistingFile> {
+    let meta = std::fs::metadata(path).ok()?;
+    Some(ExistingFile {
+        bytes: meta.len(),
+        modified: meta.modified().ok(),
+    })
 }
 
 /// Size and time of an existing file (`None` when there is none).
@@ -204,6 +207,15 @@ pub struct Taken<'a> {
     pub folder: &'a Path,
     pub scan: &'a FolderScan,
     pub queue: &'a [QueuedTarget],
+    /// The render's own test of the file ([`on_disk`]) where the caller may touch the drive (never on the UI thread):
+    /// a listing that misses a file can then never offer its name (user report 2026-11-15).
+    pub disk: Option<&'a dyn Fn(&Path) -> bool>,
+}
+
+/// The test the render makes before it writes a target: the file exists, or it cannot be told (an error counts as
+/// taken).
+pub fn on_disk(path: &Path) -> bool {
+    path.try_exists().unwrap_or(true)
 }
 
 impl Taken<'_> {
@@ -213,6 +225,7 @@ impl Taken<'_> {
         }
         let path = self.folder.join(file);
         self.queue.iter().any(|q| q.claims() && same_path(&q.target, &path))
+            || self.disk.is_some_and(|disk| disk(&path))
     }
 
     /// `stem.ext` is free.
@@ -315,7 +328,7 @@ pub enum TypedNameError {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{DEFAULT_TEMPLATE, NameContext};
+    use super::super::{DEFAULT_TEMPLATE, NameContext, render_stem};
     use super::*;
 
     fn scan(names: &[&str]) -> FolderScan {
@@ -404,6 +417,7 @@ mod tests {
             folder: Path::new("/out"),
             scan: &folder,
             queue: &queue,
+            disk: None,
         };
         let stem_for = |n: u32| Ok(format!("Clip - {n:02}"));
         assert_eq!(
@@ -450,6 +464,7 @@ mod tests {
                 folder: Path::new("/out"),
                 scan: &folder,
                 queue,
+                disk: None,
             };
             free_variant(&namer(DEFAULT_TEMPLATE, "1"), Container::Mkv, &taken)
         };
@@ -481,6 +496,7 @@ mod tests {
             folder: Path::new("/out"),
             scan: &folder,
             queue: &[],
+            disk: None,
         };
         assert_eq!(
             free_variant(&namer(DEFAULT_TEMPLATE, "1 (3)"), Container::Mkv, &taken),
@@ -495,6 +511,7 @@ mod tests {
             folder: Path::new("/out"),
             scan: &folder,
             queue: &[],
+            disk: None,
         };
         assert_eq!(
             free_variant(&namer(DEFAULT_TEMPLATE, "Clip"), Container::Mkv, &taken),
@@ -520,6 +537,7 @@ mod tests {
             folder: Path::new("/out"),
             scan: &folder,
             queue: &[],
+            disk: None,
         };
         let namer_ = namer(DEFAULT_TEMPLATE, "Old");
         assert_eq!(
@@ -559,5 +577,67 @@ mod tests {
             !scan_folder(&dir.path().join("a file")).await.readable,
             "a file is no folder"
         );
+    }
+
+    #[test]
+    fn a_large_folder_is_read_whole() {
+        // User report 2026-11-15: the listing stopped after 50 000 names, and names beyond were offered as free.
+        let dir = tempfile::tempdir().unwrap();
+        for n in 0..50_010 {
+            std::fs::File::create(dir.path().join(format!("{n}.mp4"))).unwrap();
+        }
+        std::fs::File::create(dir.path().join("1 (1) - 01.mp4")).unwrap();
+        let found = scan_folder_now(dir.path());
+        assert_eq!(found.names.len(), 50_011);
+        assert!(
+            found.names.contains("1 (1) - 01.mp4"),
+            "the newest file comes last in the listing"
+        );
+    }
+
+    #[test]
+    fn the_drive_is_asked_for_every_offered_name() {
+        // A listing that misses files (cut short, unreadable, changed since) never offers them when the drive is
+        // asked with the render's own test.
+        let dir = tempfile::tempdir().unwrap();
+        for file in ["1 - 01.mp4", "1 (1) - 01.mp4", "1 (2) - 01.mp4", "1 - 02.mp4"] {
+            std::fs::File::create(dir.path().join(file)).unwrap();
+        }
+        let empty = FolderScan::default();
+        let disk: &dyn Fn(&Path) -> bool = &on_disk;
+        let listing = Taken {
+            folder: dir.path(),
+            scan: &empty,
+            queue: &[],
+            disk: None,
+        };
+        let without = free_variant(&namer(DEFAULT_TEMPLATE, "1"), Container::Mp4, &listing);
+        assert_eq!(
+            without,
+            Some(free("1 (1) - 01", Some("1 (1)"))),
+            "the old failure: the listing alone"
+        );
+        let asked = Taken {
+            folder: dir.path(),
+            scan: &empty,
+            queue: &[],
+            disk: Some(disk),
+        };
+        assert_eq!(
+            free_variant(&namer(DEFAULT_TEMPLATE, "1"), Container::Mp4, &asked),
+            Some(free("1 (3) - 01", Some("1 (3)")))
+        );
+        let next = next_free_counter(1, Container::Mp4, &asked, |n| {
+            render_stem(
+                DEFAULT_TEMPLATE,
+                &NameContext {
+                    name: "1".into(),
+                    counter: Some(n),
+                    ..NameContext::default()
+                },
+            )
+        });
+        assert_eq!(next.map(|(n, _)| n), Some(3), "the next number too");
+        assert!(on_disk(&dir.path().join("1 - 01.mp4")) && !on_disk(&dir.path().join("1 (3) - 01.mp4")));
     }
 }
