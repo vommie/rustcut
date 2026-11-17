@@ -348,6 +348,17 @@ impl QueueBridge {
         self.shared.lock().view.row(id).cloned()
     }
 
+    /// The source of every job in the queue (any state), for plugin commands (Q-NF1: files that have a job).
+    pub fn sources(&self) -> Vec<std::path::PathBuf> {
+        self.shared
+            .lock()
+            .view
+            .rows
+            .iter()
+            .map(|row| row.source.clone())
+            .collect()
+    }
+
     /// How busy the queue is now.
     pub fn status(&self) -> QueueStatus {
         status_of(&self.shared.lock().view)

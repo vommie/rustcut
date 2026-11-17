@@ -6,6 +6,7 @@
 //! rule), and an answer about an earlier video is dropped.
 
 mod apply;
+pub mod commands;
 
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};

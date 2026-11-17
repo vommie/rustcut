@@ -124,6 +124,14 @@ impl Keymap {
             .map(|(action, _)| *action)
     }
 
+    /// The action that has a chord overlapping `chord`, if any (plugin keys are checked against every action).
+    pub fn holder(&self, chord: &Chord) -> Option<Action> {
+        self.bindings
+            .iter()
+            .find(|(_, chords)| chords.iter().any(|c| c.overlaps(chord)))
+            .map(|(action, _)| *action)
+    }
+
     /// Adds `chord` to `action` (a chord it already has is not added twice); refused when another action has it.
     pub fn bind(&mut self, action: Action, chord: Chord) -> Result<(), Conflict> {
         if let Some(other) = self.conflict(&chord, action) {

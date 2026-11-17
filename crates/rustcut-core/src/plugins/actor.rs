@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 use rustcut_plugin_host::manifest::Manifest;
 use rustcut_plugin_host::package::{self, Package};
 use rustcut_plugin_host::runtime::{CallError, Limits, Loaded, Runtime, Worker};
-use rustcut_plugin_host::types::Level;
+use rustcut_plugin_host::types::{Context, Level};
 use rustcut_plugin_host::values;
 use serde_json::{Map, Value};
 use tokio::sync::mpsc;
@@ -122,6 +122,13 @@ impl Actor {
                 }
             }
             PluginCommand::Check { id, values, reply } => self.check(&id, &values, reply),
+            PluginCommand::RunCommand {
+                id,
+                command,
+                context,
+                job_sources,
+                reply,
+            } => self.run_command(id, command, context, job_sources, reply),
             PluginCommand::Install {
                 file,
                 allow_downgrade,
@@ -385,7 +392,7 @@ impl Actor {
         for line in &report.log {
             log_line(id, line.level, &line.text);
         }
-        if matches!(report.kind, CallKind::Handle(_)) {
+        if matches!(report.kind, CallKind::Handle(_) | CallKind::Command) {
             let stats = &mut slot.info.stats;
             stats.calls += 1;
             stats.total += report.took;
@@ -404,6 +411,7 @@ impl Actor {
         let what = match report.kind {
             CallKind::Configure => "settings".to_owned(),
             CallKind::Handle(event) => event.to_owned(),
+            CallKind::Command => "command".to_owned(),
             CallKind::Check => "check".to_owned(),
         };
         let text = error_text(&error);
@@ -431,6 +439,56 @@ impl Actor {
         self.update_runners();
         self.events.publish(PluginEvent::Failed(failure));
         self.publish();
+    }
+
+    fn run_command(
+        &self,
+        id: String,
+        command: String,
+        context: Context,
+        job_sources: Arc<Vec<PathBuf>>,
+        reply: crate::actor::Reply<Result<super::CommandResult, String>>,
+    ) {
+        let runner = self.runners.lock().iter().find(|runner| runner.id == id).cloned();
+        let Some(runner) = runner else {
+            let _ = reply.send(Err(format!("the plugin {id} does not run")));
+            return;
+        };
+        let navigator = super::commands::CoreNavigator {
+            runtime: tokio::runtime::Handle::current(),
+            job_sources,
+            dolphin: crate::folder_walk::dolphin::props::DolphinPaths::of_user(),
+        };
+        let call = rustcut_plugin_host::commands::CommandCall {
+            command,
+            context,
+            navigator: Some(Arc::new(navigator)),
+        };
+        let me = self.me.clone();
+        let name = runner.name.clone();
+        runner.worker.run_command(
+            call,
+            Box::new(move |report| {
+                let error = report.result.as_ref().err().cloned();
+                let answer = report
+                    .result
+                    .map(|outcome| super::CommandResult {
+                        id: id.clone(),
+                        name,
+                        outcome,
+                    })
+                    .map_err(|err| error_text(&err));
+                let report = Report {
+                    id,
+                    kind: CallKind::Command,
+                    took: report.took,
+                    error,
+                    log: report.log,
+                };
+                let _ = me.send(PluginCommand::Reported(Box::new(report)));
+                let _ = reply.send(answer);
+            }),
+        );
     }
 
     fn check(&self, id: &str, values: &Map<String, Value>, reply: crate::actor::Reply<Option<Vec<super::Issue>>>) {

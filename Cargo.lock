@@ -1648,6 +1648,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dirs-next"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b98cf8ebf19c3d1b223e151f99a4f9f0690dca41414773390fc824184ac833e1"
+dependencies = [
+ "cfg-if",
+ "dirs-sys-next",
+]
+
+[[package]]
 name = "dirs-sys"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2927,6 +2937,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "icu_collator"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24cb0205c419b2036da3f9082964905d6849b3f2130dd4a517940c45899a544b"
+dependencies = [
+ "icu_collator_data",
+ "icu_collections",
+ "icu_locale_core",
+ "icu_locale_fallback",
+ "icu_normalizer",
+ "icu_properties",
+ "icu_provider",
+ "smallvec",
+ "utf16_iter",
+ "utf8_iter",
+ "zerovec",
+]
+
+[[package]]
+name = "icu_collator_data"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "183f47e821a327661c1ebe152f61d5b6c2000010d228cadbbf226e0e2b8c2634"
+
+[[package]]
 name = "icu_collections"
 version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3008,6 +3043,9 @@ dependencies = [
  "icu_properties",
  "icu_provider",
  "smallvec",
+ "utf16_iter",
+ "utf8_iter",
+ "write16",
  "zerovec",
 ]
 
@@ -3935,6 +3973,12 @@ dependencies = [
  "quote",
  "syn 2.0.119",
 ]
+
+[[package]]
+name = "mime"
+version = "0.3.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5848f5a9e8117cf94f2f90faac24a87ff81600ff8628c1e3deaab572e76bfa1"
 
 [[package]]
 name = "minijinja"
@@ -5733,7 +5777,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut"
-version = "0.0.112"
+version = "0.0.113"
 dependencies = [
  "arboard",
  "ashpd",
@@ -5774,17 +5818,20 @@ dependencies = [
 
 [[package]]
 name = "rustcut-core"
-version = "0.0.112"
+version = "0.0.113"
 dependencies = [
  "atomic-write-file",
  "az",
  "backon",
+ "base64 0.23.1",
  "blake3",
  "chrono",
  "criterion",
  "directories",
  "hex",
  "humansize",
+ "icu_collator",
+ "icu_locale_core",
  "image",
  "insta",
  "ioprio",
@@ -5800,6 +5847,7 @@ dependencies = [
  "quick_cache",
  "regex",
  "resvg 0.49.0",
+ "roxmltree",
  "rusqlite",
  "rusqlite_migration",
  "rustcut-plugin-host",
@@ -5809,6 +5857,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "sha1",
  "shlex 2.0.1",
  "tempfile",
  "thiserror 2.0.21",
@@ -5816,14 +5865,18 @@ dependencies = [
  "toml",
  "tracing",
  "trash",
+ "url",
  "usvg 0.49.0",
  "webp",
  "which",
+ "xattr",
+ "xdg-mime",
+ "zbus 6.2.1",
 ]
 
 [[package]]
 name = "rustcut-player"
-version = "0.0.112"
+version = "0.0.113"
 dependencies = [
  "glow",
  "hdrhistogram",
@@ -5848,7 +5901,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-plugin-host"
-version = "0.0.112"
+version = "0.0.113"
 dependencies = [
  "regex",
  "semver",
@@ -5866,7 +5919,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-thumbs"
-version = "0.0.112"
+version = "0.0.113"
 dependencies = [
  "ffmpeg-next",
  "ioprio",
@@ -5880,7 +5933,7 @@ dependencies = [
 
 [[package]]
 name = "rustcut-thumbs-protocol"
-version = "0.0.112"
+version = "0.0.113"
 dependencies = [
  "serde",
  "serde_json",
@@ -6115,6 +6168,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.9",
+]
+
+[[package]]
+name = "sha1"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aacc4cc499359472b4abe1bf11d0b12e688af9a805fa5e3016f9a386dc2d0214"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.3.1",
+ "digest 0.11.3",
 ]
 
 [[package]]
@@ -7197,6 +7261,15 @@ dependencies = [
  "svgtypes",
  "tiny-skia-path 0.12.0",
  "xmlwriter",
+]
+
+[[package]]
+name = "utf16_iter"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c7de35d9d8757dbc1f5125dc8b51438c68b4430546a735c3a9b91aaaaf9a18a"
+dependencies = [
+ "utf_types",
 ]
 
 [[package]]
@@ -8557,6 +8630,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "write16"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1890f4022759daae28ed4fe62859b1236caebfc61ede2f63ed4e695f3f6d936"
+
+[[package]]
 name = "writeable"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8626,6 +8705,19 @@ name = "xcursor"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "163b33ed8786455e2fa5d72f554057ce3f3182425434f756cd39c99839d88e23"
+
+[[package]]
+name = "xdg-mime"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58d325d0ca93fb1984a56eb926f019acfc67bd2ec559b0dbf09cafcc92e81ec9"
+dependencies = [
+ "dirs-next",
+ "glob",
+ "mime",
+ "nom 7.1.3",
+ "unicase",
+]
 
 [[package]]
 name = "xkbcommon"

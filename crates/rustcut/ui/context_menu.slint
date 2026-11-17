@@ -15,7 +15,8 @@ export struct MenuItemView {
     id: string,
     title: string,
     icon: IconId,
-    // 0 action, 1 separator, 2 submenu, 3 heading
+    // 0 action, 1 separator, 2 submenu, 3 heading, 4 hidden (an unused place of a fixed list, the File menu's plugin
+    // commands)
     kind: int,
     enabled: bool,
     hold: bool,
@@ -67,12 +68,13 @@ component MenuRow inherits Rectangle {
     callback activated();
     callback hovered();
 
-    property <bool> usable: root.item.enabled && root.item.kind != 1;
+    property <bool> usable: root.item.enabled && root.item.kind != 1 && root.item.kind != 4;
     property <color> text-color: !root.item.enabled ? Theme.status-deleted
         : logic.progress > 0 ? HoldConfirm.color.mix(Theme.text, logic.progress)
         : Theme.text;
 
-    height: root.item.kind == 1 ? 7px : root.item.kind == 3 ? 24px : 28px;
+    height: root.item.kind == 4 ? 0px : root.item.kind == 1 ? 7px : root.item.kind == 3 ? 24px : 28px;
+    visible: root.item.kind != 4;
     border-radius: 4px;
     clip: true;
     background: root.usable && (touch.has-hover || root.active) ? Theme.surface-hover : transparent;
@@ -130,7 +132,7 @@ component MenuRow inherits Rectangle {
     }
 
     content := HorizontalLayout {
-        visible: root.item.kind != 1 && root.item.kind != 3;
+        visible: root.item.kind != 1 && root.item.kind != 3 && root.item.kind != 4;
         padding-left: 8px;
         padding-right: 8px;
         spacing: 8px;

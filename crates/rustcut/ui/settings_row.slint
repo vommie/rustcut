@@ -4,18 +4,21 @@
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconRegistry, IconSize } from "icons.slint";
-import { TooltipArea } from "tooltip.slint";
+import { GlobalTooltip, TooltipArea } from "tooltip.slint";
 import { ChoiceButton, ControlMetrics, IconButton, NumberField, SegmentedChoice } from "controls.slint";
 import { ToggleSwitch } from "toggle_switch.slint";
 import { SettingRowView, SettingsUi } from "settings_types.slint";
 import { JumpFlash } from "jump.slint";
 import { ColorCodec } from "color_picker.slint";
 import { ColorSwatchButton } from "color_picker_window.slint";
+import { BubbleAnchor } from "bubble.slint";
 
 export component SettingsRow inherits Rectangle {
     in property <SettingRowView> option;
 
     property <length> indent: root.option.indent ? 22px : 0px;
+    // A key field (kind 9, a plugin command's key) waits for its key.
+    property <bool> recording: root.option.kind == 9 && SettingsUi.recording == root.option.key;
 
     background: root.option.kind == 0 && area.has-hover && root.option.enabled ? Theme.surface-hover : transparent;
     border-radius: 4px;
@@ -229,6 +232,92 @@ export component SettingsRow inherits Rectangle {
                         hold: root.option.hold;
                         enabled: root.option.enabled && root.option.status != 2;
                         clicked => { SettingsUi.action(root.option.key); }
+                    }
+
+                    // A key (kind 9, plugin API 1.2): the key as the menus write it, a button that records the next key
+                    // pressed, and one that removes it. A key that is taken is refused with a bubble at the field.
+                    if root.option.kind == 9: HorizontalLayout {
+                        spacing: 4px;
+
+                        Rectangle {
+                            width: ControlMetrics.field-max-width - 2 * 26px - 2 * 4px;
+                            height: 26px;
+                            border-radius: 4px;
+                            border-width: 1px;
+                            border-color: root.recording ? Theme.primary : root.option.status == 3 ? Theme.status-corrupt
+                                : Theme.border;
+                            background: Theme.background;
+
+                            Text {
+                                x: 8px;
+                                width: parent.width - 16px;
+                                height: parent.height;
+                                vertical-alignment: center;
+                                overflow: elide;
+                                text: root.recording ? "Press a key (Esc cancels)"
+                                    : root.option.text != "" ? root.option.text : root.option.placeholder;
+                                color: root.recording || root.option.text == "" ? Theme.text-muted : Theme.text;
+                            }
+
+                            recorder := FocusScope {
+                                width: 0px;
+                                height: 0px;
+                                // The page is published again when recording starts, which may make this row anew.
+                                init => {
+                                    if root.recording {
+                                        self.focus();
+                                    }
+                                }
+                                key-pressed(event) => {
+                                    if !root.recording {
+                                        return reject;
+                                    }
+                                    if event.text == Key.Escape {
+                                        SettingsUi.cancel-recording();
+                                        return accept;
+                                    }
+                                    if SettingsUi.recorded(event.text, event.modifiers.control, event.modifiers.alt,
+                                        event.modifiers.shift, event.modifiers.meta) {
+                                        return accept;
+                                    }
+                                    accept
+                                }
+                                changed has-focus => {
+                                    if !self.has-focus && root.recording {
+                                        SettingsUi.cancel-recording();
+                                    }
+                                }
+                            }
+
+                            BubbleAnchor {
+                                key: "settings:" + root.option.key;
+                                width: parent.width;
+                                height: parent.height;
+                            }
+                        }
+
+                        IconButton {
+                            icon: IconId.hotkey-add;
+                            tooltip: "Record a key";
+                            checked: root.recording;
+                            enabled: root.option.enabled;
+                            clicked => {
+                                // The row may be made anew while the pointer rests on it: no tooltip stays behind.
+                                GlobalTooltip.hide-cold();
+                                recorder.focus();
+                                SettingsUi.record(root.option.key);
+                            }
+                        }
+
+                        IconButton {
+                            icon: IconId.close;
+                            tooltip: "No key";
+                            enabled: root.option.enabled && root.option.text != "";
+                            clicked => {
+                                GlobalTooltip.hide-cold();
+                                SettingsUi.unbind(root.option.key, "");
+                            }
+                        }
                     }
 
                     // A color (P8): the swatch with its hex code opens the color picker over the Settings window.

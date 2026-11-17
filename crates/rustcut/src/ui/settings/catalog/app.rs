@@ -19,7 +19,8 @@ pub static GENERAL: &[Card] = &[
     Card {
         title: "Deleting and discarding",
         description: "RustCut never asks \"Are you sure?\": buttons and menu entries that delete or discard something \
-                      have to be held until the ring is full. Their keys act at once.",
+                      have to be held until the ring is full. Their keys act at once, except a plugin command's key \
+                      that would discard sections not saved as a job: it is held as long.",
         fields: &[Field {
             key: "general.hold_to_confirm_ms",
             label: "Hold for",

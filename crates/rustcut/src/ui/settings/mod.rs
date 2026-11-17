@@ -18,6 +18,7 @@ mod messages;
 pub mod page;
 mod page_list;
 pub mod pages;
+mod plugin_keys;
 mod plugins;
 mod profiles;
 mod ratios;
@@ -510,6 +511,8 @@ impl SettingsBridge {
         });
         if let Some(id) = sub {
             ui.set_resettable(true);
+            // A plugin's key field shows that it waits for a key (plugin API 1.2).
+            ui.set_recording(plugin_keys::recording().unwrap_or_default().into());
             self.publish_cards(&[]);
             self.publish_plugin_page(window, &id, &settings);
             return;

@@ -8,6 +8,7 @@
 //! editor is busy finds the state free (and is skipped if not: the editor publishes itself afterwards).
 
 mod actions;
+mod plugin_keys;
 mod section_bubbles;
 mod sections_drag;
 mod sections_input;
@@ -108,6 +109,8 @@ pub struct Editor {
     ticks: Rc<VecModel<TimelineTick>>,
     blocks: Rc<VecModel<TimelineBlock>>,
     rows: Rc<VecModel<SectionRowView>>,
+    /// Plugin command keys and whether the sections are saved (plugin API 1.2).
+    extras: plugin_keys::Extras,
 }
 
 impl Editor {
@@ -168,6 +171,7 @@ impl Editor {
             ticks: Rc::new(VecModel::default()),
             blocks: Rc::new(VecModel::default()),
             rows: Rc::new(VecModel::default()),
+            extras: plugin_keys::Extras::default(),
         });
         let tl = window.global::<Timeline<'_>>();
         tl.set_ticks(ModelRc::from(Rc::clone(&editor.ticks)));
@@ -200,6 +204,7 @@ impl Editor {
             st.drag = None;
             st.hovered = None;
         }
+        self.forget_saved_sections();
         self.publish();
     }
 
@@ -600,6 +605,7 @@ impl Editor {
                 })
                 .collect(),
         );
+        self.tell_unsaved_with(st);
     }
 }
 

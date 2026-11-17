@@ -105,6 +105,8 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     ui.on_reset_hotkey(move |id| with(&t, |b| b.reset_hotkey(&id)));
     let t = this.clone();
     ui.on_reset_hotkeys(move || with(&t, SettingsBridge::reset_hotkeys));
+    let t = this.clone();
+    ui.on_hotkey_plugin_page(move |id| with(&t, |b| b.hotkey_plugin_page(&id)));
 
     let t = this.clone();
     ui.on_messages_tab_selected(move |i| with(&t, |b| b.select_messages_tab(i)));

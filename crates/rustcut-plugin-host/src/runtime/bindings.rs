@@ -14,3 +14,15 @@ wasmtime::component::bindgen!({
     path: "../rustcut-plugin-api/wit",
     world: "plugin",
 });
+
+/// Since API 1.2: the world `plugin-with-commands`, sharing the types and host functions of `plugin`.
+pub mod with_commands {
+    wasmtime::component::bindgen!({
+        path: "../rustcut-plugin-api/wit",
+        world: "plugin-with-commands",
+        with: {
+            "rustcut:plugin/host": super::rustcut::plugin::host,
+            "rustcut:plugin/types": super::rustcut::plugin::types,
+        },
+    });
+}

@@ -34,6 +34,8 @@ pub(super) type Runners = Arc<parking_lot::Mutex<Arc<Vec<Runner>>>>;
 pub enum CallKind {
     Configure,
     Handle(&'static str),
+    /// A command (API 1.2); counts like an event.
+    Command,
     Check,
 }
 

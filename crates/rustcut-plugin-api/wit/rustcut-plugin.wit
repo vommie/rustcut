@@ -4,9 +4,10 @@
 // interfaces or types no export uses; a plugin built against 1.0 runs on every 1.x RustCut. The types the exports pass
 // (`event`, `context`, `action`, `issue` and every type inside them) are frozen within a major version: wasmtime checks
 // an export's types exactly, so a new case, field or export keeps every older plugin from loading. Those changes need
-// a new major version, and RustCut keeps loading the previous major for a while. docs/plugins.md in RustCut's
-// repository explains everything.
-package rustcut:plugin@1.1.0;
+// a new major version, and RustCut keeps loading the previous major for a while. An optional exported interface (like
+// `commands` of the world `plugin-with-commands`, since 1.2) is no change to the world `plugin`: RustCut looks for it
+// per plugin, and plugins without it load as before. docs/plugins.md in RustCut's repository explains everything.
+package rustcut:plugin@1.2.0;
 
 /// What RustCut offers a plugin to call.
 interface host {
@@ -136,6 +137,100 @@ interface types {
     }
 }
 
+/// Since 1.2. What RustCut offers a plugin while it runs one of its commands (`plugin.toml`, `[[commands]]`). Outside
+/// `run` the functions answer with an error or do nothing.
+interface command-host {
+    /// When a file manager's order counts.
+    enum file-manager-mode {
+        /// Never: names A to Z.
+        off,
+        /// Only while the folder is open in a tab of a Dolphin window.
+        open-tab,
+        /// While any Dolphin window exists (Dolphin's stored order for the folder).
+        running,
+        /// Always, read from Dolphin's stored view properties; Dolphin is never started.
+        always,
+    }
+
+    /// Which hidden files (a name starting with a dot) count.
+    enum hidden-files {
+        skip,
+        show,
+        /// Like Dolphin's "Show hidden files" for that folder.
+        like-file-manager,
+    }
+
+    /// What to list.
+    record folder-request {
+        file-manager: file-manager-mode,
+        hidden: hidden-files,
+        /// Only the formats RustCut opens; the open video always counts.
+        videos-only: bool,
+    }
+
+    /// One file of the folder.
+    record folder-file {
+        path: string,
+        name: string,
+        /// A job of RustCut's queue (any state) has this file as its source.
+        has-job: bool,
+    }
+
+    /// Where the order came from.
+    enum order-source {
+        /// The file manager's order.
+        file-manager,
+        /// Names A to Z: the file manager's order is switched off.
+        names-off,
+        /// Names A to Z: no Dolphin window exists.
+        names-not-running,
+        /// Names A to Z: no Dolphin tab shows the folder.
+        names-not-open,
+        /// Names A to Z: Dolphin sorts by something RustCut cannot rebuild (`role` names it).
+        names-unsupported,
+        /// Names A to Z: Dolphin could not be asked (`detail` says why).
+        names-failed,
+    }
+
+    /// The order that was used.
+    record folder-order {
+        source: order-source,
+        /// Dolphin's role id: `text`, `size`, `modificationtime`, `creationtime`, `accesstime`, `type`, or the
+        /// unsupported one.
+        role: string,
+        descending: bool,
+        detail: string,
+    }
+
+    /// The open video's folder.
+    record folder-listing {
+        files: list<folder-file>,
+        /// The open video's place in `files`.
+        current: option<u32>,
+        order: folder-order,
+    }
+
+    /// The files of the open video's folder, in the order asked for. Errors: no video is open, the folder cannot be
+    /// read, or the call is outside `run`.
+    list-folder: func(request: folder-request) -> result<folder-listing, string>;
+
+    /// Opens a video in RustCut after `run` returned (the last call wins). RustCut opens it like a dropped file.
+    open-video: func(path: string);
+
+    /// Shows a short bubble at the menu bar button that ran the command, or as a toast when there is no such button
+    /// (key, menu); after `run` returned, with the plugin's name in front.
+    bubble: func(text: string);
+}
+
+/// Since 1.2. The commands a plugin declares in `plugin.toml` (`[[commands]]`): RustCut runs them by their key, their
+/// File menu entry or their menu bar button.
+interface commands {
+    use types.{context, action};
+
+    /// Runs the command `command` (its `id` in `plugin.toml`); returns what RustCut should do, like `handle`.
+    run: func(command: string, context: context) -> result<list<action>, string>;
+}
+
 /// A RustCut plugin.
 world plugin {
     import host;
@@ -151,4 +246,12 @@ world plugin {
 
     /// Checks settings that the user is editing, without applying them (`settings` as in `configure`).
     export check: func(settings: string) -> list<issue>;
+}
+
+/// Since 1.2. A plugin with commands: everything of `plugin`, plus `commands` and the functions it may call while one
+/// runs.
+world plugin-with-commands {
+    include plugin;
+    import command-host;
+    export commands;
 }

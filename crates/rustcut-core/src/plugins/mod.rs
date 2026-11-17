@@ -7,6 +7,7 @@
 //! limit). What the plugins write goes into RustCut's log with the prefix `[Plugins] <id>:`.
 
 mod actor;
+mod commands;
 mod dispatch;
 mod scan;
 #[cfg(test)]
@@ -23,6 +24,10 @@ pub use rustcut_plugin_host::types::{Action, Context, Event, Issue, Level, Notic
 use serde_json::{Map, Value};
 
 use crate::actor::{EventBus, Handle, Reply, mailbox};
+
+pub use commands::CommandResult;
+pub use rustcut_plugin_host::commands::CommandOutcome;
+pub use rustcut_plugin_host::manifest::Command;
 
 /// Collects every answer of one dispatched event (tests and simple callers).
 pub async fn dispatch_all(
@@ -208,6 +213,16 @@ pub enum PluginCommand {
         folders: Arc<BTreeMap<u32, PathBuf>>,
         outcomes: tokio::sync::mpsc::UnboundedSender<Outcome>,
     },
+    /// Runs a command of a running plugin (API 1.2). `job_sources` are the sources of the queue's jobs (any state),
+    /// so the plugin learns which files of a folder already have one. Answers `Err` when the plugin does not run or
+    /// the call failed (the failure also counts like a failed event).
+    RunCommand {
+        id: String,
+        command: String,
+        context: Context,
+        job_sources: Arc<Vec<PathBuf>>,
+        reply: Reply<Result<CommandResult, String>>,
+    },
     /// Lets a plugin check settings being edited; `None` when it does not run.
     Check {
         id: String,
@@ -246,6 +261,7 @@ impl std::fmt::Debug for PluginCommand {
             Self::Apply(_) => "Apply",
             Self::Reload { .. } => "Reload",
             Self::Dispatch { .. } => "Dispatch",
+            Self::RunCommand { .. } => "RunCommand",
             Self::Check { .. } => "Check",
             Self::Install { .. } => "Install",
             Self::Remove { .. } => "Remove",

@@ -1,7 +1,7 @@
 id = "test-plugin"
 name = "Test Plugin"
 version = "0.1.0"
-api = "1.1"
+api = "1.2"
 description = "Misbehaves on request: fails, panics, runs too long or eats memory (RustCut's own tests)."
 authors = ["vommie"]
 license = "MIT"
@@ -27,3 +27,29 @@ options = [
     { value = "refuse", label = "Refuse" },
     { value = "quiet", label = "Quiet" },
 ]
+
+[[cards]]
+title = "Keys"
+description = "API 1.2: the test plugin's commands."
+
+[[cards.fields]]
+key = "next_key"
+label = "Next video"
+kind = "key"
+default = "Control+Alt+F12"
+
+[[cards.fields]]
+key = "next_button"
+label = "Button in the menu bar"
+kind = "switch"
+default = true
+
+[[commands]]
+id = "next"
+title = "Test: Next Video"
+description = "Opens the next video of the folder (names A to Z)."
+icon = "flask"
+key = "next_key"
+menu = true
+button = "next_button"
+discards_sections = true

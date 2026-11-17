@@ -108,6 +108,7 @@ enabled_if = { key = "other_field", equals = true }   # optional: dimmed and ign
 | `tag` | a RustView tag id, or `null` | |
 | `rating` | 0 to 5, or `null` | `default` |
 | `table` | an array of objects, one per row | `columns` (fields, no tables), `add_label`, `empty`, `reorder_drag`, `reorder_buttons` |
+| `key` (since 1.2) | a key like `"Control+PageDown"`, `""` = none | `default`; only for a command's key, never in a table |
 
 Tables are for rules. `reorder_drag = true` gives each row a grip for drag & drop, `reorder_buttons = true` move-up
 and move-down buttons; RustCut does all of it (the gap, the ghost, scrolling near the edges, Escape) and the plugin
@@ -154,6 +155,67 @@ Rules RustCut applies, so plugins need not:
   changes it until the next video. A user's own rating click removes the plugin mark.
 - An answer about an earlier video (the user opened another one meanwhile) is dropped.
 
+## Commands (since API 1.2)
+
+A plugin can have commands: things the user tells it to do, by a key, a File menu entry or a button in the menu bar
+(Next in Folder's "Next File" and "Previous File"). They are declared in `plugin.toml`, each with a `key` field that
+holds its key:
+
+```toml
+[[cards.fields]]
+key = "next_key"
+label = "Next file"
+kind = "key"
+default = "Control+PageDown"
+
+[[cards.fields]]
+key = "buttons"
+label = "Buttons in the menu bar"
+kind = "switch"
+default = true
+
+[[commands]]
+id = "next-file"                  # handed to `run`
+title = "Next File"               # the menu entry and the Hotkeys row
+description = "Open the next video of this folder"   # the button's tooltip
+icon = "player-track-next"        # a Tabler name RustCut knows (else the plugin symbol)
+key = "next_key"                  # its `key` field
+menu = true                       # an entry in the File menu while the plugin runs
+button = "buttons"                # a `switch` field: a menu bar button while it is on
+discards_sections = true          # it opens another video: with unsaved sections it must be held
+```
+
+RustCut records the key on the plugin's page and refuses one that RustCut's own actions or another plugin's command
+have (a bubble names the owner); Settings > Hotkeys lists every plugin command read-only under "Plugins", with the way
+to its page, and refuses a plugin's key there. A stopped plugin's keys are free; when a plugin starts with a key that
+became taken meanwhile, the command has no key and a banner says so. With `discards_sections`, the key, the button
+and the menu entry must be held for the hold time of Settings > General while the editor has sections that are not
+saved as a job.
+
+The plugin implements `Commands` as well and exports with `export_plugin_with_commands!` (the WIT world
+`plugin-with-commands`; plugins without commands stay in the world `plugin` and load as before):
+
+```rust
+impl Commands for NextInFolder {
+    fn run(command: String, context: Context) -> Result<Vec<Action>, String> {
+        let listing = rustcut_plugin_api::list_folder(FolderRequest { /* ... */ })?;
+        // ... pick a file ...
+        rustcut_plugin_api::open_video(&file.path);
+        rustcut_plugin_api::bubble(&file.name);
+        Ok(Vec::new())
+    }
+}
+export_plugin_with_commands!(NextInFolder);
+```
+
+While `run` runs, three host functions work:
+
+| Function | What it does |
+|---|---|
+| `list-folder(request)` | The files of the open video's folder in the asked order: `file-manager` (`off`, `open-tab`: only while a Dolphin tab shows the folder, `running`: while any Dolphin window exists, `always`: Dolphin's stored order, Dolphin is never started), `hidden` (`skip`, `show`, `like-file-manager`), `videos-only`. Each file says whether a queued job has it as its source; `order` says where the order came from (`file-manager`, or one of the `names-*` reasons for names A to Z, `names-unsupported` with Dolphin's `role` RustCut cannot rebuild). RustCut rebuilds Dolphin's order itself: its natural name order (numbers by value, the locale's letters, case as a tie-break), size, the three dates, type, hidden files last. |
+| `open-video(path)` | Opens the file after `run` returned, like a dropped file (the last call wins). |
+| `bubble(text)` | A short note at the command's menu bar button (a toast when it has none), with the plugin's name in front. |
+
 ## Limits and failures
 
 | Limit | Default | Where |
@@ -188,18 +250,20 @@ A plugin file (`<id>-<version>.rcplugin`) is a tar archive compressed with zstd,
 
 ## Versions
 
-The plugin API follows semantic versioning (the WIT package `rustcut:plugin@1.1.0`, the crate `rustcut-plugin-api`,
+The plugin API follows semantic versioning (the WIT package `rustcut:plugin@1.2.0`, the crate `rustcut-plugin-api`,
 tags `plugin-api-vX.Y.Z` in RustCut's repository). A minor version only adds host functions, imported interfaces or
 types that no export uses; RustCut runs every plugin of its major version whose `api` is not newer than its own. New
 events, actions, record fields, enum cases or exports change the types of `configure`, `handle` and `check`, which
 wasmtime checks exactly when it loads a plugin (a plugin built against 1.0 would no longer load), so they wait for the
-next major version. A plugin keeps its own version, changelog and release tags (`<id>-v<version>`) in
+next major version. An optional exported interface is the one exception (since 1.2, `commands` of the world
+`plugin-with-commands`): RustCut looks for it per plugin, and a plugin without it loads as before. A plugin keeps its own version, changelog and release tags (`<id>-v<version>`) in
 `rustcut-plugins`.
 
 | API | What it added |
 |---|---|
 | 1.0 | The events `video-opened`, `tag-assigned`, `tag-removed`; the actions `set-target`, `set-rating`, `notify`; the host's `log`. |
 | 1.1 | The host's `target-folder` and `hide-marks` (new functions only, so a plugin built against 1.0 links unchanged; RustCut's host tests load a 1.0 build). |
+| 1.2 | Commands: the world `plugin-with-commands` (the export `commands.run`, the imports `list-folder`, `open-video`, `bubble`), `[[commands]]` and the field kind `key` in `plugin.toml`. Plugins of 1.0 and 1.1 load unchanged (host tests load both builds). |
 
 ## Testing
 
