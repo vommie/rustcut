@@ -95,7 +95,9 @@ pub struct Listing {
 /// # Errors
 /// The video has no folder or the folder cannot be read.
 pub async fn list(request: &Request, paths: Option<&props::DolphinPaths>) -> Result<Listing, String> {
-    let folder = request.current.parent().ok_or("the video has no folder")?.to_path_buf();
+    // Lexically clean (`a/../b` = `b`): Dolphin compares folder URLs exactly.
+    let current_path = path_clean::clean(&request.current);
+    let folder = current_path.parent().ok_or("the video has no folder")?.to_path_buf();
     let stored = paths.map(|p| props::stored_view(&folder, p));
     let (sort, source, choice) = decide(request.file_manager, &folder, stored.as_ref()).await;
     let hidden_shown = match request.hidden {
@@ -103,7 +105,7 @@ pub async fn list(request: &Request, paths: Option<&props::DolphinPaths>) -> Res
         HiddenFiles::Show => true,
         HiddenFiles::LikeFileManager => stored.as_ref().is_some_and(|s| s.hidden_shown),
     };
-    let current = request.current.clone();
+    let current = current_path.clone();
     let videos_only = request.videos_only;
     let want_types = sort.role == SortRole::Type;
     let sort_spec = sort.clone();
@@ -115,7 +117,7 @@ pub async fn list(request: &Request, paths: Option<&props::DolphinPaths>) -> Res
     })
     .await
     .map_err(|e| e.to_string())??;
-    let current = files.iter().position(|f| f == &request.current);
+    let current = files.iter().position(|f| f == &current_path);
     Ok(Listing {
         files,
         current,
@@ -137,7 +139,7 @@ async fn decide(
             Some(stored) => stored.sort.clone(),
             None => return names(NamesBecause::Failed("Dolphin's folders are unknown".to_owned())),
         },
-        FileManagerMode::OpenTab | FileManagerMode::Running => match bus::ask(folder, true).await {
+        FileManagerMode::OpenTab | FileManagerMode::Running => match ask_dolphin(folder).await {
             Err(error) => {
                 tracing::info!("[NextInFolder] Dolphin could not be asked: {error}");
                 return names(NamesBecause::Failed(error));
@@ -163,6 +165,24 @@ async fn decide(
     }
     let choice = stored.map_or(SortingChoice::Natural, |s| s.choice);
     (from_dolphin, OrderSource::FileManager, choice)
+}
+
+/// Asks Dolphin about `folder`, and about its real path when Dolphin does not show it but the path holds a link.
+async fn ask_dolphin(folder: &Path) -> Result<bus::BusView, String> {
+    let view = bus::ask(folder, true).await?;
+    tracing::debug!(
+        "[NextInFolder] Dolphin: {} windows, open {}, sort {:?}",
+        view.windows,
+        view.open,
+        view.sort
+    );
+    if view.open || view.windows == 0 {
+        return Ok(view);
+    }
+    match tokio::fs::canonicalize(folder).await {
+        Ok(real) if real != folder => bus::ask(&real, true).await,
+        _ => Ok(view),
+    }
 }
 
 fn seconds(time: std::io::Result<SystemTime>) -> i64 {

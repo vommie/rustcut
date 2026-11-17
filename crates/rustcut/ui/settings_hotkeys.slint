@@ -123,7 +123,7 @@ export component SettingsHotkeys inherits SettingsCard {
     for row in SettingsUi.hotkeys: Rectangle {
         min-height: 30px;
         border-radius: 4px;
-        background: SettingsUi.recording == row.id ? Theme.primary.with-alpha(0.12)
+        background: SettingsUi.recording == row.id && !row.plugin ? Theme.primary.with-alpha(0.12)
             : hover.has-hover ? Theme.surface-hover : transparent;
 
         hover := TouchArea { }
@@ -164,7 +164,7 @@ export component SettingsHotkeys inherits SettingsCard {
                 }
             }
 
-            if SettingsUi.recording == row.id: VerticalLayout {
+            if SettingsUi.recording == row.id && !row.plugin: VerticalLayout {
                 alignment: center;
 
                 Text {

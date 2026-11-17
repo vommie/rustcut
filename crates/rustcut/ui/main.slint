@@ -612,8 +612,9 @@ export component MainWindow inherits Window {
     // The plugins' command buttons (Q-NF1): left of the bell, a line between them.
     plugin-bar := PluginCommandBar {
         separator: Notices.bell;
-        x: (Notices.bell ? bell.x - 4px : parent.width - 8px) - self.preferred-width;
+        x: (Notices.bell ? bell.x - 4px : parent.width - 8px) - self.width;
         y: (root.bar-height - 24px) / 2;
+        width: self.preferred-width;
         height: 24px;
     }
 

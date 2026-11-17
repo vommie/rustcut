@@ -69,6 +69,9 @@ pub struct Parts<'a> {
 struct Held {
     plugin: String,
     id: String,
+    /// The key and the sections, for the message after an early release.
+    key: String,
+    sections: usize,
     timer: slint::Timer,
 }
 
@@ -226,26 +229,25 @@ impl CommandsBridge {
                 }
             },
         );
-        let noun = if sections == 1 { "section is" } else { "sections are" };
         notices::post(
             Notice::new(
                 Kind::PluginMessage,
                 format!("Keep holding {} to go on", entry.key_label()),
             )
-            .detail(format!(
-                "{sections} {noun} not saved as a job; {} discards them.",
-                entry.title
-            ))
+            .detail(format!("{}; {} discards them.", unsaved_words(sections), entry.title))
             .live(HOLD_NOTICE),
         );
         tracing::info!(
-            "[Plugins] {}: {} waits for the held key ({sections} unsaved sections)",
+            "[Plugins] {}: {} waits for the held key ({})",
             entry.plugin,
-            entry.id
+            entry.id,
+            unsaved_words(sections)
         );
         self.held.replace(Some(Held {
             plugin: entry.plugin.clone(),
             id: entry.id.clone(),
+            key: entry.key_label(),
+            sections,
             timer,
         }));
     }
@@ -254,6 +256,14 @@ impl CommandsBridge {
         if let Some(held) = self.held.take() {
             held.timer.stop();
             notices::clear(HOLD_NOTICE);
+            notices::post(
+                Notice::new(Kind::PluginMessage, format!("Not opened: hold {} longer", held.key))
+                    .detail(format!(
+                        "{}; the hold time is in Settings > General.",
+                        unsaved_words(held.sections)
+                    ))
+                    .key(HOLD_NOTICE),
+            );
             tracing::info!(
                 "[Plugins] {}: {} canceled (the key was released early)",
                 held.plugin,
@@ -330,6 +340,12 @@ impl CommandsBridge {
             opener.open(path);
         }
     }
+}
+
+/// "1 section is not saved as a job", "3 sections are ...".
+fn unsaved_words(sections: usize) -> String {
+    let noun = if sections == 1 { "section is" } else { "sections are" };
+    format!("{sections} {noun} not saved as a job")
 }
 
 /// A command whose key became taken (its plugin was switched on, or a key changed) gets a banner with the way to its

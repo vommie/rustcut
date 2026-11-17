@@ -101,7 +101,12 @@ async fn introspect(connection: &Connection, name: &str) -> zbus::Result<String>
 /// The `Dolphin_<n>` child nodes of `/dolphin` in introspection XML.
 #[must_use]
 pub fn window_paths(xml: &str) -> Vec<String> {
-    let Ok(doc) = roxmltree::Document::parse(xml) else {
+    // D-Bus introspection starts with a DOCTYPE, which roxmltree refuses unless allowed.
+    let options = roxmltree::ParsingOptions {
+        allow_dtd: true,
+        ..roxmltree::ParsingOptions::default()
+    };
+    let Ok(doc) = roxmltree::Document::parse_with_options(xml, options) else {
         return Vec::new();
     };
     doc.root_element()
@@ -129,7 +134,9 @@ mod tests {
 
     #[test]
     fn finds_main_windows_only() {
-        let xml = r#"<node><interface name="org.freedesktop.DBus.Introspectable"/><node name="Dolphin_1"/><node name="Dolphin_12"/><node name="Dolphin_x"/><node name="FileUndoManager"/></node>"#;
+        let xml = r#"<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node><interface name="org.freedesktop.DBus.Introspectable"/><node name="Dolphin_1"/><node name="Dolphin_12"/><node name="Dolphin_x"/><node name="FileUndoManager"/></node>"#;
         assert_eq!(window_paths(xml), ["/dolphin/Dolphin_1", "/dolphin/Dolphin_12"]);
         assert!(window_paths("not xml").is_empty());
     }

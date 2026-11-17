@@ -122,3 +122,41 @@ async fn a_hidden_current_file_still_has_its_place() {
     assert_eq!(listing.current, Some(0));
     assert_eq!(listing.files.len(), 4);
 }
+
+#[tokio::test]
+async fn a_path_with_dots_is_cleaned() {
+    let (_root, current) = folder();
+    let dir = current.parent().expect("dir");
+    let dotted = dir.join("../videos/File D.mp4");
+    let listing = list(&request(&dotted, FileManagerMode::Off, HiddenFiles::Skip), None)
+        .await
+        .expect("list");
+    assert_eq!(listing.current, Some(2));
+    assert!(listing.files.iter().all(|f| !f.to_string_lossy().contains("..")));
+}
+
+/// Against a real Dolphin: `RC_DOLPHIN_VIDEO=/path/video.mp4 cargo test -p rustcut-core live_dolphin -- --ignored
+/// --nocapture` prints what Dolphin says and the order.
+#[tokio::test]
+#[ignore = "needs a running Dolphin that shows the folder of $RC_DOLPHIN_VIDEO"]
+async fn live_dolphin() {
+    let video = PathBuf::from(std::env::var("RC_DOLPHIN_VIDEO").expect("RC_DOLPHIN_VIDEO"));
+    let folder = video.parent().expect("folder").to_path_buf();
+    println!("bus: {:?}", bus::ask(&folder, true).await);
+    let paths = props::DolphinPaths::of_user();
+    for mode in [
+        FileManagerMode::OpenTab,
+        FileManagerMode::Running,
+        FileManagerMode::Always,
+    ] {
+        let listing = list(&request(&video, mode, HiddenFiles::LikeFileManager), paths.as_ref())
+            .await
+            .expect("list");
+        println!(
+            "{mode:?}: {:?} {:?} {:?}",
+            listing.source,
+            listing.sort,
+            names(&listing)
+        );
+    }
+}

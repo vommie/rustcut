@@ -4,7 +4,7 @@
 
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconRegistry, IconSize } from "icons.slint";
-import { TooltipArea } from "tooltip.slint";
+import { GlobalTooltip, TooltipArea } from "tooltip.slint";
 import { ChoiceButton, ControlMetrics, IconButton, NumberField, SegmentedChoice } from "controls.slint";
 import { ToggleSwitch } from "toggle_switch.slint";
 import { SettingRowView, SettingsUi } from "settings_types.slint";
@@ -262,6 +262,12 @@ export component SettingsRow inherits Rectangle {
                             recorder := FocusScope {
                                 width: 0px;
                                 height: 0px;
+                                // The page is published again when recording starts, which may make this row anew.
+                                init => {
+                                    if root.recording {
+                                        self.focus();
+                                    }
+                                }
                                 key-pressed(event) => {
                                     if !root.recording {
                                         return reject;
@@ -296,8 +302,10 @@ export component SettingsRow inherits Rectangle {
                             checked: root.recording;
                             enabled: root.option.enabled;
                             clicked => {
-                                SettingsUi.record(root.option.key);
+                                // The row may be made anew while the pointer rests on it: no tooltip stays behind.
+                                GlobalTooltip.hide-cold();
                                 recorder.focus();
+                                SettingsUi.record(root.option.key);
                             }
                         }
 
@@ -305,7 +313,10 @@ export component SettingsRow inherits Rectangle {
                             icon: IconId.close;
                             tooltip: "No key";
                             enabled: root.option.enabled && root.option.text != "";
-                            clicked => { SettingsUi.unbind(root.option.key, ""); }
+                            clicked => {
+                                GlobalTooltip.hide-cold();
+                                SettingsUi.unbind(root.option.key, "");
+                            }
                         }
                     }
 
