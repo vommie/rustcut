@@ -241,6 +241,7 @@ THIS SOFTWARE.
 - Copyright (c) 2014 Chris Morgan and the Teepee project developers
 - Copyright (c) 2014 Chris Wong
 - Copyright (c) 2014 Paho Lurie-Gregg
+- Copyright (c) 2014 Sean McArthur
 - Copyright (c) 2014 The rusqlite developers
 - Copyright (c) 2014 The Rust Project Developers
 - Copyright (c) 2014-2019 Geoffroy Couprie
