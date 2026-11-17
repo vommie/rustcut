@@ -6,9 +6,18 @@ use wasmtime::{ResourceLimiter, Store, StoreLimits, StoreLimitsBuilder, Trap};
 use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
 use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxView, WasiView};
 
-use super::bindings::{self, rustcut::plugin::host};
-use super::{Loaded, TICK, convert};
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use super::bindings::with_commands::rustcut::plugin::command_host;
+use super::bindings::{self, rustcut::plugin::host, with_commands};
+use super::{Loaded, TICK, convert, convert_commands};
+use crate::commands::{CommandCall, CommandOutcome, Navigator};
 use crate::types::{Action, Context, Event, Issue, Level, LogLine};
+
+/// The most bubbles one command call keeps, and their longest text in characters.
+const MAX_BUBBLES: usize = 4;
+const MAX_BUBBLE: usize = 300;
 
 /// The most a plugin may write on stdout and stderr together before its instance is made again.
 const OUTPUT_CAPACITY: usize = 1 << 20;
@@ -67,11 +76,17 @@ pub(super) struct State {
     call: Call,
 }
 
-/// What the host's functions know during one call of `handle` (API 1.1); empty outside it.
-#[derive(Debug, Default)]
+/// What the host's functions know during one call of `handle` (API 1.1) or `run` (API 1.2); empty outside them.
+#[derive(Default)]
 struct Call {
     target_folder: Option<u32>,
     hide_marks: bool,
+    /// Inside `run` of a command.
+    command: bool,
+    video: Option<PathBuf>,
+    navigator: Option<Arc<dyn Navigator>>,
+    open: Option<PathBuf>,
+    bubbles: Vec<String>,
 }
 
 impl WasiView for State {
@@ -97,6 +112,38 @@ impl host::Host for State {
     fn hide_marks(&mut self) {
         self.call.hide_marks = true;
     }
+}
+
+impl command_host::Host for State {
+    fn list_folder(&mut self, request: command_host::FolderRequest) -> Result<command_host::FolderListing, String> {
+        if !self.call.command {
+            return Err("list-folder works only while a command runs".to_owned());
+        }
+        let (Some(navigator), Some(video)) = (&self.call.navigator, &self.call.video) else {
+            return Err("no video is open".to_owned());
+        };
+        navigator
+            .list_folder(video, convert_commands::request_from_wit(request))
+            .map(convert_commands::listing_to_wit)
+    }
+
+    fn open_video(&mut self, path: String) {
+        if self.call.command {
+            self.call.open = Some(PathBuf::from(path));
+        }
+    }
+
+    fn bubble(&mut self, text: String) {
+        if self.call.command && self.call.bubbles.len() < MAX_BUBBLES {
+            self.call.bubbles.push(text.chars().take(MAX_BUBBLE).collect());
+        }
+    }
+}
+
+/// The plugin's exports, in the world it was built for.
+enum Bound {
+    Plain(bindings::Plugin),
+    Commands(with_commands::PluginWithCommands),
 }
 
 fn push_line(log: &mut Vec<LogLine>, level: Level, text: &str) {
@@ -129,7 +176,7 @@ impl ResourceLimiter for Limiter {
 /// A running plugin. Not thread-safe by itself: a [`super::Worker`] owns one on its own thread.
 pub struct Instance {
     store: Store<State>,
-    plugin: bindings::Plugin,
+    plugin: Bound,
     output: MemoryOutputPipe,
     output_seen: usize,
     limits: Limits,
@@ -162,11 +209,11 @@ impl Instance {
         let mut store = Store::new(&loaded.inner.engine, state);
         store.limiter(|state| &mut state.limiter);
         store.set_epoch_deadline(deadline_ticks(limits.time));
-        let plugin = loaded
-            .inner
-            .pre
-            .instantiate(&mut store)
-            .map_err(|err| CallError::Start(format!("{err:#}")))?;
+        let plugin = match &loaded.inner.commands_pre {
+            Some(pre) => pre.instantiate(&mut store).map(Bound::Commands),
+            None => loaded.inner.pre.instantiate(&mut store).map(Bound::Plain),
+        }
+        .map_err(|err| CallError::Start(format!("{err:#}")))?;
         Ok(Self {
             store,
             plugin,
@@ -187,8 +234,11 @@ impl Instance {
     /// The plugin refused the settings, crashed or ran out of time or memory.
     pub fn configure(&mut self, settings: &serde_json::Value) -> Result<(), CallError> {
         let text = settings.to_string();
-        self.call(|plugin, store| plugin.call_configure(store, &text))?
-            .map_err(CallError::Failed)
+        self.call(|plugin, store| match plugin {
+            Bound::Plain(p) => p.call_configure(store, &text),
+            Bound::Commands(p) => p.call_configure(store, &text),
+        })?
+        .map_err(CallError::Failed)
     }
 
     /// Hands the plugin an event and returns its actions.
@@ -201,9 +251,12 @@ impl Instance {
         let context = convert::context_to_wit(context);
         self.store.data_mut().call = Call {
             target_folder,
-            hide_marks: false,
+            ..Call::default()
         };
-        let answer = self.call(|plugin, store| plugin.call_handle(store, &event, &context));
+        let answer = self.call(|plugin, store| match plugin {
+            Bound::Plain(p) => p.call_handle(store, &event, &context),
+            Bound::Commands(p) => p.call_handle(store, &event, &context),
+        });
         let call = std::mem::take(&mut self.store.data_mut().call);
         let actions = answer?.map_err(CallError::Failed)?;
         let mark = !call.hide_marks;
@@ -219,8 +272,42 @@ impl Instance {
     /// See [`Instance::configure`].
     pub fn check(&mut self, settings: &serde_json::Value) -> Result<Vec<Issue>, CallError> {
         let text = settings.to_string();
-        let issues = self.call(|plugin, store| plugin.call_check(store, &text))?;
+        let issues = self.call(|plugin, store| match plugin {
+            Bound::Plain(p) => p.call_check(store, &text),
+            Bound::Commands(p) => p.call_check(store, &text),
+        })?;
         Ok(issues.into_iter().map(convert::issue_from_wit).collect())
+    }
+
+    /// Runs one of the plugin's commands (API 1.2).
+    ///
+    /// # Errors
+    /// The plugin has no commands, refused, crashed or ran out of time or memory.
+    pub fn run_command(&mut self, call: &CommandCall) -> Result<CommandOutcome, CallError> {
+        if matches!(self.plugin, Bound::Plain(_)) {
+            return Err(CallError::Failed("the plugin has no commands".to_owned()));
+        }
+        let context = convert::context_to_wit(&call.context);
+        self.store.data_mut().call = Call {
+            target_folder: call.context.target_folder,
+            command: true,
+            video: call.context.video.clone(),
+            navigator: call.navigator.clone(),
+            ..Call::default()
+        };
+        let command = call.command.clone();
+        let answer = self.call(|plugin, store| match plugin {
+            Bound::Commands(p) => p.rustcut_plugin_commands().call_run(store, &command, &context),
+            Bound::Plain(_) => Ok(Err("the plugin has no commands".to_owned())),
+        });
+        let state = std::mem::take(&mut self.store.data_mut().call);
+        let actions = answer?.map_err(CallError::Failed)?;
+        let mark = !state.hide_marks;
+        Ok(CommandOutcome {
+            actions: actions.into_iter().map(|a| convert::action_from_wit(a, mark)).collect(),
+            open: state.open,
+            bubbles: state.bubbles,
+        })
     }
 
     /// The lines the plugin wrote since the last call of this method.
@@ -234,10 +321,7 @@ impl Instance {
         self.output_seen > OUTPUT_CAPACITY / 2
     }
 
-    fn call<T>(
-        &mut self,
-        run: impl FnOnce(&bindings::Plugin, &mut Store<State>) -> wasmtime::Result<T>,
-    ) -> Result<T, CallError> {
+    fn call<T>(&mut self, run: impl FnOnce(&Bound, &mut Store<State>) -> wasmtime::Result<T>) -> Result<T, CallError> {
         self.store.data_mut().limiter.memory_refused = false;
         self.store.set_epoch_deadline(deadline_ticks(self.limits.time));
         let result = run(&self.plugin, &mut self.store);

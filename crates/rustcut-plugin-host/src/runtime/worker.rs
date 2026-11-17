@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 
 use super::{CallError, Instance, Limits, Loaded};
+use crate::commands::{CommandCall, CommandOutcome};
 use crate::types::{Action, Context, Event, Issue, LogLine};
 
 /// The answer to one call: the result, what the plugin wrote meanwhile and how long it took.
@@ -34,6 +35,10 @@ enum Job {
     Check {
         settings: Value,
         reply: Reply<Vec<Issue>>,
+    },
+    Command {
+        call: CommandCall,
+        reply: Reply<CommandOutcome>,
     },
     Limits(Limits),
 }
@@ -68,6 +73,11 @@ impl Worker {
 
     pub fn check(&self, settings: Value, reply: Reply<Vec<Issue>>) {
         self.send(Job::Check { settings, reply });
+    }
+
+    /// Runs one of the plugin's commands (API 1.2).
+    pub fn run_command(&self, call: CommandCall, reply: Reply<CommandOutcome>) {
+        self.send(Job::Command { call, reply });
     }
 
     /// New limits; they apply from the next instance (made at once).
@@ -107,6 +117,7 @@ fn run(loaded: &Loaded, limits: Limits, inbox: &mpsc::Receiver<Job>) {
                 reply(slot.call(true, |instance| instance.handle(&event, &context)));
             }
             Job::Check { settings, reply } => reply(slot.call(true, |instance| instance.check(&settings))),
+            Job::Command { call, reply } => reply(slot.call(true, |instance| instance.run_command(&call))),
             Job::Limits(limits) => {
                 slot.limits = limits;
                 slot.instance = None;

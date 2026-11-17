@@ -6,6 +6,7 @@
 
 mod bindings;
 mod convert;
+mod convert_commands;
 mod instance;
 mod worker;
 
@@ -100,14 +101,16 @@ impl Runtime {
         // A plugin built against an older minor API version imports older interface versions; semver matching
         // links them to this host's.
         wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(|err| LoadError::Component(format!("{err:#}")))?;
-        bindings::Plugin::add_to_linker::<instance::State, wasmtime::component::HasSelf<instance::State>>(
-            &mut linker,
-            |state| state,
-        )
+        bindings::with_commands::PluginWithCommands::add_to_linker::<
+            instance::State,
+            wasmtime::component::HasSelf<instance::State>,
+        >(&mut linker, |state| state)
         .map_err(|err| LoadError::Component(format!("{err:#}")))?;
         let pre = linker
             .instantiate_pre(&component)
             .map_err(|err| LoadError::Component(format!("{err:#}")))?;
+        // A plugin of the world `plugin-with-commands` (API 1.2) exports `commands`; others load as `plugin`.
+        let commands_pre = bindings::with_commands::PluginWithCommandsPre::new(pre.clone()).ok();
         let pre = bindings::PluginPre::new(pre).map_err(|err| LoadError::Component(format!("{err:#}")))?;
         Ok(Loaded {
             inner: Arc::new(LoadedInner {
@@ -115,6 +118,7 @@ impl Runtime {
                 dir: dir.to_path_buf(),
                 engine: self.engine.clone(),
                 pre,
+                commands_pre,
             }),
         })
     }
@@ -142,12 +146,19 @@ struct LoadedInner {
     dir: PathBuf,
     engine: Engine,
     pre: bindings::PluginPre<instance::State>,
+    commands_pre: Option<bindings::with_commands::PluginWithCommandsPre<instance::State>>,
 }
 
 impl Loaded {
     #[must_use]
     pub fn manifest(&self) -> &Manifest {
         &self.inner.manifest
+    }
+
+    /// Whether the plugin exports `commands` (API 1.2).
+    #[must_use]
+    pub fn has_commands(&self) -> bool {
+        self.inner.commands_pre.is_some()
     }
 
     #[must_use]

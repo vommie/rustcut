@@ -1,5 +1,6 @@
 //! `plugin.toml`: who a plugin is, what it needs and which settings it has.
 
+mod commands;
 mod schema;
 #[cfg(test)]
 mod tests;
@@ -8,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+pub use commands::Command;
 pub use schema::{Card, ChoiceOption, Condition, Field, FieldKind, PathSelect};
 
 /// The limits of settings values.
@@ -16,7 +18,7 @@ pub mod schema_limits {
 }
 
 /// The plugin API version this RustCut implements (the WIT package version of `rustcut-plugin-api`).
-pub const API_VERSION: semver::Version = semver::Version::new(1, 1, 0);
+pub const API_VERSION: semver::Version = semver::Version::new(1, 2, 0);
 
 /// The manifest's file name inside a plugin folder and a plugin file.
 pub const MANIFEST_FILE: &str = "plugin.toml";
@@ -53,6 +55,9 @@ pub struct Manifest {
     /// The plugin's settings as cards on its Settings page.
     #[serde(default)]
     pub cards: Vec<Card>,
+    /// Since API 1.2: commands RustCut runs by a key, a File menu entry or a menu bar button.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub commands: Vec<Command>,
 }
 
 fn default_wasm() -> PathBuf {
@@ -145,7 +150,14 @@ impl Manifest {
                 self.icon
             ));
         }
-        schema::validate(&self.cards).map_err(ManifestError::Invalid)
+        schema::validate(&self.cards).map_err(ManifestError::Invalid)?;
+        commands::validate(self).map_err(ManifestError::Invalid)
+    }
+
+    /// The field of a top-level card with this key.
+    #[must_use]
+    pub fn field(&self, key: &str) -> Option<&Field> {
+        self.fields().find(|field| field.key == key)
     }
 
     /// Every field of every card.

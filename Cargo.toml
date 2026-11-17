@@ -119,6 +119,19 @@ humansize = "2"
 opener = { version = "0.9", features = ["reveal"] }
 # The clipboard (Copy in the Logs panel): X11 and Wayland's data-control protocol; Slint's winit backend uses it too.
 arboard = { version = "3.7", default-features = false, features = ["wayland-data-control"] }
+# Dolphin's name order for "Next in Folder": the locale's collation (ICU4X, compiled data) and its locale parser.
+icu_collator = "2.4"
+icu_locale_core = "2.4"
+# Dolphin's per-folder view properties live in an extended attribute of the folder.
+xattr = "1.7"
+# Dolphin names its view-properties store for folders outside home by the SHA-1 of the folder's URL.
+sha1 = "0.11"
+# ... base64 with "/" turned into "-", of the folder's file URL.
+base64 = "0.23"
+url = "2.5"
+# The type descriptions Dolphin sorts by "Type" come from the shared MIME database (globs, then the type's XML).
+xdg-mime = "0.4"
+roxmltree = "0.21"
 # D-Bus for logind (sleep inhibitor, suspend, power off) and the taskbar progress (Unity LauncherEntry); the version
 # rfd's portal already uses.
 zbus = { version = "6", default-features = false, features = ["default-rt", "proxy", "tokio"] }

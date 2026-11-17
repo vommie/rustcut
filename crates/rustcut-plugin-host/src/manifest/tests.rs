@@ -30,7 +30,8 @@ fn api_versions_decide_compatibility() {
     let with = |api: &str| Manifest::parse(&MINIMAL.replace("api = \"1.0\"", &format!("api = \"{api}\""))).unwrap();
     assert!(with("1.0.0").api_compatible());
     assert!(with("1.1").api_compatible());
-    assert!(!with("1.2").api_compatible());
+    assert!(with("1.2").api_compatible());
+    assert!(!with("1.3").api_compatible());
     assert!(!with("2.0").api_compatible());
     assert!(!with("0.9").api_compatible());
     assert!(Manifest::parse(&MINIMAL.replace("api = \"1.0\"", "api = \"one\"")).is_err());
@@ -70,4 +71,41 @@ fn the_manifest_survives_a_round_trip() {
     ))
     .unwrap();
     assert_eq!(Manifest::parse(&manifest.to_toml().unwrap()).unwrap(), manifest);
+}
+
+const WITH_KEYS: &str = "\n[[cards]]\ntitle = \"Keys\"\n[[cards.fields]]\nkey = \"next_key\"\nlabel = \"Next\"\nkind = \"key\"\n\
+    default = \"Control+PageDown\"\n[[cards.fields]]\nkey = \"buttons\"\nlabel = \"Buttons\"\nkind = \"switch\"\n";
+
+#[test]
+fn commands_name_their_key_and_button_fields() {
+    let good = format!(
+        "{MINIMAL}{WITH_KEYS}\n[[commands]]\nid = \"next-file\"\ntitle = \"Next File\"\nicon = \"player-track-next\"\n\
+         key = \"next_key\"\nmenu = true\nbutton = \"buttons\"\ndiscards_sections = true\n"
+    );
+    let manifest = Manifest::parse(&good).unwrap();
+    let command = &manifest.commands[0];
+    assert!(command.menu && command.discards_sections);
+    assert_eq!(command.button, "buttons");
+    assert!(Manifest::parse(&manifest.to_toml().unwrap()).is_ok());
+
+    for (from, to) in [
+        ("key = \"next_key\"\nmenu", "key = \"buttons\"\nmenu"),
+        ("button = \"buttons\"", "button = \"next_key\""),
+        ("id = \"next-file\"", "id = \"Next\""),
+        ("title = \"Next File\"", "title = \"\""),
+        ("icon = \"player-track-next\"", "icon = \"icon.svg\""),
+    ] {
+        assert!(Manifest::parse(&good.replace(from, to)).is_err(), "{to}");
+    }
+    let twice = format!("{good}\n[[commands]]\nid = \"next-file\"\ntitle = \"Again\"\nkey = \"next_key\"\n");
+    assert!(Manifest::parse(&twice).is_err());
+}
+
+#[test]
+fn key_fields_stay_out_of_tables() {
+    let table = format!(
+        "{MINIMAL}\n[[cards]]\ntitle = \"T\"\n[[cards.fields]]\nkey = \"rows\"\nlabel = \"Rows\"\nkind = \"table\"\n\
+         [[cards.fields.columns]]\nkey = \"k\"\nlabel = \"K\"\nkind = \"key\"\n"
+    );
+    assert!(Manifest::parse(&table).is_err());
 }

@@ -1,10 +1,12 @@
 //! RustCut's test plugin. Its `mode` setting decides what `handle` does:
 //! `ok` (a notice and, with a video, a target), `fail` (an error), `panic`, `slow` (an endless loop),
 //! `memory` (allocates until it is stopped), `quiet` (API 1.1: hides its marks, sets 3 stars and tells the target
-//! folder id it reads from the host).
+//! folder id it reads from the host). API 1.2: the command `next` lists the video's folder by name and opens the next
+//! video with a bubble; `slow` never ends.
 
 use rustcut_plugin_api::{
-    Action, Context, Event, Issue, Level, Notice, Place, Plugin, SetRating, SetTarget, Target, export_plugin,
+    Action, Commands, Context, Event, FileManagerMode, FolderRequest, HiddenFiles, Issue, Level, Notice, Place, Plugin,
+    SetRating, SetTarget, Target, export_plugin_with_commands,
 };
 use std::sync::Mutex;
 
@@ -84,4 +86,32 @@ impl Plugin for TestPlugin {
     }
 }
 
-export_plugin!(TestPlugin);
+impl Commands for TestPlugin {
+    fn run(command: String, _context: Context) -> Result<Vec<Action>, String> {
+        match command.as_str() {
+            "next" => {
+                let request =
+                    FolderRequest { file_manager: FileManagerMode::Off, hidden: HiddenFiles::Skip, videos_only: true };
+                let listing = rustcut_plugin_api::list_folder(request)?;
+                let next = listing.current.and_then(|i| listing.files.get(i as usize + 1));
+                match next {
+                    Some(file) => {
+                        rustcut_plugin_api::open_video(&file.path);
+                        rustcut_plugin_api::bubble(&format!("{} of {}", file.name, listing.files.len()));
+                        Ok(Vec::new())
+                    }
+                    None => Ok(vec![Action::Notify(Notice::new(Place::Toast, Level::Info, "Last video", ""))]),
+                }
+            }
+            "slow" => {
+                let mut n: u64 = 0;
+                loop {
+                    n = std::hint::black_box(n.wrapping_add(1));
+                }
+            }
+            other => Err(format!("unknown command {other}")),
+        }
+    }
+}
+
+export_plugin_with_commands!(TestPlugin);

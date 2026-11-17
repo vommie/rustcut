@@ -4,10 +4,12 @@
 //! - [`values`]: setting values, their defaults and sanitizing, TOML <-> JSON.
 //! - [`package`]: plugin files (`.rcplugin`, tar.zst): read, stage, commit, pack.
 //! - [`runtime`]: the sandbox (engine, compile cache, instances with time and memory limits, a thread per plugin).
+//! - [`commands`]: plugin commands (API 1.2): the call, the folder listing RustCut provides, the outcome.
 //! - [`types`]: the values exchanged with a plugin, on RustCut's side.
 //!
 //! Nothing here touches RustCut's settings or UI; `rustcut-core::plugins` runs the plugins as a service.
 
+pub mod commands;
 pub mod manifest;
 pub mod package;
 pub mod runtime;

@@ -65,6 +65,12 @@ pub enum FieldKind {
         options: Vec<ChoiceOption>,
         default: String,
     },
+    /// Since API 1.2: a key of one of the plugin's commands (JSON string like `"Control+PageDown"`, empty = none).
+    /// RustCut records it on the plugin's page and checks it against its own keys and other plugins' keys.
+    Key {
+        #[serde(default)]
+        default: String,
+    },
     /// A line of text (JSON string).
     Text {
         #[serde(default)]
@@ -227,6 +233,11 @@ fn validate_kind(field: &Field, in_table: bool) -> Result<(), String> {
             }
             let columns: Vec<&Field> = columns.iter().collect();
             validate_level(&columns, true)?;
+        }
+        FieldKind::Key { .. } => {
+            if in_table {
+                return Err(format!("key \"{key}\" cannot be inside a table"));
+            }
         }
         FieldKind::Switch { .. }
         | FieldKind::Text { .. }

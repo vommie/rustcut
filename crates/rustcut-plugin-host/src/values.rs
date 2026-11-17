@@ -61,7 +61,7 @@ pub fn sanitize(field: &Field, value: Option<&Value>) -> Value {
                 .filter(|v| options.iter().any(|o| o.value == *v));
             Value::String(text.unwrap_or(default).to_owned())
         }
-        FieldKind::Text { default, .. } | FieldKind::Path { default, .. } => {
+        FieldKind::Text { default, .. } | FieldKind::Path { default, .. } | FieldKind::Key { default } => {
             let text = value.and_then(Value::as_str).unwrap_or(default);
             Value::String(text.chars().take(schema_limits::MAX_TEXT).collect())
         }

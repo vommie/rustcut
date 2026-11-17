@@ -10,9 +10,12 @@
 )]
 
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
+use rustcut_plugin_host::commands::{
+    CommandCall, FileManagerMode, FolderFile, FolderListing, FolderOrder, FolderRequest, Navigator, OrderSource,
+};
 use rustcut_plugin_host::manifest::Manifest;
 use rustcut_plugin_host::package::{Package, pack};
 use rustcut_plugin_host::runtime::{CallError, Instance, Limits, Loaded, Runtime, Worker};
@@ -246,4 +249,133 @@ fn a_plugin_built_against_api_1_0_still_loads_and_answers() {
         matches!(&actions[1], Action::SetTarget { target: Target::Path(p), mark: true, .. } if p == Path::new("/videos/holiday")),
         "{actions:?}"
     );
+}
+
+#[test]
+fn a_plugin_built_against_api_1_1_still_loads_and_answers() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/api-1.1.0");
+    let manifest = Manifest::read(&dir).unwrap();
+    assert_eq!(manifest.api, "1.1");
+    let loaded = runtime().load(&dir, manifest).unwrap();
+    assert!(!loaded.has_commands());
+    let mut plugin = Instance::new(&loaded, Limits::default()).unwrap();
+    plugin.configure(&json!({ "mode": "quiet" })).unwrap();
+    let (event, mut context) = opened();
+    context.target_folder = Some(4);
+    let actions = plugin.handle(&event, &context).unwrap();
+    assert!(
+        matches!(
+            &actions[0],
+            Action::SetRating {
+                stars: 3,
+                mark: false,
+                ..
+            }
+        ),
+        "{actions:?}"
+    );
+    let call = CommandCall {
+        command: "next".into(),
+        context,
+        navigator: None,
+    };
+    assert!(matches!(plugin.run_command(&call), Err(CallError::Failed(_))));
+}
+
+/// Lists a fixed folder: `b.mp4` (the open video), `a.mp4`, `c.mp4` by name.
+struct FixedFolder;
+
+impl Navigator for FixedFolder {
+    fn list_folder(&self, video: &Path, request: FolderRequest) -> Result<FolderListing, String> {
+        assert_eq!(request.file_manager, FileManagerMode::Off);
+        assert!(request.videos_only);
+        let dir = video.parent().ok_or("no folder")?;
+        let files = ["a.mp4", "b.mp4", "c.mp4"]
+            .iter()
+            .map(|name| FolderFile {
+                path: dir.join(name),
+                name: (*name).to_owned(),
+                has_job: false,
+            })
+            .collect();
+        let order = FolderOrder {
+            source: OrderSource::NamesOff,
+            role: "text".into(),
+            descending: false,
+            detail: String::new(),
+        };
+        Ok(FolderListing {
+            files,
+            current: Some(1),
+            order,
+        })
+    }
+}
+
+#[test]
+fn api_1_2_commands_list_the_folder_open_a_video_and_bubble() {
+    let loaded = loaded();
+    assert!(loaded.has_commands());
+    assert_eq!(loaded.manifest().commands[0].id, "next");
+    let mut plugin = instance("ok", Limits::default());
+    let context = Context {
+        video: Some("/videos/b.mp4".into()),
+        ..Context::default()
+    };
+    let call = CommandCall {
+        command: "next".into(),
+        context: context.clone(),
+        navigator: Some(Arc::new(FixedFolder)),
+    };
+    let outcome = plugin.run_command(&call).unwrap();
+    assert_eq!(outcome.open.as_deref(), Some(Path::new("/videos/c.mp4")));
+    assert_eq!(outcome.bubbles, ["c.mp4 of 3"]);
+    assert!(outcome.actions.is_empty());
+
+    // Without a navigator list-folder is an error the plugin returns.
+    let call = CommandCall {
+        command: "next".into(),
+        context: context.clone(),
+        navigator: None,
+    };
+    assert!(
+        matches!(plugin.run_command(&call), Err(CallError::Failed(text)) if text.contains("no video")
+        || text.contains("list"))
+    );
+    // An event never opens anything: open-video works only inside `run`.
+    let (event, context) = opened();
+    assert!(plugin.handle(&event, &context).is_ok());
+
+    let call = CommandCall {
+        command: "slow".into(),
+        context: Context::default(),
+        navigator: None,
+    };
+    let mut limited = instance(
+        "ok",
+        Limits {
+            time: Duration::from_millis(100),
+            ..Limits::default()
+        },
+    );
+    assert!(matches!(limited.run_command(&call), Err(CallError::Timeout(_))));
+}
+
+#[test]
+fn a_worker_runs_commands() {
+    let worker = Worker::spawn(loaded(), Limits::default()).unwrap();
+    configure(&worker, "ok").unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let context = Context {
+        video: Some("/videos/b.mp4".into()),
+        ..Context::default()
+    };
+    let call = CommandCall {
+        command: "next".into(),
+        context,
+        navigator: Some(Arc::new(FixedFolder)),
+    };
+    worker.run_command(call, Box::new(move |report| tx.send(report.result).unwrap()));
+    let outcome = rx.recv_timeout(Duration::from_secs(10)).unwrap().unwrap();
+    assert_eq!(outcome.open.as_deref(), Some(Path::new("/videos/c.mp4")));
 }
