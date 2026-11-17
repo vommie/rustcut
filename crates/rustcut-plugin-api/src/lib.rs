@@ -215,3 +215,15 @@ impl Notice {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    /// The crate's version, `API_VERSION` and the WIT package version are one number (a tag plugin-api-v1.2.0 once
+    /// shipped the crate as 1.1.0).
+    #[test]
+    fn one_version_everywhere() {
+        assert_eq!(env!("CARGO_PKG_VERSION"), super::API_VERSION);
+        let wit = include_str!("../wit/rustcut-plugin.wit");
+        assert!(wit.contains(&format!("package rustcut:plugin@{};", super::API_VERSION)));
+    }
+}
