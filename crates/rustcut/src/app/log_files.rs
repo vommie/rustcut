@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
 
-use chrono::NaiveDate;
+use jiff::civil::Date;
 
 /// The file families: `rustcut.DATE.log`, `rustcut-shareable.DATE.log` (and `.gz` once packed).
 const PREFIXES: [&str; 2] = ["rustcut", "rustcut-shareable"];
@@ -41,7 +41,7 @@ impl Retention {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogFile {
     pub name: String,
-    pub date: NaiveDate,
+    pub date: Date,
     pub packed: bool,
     pub size: u64,
     /// Written in the last minutes (or today): never packed or deleted.
@@ -57,20 +57,20 @@ pub enum Step {
 
 /// The date of a log file's name (`rustcut.2026-10-23.log`, `rustcut-shareable.2026-10-23.log.gz`) and whether it is
 /// packed; other files are not the log's.
-pub fn parse(name: &str) -> Option<(NaiveDate, bool)> {
+pub fn parse(name: &str) -> Option<(Date, bool)> {
     let (rest, packed) = name.strip_suffix(".gz").map_or((name, false), |r| (r, true));
     let rest = rest.strip_suffix(".log")?;
     let (prefix, date) = rest.rsplit_once('.')?;
     if !PREFIXES.contains(&prefix) {
         return None;
     }
-    NaiveDate::parse_from_str(date, "%Y-%m-%d").ok().map(|d| (d, packed))
+    date.parse::<Date>().ok().map(|d| (d, packed))
 }
 
 /// Files too old are deleted, the other files of earlier days packed.
-pub fn plan_age(files: &[LogFile], today: NaiveDate, retention: Retention) -> Vec<Step> {
+pub fn plan_age(files: &[LogFile], today: Date, retention: Retention) -> Vec<Step> {
     let first_kept = today
-        .checked_sub_days(chrono::Days::new(u64::from(retention.keep_days.saturating_sub(1))))
+        .checked_sub(jiff::Span::new().days(i64::from(retention.keep_days.saturating_sub(1))))
         .unwrap_or(today);
     files
         .iter()
@@ -104,7 +104,7 @@ pub fn plan_size(files: &[LogFile], max_bytes: u64) -> Vec<Step> {
 }
 
 /// The log files in `dir`; `today` is the date the writer uses (UTC, like `tracing-appender`).
-fn scan(dir: &Path, today: NaiveDate) -> Vec<LogFile> {
+fn scan(dir: &Path, today: Date) -> Vec<LogFile> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
@@ -133,7 +133,7 @@ fn scan(dir: &Path, today: NaiveDate) -> Vec<LogFile> {
 
 /// Packs and deletes in `dir` as `retention` says; problems are logged, never fatal.
 pub fn tidy(dir: &Path, retention: Retention) {
-    let today = chrono::Utc::now().date_naive();
+    let today = jiff::Timestamp::now().to_zoned_datetime(jiff::tz::TimeZone::UTC).date();
     run(dir, &plan_age(&scan(dir, today), today, retention));
     run(dir, &plan_size(&scan(dir, today), retention.max_bytes));
 }
@@ -209,8 +209,8 @@ impl Keeper {
 mod tests {
     use super::*;
 
-    fn day(d: u32) -> NaiveDate {
-        NaiveDate::from_ymd_opt(2026, 10, d).unwrap()
+    fn day(d: i8) -> Date {
+        jiff::civil::date(2026, 10, d)
     }
 
     fn file(name: &str, size: u64, in_use: bool) -> LogFile {

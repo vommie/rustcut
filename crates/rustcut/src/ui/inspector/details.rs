@@ -494,9 +494,14 @@ fn tags_section(spec: &JobSpec, tag_name: Option<&dyn Fn(u32) -> Option<String>>
 
 /// Unix milliseconds as local `YYYY-MM-DD HH:MM:SS`.
 fn local_time(ms: i64) -> String {
-    chrono::DateTime::from_timestamp_millis(ms).map_or_else(String::new, |t| {
-        t.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S").to_string()
-    })
+    jiff::Timestamp::from_millisecond(ms).map_or_else(
+        |_| String::new(),
+        |t| {
+            t.to_zoned_datetime(jiff::tz::TimeZone::system())
+                .strftime("%Y-%m-%d %H:%M:%S")
+                .to_string()
+        },
+    )
 }
 
 #[cfg(test)]

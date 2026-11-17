@@ -189,7 +189,7 @@ impl NoticeCenter {
             self.bubbles.set(&bubble_key(), None, Duration::ZERO);
         }
         // hh:mm:ss everywhere (review 34/35, P9.2).
-        let clock = chrono::Local::now().format("%H:%M:%S").to_string();
+        let clock = jiff::ZonedDateTime::now().strftime("%H:%M:%S").to_string();
         let fresh = match route.place {
             NoticePlace::Toast => self.toast(&notice, clock.clone()),
             NoticePlace::Banner => self.banner(&notice, clock.clone()),

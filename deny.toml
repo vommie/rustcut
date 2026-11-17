@@ -16,6 +16,7 @@ ignore = [
     { id = "RUSTSEC-2026-0371", reason = "zbus_names: same zbus stack notice" },
     { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: same zbus stack notice" },
     { id = "RUSTSEC-2026-0441", reason = "pin-utils comes from spin_on in Slint (slint-macros, slint-build); no replacement is available to this project" },
+    { id = "RUSTSEC-2026-0543", reason = "chrono: RustCut's own code uses jiff since 0.0.114; only i-slint-core still depends on chrono (also in Slint 1.19)" },
 ]
 
 [licenses]

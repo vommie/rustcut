@@ -183,7 +183,7 @@ fn move_aside(path: &Path, backups: &Path) -> Result<PathBuf, StoreError> {
     let name = path
         .file_name()
         .map_or_else(|| "queue.sqlite".into(), |n| n.to_string_lossy().into_owned());
-    let stamp = chrono::Local::now().format("%Y-%m-%d-%H%M%S");
+    let stamp = jiff::ZonedDateTime::now().strftime("%Y-%m-%d-%H%M%S");
     std::fs::create_dir_all(backups).map_err(|e| StoreError::Backup(e.to_string()))?;
     let kept = backups.join(format!("{name}.damaged-{stamp}"));
     for suffix in ["", "-wal", "-shm"] {

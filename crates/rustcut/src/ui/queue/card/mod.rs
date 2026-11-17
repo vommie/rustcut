@@ -268,7 +268,7 @@ impl QueueBridge {
             spec,
             tag_name,
             in_line,
-            now_ms: chrono::Utc::now().timestamp_millis(),
+            now_ms: jiff::Timestamp::now().as_millisecond(),
         });
         let view = self.card_view(id, &facts);
         let card = window.global::<JobCard<'_>>();

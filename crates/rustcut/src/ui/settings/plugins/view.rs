@@ -67,8 +67,14 @@ pub fn details(info: &PluginInfo) -> Vec<(String, String)> {
         ),
     );
     if let Some((at, error)) = &stats.last_error {
-        let at: chrono::DateTime<chrono::Local> = (*at).into();
-        push("Last error", format!("{} at {}", error, at.format("%H:%M:%S")));
+        let at = jiff::Timestamp::try_from(*at)
+            .map(|t| {
+                t.to_zoned_datetime(jiff::tz::TimeZone::system())
+                    .strftime("%H:%M:%S")
+                    .to_string()
+            })
+            .unwrap_or_default();
+        push("Last error", format!("{error} at {at}"));
     }
     push("State", state(&info.state).0);
     rows

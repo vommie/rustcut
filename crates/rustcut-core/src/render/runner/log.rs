@@ -32,7 +32,7 @@ impl JobLog {
             None => line.to_owned(),
         };
         let entry = LogLine {
-            at: chrono::Utc::now().timestamp_millis(),
+            at: jiff::Timestamp::now().as_millisecond(),
             stream,
             line,
         };

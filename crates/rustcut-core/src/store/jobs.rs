@@ -76,7 +76,7 @@ const COLUMNS: &str = "id, position, state_detail, attempt, created_at, started_
                        note, spec_version, spec, sync, relocation";
 
 fn now_millis() -> i64 {
-    chrono::Utc::now().timestamp_millis()
+    jiff::Timestamp::now().as_millisecond()
 }
 
 fn read_row(row: &Row<'_>) -> rusqlite::Result<JobRecord> {

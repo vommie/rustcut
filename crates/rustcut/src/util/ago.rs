@@ -3,14 +3,14 @@
 //! checked: both count whole 24-hour spans and go from weeks to months after a month, so neither says "yesterday" by the
 //! calendar nor "5 weeks ago".
 
-use chrono::{Datelike as _, NaiveDate};
+use jiff::civil::Date;
 
 /// Weeks are counted up to this many days; months after it.
 const WEEKS_UNTIL_DAYS: i64 = 60;
 
 /// `then` seen from `today`; `None` for a day after today (a clock that was off).
-pub fn ago(then: NaiveDate, today: NaiveDate) -> Option<String> {
-    let days = today.signed_duration_since(then).num_days();
+pub fn ago(then: Date, today: Date) -> Option<String> {
+    let days = i64::from(then.until(today).map_or(0, |span| span.get_days()));
     let text = match days {
         ..0 => return None,
         0 => "today".to_owned(),
@@ -18,8 +18,8 @@ pub fn ago(then: NaiveDate, today: NaiveDate) -> Option<String> {
         2..7 => format!("{days} days ago"),
         7..WEEKS_UNTIL_DAYS => plural(days / 7, "week"),
         _ => {
-            let mut months = (today.year() - then.year()) * 12 + i32::try_from(today.month()).unwrap_or(0)
-                - i32::try_from(then.month()).unwrap_or(0);
+            let mut months = (i32::from(today.year()) - i32::from(then.year())) * 12 + i32::from(today.month())
+                - i32::from(then.month());
             if today.day() < then.day() {
                 months -= 1;
             }
@@ -46,8 +46,8 @@ fn plural(count: i64, unit: &str) -> String {
 mod tests {
     use super::*;
 
-    fn day(y: i32, m: u32, d: u32) -> NaiveDate {
-        NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    fn day(y: i16, m: i8, d: i8) -> Date {
+        jiff::civil::date(y, m, d)
     }
 
     #[test]

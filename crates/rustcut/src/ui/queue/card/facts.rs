@@ -313,10 +313,14 @@ fn path_text(path: &Path) -> String {
 
 /// "14:03" today, else "2026-10-30 14:03" (local time).
 pub fn local_time(ms: i64, now_ms: i64) -> String {
-    let local = |ms: i64| chrono::DateTime::from_timestamp_millis(ms).map(|t| t.with_timezone(&chrono::Local));
+    let local = |ms: i64| {
+        jiff::Timestamp::from_millisecond(ms)
+            .ok()
+            .map(|t| t.to_zoned_datetime(jiff::tz::TimeZone::system()))
+    };
     match (local(ms), local(now_ms)) {
-        (Some(t), Some(now)) if t.date_naive() == now.date_naive() => t.format("%H:%M").to_string(),
-        (Some(t), _) => t.format("%Y-%m-%d %H:%M").to_string(),
+        (Some(t), Some(now)) if t.date() == now.date() => t.strftime("%H:%M").to_string(),
+        (Some(t), _) => t.strftime("%Y-%m-%d %H:%M").to_string(),
         (None, _) => String::new(),
     }
 }
