@@ -18,6 +18,7 @@ mod messages;
 pub mod page;
 mod page_list;
 pub mod pages;
+mod plugin_keys;
 mod plugins;
 mod profiles;
 mod ratios;

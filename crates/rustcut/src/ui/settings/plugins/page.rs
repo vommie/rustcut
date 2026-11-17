@@ -324,9 +324,37 @@ fn field_block(
             r.searchable = !matches!(kind, FieldKind::Rating { .. });
             r.items = texts(&items);
         }
+        FieldKind::Key { .. } => {
+            r.kind = 9;
+            let text = value.as_str().unwrap_or_default();
+            r.text = crate::ui::keymap::Chord::parse(text)
+                .map(|c| c.label())
+                .unwrap_or_default()
+                .into();
+            r.placeholder = "No key".into();
+        }
         FieldKind::Table { .. } => {}
     }
-    let (issue, level) = found(issues, &field.key, None);
+    let (mut issue, mut level) = found(issues, &field.key, None);
+    // A key another action or plugin command has stays unbound until the user records another (Q-NF1).
+    if matches!(field.kind, FieldKind::Key { .. })
+        && let Some(taken) = crate::ui::plugins::commands::entries()
+            .iter()
+            .find(|e| e.plugin == id && e.key_field == field.key)
+            .and_then(|e| e.taken_by.clone())
+    {
+        let text = format!(
+            "{} already belongs to {}; record another key.",
+            r.text,
+            taken.describe()
+        );
+        issue = if issue.is_empty() {
+            text
+        } else {
+            format!("{issue}\n{text}")
+        };
+        level = 2;
+    }
     if level > 0 {
         r.status = 3;
         r.status_text = issue.into();
@@ -341,7 +369,7 @@ fn column_width(kind: &FieldKind) -> (f32, f32) {
         FieldKind::Rating { .. } => (150.0, 0.0),
         FieldKind::Path { .. } => (0.0, 3.0),
         FieldKind::Text { .. } | FieldKind::Target | FieldKind::Tag => (0.0, 2.0),
-        FieldKind::Number { .. } | FieldKind::Table { .. } => (0.0, 1.0),
+        FieldKind::Number { .. } | FieldKind::Table { .. } | FieldKind::Key { .. } => (0.0, 1.0),
         FieldKind::Choice { options, .. } => (0.0, if options.len() <= 3 { 1.2 } else { 1.6 }),
     }
 }
@@ -349,7 +377,8 @@ fn column_width(kind: &FieldKind) -> (f32, f32) {
 /// The cell kind of a column (0 text, 1 folder path, 2 switch, 3 choice, 4 target folder, 5 tag, 6 rating).
 fn cell_kind(kind: &FieldKind) -> i32 {
     match kind {
-        FieldKind::Text { .. } | FieldKind::Number { .. } | FieldKind::Table { .. } => 0,
+        // A key is never a column (the manifest refuses it); it would show as text.
+        FieldKind::Text { .. } | FieldKind::Number { .. } | FieldKind::Table { .. } | FieldKind::Key { .. } => 0,
         FieldKind::Path { .. } => 1,
         FieldKind::Switch { .. } => 2,
         FieldKind::Choice { .. } => 3,
@@ -371,6 +400,7 @@ fn cell(column: &Field, value: &Value, choices: &Choices) -> PluginCellView {
             cell.text = value.as_str().unwrap_or_default().into();
             cell.placeholder = placeholder.as_str().into();
         }
+        FieldKind::Key { .. } => cell.text = value.as_str().unwrap_or_default().into(),
         FieldKind::Number { decimals, .. } => cell.text = number_text(value, *decimals).into(),
         FieldKind::Switch { .. } => cell.checked = value.as_bool().unwrap_or_default(),
         FieldKind::Choice { options, .. } => {

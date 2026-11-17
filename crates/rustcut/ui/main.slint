@@ -62,7 +62,8 @@ import { BannerView, HistoryView, Notices, ToastTagView, ToastView } from "notic
 import { NoticeBanner } from "notice_banner.slint";
 import { ToastLayer } from "notice_toasts.slint";
 import { BellPopup, NoticeBell } from "notice_bell.slint";
-import { BubbleButtonView, BubbleView, Bubbles } from "bubble.slint";
+import { BubbleButtonView, BubbleLayer, BubbleView, Bubbles } from "bubble.slint";
+import { PluginCommandBar, PluginCommands, PluginCommandView } from "plugin_commands.slint";
 import { NewerFileDialog, Problems, QueueDatabaseDialog } from "problem_dialogs.slint";
 import { TextLogic, TextSplit } from "controls_text.slint";
 import { DragLogic, DragState } from "drag.slint";
@@ -81,7 +82,8 @@ export {
     ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, SettingsPageItem, PluginsUi, PluginItemView, PluginDetailView, PluginAvailableView, PluginCardView, PluginBlockView, PluginCellView, PluginColumnView, PluginTableRowView, FolderTreeUi, FolderTreeRowView, FolderList, FolderListRowView, FolderFieldView, Relocate, RelocateChipView, RelocateConflictView, RelocateRecordView, FolderWheel, WheelSlotView, WheelLookView, WheelMiddleView, FolderDetailsView, FolderIconView, FolderIconRowView, FolderPictureView, RatioChipView, DiagCheckView, DiagGroupView,
     ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power, AppTray, Jump, Notices,
     ToastView, ToastTagView, BannerView, HistoryView, MessageKindView, Bubbles, BubbleView, BubbleButtonView, Problems, ColorCodec, ColorPickerWindow, TagFilterWindow, TagFilterRowView,
-    TextLogic, TextSplit, DragLogic, DragState, AppMenu, MenuBarMenu, TabView, JobCard, JobCardPill, JobCardRow, JobCardView
+    TextLogic, TextSplit, DragLogic, DragState, AppMenu, MenuBarMenu, TabView, JobCard, JobCardPill, JobCardRow, JobCardView,
+    PluginCommands, PluginCommandView
 }
 
 export component MainWindow inherits Window {
@@ -165,6 +167,26 @@ export component MainWindow inherits Window {
                 { id: "open", title: "Open...", enabled: !root.modal-open, shortcut: Shortcuts.open },
                 { id: "save", title: "Save Job", shortcut: Shortcuts.save,
                     enabled: !root.modal-open && (Export.can-save && !Export.dialog-open && !Export.meta-open) },
+                // The plugins' commands (plugin API 1.2, Q-NF1): together, between separators, while a plugin has any.
+                { kind: PluginCommands.menu.length > 0 ? 1 : 4 },
+                { id: "plugin-menu:0", kind: PluginCommands.menu.length > 0 ? 0 : 4, title: PluginCommands.menu[0].title,
+                    shortcut: PluginCommands.menu[0].shortcut, enabled: !root.modal-open,
+                    hold: PluginCommands.menu[0].discards && PluginCommands.unsaved },
+                { id: "plugin-menu:1", kind: PluginCommands.menu.length > 1 ? 0 : 4, title: PluginCommands.menu[1].title,
+                    shortcut: PluginCommands.menu[1].shortcut, enabled: !root.modal-open,
+                    hold: PluginCommands.menu[1].discards && PluginCommands.unsaved },
+                { id: "plugin-menu:2", kind: PluginCommands.menu.length > 2 ? 0 : 4, title: PluginCommands.menu[2].title,
+                    shortcut: PluginCommands.menu[2].shortcut, enabled: !root.modal-open,
+                    hold: PluginCommands.menu[2].discards && PluginCommands.unsaved },
+                { id: "plugin-menu:3", kind: PluginCommands.menu.length > 3 ? 0 : 4, title: PluginCommands.menu[3].title,
+                    shortcut: PluginCommands.menu[3].shortcut, enabled: !root.modal-open,
+                    hold: PluginCommands.menu[3].discards && PluginCommands.unsaved },
+                { id: "plugin-menu:4", kind: PluginCommands.menu.length > 4 ? 0 : 4, title: PluginCommands.menu[4].title,
+                    shortcut: PluginCommands.menu[4].shortcut, enabled: !root.modal-open,
+                    hold: PluginCommands.menu[4].discards && PluginCommands.unsaved },
+                { id: "plugin-menu:5", kind: PluginCommands.menu.length > 5 ? 0 : 4, title: PluginCommands.menu[5].title,
+                    shortcut: PluginCommands.menu[5].shortcut, enabled: !root.modal-open,
+                    hold: PluginCommands.menu[5].discards && PluginCommands.unsaved },
                 { kind: 1 },
                 { id: "settings", title: "Settings...", enabled: !root.modal-open, shortcut: Shortcuts.settings },
                 { kind: 1 },
@@ -311,11 +333,21 @@ export component MainWindow inherits Window {
             root.open-folder("data");
         } else if id == "folder_logs" {
             root.open-folder("logs");
+        } else if id == "plugin-menu:0" || id == "plugin-menu:1" || id == "plugin-menu:2" || id == "plugin-menu:3"
+            || id == "plugin-menu:4" || id == "plugin-menu:5" {
+            root.run-plugin-menu(id == "plugin-menu:0" ? 0 : id == "plugin-menu:1" ? 1 : id == "plugin-menu:2" ? 2
+                : id == "plugin-menu:3" ? 3 : id == "plugin-menu:4" ? 4 : 5);
         } else if id == "about" {
             root.open-settings-page("about");
         } else {
             // Every other entry is a keymap action of the same id.
             Shortcuts.run(id);
+        }
+    }
+
+    function run-plugin-menu(index: int) {
+        if index < PluginCommands.menu.length {
+            PluginCommands.run(PluginCommands.menu[index].plugin, PluginCommands.menu[index].id, false);
         }
     }
 
@@ -476,6 +508,15 @@ export component MainWindow inherits Window {
         group: Dock.right-groups[self.index];
     }
 
+    // Bubbles about the whole window (a plugin command's note at its menu bar button, Q-NF1).
+    BubbleLayer {
+        area: "window";
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+    }
+
     ToastLayer {
         x: 0;
         y: root.bar-height;
@@ -566,6 +607,14 @@ export component MainWindow inherits Window {
         visible: Notices.bell;
         x: parent.width - self.width - 8px;
         y: (root.bar-height - self.height) / 2;
+    }
+
+    // The plugins' command buttons (Q-NF1): left of the bell, a line between them.
+    plugin-bar := PluginCommandBar {
+        separator: Notices.bell;
+        x: (Notices.bell ? bell.x - 4px : parent.width - 8px) - self.preferred-width;
+        y: (root.bar-height - 24px) / 2;
+        height: 24px;
     }
 
     PlayerPopups {

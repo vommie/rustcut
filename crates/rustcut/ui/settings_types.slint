@@ -5,7 +5,8 @@
 import { OptionRowView, RenderIssueView } from "render_types.slint";
 import { IconId } from "icons.slint";
 
-// One option. kind: 0 switch, 1 choice, 2 number, 3 text, 4 folder path, 5 file path, 6 button.
+// One option. kind: 0 switch, 1 choice, 2 number, 3 text, 4 folder path, 5 file path, 6 button, 7 color, 8 number
+// typed as text, 9 key (a plugin command's, plugin API 1.2).
 export struct SettingRowView {
     key: string,
     kind: int,
@@ -96,6 +97,8 @@ export struct HotkeyRowView {
     changed: bool,
     // The defaults as a text ("Ctrl+O"), for the reset button's tooltip.
     defaults: string,
+    // A plugin command's key (plugin API 1.2): shown here, changed on the plugin's page (`id` = its setting key).
+    plugin: bool,
 }
 
 // A kind of message on the Messages page (M6.5b).
@@ -233,6 +236,8 @@ export global SettingsUi {
     callback unbind(/* action id */ string, /* key text */ string);
     callback reset-hotkey(/* action id */ string);
     callback reset-hotkeys();
+    // Opens the page of a plugin command's row (its key is changed there).
+    callback hotkey-plugin-page(/* setting key */ string);
 
     // Messages: the tab (0 look, 1 kinds, 2 muted), the search of the lists, the lists.
     in property <int> messages-tab;

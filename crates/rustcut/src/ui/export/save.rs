@@ -393,8 +393,12 @@ impl ExportBridge {
             st.saved(counter);
             st.clear_sections
         };
-        if clear && let Some(editor) = self.editor.upgrade() {
-            editor.clear_sections();
+        if let Some(editor) = self.editor.upgrade() {
+            // The job holds these sections now ("Next in Folder" no longer asks to hold its key, Q-NF1).
+            editor.sections_saved();
+            if clear {
+                editor.clear_sections();
+            }
         }
         if let Some(filters) = self.filters.upgrade() {
             filters.job_saved();

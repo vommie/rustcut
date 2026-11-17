@@ -48,6 +48,12 @@ pub(super) fn connect(editor: &Rc<Editor>, window: &MainWindow) {
         (None, _) => {}
     });
     let this = Rc::downgrade(editor);
+    sc.on_key_released(move |text| {
+        if let Some(editor) = this.upgrade() {
+            editor.key_released(text.as_str());
+        }
+    });
+    let this = Rc::downgrade(editor);
     sc.on_modal_changed(move |modal| {
         if let Some(editor) = this.upgrade() {
             editor.set_menu_modal(modal);
@@ -94,7 +100,8 @@ impl Editor {
         }
         let found = self.keymap.borrow().lookup(press);
         let Some(action) = found else {
-            return false;
+            // A plugin command's key (plugin API 1.2), or nothing.
+            return self.plugin_key(press);
         };
         // Behind a modal dialog only Quit acts (a key the dialog did not take must not reach the editor, P8).
         if self.menu_modal.get() && action != Action::Quit {

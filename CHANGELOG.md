@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Plugin API 1.2 (`plugin-api-v1.2.0`): plugins can have commands that you run by a key, a File menu entry or a button
+  in the menu bar. Their keys are recorded on the plugin's page (Settings > Plugins) and checked against RustCut's own
+  keys and the other plugins' keys: a taken key is refused with a bubble that names its owner. Settings > Hotkeys lists
+  every plugin command under "Plugins" (read-only, with the way to the plugin's page) and refuses a plugin's key there.
+  A plugin that is switched off frees its keys; when it starts with a key that became taken, a banner says so.
+- A command that opens another video (the plugin "Next in Folder") must be held for the hold time of Settings >
+  General while the sections are not saved as a job: its key, its button and its menu entry.
+- What plugin commands can use: the open video's folder in the order Dolphin shows it (asked over D-Bus while a
+  Dolphin tab shows the folder or Dolphin runs, or read from Dolphin's stored view properties; Dolphin is never
+  started), with the files that already have a job marked; opening a video; a short note at the command's button.
+  RustCut rebuilds Dolphin's order itself: its natural name order (numbers by value, umlauts, case), size, the dates,
+  type and hidden files last. Plugins of API 1.0 and 1.1 keep working unchanged.
+
 ## [0.0.112] - 2026-11-15
 
 ### Security

@@ -69,7 +69,7 @@ pub mod commands_bindings {
         path: "wit",
         world: "plugin-with-commands",
         pub_export_macro: true,
-        export_macro_name: "export_plugin_with_commands",
+        export_macro_name: "__export_plugin_with_commands",
         default_bindings_module: "rustcut_plugin_api::__commands_bindings",
         with: {
             "rustcut:plugin/host@1.2.0": crate::bindings::rustcut::plugin::host,
@@ -102,7 +102,24 @@ pub use bindings::rustcut::plugin::types::{
 };
 #[doc(hidden)]
 pub use commands_bindings as __commands_bindings;
-pub use commands_bindings::export_plugin_with_commands;
+#[doc(hidden)]
+pub use commands_bindings::__export_plugin_with_commands;
+
+/// Since API 1.2: exports a plugin with commands (it implements [`Plugin`] and [`Commands`]). The exports exist only in
+/// the `wasm32` build: their WIT names (`rustcut:plugin/commands@1.2.0#run`) are no valid symbol names for a native
+/// library, which the plugin's own unit tests build.
+#[macro_export]
+macro_rules! export_plugin_with_commands {
+    ($plugin:ident) => {
+        #[cfg(target_arch = "wasm32")]
+        $crate::__export_plugin_with_commands!($plugin);
+        #[cfg(not(target_arch = "wasm32"))]
+        const _: fn() = || {
+            fn exported<T: $crate::Plugin + $crate::Commands>() {}
+            exported::<$plugin>();
+        };
+    };
+}
 pub use commands_bindings::exports::rustcut::plugin::commands::Guest as Commands;
 pub use commands_bindings::rustcut::plugin::command_host::{
     FileManagerMode, FolderFile, FolderListing, FolderOrder, FolderRequest, HiddenFiles, OrderSource,

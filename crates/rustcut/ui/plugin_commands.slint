@@ -1,0 +1,72 @@
+// Plugin commands (plugin API 1.2, Q-NF1): what the running plugins declared in `[[commands]]`, filled by
+// src/ui/plugins/commands/. Their entries stand in the File menu (main.slint) and, when the plugin's switch says so,
+// as buttons at the right end of the menu bar, left of the bell. A command that discards unsaved sections is held
+// while there are any (the hold time of Settings > General), its key too.
+
+import { Theme } from "styles.slint";
+import { IconId } from "icons.slint";
+import { IconButton } from "controls.slint";
+import { BubbleAnchor } from "bubble.slint";
+
+export struct PluginCommandView {
+    plugin: string,
+    id: string,
+    title: string,
+    // The button's tooltip text (the command's description, or its title).
+    tooltip: string,
+    // The key as the menus show it ("" = none).
+    shortcut: string,
+    icon: IconId,
+    // It discards the editor's unsaved sections (it opens another video).
+    discards: bool,
+}
+
+export global PluginCommands {
+    // The commands with a File menu entry, in the plugins' order.
+    in property <[PluginCommandView]> menu;
+    // The commands with a menu bar button.
+    in property <[PluginCommandView]> buttons;
+    // The editor has sections that are not saved as a job.
+    in property <bool> unsaved;
+    callback run(/* plugin */ string, /* command */ string, /* from its button */ bool);
+}
+
+// The menu bar's plugin buttons, then a separator line (the bell's side). Its width is 0 without buttons.
+export component PluginCommandBar inherits HorizontalLayout {
+    in property <bool> separator: true;
+
+    spacing: 2px;
+    alignment: end;
+
+    for item in PluginCommands.buttons: Rectangle {
+        width: button.preferred-width;
+        height: 24px;
+
+        button := IconButton {
+            width: 28px;
+            height: 24px;
+            icon: item.icon;
+            tooltip: item.tooltip;
+            shortcut: item.shortcut;
+            hold: item.discards && PluginCommands.unsaved;
+            clicked => { PluginCommands.run(item.plugin, item.id, true); }
+        }
+
+        BubbleAnchor {
+            key: "plugin-button:" + item.plugin + ":" + item.id;
+            width: parent.width;
+            height: parent.height;
+        }
+    }
+
+    if root.separator && PluginCommands.buttons.length > 0: Rectangle {
+        width: 9px;
+
+        Rectangle {
+            x: 4px;
+            width: 1px;
+            height: 16px;
+            background: Theme.border;
+        }
+    }
+}

@@ -15,7 +15,7 @@ use crate::ui::color_picker::{self, PickerRequest};
 use crate::ui::keymap::{Action, Chord, KeyPress, Keymap};
 use crate::ui::notices::{self, Area, Notice, TYPING};
 use crate::ui::render_settings::state::Row;
-use crate::util::model::{sync, sync_with};
+use crate::util::model::sync;
 use crate::{ProfileItemView, RenderIssueView, SettingsUi};
 
 impl SettingsBridge {
@@ -389,6 +389,9 @@ impl SettingsBridge {
     }
 
     pub(super) fn record(&self, id: &str) {
+        if self.record_plugin_key(id) {
+            return;
+        }
         if let Some(action) = Action::from_id(id) {
             self.hotkeys.borrow_mut().start(action);
             *self.hotkey_note.borrow_mut() = (String::new(), false);
@@ -397,6 +400,7 @@ impl SettingsBridge {
     }
 
     pub(super) fn cancel_recording(&self) {
+        Self::cancel_plugin_recording();
         self.hotkeys.borrow_mut().cancel();
         self.publish();
     }
@@ -411,6 +415,17 @@ impl SettingsBridge {
             meta,
             repeat: false,
         };
+        if self.plugin_key_pressed(&press) {
+            return true;
+        }
+        // A plugin command's key stays with it: it is changed on the plugin's page (Q-NF1).
+        if self.hotkeys.borrow().recording.is_some()
+            && let Some(note) = Self::plugin_owner_note(&press)
+        {
+            *self.hotkey_note.borrow_mut() = (note, true);
+            self.publish();
+            return true;
+        }
         let outcome = {
             let mut keymap = self.keymap.borrow_mut();
             self.hotkeys.borrow_mut().press(&mut keymap, &press)
@@ -439,6 +454,9 @@ impl SettingsBridge {
     }
 
     pub(super) fn unbind(&self, id: &str, key: &str) {
+        if self.clear_plugin_key(id) {
+            return;
+        }
         if let Some(action) = Action::from_id(id)
             && self.keymap.borrow_mut().unbind(action, key)
         {
@@ -483,8 +501,14 @@ impl SettingsBridge {
         let page = self.hotkeys.borrow();
         let rows = hotkeys::rows(&self.keymap.borrow(), &page.search);
         let mut shown = self.hotkeys_shown.borrow_mut();
-        sync_with(&self.models.hotkeys, &mut shown, &rows, hotkey_view);
-        ui.set_recording(page.recording.map_or("", Action::id).into());
+        // RustCut's own actions, then the plugins' commands (read-only, Q-NF1).
+        let mut views: Vec<crate::HotkeyRowView> = rows.iter().map(hotkey_view).collect();
+        views.extend(super::plugin_keys::hotkey_rows(&page.search));
+        shown.clone_from(&rows);
+        sync(&self.models.hotkeys, views);
+        let recording =
+            super::plugin_keys::recording().unwrap_or_else(|| page.recording.map_or("", Action::id).to_owned());
+        ui.set_recording(recording.into());
         let note = self.hotkey_note.borrow();
         ui.set_hotkey_note(note.0.as_str().into());
         ui.set_hotkey_note_error(note.1);

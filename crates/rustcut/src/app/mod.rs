@@ -557,6 +557,17 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         tags: &tags,
         opener: &opener,
     });
+    // Plugin commands (plugin API 1.2, Q-NF1): keys, File menu entries and menu bar buttons of the plugins.
+    let plugin_commands = crate::ui::plugins::commands::CommandsBridge::install(&crate::ui::plugins::commands::Parts {
+        window: &main,
+        ui: &ui,
+        runtime: runtime.handle().clone(),
+        writer: &writer,
+        plugins: &plugins,
+        editor: &editor,
+        opener: &opener,
+        queue: &queue,
+    });
     // Moving target files (P12 block 7): the queue's menu opens the dialog.
     let relocate = crate::ui::relocate::RelocateBridge::install(
         &main,
@@ -789,6 +800,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     drop(server.borrow_mut().take());
     drop(settings_window);
     drop(control_bar);
+    drop(plugin_commands);
     drop(editing);
     drop(opener);
     drop(wheel);

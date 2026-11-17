@@ -297,6 +297,10 @@ kinds! {
     /// A plugin asked for a message that stays (its notice with place "banner").
     PluginBanner = "plugin_banner", "A plugin's lasting message", Plugins, Info, Banner, LOUD, desktop false,
         critical false, ("Auto-Rate: Rating set to 5 stars", "tag Treasure chest › Great");
+    /// A plugin command's short note (API 1.2 `bubble`) at the menu bar button that ran it (Q-NF1); a command run
+    /// by its key or menu entry shows it as a plugin message instead.
+    PluginBubble = "plugin_bubble", "A plugin's note at its button", Plugins, Info, Bubble, BUBBLE_OR_NOT,
+        desktop false, critical false, ("Next in Folder: File A.mp4", "4 of 12");
     /// A plugin failed (an error, a crash, a timeout, too much memory, refused settings).
     PluginFailed = "plugin_failed", "A plugin failed", Plugins, Error, Banner, LOUD, desktop true, critical false,
         ("Auto-Folder failed", "timed out after 1s");

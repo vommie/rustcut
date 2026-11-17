@@ -54,5 +54,6 @@ pub(super) fn hotkey_view(row: &hotkeys::HotkeyRow) -> HotkeyRowView {
         )),
         changed: row.changed,
         defaults: row.defaults.as_str().into(),
+        plugin: false,
     }
 }

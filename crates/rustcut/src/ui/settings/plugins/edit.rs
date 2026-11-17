@@ -371,7 +371,7 @@ impl SettingsBridge {
     }
 
     /// Writes one value of a plugin (the other stored values, also unknown ones, stay) and checks again.
-    fn store_value(&self, id: &str, key: &str, value: Value) {
+    pub(in crate::ui::settings) fn store_value(&self, id: &str, key: &str, value: Value) {
         let (id_owned, key_owned) = (id.to_owned(), key.to_owned());
         self.update(|s| {
             s.plugins

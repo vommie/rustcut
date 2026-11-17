@@ -11,6 +11,8 @@ import { HotkeyChipView, HotkeyRowView, SettingsUi } from "settings_types.slint"
 
 component KeyChip inherits Rectangle {
     in property <HotkeyChipView> chip;
+    // Without the cross (a plugin command's key, changed on the plugin's page).
+    in property <bool> fixed;
     callback remove();
 
     height: 22px;
@@ -23,7 +25,7 @@ component KeyChip inherits Rectangle {
 
     chip-row := HorizontalLayout {
         padding-left: 6px;
-        padding-right: 2px;
+        padding-right: root.fixed ? 6px : 2px;
         spacing: 2px;
 
         Text {
@@ -34,7 +36,7 @@ component KeyChip inherits Rectangle {
             vertical-alignment: center;
         }
 
-        VerticalLayout {
+        if !root.fixed: VerticalLayout {
             alignment: center;
 
             Rectangle {
@@ -157,6 +159,7 @@ export component SettingsHotkeys inherits SettingsCard {
 
                 KeyChip {
                     chip: chip;
+                    fixed: row.plugin;
                     remove => { SettingsUi.unbind(row.id, chip.text); }
                 }
             }
@@ -171,7 +174,18 @@ export component SettingsHotkeys inherits SettingsCard {
                 }
             }
 
-            VerticalLayout {
+            // A plugin command's key is changed on its plugin's page (Q-NF1).
+            if row.plugin: VerticalLayout {
+                alignment: center;
+
+                IconButton {
+                    icon: IconId.jump-to;
+                    tooltip: "Change it on the plugin's page";
+                    clicked => { SettingsUi.hotkey-plugin-page(row.id); }
+                }
+            }
+
+            if !row.plugin: VerticalLayout {
                 alignment: center;
 
                 IconButton {
@@ -185,7 +199,7 @@ export component SettingsHotkeys inherits SettingsCard {
                 }
             }
 
-            VerticalLayout {
+            if !row.plugin: VerticalLayout {
                 alignment: center;
 
                 IconButton {

@@ -15,6 +15,8 @@ pub enum Area {
     Codecs,
     /// The Settings window's page.
     Settings,
+    /// The main window as a whole (the menu bar's plugin buttons, Q-NF1).
+    Window,
 }
 
 impl Area {
@@ -24,12 +26,13 @@ impl Area {
             Self::Export => "export",
             Self::Codecs => "render-settings",
             Self::Settings => "settings",
+            Self::Window => "window",
         }
     }
 
     pub const fn window(self) -> Win {
         match self {
-            Self::Export | Self::Codecs => Win::Main,
+            Self::Export | Self::Codecs | Self::Window => Win::Main,
             Self::Settings => Win::Settings,
         }
     }

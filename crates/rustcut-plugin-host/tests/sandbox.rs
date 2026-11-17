@@ -335,7 +335,7 @@ fn api_1_2_commands_list_the_folder_open_a_video_and_bubble() {
     // Without a navigator list-folder is an error the plugin returns.
     let call = CommandCall {
         command: "next".into(),
-        context: context.clone(),
+        context,
         navigator: None,
     };
     assert!(
