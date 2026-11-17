@@ -97,7 +97,7 @@ fn backup(conn: &Connection, path: &Path, backup_dir: &Path, from: usize) -> Res
     let name = path
         .file_name()
         .map_or_else(|| "queue.sqlite".into(), |n| n.to_string_lossy().into_owned());
-    let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+    let stamp = jiff::ZonedDateTime::now().strftime("%Y%m%d-%H%M%S");
     let target = backup_dir.join(format!("{name}.v{from}.{stamp}.bak"));
     std::fs::create_dir_all(backup_dir).map_err(|e| StoreError::Backup(e.to_string()))?;
     conn.backup(rusqlite::MAIN_DB, &target, None::<fn(rusqlite::backup::Progress)>)

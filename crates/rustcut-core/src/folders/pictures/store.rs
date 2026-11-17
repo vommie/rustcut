@@ -54,7 +54,7 @@ fn store_error(e: impl std::fmt::Display) -> PictureError {
 }
 
 fn now() -> i64 {
-    chrono::Utc::now().timestamp()
+    jiff::Timestamp::now().as_second()
 }
 
 impl PictureStore {
@@ -190,7 +190,7 @@ fn migrate(conn: &mut Connection, backups: Option<&Path>) -> Result<(), PictureE
         && let Some(backups) = backups
     {
         std::fs::create_dir_all(backups).map_err(store_error)?;
-        let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+        let stamp = jiff::ZonedDateTime::now().strftime("%Y%m%d-%H%M%S");
         let target = backups.join(format!("pictures.sqlite.v{current}.{stamp}.bak"));
         conn.backup(rusqlite::MAIN_DB, &target, None::<fn(rusqlite::backup::Progress)>)
             .map_err(store_error)?;

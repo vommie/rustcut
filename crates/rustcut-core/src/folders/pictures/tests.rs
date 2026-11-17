@@ -105,7 +105,7 @@ fn the_store_keeps_each_picture_once_and_removes_unused_ones() {
     // New pictures stay a while even when unused (the Settings page may not have set them yet).
     let keep: HashSet<String> = std::iter::once(a.hash).collect();
     assert_eq!(store.retain(&keep).unwrap(), 0);
-    let later = chrono::Utc::now().timestamp() + KEEP_NEW_SECS + 1;
+    let later = jiff::Timestamp::now().as_second() + KEEP_NEW_SECS + 1;
     assert_eq!(store.retain_at(&keep, later).unwrap(), 1);
     assert_eq!(store.get(&b.hash).unwrap(), None);
     drop(store);

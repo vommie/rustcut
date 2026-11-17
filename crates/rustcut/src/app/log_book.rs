@@ -48,7 +48,7 @@ impl LogBook {
     }
 
     fn push(&self, level: Level, text: String) {
-        let time = chrono::Local::now().format("%H:%M:%S%.3f").to_string();
+        let time = jiff::ZonedDateTime::now().strftime("%H:%M:%S%.3f").to_string();
         let mut book = self.0.lock();
         book.seq = book.seq.saturating_add(1);
         let seq = book.seq;

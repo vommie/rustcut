@@ -212,9 +212,11 @@ pub(in crate::ui::export) fn length_text(length: Timestamp) -> String {
 
 /// "2026-10-27 19:00 (today)": the date with how long ago it was (user review 2026-10-27).
 fn date_text(time: std::time::SystemTime) -> String {
-    let local: chrono::DateTime<chrono::Local> = time.into();
-    let date = local.format("%Y-%m-%d %H:%M").to_string();
-    match crate::util::ago::ago(local.date_naive(), chrono::Local::now().date_naive()) {
+    let Ok(local) = jiff::ZonedDateTime::try_from(time) else {
+        return String::new();
+    };
+    let date = local.strftime("%Y-%m-%d %H:%M").to_string();
+    match crate::util::ago::ago(local.date(), jiff::ZonedDateTime::now().date()) {
         Some(ago) => format!("{date} ({ago})"),
         None => date,
     }

@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Security
+
+- RustCut's own code no longer uses the date library chrono, which is unmaintained (RUSTSEC-2026-0543); it uses jiff.
+  Times and dates look the same as before (backup and log file names, the clocks in messages, the job card and the Job
+  panel, the date and time in target file names). Slint itself still brings chrono along.
+
 ### Added
 
 - Plugin API 1.2 (`plugin-api-v1.2.0`): plugins can have commands that you run by a key, a File menu entry or a button

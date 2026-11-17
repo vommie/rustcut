@@ -203,7 +203,7 @@ pub fn backup_file(path: &Path, backup_dir: &Path, reason: &str) -> std::io::Res
         .file_name()
         .map_or_else(|| "file".into(), |n| n.to_string_lossy().into_owned());
     std::fs::create_dir_all(backup_dir)?;
-    let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S%.3f");
+    let stamp = jiff::ZonedDateTime::now().strftime("%Y%m%d-%H%M%S%.3f");
     let target = backup_dir.join(format!("{name}.{reason}.{stamp}.bak"));
     std::fs::copy(path, &target)?;
     prune_backups(backup_dir, &name);

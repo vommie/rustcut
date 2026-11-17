@@ -6,7 +6,6 @@
 use std::rc::{Rc, Weak};
 use std::time::Duration;
 
-use chrono::Local;
 use rustcut_core::edit::{Crop, CropHistory, CropMemory, FilterKind};
 use slint::{ComponentHandle as _, ModelRc, VecModel};
 
@@ -49,7 +48,7 @@ impl HistoryPanel {
             page: 0,
             highlight: None,
             shown: Vec::new(),
-            session_start: Local::now().timestamp(),
+            session_start: jiff::Timestamp::now().as_second(),
             saver: None,
             rows: Rc::new(VecModel::default()),
             preview_timer: slint::Timer::default(),
@@ -120,7 +119,7 @@ impl FiltersBridge {
             frame,
             crop,
             pinned: false,
-            used: Local::now().timestamp(),
+            used: jiff::Timestamp::now().as_second(),
             source: self
                 .file
                 .borrow()
@@ -171,7 +170,7 @@ impl FiltersBridge {
             orientation: st.chain().orientation_after(FilterKind::Crop),
             sar: st.crop_sar(),
             session_start: self.history.borrow().session_start,
-            today: Local::now().date_naive(),
+            today: jiff::ZonedDateTime::now().date(),
         }
     }
 
@@ -283,7 +282,7 @@ impl FiltersBridge {
             }
             panel.list.remember(
                 CropMemory {
-                    used: Local::now().timestamp(),
+                    used: jiff::Timestamp::now().as_second(),
                     ..memory.clone()
                 },
                 length,

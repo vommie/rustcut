@@ -225,7 +225,7 @@ impl ExportState {
 
     /// The template's variables for counter `counter` (`None` = no counter).
     pub fn context(&self, facts: &JobFacts, counter: Option<u32>) -> NameContext {
-        let now = chrono::Local::now();
+        let now = jiff::ZonedDateTime::now();
         let source = self
             .source
             .as_deref()
@@ -237,8 +237,8 @@ impl ExportState {
             name: self.name.trim().to_owned(),
             source,
             counter,
-            date: now.format("%Y-%m-%d").to_string(),
-            time: now.format("%H-%M-%S").to_string(),
+            date: now.strftime("%Y-%m-%d").to_string(),
+            time: now.strftime("%H-%M-%S").to_string(),
             profile: facts.profile.clone(),
             codec: facts.codec.to_owned(),
             sections: facts.sections,

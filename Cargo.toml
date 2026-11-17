@@ -26,7 +26,7 @@ exclude = ["crates/rustcut-plugin-host/test-plugin"]
 [workspace.package]
 # Single source of truth for the app version: the About page, the package script and the PKGBUILD read it from here.
 # Claude bumps the patch number whenever a state is testable; major and minor belong to the user.
-version = "0.0.113"
+version = "0.0.114"
 edition = "2024"
 # The lowest toolchain known to work (wasmtime 50 needs 1.97). rust-toolchain.toml pins `stable`.
 rust-version = "1.97"
@@ -84,7 +84,8 @@ atomic-write-file = "0.3"
 trash = "5"
 # XDG config, data and state folders.
 directories = "6"
-chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+# Dates and times (local time of backups, logs and file name templates); chrono is unmaintained (RUSTSEC-2026-0543).
+jiff = "1"
 # Lexical path normalization (`a/./b/../c` -> `a/c`) without touching the drive.
 path-clean = "1"
 # libmpv bindings (LGPL-2.1, linked dynamically like RustView); the default `render` feature brings the render API that draws

@@ -2,7 +2,7 @@
 //! sizes, pinned ones first, newest first in each group. A crop scaled onto this video that equals another entry shows
 //! once. Ten entries per page, and pages only while more than ten exist and the chosen length allows more than ten.
 
-use chrono::{DateTime, Local, NaiveDate};
+use jiff::civil::Date;
 use rustcut_core::edit::{Crop, CropMemory, Fit, Orientation, Size, fit};
 
 /// Entries per page.
@@ -25,7 +25,7 @@ pub struct Context {
     pub sar: f64,
     /// Entries used since this time (Unix seconds) are this session's.
     pub session_start: i64,
-    pub today: NaiveDate,
+    pub today: Date,
 }
 
 /// The small drawing: the frame's size in its box and the kept area in it.
@@ -157,15 +157,16 @@ fn ratio_text(size: Size, sar: f64) -> String {
         .map_or_else(|| format!("{ratio:.2}:1"), |(_, name)| (*name).to_owned())
 }
 
-fn tip(memory: &CropMemory, kind: Fit, today: NaiveDate) -> String {
-    let when = DateTime::from_timestamp(memory.used, 0)
+fn tip(memory: &CropMemory, kind: Fit, today: Date) -> String {
+    let when = jiff::Timestamp::from_second(memory.used)
+        .ok()
         .filter(|_| memory.used > 0)
         .map(|t| {
-            let local = t.with_timezone(&Local);
-            if local.date_naive() == today {
-                local.format("today %H:%M").to_string()
+            let local = t.to_zoned_datetime(jiff::tz::TimeZone::system());
+            if local.date() == today {
+                local.strftime("today %H:%M").to_string()
             } else {
-                local.format("%Y-%m-%d %H:%M").to_string()
+                local.strftime("%Y-%m-%d %H:%M").to_string()
             }
         });
     let made = [Some(memory.source.clone()).filter(|s| !s.is_empty()), when]
@@ -269,7 +270,7 @@ mod tests {
             orientation: Orientation::default(),
             sar: 1.0,
             session_start: 100,
-            today: NaiveDate::default(),
+            today: Date::default(),
         }
     }
 

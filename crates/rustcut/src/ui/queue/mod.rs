@@ -384,7 +384,7 @@ async fn follow(service: QueueService, shared: Arc<Mutex<Shared>>, ui: UiDispatc
             });
         });
     };
-    let now = || chrono::Utc::now().timestamp_millis();
+    let now = || jiff::Timestamp::now().as_millisecond();
     let mut resync = true;
     loop {
         if resync {
