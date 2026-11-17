@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.114] - 2026-11-17
+
 ### Security
 
 - RustCut's own code no longer uses the date library chrono, which is unmaintained (RUSTSEC-2026-0543); it uses jiff.
@@ -1559,7 +1561,8 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.112...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.114...HEAD
+[0.0.114]: https://github.com/vommie/rustcut/compare/v0.0.112...v0.0.114
 [0.0.112]: https://github.com/vommie/rustcut/compare/v0.0.111...v0.0.112
 [0.0.111]: https://github.com/vommie/rustcut/compare/v0.0.110...v0.0.111
 [0.0.110]: https://github.com/vommie/rustcut/compare/v0.0.109...v0.0.110
