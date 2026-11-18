@@ -1,5 +1,5 @@
 //! The words and numbers of the folder progress bar (Q-NF2, pure): the number candidates the bar tries from the longest
-//! to the shortest (it shows the first that fits, else none), the percent, the order in words and the neighbors window.
+//! to the shortest (it shows the first that fits, else none), the percent, the order in words and as the navigator's chip.
 
 use rustcut_core::folder_walk::order::{SortRole, SortSpec};
 use rustcut_core::folder_walk::{NamesBecause, OrderSource};
@@ -73,6 +73,17 @@ pub fn title(position: usize, total: usize) -> String {
     format!("{position} of {total} ({})", percent(position, total))
 }
 
+/// "Modified, newest first", or "Names A to Z" when the order is not Dolphin's (the navigator's chip).
+pub fn order_chip(sort: &SortSpec, source: &OrderSource) -> String {
+    match source {
+        OrderSource::FileManager => {
+            let words = order_words(sort, source);
+            words.strip_prefix("Dolphin: ").unwrap_or(&words).to_owned()
+        }
+        OrderSource::Names(_) => "Names A to Z".to_owned(),
+    }
+}
+
 /// "Dolphin: Modified, newest first", or names A to Z with the reason.
 pub fn order_words(sort: &SortSpec, source: &OrderSource) -> String {
     let role = match &sort.role {
@@ -104,13 +115,6 @@ pub fn order_words(sort: &SortSpec, source: &OrderSource) -> String {
             format!("Names A to Z ({why})")
         }
     }
-}
-
-/// The places of the neighbors list: up to `around` before and after `current`, within `0..total`.
-pub fn neighbors(current: usize, total: usize, around: usize) -> std::ops::Range<usize> {
-    let start = current.saturating_sub(around);
-    let end = current.saturating_add(around).saturating_add(1).min(total);
-    start.min(end)..end
 }
 
 #[cfg(test)]
@@ -164,13 +168,10 @@ mod tests {
             order_words(&names, &OrderSource::Names(NamesBecause::NotOpen)),
             "Names A to Z (no Dolphin tab shows the folder)"
         );
-    }
-
-    #[test]
-    fn neighbors_stay_inside_the_folder() {
-        assert_eq!(neighbors(10, 100, 5), 5..16);
-        assert_eq!(neighbors(1, 100, 5), 0..7);
-        assert_eq!(neighbors(99, 100, 5), 94..100);
-        assert_eq!(neighbors(0, 1, 5), 0..1);
+        assert_eq!(order_chip(&date, &OrderSource::FileManager), "Modified, newest first");
+        assert_eq!(
+            order_chip(&date, &OrderSource::Names(NamesBecause::Off)),
+            "Names A to Z"
+        );
     }
 }

@@ -567,7 +567,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         editor: &editor,
         opener: &opener,
         queue: &queue,
-        context_menu: &menu,
+        navigator_regex: loaded.ui_state.navigator_regex,
     });
     // Moving target files (P12 block 7): the queue's menu opens the dialog.
     let relocate = crate::ui::relocate::RelocateBridge::install(
@@ -793,6 +793,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     dialogs::capture(&main, &mut ui_state.dialogs);
     logs.save_into(&mut ui_state.logs);
     settings_window.save_into(&mut ui_state.settings);
+    ui_state.navigator_regex = plugin_commands.navigator_regex();
     // A write of the pause that still runs ends first, and none follows the full state.
     ui_writer.close();
     persistence::save_ui_state(&loaded, &ui_state);

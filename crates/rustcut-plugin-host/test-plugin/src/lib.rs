@@ -27,7 +27,11 @@ impl Plugin for TestPlugin {
             return Err("mode refuse refuses every configuration".to_owned());
         }
         rustcut_plugin_api::log(Level::Info, &format!("configured, mode {}", parsed.mode));
-        // API 1.4: mode "view" asks for the folder view, every other mode for none.
+        // API 1.4: mode "view" asks for the folder view, every other mode for none. API 1.5: its rows before it (too
+        // many, so RustCut moves them into its range).
+        if parsed.mode == "view" {
+            rustcut_plugin_api::set_neighbor_rows(99);
+        }
         let view = (parsed.mode == "view").then_some(rustcut_plugin_api::FolderView {
             request: FolderRequest { file_manager: FileManagerMode::OpenTab, hidden: HiddenFiles::Skip, videos_only: true },
             progress: true,

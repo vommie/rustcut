@@ -5,6 +5,7 @@
 //! The list of commands (`registry`) is rebuilt when the plugins, their settings or the keymap change; the Settings
 //! window reads it through [`entries`] and [`listen`] for the key conflicts and the Hotkeys page's "Plugins" group.
 
+mod navigator;
 mod progress;
 mod progress_text;
 mod registry;
@@ -65,7 +66,8 @@ pub struct Parts<'a> {
     pub editor: &'a Rc<Editor>,
     pub opener: &'a Rc<FileOpener>,
     pub queue: &'a Rc<QueueBridge>,
-    pub context_menu: &'a Rc<crate::ui::menu::ContextMenuBridge>,
+    /// The folder navigator's search is a regular expression (`ui-state.toml`, Q-NF3).
+    pub navigator_regex: bool,
 }
 
 /// A key held because the command would discard unsaved sections.
@@ -96,10 +98,10 @@ pub struct CommandsBridge {
     /// The menu bar buttons before and after the folder view's bar.
     before: Rc<VecModel<PluginCommandView>>,
     after: Rc<VecModel<PluginCommandView>>,
-    context_menu: Weak<crate::ui::menu::ContextMenuBridge>,
     /// The plugins' one folder cache (commands and the folder view share it).
     folder_cache: Arc<rustcut_core::folder_walk::FolderCache>,
     progress: progress::Progress,
+    navigator: navigator::NavigatorUi,
 }
 
 impl CommandsBridge {
@@ -121,9 +123,9 @@ impl CommandsBridge {
             menu: Rc::new(VecModel::default()),
             before: Rc::new(VecModel::default()),
             after: Rc::new(VecModel::default()),
-            context_menu: Rc::downgrade(parts.context_menu),
             folder_cache: Arc::clone(&parts.plugins.service().folder_cache),
             progress: progress::Progress::default(),
+            navigator: navigator::NavigatorUi::new(parts.navigator_regex, 15),
         });
         BRIDGE.with(|b| *b.borrow_mut() = Rc::downgrade(&bridge));
         let global = parts.window.global::<PluginCommands<'_>>();
@@ -143,6 +145,7 @@ impl CommandsBridge {
             }
         });
         bridge.follow_folder();
+        bridge.install_navigator();
         let weak = Rc::downgrade(&bridge);
         global.on_run(move |plugin, id, from_button| {
             if let Some(bridge) = weak.upgrade() {
@@ -182,6 +185,11 @@ impl CommandsBridge {
         }));
         bridge.rebuild();
         bridge
+    }
+
+    /// For `ui-state.toml` at quit.
+    pub fn navigator_regex(&self) -> bool {
+        self.navigator.regex()
     }
 
     fn rebuild(&self) {

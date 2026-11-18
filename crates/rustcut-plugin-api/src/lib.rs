@@ -73,8 +73,8 @@ pub mod commands_bindings {
         default_bindings_module: "rustcut_plugin_api::__commands_bindings",
         // wit-bindgen matches these with the package version: change them with every API version.
         with: {
-            "rustcut:plugin/host@1.4.0": crate::bindings::rustcut::plugin::host,
-            "rustcut:plugin/types@1.4.0": crate::bindings::rustcut::plugin::types,
+            "rustcut:plugin/host@1.5.0": crate::bindings::rustcut::plugin::host,
+            "rustcut:plugin/types@1.5.0": crate::bindings::rustcut::plugin::types,
         },
         generate_all,
     });
@@ -128,7 +128,7 @@ pub use commands_bindings::rustcut::plugin::command_host::{
 };
 
 /// The plugin API version this kit implements.
-pub const API_VERSION: &str = "1.4.0";
+pub const API_VERSION: &str = "1.5.0";
 
 /// Writes a line into the plugin log. Outside RustCut (native unit tests) it goes to stderr.
 pub fn log(level: Level, message: &str) {
@@ -202,6 +202,15 @@ pub fn set_folder_view(view: Option<FolderView>) {
     commands_bindings::rustcut::plugin::command_host::set_folder_view(view);
     #[cfg(not(target_arch = "wasm32"))]
     let _ = view;
+}
+
+/// Since API 1.5: how many files a page of the neighbor list shows (5 to 50, RustCut's default is 15). Call it in
+/// `configure` with what the settings say. Outside RustCut it does nothing. Needs `api = "1.5"`.
+pub fn set_neighbor_rows(rows: u32) {
+    #[cfg(target_arch = "wasm32")]
+    commands_bindings::rustcut::plugin::command_host::set_neighbor_rows(rows);
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = rows;
 }
 
 /// Since API 1.2: opens `path` in RustCut after `run` returned (like a dropped file). Outside RustCut it does nothing.

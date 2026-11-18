@@ -64,6 +64,7 @@ import { ToastLayer } from "notice_toasts.slint";
 import { BellPopup, NoticeBell } from "notice_bell.slint";
 import { BubbleButtonView, BubbleLayer, BubbleView, Bubbles } from "bubble.slint";
 import { PluginCommandBar, PluginCommands, PluginCommandView } from "plugin_commands.slint";
+import { FolderNavigator, FolderNavigatorFlyout, NavRow, NavSegment, NavSlot } from "folder_navigator.slint";
 import { NewerFileDialog, Problems, QueueDatabaseDialog } from "problem_dialogs.slint";
 import { TextLogic, TextSplit } from "controls_text.slint";
 import { DragLogic, DragState } from "drag.slint";
@@ -83,7 +84,7 @@ export {
     ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power, AppTray, Jump, Notices,
     ToastView, ToastTagView, BannerView, HistoryView, MessageKindView, Bubbles, BubbleView, BubbleButtonView, Problems, ColorCodec, ColorPickerWindow, TagFilterWindow, TagFilterRowView,
     TextLogic, TextSplit, DragLogic, DragState, AppMenu, MenuBarMenu, TabView, JobCard, JobCardPill, JobCardRow, JobCardView,
-    PluginCommands, PluginCommandView
+    PluginCommands, PluginCommandView, FolderNavigator, NavRow, NavSegment, NavSlot
 }
 
 export component MainWindow inherits Window {
@@ -137,7 +138,7 @@ export component MainWindow inherits Window {
     // A modal dialog covers the window: the menu bar's keys (which Slint gives the menu before any focused element) must
     // not act on the editor behind it (found by the P8 audit: I, O and Shift+I moved the marks under the save question).
     property <bool> modal-open: FolderList.open || Relocate.open || Relocate.records-open || CropHistoryUi.open || Export.dialog-open || Export.meta-open || Power.asking || Problems.newer-open
-        || Problems.db-open || JobLoad.open || PlayerPopup.time-open;
+        || Problems.db-open || JobLoad.open || PlayerPopup.time-open || FolderNavigator.open;
     changed modal-open => {
         Shortcuts.modal-changed(root.modal-open);
     }
@@ -669,6 +670,18 @@ export component MainWindow inherits Window {
         anchor-y: Queue.filter-anchor-y - root.content-y;
         anchor-width: Queue.filter-anchor-width;
         anchor-height: Queue.filter-anchor-height;
+    }
+
+    // The folder navigator hangs from the plugin's button or bar it was opened on (Q-NF3).
+    if FolderNavigator.open: FolderNavigatorFlyout {
+        x: 0;
+        y: root.bar-height;
+        width: parent.width;
+        height: parent.height - root.bar-height;
+        anchor-x: FolderNavigator.anchor-x - root.content-x;
+        anchor-y: FolderNavigator.anchor-y - root.content-y;
+        anchor-width: FolderNavigator.anchor-width;
+        anchor-height: FolderNavigator.anchor-height;
     }
 
     // The crop history hangs from its button (P12 4.3).
