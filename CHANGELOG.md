@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.116] - 2026-11-18
+
 ### Added
 
 - Where the open video stands in its folder, in the menu bar (Next in Folder 1.2 with "Progress in the menu bar"): a
@@ -1601,7 +1603,8 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.115...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.116...HEAD
+[0.0.116]: https://github.com/vommie/rustcut/compare/v0.0.115...v0.0.116
 [0.0.115]: https://github.com/vommie/rustcut/compare/v0.0.114...v0.0.115
 [0.0.114]: https://github.com/vommie/rustcut/compare/v0.0.112...v0.0.114
 [0.0.112]: https://github.com/vommie/rustcut/compare/v0.0.111...v0.0.112
