@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use super::{NameOrder, SortingChoice, parse_locale, split_extension};
+use super::{NameKey, NameOrder, SortingChoice, extension_start, parse_locale};
 
 /// The order Dolphin 26.08 showed for these names (name ascending, natural sorting, en_US; 2026-11-17).
 const DOLPHIN_ORDER: [&str; 21] = [
@@ -76,18 +76,29 @@ fn the_extension_counts_after_the_base_name() {
 
 #[test]
 fn extension_split_follows_dolphin() {
-    let chars = |s: &str| s.chars().collect::<Vec<char>>();
-    let text = |s: &[char]| s.iter().collect::<String>();
-    for (name, base, ext) in [
-        ("a.tar.gz", "a.tar", ".gz"),
-        ("v1.5", "v1.5", ""),
-        ("clip.final cut", "clip.final cut", ""),
-        (".hidden", ".hidden", ""),
-        ("noext", "noext", ""),
+    for (name, base) in [
+        ("a.tar.gz", "a.tar"),
+        ("v1.5", "v1.5"),
+        ("clip.final cut", "clip.final cut"),
+        (".hidden", ".hidden"),
+        ("noext", "noext"),
+        ("Ärger.mkv", "Ärger"),
     ] {
-        let name = chars(name);
-        let (b, e) = split_extension(&name);
-        assert_eq!((text(b), text(e)), (base.to_owned(), ext.to_owned()), "{}", text(&name));
+        let split = extension_start(name).unwrap_or(name.len());
+        assert_eq!(name.get(..split), Some(base), "{name}");
+    }
+}
+
+#[test]
+fn keys_compare_like_names() {
+    let order = NameOrder::new(SortingChoice::Natural, "en_US.UTF-8");
+    for pair in DOLPHIN_ORDER.windows(2) {
+        let [a, b] = pair else { continue };
+        assert_eq!(
+            order.compare_keys(&NameKey::new(a), &NameKey::new(b)),
+            order.compare(a, b)
+        );
+        assert_eq!(NameKey::new(a).name(), *a);
     }
 }
 
@@ -111,4 +122,43 @@ fn config_values_and_locales() {
     assert_eq!(parse_locale("de_DE.UTF-8@euro").to_string(), "de-DE");
     assert_eq!(parse_locale("POSIX").to_string(), "und");
     assert_eq!(parse_locale("not a locale!").to_string(), "und");
+}
+
+#[test]
+fn sort_keys_sort_like_the_collator() {
+    let order = NameOrder::new(SortingChoice::Natural, "de_DE.UTF-8");
+    let names = [
+        "a",
+        "A",
+        "ä",
+        "Ä",
+        "a1",
+        "a01",
+        "a 1",
+        "a.b",
+        "a-b",
+        "a_b",
+        "File 9.mp4",
+        "file 10.mp4",
+        "Öl",
+        "ol",
+        "",
+        "1.10",
+        "1.9",
+        "x1.2.3",
+        "x1.2.10",
+        "äb",
+        "ab",
+        "Ab",
+        "b",
+    ];
+    for a in names {
+        for b in names {
+            assert_eq!(
+                order.compare_keys(&order.key(a), &order.key(b)),
+                order.compare(a, b),
+                "{a:?} / {b:?}"
+            );
+        }
+    }
 }

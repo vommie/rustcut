@@ -119,8 +119,8 @@ fn read_at(place: &Path) -> Option<HashMap<String, HashMap<String, String>>> {
 /// Dolphin's `directoryHashForUrl`: SHA-1 of the encoded file URL, base64, `/` -> `-`.
 #[must_use]
 pub fn folder_hash(folder: &Path) -> Option<String> {
-    let url = url::Url::from_file_path(folder).ok()?;
-    let digest = Sha1::digest(url.as_str().as_bytes());
+    let url = super::file_url::file_url(folder)?;
+    let digest = Sha1::digest(url.as_bytes());
     Some(
         base64::engine::general_purpose::STANDARD
             .encode(digest)

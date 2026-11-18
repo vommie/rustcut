@@ -2,7 +2,7 @@
 //! `ok` (a notice and, with a video, a target), `fail` (an error), `panic`, `slow` (an endless loop),
 //! `memory` (allocates until it is stopped), `quiet` (API 1.1: hides its marks, sets 3 stars and tells the target
 //! folder id it reads from the host). API 1.2: the command `next` lists the video's folder by name and opens the next
-//! video with a bubble; `slow` never ends.
+//! video with a bubble; `step` (API 1.3) does it with `step-folder`; `slow` never ends.
 
 use rustcut_plugin_api::{
     Action, Commands, Context, Event, FileManagerMode, FolderRequest, HiddenFiles, Issue, Level, Notice, Place, Plugin,
@@ -98,6 +98,20 @@ impl Commands for TestPlugin {
                     Some(file) => {
                         rustcut_plugin_api::open_video(&file.path);
                         rustcut_plugin_api::bubble(&format!("{} of {}", file.name, listing.files.len()));
+                        Ok(Vec::new())
+                    }
+                    None => Ok(vec![Action::Notify(Notice::new(Place::Toast, Level::Info, "Last video", ""))]),
+                }
+            }
+            // API 1.3: one step forward, only the landing file crosses over.
+            "step" => {
+                let request =
+                    FolderRequest { file_manager: FileManagerMode::Off, hidden: HiddenFiles::Skip, videos_only: true };
+                let step = rustcut_plugin_api::step_folder(request, true, true, false)?;
+                match step.file {
+                    Some(file) => {
+                        rustcut_plugin_api::open_video(&file.path);
+                        rustcut_plugin_api::bubble(&format!("{} of {} ({} skipped)", step.position, step.total, step.skipped));
                         Ok(Vec::new())
                     }
                     None => Ok(vec![Action::Notify(Notice::new(Place::Toast, Level::Info, "Last video", ""))]),

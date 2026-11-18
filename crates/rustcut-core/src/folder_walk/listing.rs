@@ -5,8 +5,11 @@ use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 
+use super::cache::{FolderCache, Variant};
 use super::dolphin::{bus, props};
-use super::natural::{NameOrder, SortingChoice};
+use rayon::iter::{IntoParallelIterator as _, ParallelIterator as _};
+
+use super::natural::{NameKey, NameOrder, SortingChoice};
 use super::order::{self, Entry, SortRole, SortSpec};
 use crate::media::is_video_file;
 
@@ -90,11 +93,16 @@ pub struct Listing {
     pub source: OrderSource,
 }
 
-/// Lists the folder of `request.current`; asks Dolphin when the request says so.
+/// Lists the folder of `request.current`; asks Dolphin when the request says so. With `cache`, a listing of the same
+/// folder that no change touched since is used again (see [`super::cache`]).
 ///
 /// # Errors
 /// The video has no folder or the folder cannot be read.
-pub async fn list(request: &Request, paths: Option<&props::DolphinPaths>) -> Result<Listing, String> {
+pub async fn list(
+    request: &Request,
+    paths: Option<&props::DolphinPaths>,
+    cache: Option<&FolderCache>,
+) -> Result<Listing, String> {
     // Lexically clean (`a/../b` = `b`): Dolphin compares folder URLs exactly.
     let current_path = path_clean::clean(&request.current);
     let folder = current_path.parent().ok_or("the video has no folder")?.to_path_buf();
@@ -107,16 +115,47 @@ pub async fn list(request: &Request, paths: Option<&props::DolphinPaths>) -> Res
     };
     let current = current_path.clone();
     let videos_only = request.videos_only;
-    let want_types = sort.role == SortRole::Type;
+    let wanted = Wanted {
+        hidden: hidden_shown,
+        videos_only,
+        metadata: matches!(
+            sort.role,
+            SortRole::Size | SortRole::Modified | SortRole::Created | SortRole::Accessed
+        ),
+        types: sort.role == SortRole::Type,
+    };
+    let variant = Variant {
+        sort: sort.clone(),
+        choice,
+        hidden: hidden_shown,
+        videos_only,
+    };
+    if let Some(files) = cache.and_then(|c| c.get(&folder, &variant)) {
+        tracing::debug!(
+            "[NextInFolder] {} unchanged: its listing is used again",
+            folder.display()
+        );
+        let current = files.iter().position(|f| f == &current_path);
+        return Ok(Listing {
+            files: files.to_vec(),
+            current,
+            sort,
+            source,
+        });
+    }
+    let ticket = cache.and_then(|c| c.begin(&folder));
     let sort_spec = sort.clone();
     let files = tokio::task::spawn_blocking(move || {
-        let mut entries = read_folder(&folder, &current, hidden_shown, videos_only, want_types)?;
         let names = NameOrder::for_environment(choice);
+        let mut entries = read_folder(&folder, &current, wanted, &names)?;
         order::sort(&mut entries, &sort_spec, &names);
         Ok::<_, String>(entries.into_iter().map(|e| e.path).collect::<Vec<_>>())
     })
     .await
     .map_err(|e| e.to_string())??;
+    if let (Some(cache), Some(ticket)) = (cache, ticket) {
+        cache.put(ticket, variant, std::sync::Arc::new(files.clone()));
+    }
     let current = files.iter().position(|f| f == &current_path);
     Ok(Listing {
         files,
@@ -192,44 +231,71 @@ fn seconds(time: std::io::Result<SystemTime>) -> i64 {
         .unwrap_or(-1)
 }
 
-fn read_folder(
-    folder: &Path,
-    current: &Path,
-    hidden_shown: bool,
-    videos_only: bool,
-    want_types: bool,
-) -> Result<Vec<Entry>, String> {
+/// The files of `folder` that count, with what the order needs. A name sort reads only the folder (the file type
+/// comes with each entry, no `stat`); sizes and dates are read on every core, so a slow mount answers many at once.
+fn read_folder(folder: &Path, current: &Path, wanted: Wanted, names: &NameOrder) -> Result<Vec<Entry>, String> {
     let reader = std::fs::read_dir(folder).map_err(|e| format!("{}: {e}", folder.display()))?;
-    let mut entries = Vec::new();
+    let mut found = Vec::new();
     for item in reader.flatten() {
-        let path = item.path();
-        let Ok(meta) = std::fs::metadata(&path) else { continue };
-        if !meta.is_file() {
-            continue;
-        }
-        let name = item.file_name().to_string_lossy().into_owned();
+        let file_name = item.file_name();
+        let is_current = current.file_name() == Some(file_name.as_os_str());
+        let name = file_name.to_string_lossy().into_owned();
         let hidden = name.starts_with('.');
-        let is_current = path == current;
-        if !is_current && ((hidden && !hidden_shown) || (videos_only && !is_video_file(&path))) {
+        // Names first: most files are left out before anything else is asked.
+        if !is_current && ((hidden && !wanted.hidden) || (wanted.videos_only && !is_video_file(&name))) {
             continue;
         }
-        let type_name = if want_types {
-            super::type_name::of(&path)
-        } else {
-            String::new()
+        // The entry's type costs nothing on most file systems; a link is followed (its target counts).
+        let (is_file, link) = match item.file_type() {
+            Ok(kind) if kind.is_symlink() => (true, true),
+            Ok(kind) => (kind.is_file(), false),
+            Err(_) => (true, true),
         };
-        entries.push(Entry {
-            name,
-            hidden,
-            size: meta.len(),
-            modified: seconds(meta.modified()),
-            created: seconds(meta.created()),
-            accessed: seconds(meta.accessed()),
-            type_name,
-            path,
-        });
+        if is_file {
+            found.push((name, file_name, hidden, link));
+        }
+    }
+    let mut entries: Vec<Entry> = found
+        .into_par_iter()
+        .filter_map(|(name, file_name, hidden, link)| {
+            let path = folder.join(file_name);
+            let meta = if wanted.metadata || link {
+                Some(std::fs::metadata(&path).ok()?)
+            } else {
+                None
+            };
+            if meta.as_ref().is_some_and(|m| !m.is_file()) {
+                return None;
+            }
+            let time = |get: fn(&std::fs::Metadata) -> std::io::Result<SystemTime>| {
+                meta.as_ref().map_or(-1, |m| seconds(get(m)))
+            };
+            Some(Entry {
+                key: names.key(&name),
+                hidden,
+                size: meta.as_ref().map_or(0, std::fs::Metadata::len),
+                modified: time(std::fs::Metadata::modified),
+                created: time(std::fs::Metadata::created),
+                accessed: time(std::fs::Metadata::accessed),
+                type_name: NameKey::default(),
+                path,
+            })
+        })
+        .collect();
+    if wanted.types {
+        super::type_name::fill(&mut entries, names);
     }
     Ok(entries)
+}
+
+/// What a listing needs besides the names.
+#[derive(Debug, Clone, Copy)]
+struct Wanted {
+    hidden: bool,
+    videos_only: bool,
+    /// Sizes and dates (the sort role needs them).
+    metadata: bool,
+    types: bool,
 }
 
 #[cfg(test)]

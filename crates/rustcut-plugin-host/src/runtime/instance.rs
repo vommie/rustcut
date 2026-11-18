@@ -74,6 +74,31 @@ pub(super) struct State {
     limiter: Limiter,
     log: Vec<LogLine>,
     call: Call,
+    /// The running call's clock: its start, its time limit and the time spent in RustCut's host functions (a folder
+    /// listing over a slow mount, Dolphin's answer), which never counts against the plugin.
+    clock: Clock,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Clock {
+    started: std::time::Instant,
+    limit: Duration,
+    host: Duration,
+}
+
+impl Clock {
+    fn new(limit: Duration) -> Self {
+        Self {
+            started: std::time::Instant::now(),
+            limit,
+            host: Duration::ZERO,
+        }
+    }
+
+    /// The plugin's own time so far.
+    fn used(&self) -> Duration {
+        self.started.elapsed().saturating_sub(self.host)
+    }
 }
 
 /// What the host's functions know during one call of `handle` (API 1.1) or `run` (API 1.2); empty outside them.
@@ -122,9 +147,39 @@ impl command_host::Host for State {
         let (Some(navigator), Some(video)) = (&self.call.navigator, &self.call.video) else {
             return Err("no video is open".to_owned());
         };
-        navigator
+        let start = std::time::Instant::now();
+        let listing = navigator
             .list_folder(video, convert_commands::request_from_wit(request))
-            .map(convert_commands::listing_to_wit)
+            .map(convert_commands::listing_to_wit);
+        self.clock.host += start.elapsed();
+        listing
+    }
+
+    fn step_folder(
+        &mut self,
+        request: command_host::FolderRequest,
+        forward: bool,
+        skip_with_job: bool,
+        wrap: bool,
+    ) -> Result<command_host::FolderStep, String> {
+        if !self.call.command {
+            return Err("step-folder works only while a command runs".to_owned());
+        }
+        let (Some(navigator), Some(video)) = (&self.call.navigator, &self.call.video) else {
+            return Err("no video is open".to_owned());
+        };
+        let start = std::time::Instant::now();
+        let step = navigator
+            .step_folder(
+                video,
+                convert_commands::request_from_wit(request),
+                forward,
+                skip_with_job,
+                wrap,
+            )
+            .map(convert_commands::step_to_wit);
+        self.clock.host += start.elapsed();
+        step
     }
 
     fn open_video(&mut self, path: String) {
@@ -205,10 +260,23 @@ impl Instance {
             limiter,
             log: Vec::new(),
             call: Call::default(),
+            clock: Clock::new(limits.time),
         };
         let mut store = Store::new(&loaded.inner.engine, state);
         store.limiter(|state| &mut state.limiter);
         store.set_epoch_deadline(deadline_ticks(limits.time));
+        // At the deadline: go on while the plugin's own time (without the host functions') is within the limit.
+        store.epoch_deadline_callback(|context| {
+            let clock = context.data().clock;
+            let used = clock.used();
+            if used < clock.limit {
+                Ok(wasmtime::UpdateDeadline::Continue(deadline_ticks(
+                    clock.limit.saturating_sub(used),
+                )))
+            } else {
+                Err(Trap::Interrupt.into())
+            }
+        });
         let plugin = match &loaded.inner.commands_pre {
             Some(pre) => pre.instantiate(&mut store).map(Bound::Commands),
             None => loaded.inner.pre.instantiate(&mut store).map(Bound::Plain),
@@ -323,6 +391,7 @@ impl Instance {
 
     fn call<T>(&mut self, run: impl FnOnce(&Bound, &mut Store<State>) -> wasmtime::Result<T>) -> Result<T, CallError> {
         self.store.data_mut().limiter.memory_refused = false;
+        self.store.data_mut().clock = Clock::new(self.limits.time);
         self.store.set_epoch_deadline(deadline_ticks(self.limits.time));
         let result = run(&self.plugin, &mut self.store);
         self.collect_output();
