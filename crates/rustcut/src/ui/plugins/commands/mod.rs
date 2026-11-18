@@ -5,6 +5,8 @@
 //! The list of commands (`registry`) is rebuilt when the plugins, their settings or the keymap change; the Settings
 //! window reads it through [`entries`] and [`listen`] for the key conflicts and the Hotkeys page's "Plugins" group.
 
+mod progress;
+mod progress_text;
 mod registry;
 
 use std::cell::{Cell, RefCell};
@@ -13,7 +15,7 @@ use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::time::Duration;
 
-use rustcut_core::plugins::{Outcome, PluginCommand};
+use rustcut_core::plugins::{FolderView, Outcome, PluginCommand, PluginState};
 use rustcut_core::settings::Settings;
 use slint::{ComponentHandle, ModelRc, VecModel};
 
@@ -63,6 +65,7 @@ pub struct Parts<'a> {
     pub editor: &'a Rc<Editor>,
     pub opener: &'a Rc<FileOpener>,
     pub queue: &'a Rc<QueueBridge>,
+    pub context_menu: &'a Rc<crate::ui::menu::ContextMenuBridge>,
 }
 
 /// A key held because the command would discard unsaved sections.
@@ -77,6 +80,7 @@ struct Held {
 
 pub struct CommandsBridge {
     me: Weak<Self>,
+    window: slint::Weak<MainWindow>,
     ui: UiDispatcher,
     runtime: tokio::runtime::Handle,
     plugins: Weak<PluginsBridge>,
@@ -89,13 +93,20 @@ pub struct CommandsBridge {
     held: RefCell<Option<Held>>,
     hold_ms: Cell<u64>,
     menu: Rc<VecModel<PluginCommandView>>,
-    buttons: Rc<VecModel<PluginCommandView>>,
+    /// The menu bar buttons before and after the folder view's bar.
+    before: Rc<VecModel<PluginCommandView>>,
+    after: Rc<VecModel<PluginCommandView>>,
+    context_menu: Weak<crate::ui::menu::ContextMenuBridge>,
+    /// The plugins' one folder cache (commands and the folder view share it).
+    folder_cache: Arc<rustcut_core::folder_walk::FolderCache>,
+    progress: progress::Progress,
 }
 
 impl CommandsBridge {
     pub fn install(parts: &Parts<'_>) -> Rc<Self> {
         let bridge = Rc::new_cyclic(|me| Self {
             me: Weak::clone(me),
+            window: parts.window.as_weak(),
             ui: parts.ui.clone(),
             runtime: parts.runtime.clone(),
             plugins: Rc::downgrade(parts.plugins),
@@ -108,12 +119,30 @@ impl CommandsBridge {
             held: RefCell::new(None),
             hold_ms: Cell::new(0),
             menu: Rc::new(VecModel::default()),
-            buttons: Rc::new(VecModel::default()),
+            before: Rc::new(VecModel::default()),
+            after: Rc::new(VecModel::default()),
+            context_menu: Rc::downgrade(parts.context_menu),
+            folder_cache: Arc::clone(&parts.plugins.service().folder_cache),
+            progress: progress::Progress::default(),
         });
         BRIDGE.with(|b| *b.borrow_mut() = Rc::downgrade(&bridge));
         let global = parts.window.global::<PluginCommands<'_>>();
         global.set_menu(ModelRc::from(Rc::clone(&bridge.menu)));
-        global.set_buttons(ModelRc::from(Rc::clone(&bridge.buttons)));
+        global.set_buttons_before(ModelRc::from(Rc::clone(&bridge.before)));
+        global.set_buttons_after(ModelRc::from(Rc::clone(&bridge.after)));
+        let weak = Rc::downgrade(&bridge);
+        global.on_open_neighbors(move |x, y, width, height| {
+            if let Some(bridge) = weak.upgrade() {
+                bridge.open_neighbors([x, y, width, height]);
+            }
+        });
+        let weak = Rc::downgrade(&bridge);
+        parts.plugins.listen_opened(move |path| {
+            if let Some(bridge) = weak.upgrade() {
+                bridge.video_opened(path);
+            }
+        });
+        bridge.follow_folder();
         let weak = Rc::downgrade(&bridge);
         global.on_run(move |plugin, id, from_button| {
             if let Some(bridge) = weak.upgrade() {
@@ -179,12 +208,38 @@ impl CommandsBridge {
             shortcut: e.key_label().into(),
             icon: icon(&e.icon),
             discards: e.discards_sections,
+            neighbors: false,
         };
         crate::util::model::sync(
             &self.menu,
             entries.iter().filter(|e| e.menu).take(6).map(view).collect(),
         );
-        crate::util::model::sync(&self.buttons, entries.iter().filter(|e| e.button).map(view).collect());
+        // The folder view (API 1.4) of the first running plugin with one; its bar stands in the middle of its buttons.
+        let owner = self.plugins.upgrade().and_then(|p| {
+            p.list()
+                .iter()
+                .find(|i| i.state == PluginState::Ready && i.folder_view.is_some())
+                .map(|i| (i.id.clone(), i.folder_view))
+        });
+        let owner = owner.and_then(|(id, view)| view.map(|v| (id, v)));
+        let mut buttons: Vec<PluginCommandView> = entries.iter().filter(|e| e.button).map(view).collect();
+        let at = split_at(&buttons, owner.as_ref());
+        if let Some((id, folder_view)) = &owner {
+            for button in buttons.iter_mut().filter(|b| b.plugin.as_str() == id) {
+                button.neighbors = folder_view.neighbors;
+            }
+        }
+        let after = buttons.split_off(at);
+        let owner_has_buttons = owner
+            .as_ref()
+            .is_some_and(|(id, _)| buttons.iter().chain(&after).any(|b| b.plugin.as_str() == id));
+        crate::util::model::sync(&self.before, buttons);
+        crate::util::model::sync(&self.after, after);
+        if let Some(window) = self.window.upgrade() {
+            let list_button = owner.as_ref().is_some_and(|(_, v)| v.neighbors && !v.progress) && !owner_has_buttons;
+            window.global::<PluginCommands<'_>>().set_list_button(list_button);
+        }
+        self.set_owner(owner);
         tell_taken(&self.entries.borrow(), &entries);
         self.entries.replace(Rc::new(entries));
         for listener in self.listeners.borrow().iter() {
@@ -339,6 +394,22 @@ impl CommandsBridge {
             tracing::info!("[Plugins] {}: opens {}", entry.plugin, path.display());
             opener.open(path);
         }
+    }
+}
+
+/// Where the folder view's bar goes among the buttons: after the first half of its plugin's buttons (between previous
+/// and next), at the end when its plugin shows none.
+fn split_at(buttons: &[PluginCommandView], owner: Option<&(String, FolderView)>) -> usize {
+    let Some((id, _)) = owner else { return buttons.len() };
+    let own: Vec<usize> = buttons
+        .iter()
+        .enumerate()
+        .filter(|(_, b)| b.plugin.as_str() == id)
+        .map(|(i, _)| i)
+        .collect();
+    match own.as_slice() {
+        [] => buttons.len(),
+        own => own.get(own.len().div_ceil(2) - 1).map_or(buttons.len(), |i| i + 1),
     }
 }
 

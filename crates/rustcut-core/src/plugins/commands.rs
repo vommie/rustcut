@@ -56,23 +56,29 @@ impl Navigator for CoreNavigator {
 
 impl CoreNavigator {
     fn listing(&self, video: &Path, request: FolderRequest) -> Result<folder_walk::Listing, String> {
-        let request = folder_walk::Request {
-            current: video.to_path_buf(),
-            file_manager: match request.file_manager {
-                host::FileManagerMode::Off => folder_walk::FileManagerMode::Off,
-                host::FileManagerMode::OpenTab => folder_walk::FileManagerMode::OpenTab,
-                host::FileManagerMode::Running => folder_walk::FileManagerMode::Running,
-                host::FileManagerMode::Always => folder_walk::FileManagerMode::Always,
-            },
-            hidden: match request.hidden {
-                host::HiddenFiles::Skip => folder_walk::HiddenFiles::Skip,
-                host::HiddenFiles::Show => folder_walk::HiddenFiles::Show,
-                host::HiddenFiles::LikeFileManager => folder_walk::HiddenFiles::LikeFileManager,
-            },
-            videos_only: request.videos_only,
-        };
+        let request = walk_request(video, request);
         self.runtime
             .block_on(folder_walk::list(&request, self.dolphin.as_ref(), Some(&self.cache)))
+    }
+}
+
+/// A plugin's folder request for `video` as [`folder_walk::list`] takes it.
+#[must_use]
+pub fn walk_request(video: &Path, request: FolderRequest) -> folder_walk::Request {
+    folder_walk::Request {
+        current: video.to_path_buf(),
+        file_manager: match request.file_manager {
+            host::FileManagerMode::Off => folder_walk::FileManagerMode::Off,
+            host::FileManagerMode::OpenTab => folder_walk::FileManagerMode::OpenTab,
+            host::FileManagerMode::Running => folder_walk::FileManagerMode::Running,
+            host::FileManagerMode::Always => folder_walk::FileManagerMode::Always,
+        },
+        hidden: match request.hidden {
+            host::HiddenFiles::Skip => folder_walk::HiddenFiles::Skip,
+            host::HiddenFiles::Show => folder_walk::HiddenFiles::Show,
+            host::HiddenFiles::LikeFileManager => folder_walk::HiddenFiles::LikeFileManager,
+        },
+        videos_only: request.videos_only,
     }
 }
 

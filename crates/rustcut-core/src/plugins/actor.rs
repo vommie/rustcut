@@ -64,6 +64,7 @@ impl Actor {
         me: Handle<PluginCommand>,
         events: EventBus<PluginEvent>,
         rt: tokio::runtime::Handle,
+        folder_cache: Arc<crate::folder_walk::FolderCache>,
     ) -> Self {
         Self {
             paths,
@@ -78,7 +79,7 @@ impl Actor {
             jobs: None,
             watch: None,
             touched: HashMap::new(),
-            folder_cache: Arc::default(),
+            folder_cache,
         }
     }
 
@@ -221,6 +222,7 @@ impl Actor {
             state: PluginState::Ready,
             stats,
             update: None,
+            folder_view: None,
         };
         let mut slot = Slot {
             info: info.clone(),
@@ -325,6 +327,7 @@ impl Actor {
                             took: report.took,
                             error: report.result.err(),
                             log: report.log,
+                            folder_view: report.folder_view,
                         };
                         let _ = me.send(PluginCommand::Reported(Box::new(report)));
                     }),
@@ -392,6 +395,9 @@ impl Actor {
             return;
         };
         let id = &report.id;
+        if let Some(update) = report.folder_view {
+            slot.info.folder_view = update.0;
+        }
         for line in &report.log {
             log_line(id, line.level, &line.text);
         }
@@ -488,6 +494,7 @@ impl Actor {
                     took: report.took,
                     error,
                     log: report.log,
+                    folder_view: report.folder_view,
                 };
                 let _ = me.send(PluginCommand::Reported(Box::new(report)));
                 let _ = reply.send(answer);

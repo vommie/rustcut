@@ -77,6 +77,9 @@ pub(super) struct State {
     /// The running call's clock: its start, its time limit and the time spent in RustCut's host functions (a folder
     /// listing over a slow mount, Dolphin's answer), which never counts against the plugin.
     clock: Clock,
+    /// The plugin's folder view (API 1.4) and whether a call changed it since it was last taken.
+    view: Option<crate::commands::FolderView>,
+    view_changed: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -182,6 +185,14 @@ impl command_host::Host for State {
         step
     }
 
+    fn set_folder_view(&mut self, view: Option<command_host::FolderView>) {
+        let view = view.map(convert_commands::view_from_wit);
+        if view != self.view {
+            self.view = view;
+            self.view_changed = true;
+        }
+    }
+
     fn open_video(&mut self, path: String) {
         if self.call.command {
             self.call.open = Some(PathBuf::from(path));
@@ -261,6 +272,8 @@ impl Instance {
             log: Vec::new(),
             call: Call::default(),
             clock: Clock::new(limits.time),
+            view: None,
+            view_changed: false,
         };
         let mut store = Store::new(&loaded.inner.engine, state);
         store.limiter(|state| &mut state.limiter);
@@ -376,6 +389,12 @@ impl Instance {
             open: state.open,
             bubbles: state.bubbles,
         })
+    }
+
+    /// The folder view a call set (API 1.4), once: `Some` after a change, `None` without one.
+    pub fn take_view_change(&mut self) -> Option<crate::commands::ViewUpdate> {
+        let state = self.store.data_mut();
+        std::mem::take(&mut state.view_changed).then_some(crate::commands::ViewUpdate(state.view))
     }
 
     /// The lines the plugin wrote since the last call of this method.

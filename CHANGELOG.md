@@ -7,6 +7,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Where the open video stands in its folder, in the menu bar (Next in Folder 1.2 with "Progress in the menu bar"): a
+  bar between the plugin's Previous and Next buttons, filled to the video's position, with the position as a number
+  (`37/100`, shortened when it does not fit, `37512/100k`, never cut off). Its tooltip has the exact position, the
+  percent, the order (Dolphin's, or names A to Z and why) and the folder. It follows a video that opens and files
+  that come or go in the folder at once, without flickering, and pulses while a slow folder is read. A fill in gray
+  means the files go by name instead of Dolphin's order; a dim bar means the video is no longer in its folder or the
+  folder cannot be read.
+- The neighbor list (Next in Folder 1.2 with "Neighbor list"): a right click on Previous, the bar or Next (or a click
+  on the bar) lists the five files before and after the open video; a click opens one. Files with a job say "Job".
+  When the plugin shows neither buttons nor the bar, the list has a button of its own.
+- Plugin API 1.4: the host function `set-folder-view` (see `docs/plugins.md`). Plugins of 1.0 to 1.3 load unchanged.
+
 ## [0.0.115] - 2026-11-18
 
 ### Fixed

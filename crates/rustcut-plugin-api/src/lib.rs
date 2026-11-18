@@ -73,8 +73,8 @@ pub mod commands_bindings {
         default_bindings_module: "rustcut_plugin_api::__commands_bindings",
         // wit-bindgen matches these with the package version: change them with every API version.
         with: {
-            "rustcut:plugin/host@1.3.0": crate::bindings::rustcut::plugin::host,
-            "rustcut:plugin/types@1.3.0": crate::bindings::rustcut::plugin::types,
+            "rustcut:plugin/host@1.4.0": crate::bindings::rustcut::plugin::host,
+            "rustcut:plugin/types@1.4.0": crate::bindings::rustcut::plugin::types,
         },
         generate_all,
     });
@@ -123,11 +123,12 @@ macro_rules! export_plugin_with_commands {
 }
 pub use commands_bindings::exports::rustcut::plugin::commands::Guest as Commands;
 pub use commands_bindings::rustcut::plugin::command_host::{
-    FileManagerMode, FolderFile, FolderListing, FolderOrder, FolderRequest, FolderStep, HiddenFiles, OrderSource,
+    FileManagerMode, FolderFile, FolderListing, FolderOrder, FolderRequest, FolderStep, FolderView, HiddenFiles,
+    OrderSource,
 };
 
 /// The plugin API version this kit implements.
-pub const API_VERSION: &str = "1.3.0";
+pub const API_VERSION: &str = "1.4.0";
 
 /// Writes a line into the plugin log. Outside RustCut (native unit tests) it goes to stderr.
 pub fn log(level: Level, message: &str) {
@@ -191,6 +192,16 @@ pub fn step_folder(
         let _ = (request, forward, skip_with_job, wrap);
         Err("step-folder works only inside RustCut".to_owned())
     }
+}
+
+/// Since API 1.4: what RustCut shows of the open video's folder for this plugin (a progress bar between its menu bar
+/// buttons, a list of the neighbors on a right click), or nothing with `None`. Call it in `configure` with what the
+/// settings say; RustCut keeps the view up to date by itself. Outside RustCut it does nothing. Needs `api = "1.4"`.
+pub fn set_folder_view(view: Option<FolderView>) {
+    #[cfg(target_arch = "wasm32")]
+    commands_bindings::rustcut::plugin::command_host::set_folder_view(view);
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = view;
 }
 
 /// Since API 1.2: opens `path` in RustCut after `run` returned (like a dropped file). Outside RustCut it does nothing.

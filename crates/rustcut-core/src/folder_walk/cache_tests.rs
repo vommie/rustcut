@@ -109,3 +109,21 @@ fn reading_the_folder_and_its_files_changes_nothing() {
     cache.put(ticket, variant(), listing(dir.path()));
     assert!(cache.get(dir.path(), &variant()).is_some());
 }
+
+#[test]
+fn a_change_of_the_watched_folder_is_told() {
+    let dir = tempfile::tempdir().expect("dir");
+    let cache = FolderCache::default();
+    let mut changes = cache.changes();
+    if cache.begin(dir.path()).is_none() {
+        return;
+    }
+    assert_eq!(cache.watched_folder().as_deref(), Some(dir.path()));
+    std::fs::write(dir.path().join("new.mp4"), b"").expect("file");
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("runtime");
+    let told = runtime.block_on(async { tokio::time::timeout(Duration::from_secs(5), changes.changed()).await });
+    assert!(matches!(told, Ok(Ok(()))), "no change was told");
+}

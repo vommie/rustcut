@@ -44,6 +44,7 @@ fn plugin(id: &str, name: &str, state: PluginState) -> PluginInfo {
         state,
         stats: Stats::default(),
         update: None,
+        folder_view: None,
     }
 }
 

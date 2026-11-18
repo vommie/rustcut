@@ -486,3 +486,28 @@ fn api_1_3_steps_hand_over_one_file_however_large_the_folder() {
     assert_eq!(outcome.open.as_deref(), Some(Path::new("/videos/299999.mp4")));
     assert_eq!(outcome.bubbles, ["300000 of 300000 (299998 skipped)"]);
 }
+
+#[test]
+fn api_1_4_a_plugin_sets_its_folder_view_in_configure() {
+    let mut plugin = Instance::new(&loaded(), Limits::default()).unwrap();
+    plugin.configure(&json!({ "mode": "view" })).unwrap();
+    let update = plugin.take_view_change().expect("a change");
+    let view = update.0.expect("a view");
+    assert!(view.progress && !view.neighbors);
+    assert_eq!(view.request.file_manager, FileManagerMode::OpenTab);
+    assert!(plugin.take_view_change().is_none(), "told once");
+    plugin.configure(&json!({ "mode": "view" })).unwrap();
+    assert!(plugin.take_view_change().is_none(), "the same view is no change");
+    plugin.configure(&json!({ "mode": "ok" })).unwrap();
+    assert_eq!(plugin.take_view_change().map(|u| u.0), Some(None));
+
+    // Through a worker the change rides on the call's report.
+    let worker = Worker::spawn(loaded(), Limits::default()).unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    worker.configure(
+        json!({ "mode": "view" }),
+        Box::new(move |report| tx.send(report.folder_view).unwrap()),
+    );
+    let told = rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert!(told.is_some_and(|u| u.0.is_some_and(|v| v.progress)));
+}
