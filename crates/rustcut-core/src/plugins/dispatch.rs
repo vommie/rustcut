@@ -47,6 +47,8 @@ pub struct Report {
     pub took: Duration,
     pub error: Option<CallError>,
     pub log: Vec<LogLine>,
+    /// The plugin's folder view after the call, when it changed (API 1.4).
+    pub folder_view: Option<rustcut_plugin_host::commands::ViewUpdate>,
 }
 
 pub(super) struct Job {
@@ -70,14 +72,20 @@ pub(super) async fn run(mut jobs: mpsc::UnboundedReceiver<Job>, runners: Runners
                     let _ = tx.send(report);
                 }),
             );
-            let (took, result, log) = match tokio::time::timeout(runner.limit + GRACE, rx).await {
-                Ok(Ok(report)) => (report.took, report.result, report.log),
+            let (took, result, log, folder_view) = match tokio::time::timeout(runner.limit + GRACE, rx).await {
+                Ok(Ok(report)) => (report.took, report.result, report.log, report.folder_view),
                 Ok(Err(_)) => (
                     Duration::ZERO,
                     Err(CallError::Start("the plugin's thread ended".to_owned())),
                     Vec::new(),
+                    None,
                 ),
-                Err(_) => (runner.limit + GRACE, Err(CallError::Timeout(runner.limit)), Vec::new()),
+                Err(_) => (
+                    runner.limit + GRACE,
+                    Err(CallError::Timeout(runner.limit)),
+                    Vec::new(),
+                    None,
+                ),
             };
             let error = result.as_ref().err().cloned();
             let report = Report {
@@ -86,6 +94,7 @@ pub(super) async fn run(mut jobs: mpsc::UnboundedReceiver<Job>, runners: Runners
                 took,
                 error,
                 log,
+                folder_view,
             };
             let _ = actor.send(PluginCommand::Reported(Box::new(report)));
             if let Ok(actions) = result {

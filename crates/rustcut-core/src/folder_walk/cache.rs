@@ -54,19 +54,43 @@ struct Watched {
 }
 
 /// The cache; one per plugin service.
-#[derive(Default)]
 pub struct FolderCache {
     watched: Mutex<Option<Watched>>,
+    /// Counts the watched folder's changes, for whoever shows something of it (the folder view, API 1.4).
+    changes: Arc<tokio::sync::watch::Sender<u64>>,
+}
+
+impl Default for FolderCache {
+    fn default() -> Self {
+        Self {
+            watched: Mutex::new(None),
+            changes: Arc::new(tokio::sync::watch::Sender::new(0)),
+        }
+    }
 }
 
 impl std::fmt::Debug for FolderCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let folder = self.watched.lock().as_ref().map(|w| w.folder.clone());
-        f.debug_struct("FolderCache").field("folder", &folder).finish()
+        f.debug_struct("FolderCache")
+            .field("folder", &folder)
+            .finish_non_exhaustive()
     }
 }
 
 impl FolderCache {
+    /// Hears every change of the watched folder (local file systems only; another folder changes nothing).
+    #[must_use]
+    pub fn changes(&self) -> tokio::sync::watch::Receiver<u64> {
+        self.changes.subscribe()
+    }
+
+    /// The folder the cache watches now.
+    #[must_use]
+    pub fn watched_folder(&self) -> Option<PathBuf> {
+        self.watched.lock().as_ref().map(|w| w.folder.clone())
+    }
+
     /// The kept listing of `folder` for `variant`, if nothing changed since it was read.
     pub(super) fn get(&self, folder: &Path, variant: &Variant) -> Option<Arc<Vec<PathBuf>>> {
         let watched = self.watched.lock();
@@ -92,7 +116,7 @@ impl FolderCache {
             if !reliable(folder) {
                 return None;
             }
-            *watched = watch(folder);
+            *watched = watch(folder, &self.changes);
         }
         let watched = watched.as_ref()?;
         Some(Ticket {
@@ -116,10 +140,11 @@ impl FolderCache {
     }
 }
 
-fn watch(folder: &Path) -> Option<Watched> {
+fn watch(folder: &Path, changes: &Arc<tokio::sync::watch::Sender<u64>>) -> Option<Watched> {
     use notify::Watcher as _;
     let events = Arc::new(AtomicU64::new(0));
     let seen = Arc::clone(&events);
+    let told = Arc::clone(changes);
     // Every event counts but a read (opening or closing a file or the folder unwritten, as reading the folder does);
     // an error counts too: a lost event must never keep a listing.
     let handler = move |event: notify::Result<notify::Event>| {
@@ -128,6 +153,7 @@ fn watch(folder: &Path) -> Option<Watched> {
             .is_ok_and(|e| matches!(e.kind, notify::EventKind::Access(_)) && !e.need_rescan());
         if !read_only {
             seen.fetch_add(1, Ordering::AcqRel);
+            told.send_modify(|n| *n = n.wrapping_add(1));
         }
     };
     let mut watcher = notify::recommended_watcher(handler)

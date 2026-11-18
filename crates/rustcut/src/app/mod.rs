@@ -567,6 +567,7 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
         editor: &editor,
         opener: &opener,
         queue: &queue,
+        context_menu: &menu,
     });
     // Moving target files (P12 block 7): the queue's menu opens the dialog.
     let relocate = crate::ui::relocate::RelocateBridge::install(

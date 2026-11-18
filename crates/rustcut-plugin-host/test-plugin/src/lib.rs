@@ -27,6 +27,13 @@ impl Plugin for TestPlugin {
             return Err("mode refuse refuses every configuration".to_owned());
         }
         rustcut_plugin_api::log(Level::Info, &format!("configured, mode {}", parsed.mode));
+        // API 1.4: mode "view" asks for the folder view, every other mode for none.
+        let view = (parsed.mode == "view").then_some(rustcut_plugin_api::FolderView {
+            request: FolderRequest { file_manager: FileManagerMode::OpenTab, hidden: HiddenFiles::Skip, videos_only: true },
+            progress: true,
+            neighbors: false,
+        });
+        rustcut_plugin_api::set_folder_view(view);
         *SETTINGS.lock().map_err(|_| "poisoned".to_owned())? = Some(parsed);
         Ok(())
     }
@@ -74,7 +81,7 @@ impl Plugin for TestPlugin {
 
     fn check(settings: String) -> Vec<Issue> {
         match rustcut_plugin_api::parse_settings::<Settings>(&settings) {
-            Ok(s) if !["", "ok", "fail", "panic", "slow", "memory", "refuse", "quiet"].contains(&s.mode.as_str()) => vec![Issue {
+            Ok(s) if !["", "ok", "fail", "panic", "slow", "memory", "refuse", "quiet", "view"].contains(&s.mode.as_str()) => vec![Issue {
                 field: "mode".into(),
                 row: None,
                 level: Level::Warning,

@@ -44,6 +44,8 @@ fn with_bridge(ui: &UiDispatcher, job: impl FnOnce(&Rc<PluginsBridge>) + Send + 
 
 /// Opens a plugin's Settings page.
 type OpenPage = Box<dyn Fn(&str)>;
+/// Hears an opened video.
+type OpenedHook = Box<dyn Fn(&Path)>;
 
 pub struct PluginsBridge {
     ui: UiDispatcher,
@@ -60,6 +62,8 @@ pub struct PluginsBridge {
     listeners: RefCell<Vec<Box<dyn Fn()>>>,
     /// Opens a plugin's Settings page (set by the Settings window).
     open_page: RefCell<Option<OpenPage>>,
+    /// Told when a video opens (the folder view, API 1.4).
+    opened: RefCell<Vec<OpenedHook>>,
 }
 
 impl PluginsBridge {
@@ -81,6 +85,7 @@ impl PluginsBridge {
             listed: Cell::new(false),
             listeners: RefCell::new(Vec::new()),
             open_page: RefCell::new(None),
+            opened: RefCell::new(Vec::new()),
         });
         BRIDGE.with(|b| *b.borrow_mut() = Rc::downgrade(&bridge));
         bridge.follow();
@@ -107,6 +112,11 @@ impl PluginsBridge {
         self.listeners.borrow_mut().push(Box::new(hook));
     }
 
+    /// `hook` hears every opened video (after the plugins' event went out).
+    pub fn listen_opened(&self, hook: impl Fn(&Path) + 'static) {
+        self.opened.borrow_mut().push(Box::new(hook));
+    }
+
     pub fn set_open_page(&self, open: impl Fn(&str) + 'static) {
         *self.open_page.borrow_mut() = Some(Box::new(open));
     }
@@ -121,6 +131,9 @@ impl PluginsBridge {
         let mut context = self.context();
         context.video = Some(path.to_path_buf());
         self.dispatch(Event::VideoOpened(by), context);
+        for hook in self.opened.borrow().iter() {
+            hook(path);
+        }
     }
 
     fn user_tag(&self, id: u32, assigned: bool) {

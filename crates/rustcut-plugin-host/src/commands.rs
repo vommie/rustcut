@@ -67,6 +67,20 @@ pub struct FolderListing {
     pub order: FolderOrder,
 }
 
+/// What RustCut shows of the open video's folder for a plugin (API 1.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FolderView {
+    pub request: FolderRequest,
+    /// The bar with the open video's place.
+    pub progress: bool,
+    /// The list of the neighbors.
+    pub neighbors: bool,
+}
+
+/// A call changed the plugin's folder view to this (none = removed).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ViewUpdate(pub Option<FolderView>);
+
 /// Where one step landed (API 1.3).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FolderStep {

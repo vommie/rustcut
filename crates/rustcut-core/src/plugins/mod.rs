@@ -25,8 +25,8 @@ use serde_json::{Map, Value};
 
 use crate::actor::{EventBus, Handle, Reply, mailbox};
 
-pub use commands::CommandResult;
-pub use rustcut_plugin_host::commands::CommandOutcome;
+pub use commands::{CommandResult, walk_request};
+pub use rustcut_plugin_host::commands::{CommandOutcome, FolderView};
 pub use rustcut_plugin_host::manifest::Command;
 
 /// Collects every answer of one dispatched event (tests and simple callers).
@@ -136,6 +136,8 @@ pub struct PluginInfo {
     pub stats: Stats,
     /// A newer version in the update folder: its version and file.
     pub update: Option<(semver::Version, PathBuf)>,
+    /// What RustCut shows of the open video's folder for the plugin (API 1.4 `set-folder-view`).
+    pub folder_view: Option<FolderView>,
 }
 
 impl PluginInfo {
@@ -287,6 +289,8 @@ pub enum PluginEvent {
 pub struct PluginService {
     pub handle: Handle<PluginCommand>,
     pub events: EventBus<PluginEvent>,
+    /// The one cached folder listing, shared by plugin commands and the folder view (API 1.4).
+    pub folder_cache: Arc<crate::folder_walk::FolderCache>,
 }
 
 /// Starts the service. `safe_mode` (`--no-plugins`) lists the plugins but runs none.
@@ -298,6 +302,7 @@ pub fn spawn_plugin_service(
 ) -> PluginService {
     let (handle, rx) = mailbox();
     let events = EventBus::new();
+    let folder_cache = Arc::new(crate::folder_walk::FolderCache::default());
     let actor = actor::Actor::new(
         paths,
         settings,
@@ -305,7 +310,12 @@ pub fn spawn_plugin_service(
         handle.clone(),
         events.clone(),
         runtime.clone(),
+        Arc::clone(&folder_cache),
     );
     runtime.spawn(actor.run(rx));
-    PluginService { handle, events }
+    PluginService {
+        handle,
+        events,
+        folder_cache,
+    }
 }

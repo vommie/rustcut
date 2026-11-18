@@ -218,6 +218,12 @@ or asking Dolphin, does not count against the plugin's time limit):
 | `open-video(path)` | Opens the file after `run` returned, like a dropped file (the last call wins). |
 | `bubble(text)` | A short note at the command's menu bar button (a toast when it has none), with the plugin's name in front. |
 
+One more host function of the world `plugin-with-commands` works in every call, `configure` included:
+
+| Function | What it does |
+|---|---|
+| `set-folder-view(view)` (since 1.4) | Shows where the open video stands in its folder, in the menu bar: `progress` = a bar with the position (`10/100`, shortened when it does not fit; its tooltip has the exact numbers, the percent, the order and the folder) between the plugin's buttons, or alone where they would stand; `neighbors` = a list of the files around the open video (a right click on the plugin's buttons or the bar, a click on the bar, or a button of its own when the plugin shows neither). `request` is the order, as in `list-folder`. RustCut reads the position itself whenever a video opens or the folder changes, so it costs the plugin nothing; `none` takes the view away. The first running plugin with a view shows it. Call it from `configure`, so it follows the plugin's settings. |
+
 ## Limits and failures
 
 | Limit | Default | Where |
@@ -252,7 +258,7 @@ A plugin file (`<id>-<version>.rcplugin`) is a tar archive compressed with zstd,
 
 ## Versions
 
-The plugin API follows semantic versioning (the WIT package `rustcut:plugin@1.3.0`, the crate `rustcut-plugin-api`,
+The plugin API follows semantic versioning (the WIT package `rustcut:plugin@1.4.0`, the crate `rustcut-plugin-api`,
 tags `plugin-api-vX.Y.Z` in RustCut's repository). A minor version only adds host functions, imported interfaces or
 types that no export uses; RustCut runs every plugin of its major version whose `api` is not newer than its own. New
 events, actions, record fields, enum cases or exports change the types of `configure`, `handle` and `check`, which
@@ -265,8 +271,9 @@ next major version. An optional exported interface is the one exception (since 1
 |---|---|
 | 1.0 | The events `video-opened`, `tag-assigned`, `tag-removed`; the actions `set-target`, `set-rating`, `notify`; the host's `log`. |
 | 1.1 | The host's `target-folder` and `hide-marks` (new functions only, so a plugin built against 1.0 links unchanged; RustCut's host tests load a 1.0 build). |
-| 1.3 | The host's `step-folder` (a new function and record only). |
 | 1.2 | Commands: the world `plugin-with-commands` (the export `commands.run`, the imports `list-folder`, `open-video`, `bubble`), `[[commands]]` and the field kind `key` in `plugin.toml`. Plugins of 1.0 and 1.1 load unchanged (host tests load both builds). |
+| 1.3 | The host's `step-folder` (a new function and record only). |
+| 1.4 | The host's `set-folder-view` (a new function and record only). |
 
 ## Testing
 

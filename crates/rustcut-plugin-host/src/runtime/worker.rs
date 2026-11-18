@@ -17,6 +17,8 @@ pub struct CallReport<T> {
     pub result: Result<T, CallError>,
     pub log: Vec<LogLine>,
     pub took: Duration,
+    /// The plugin's folder view after the call, when the call changed it (API 1.4); a new instance starts without.
+    pub folder_view: Option<crate::commands::ViewUpdate>,
 }
 
 /// Receives a [`CallReport`] on the worker's thread.
@@ -130,9 +132,11 @@ impl Slot<'_> {
     fn call<T>(&mut self, configured: bool, run: impl FnOnce(&mut Instance) -> Result<T, CallError>) -> CallReport<T> {
         let start = Instant::now();
         let mut log = Vec::new();
+        let mut folder_view = None;
         let result = self.ready(configured, &mut log).and_then(|instance| {
             let result = run(instance);
             log.extend(instance.take_log());
+            folder_view = instance.take_view_change();
             result
         });
         if result.as_ref().is_err_and(CallError::poisons) || self.instance.as_ref().is_some_and(Instance::output_full) {
@@ -142,6 +146,7 @@ impl Slot<'_> {
             result,
             log,
             took: start.elapsed(),
+            folder_view,
         }
     }
 

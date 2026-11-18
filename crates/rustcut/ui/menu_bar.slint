@@ -84,6 +84,8 @@ component MenuTitle inherits Rectangle {
 /// The row of menu titles at the top of the main window.
 export component AppMenuBar inherits Rectangle {
     in property <[MenuBarMenu]> menus;
+    // How wide the menu titles are (the plugin buttons at the right end give way before they would touch them).
+    out property <length> titles-width: titles.preferred-width;
     // A menu opened or closed (main.slint gives the keyboard back to its key scope when it closes).
     callback changed-open(/* open */ bool);
 
@@ -99,7 +101,7 @@ export component AppMenuBar inherits Rectangle {
         }
     }
 
-    HorizontalLayout {
+    titles := HorizontalLayout {
         alignment: start;
         spacing: 10px;
 

@@ -7,7 +7,7 @@
 // a new major version, and RustCut keeps loading the previous major for a while. An optional exported interface (like
 // `commands` of the world `plugin-with-commands`, since 1.2) is no change to the world `plugin`: RustCut looks for it
 // per plugin, and plugins without it load as before. docs/plugins.md in RustCut's repository explains everything.
-package rustcut:plugin@1.3.0;
+package rustcut:plugin@1.4.0;
 
 /// What RustCut offers a plugin to call.
 interface host {
@@ -234,6 +234,22 @@ interface command-host {
     /// the open video itself). Like `list-folder`, but only the result crosses into the plugin, so a folder of any size
     /// costs the same. Errors as `list-folder`.
     step-folder: func(request: folder-request, forward: bool, skip-with-job: bool, wrap: bool) -> result<folder-step, string>;
+
+    /// Since 1.4. What RustCut shows of the open video's folder for this plugin.
+    record folder-view {
+        /// How the folder is read and ordered (as for `list-folder`).
+        request: folder-request,
+        /// A bar in the menu bar, between the plugin's buttons: where the open video stands ("10 of 100").
+        progress: bool,
+        /// A list of the five files before and after the open video, opened by a right click on the plugin's buttons
+        /// or the bar (a button of its own when the plugin shows neither); a click on an entry opens it.
+        neighbors: bool,
+    }
+
+    /// Since 1.4. Sets the plugin's folder view, or removes it with none. It works in every call, also in
+    /// `configure` (where a plugin turns its settings into it); RustCut keeps it until the plugin sets another or
+    /// stops, and keeps it up to date by itself (a video opens, the folder changes).
+    set-folder-view: func(view: option<folder-view>);
 
     /// Opens a video in RustCut after `run` returned (the last call wins). RustCut opens it like a dropped file.
     open-video: func(path: string);

@@ -1,12 +1,14 @@
-// Plugin commands (plugin API 1.2, Q-NF1): what the running plugins declared in `[[commands]]`, filled by
-// src/ui/plugins/commands/. Their entries stand in the File menu (main.slint) and, when the plugin's switch says so,
-// as buttons at the right end of the menu bar, left of the bell. A command that discards unsaved sections is held
-// while there are any (the hold time of Settings > General), its key too.
+// Plugin commands (plugin API 1.2, Q-NF1) and a plugin's folder view (API 1.4, Q-NF2), filled by
+// src/ui/plugins/commands/. Their entries stand in the File menu (main.slint) and, when the plugin's switch says so, as
+// buttons at the right end of the menu bar, left of the bell. A command that discards unsaved sections is held while
+// there are any (the hold time of Settings > General), its key too. The folder view's bar stands between its plugin's
+// buttons; a right click on them or on the bar opens the list of the neighbor files.
 
 import { Theme } from "styles.slint";
 import { IconId } from "icons.slint";
 import { IconButton } from "controls.slint";
 import { BubbleAnchor } from "bubble.slint";
+import { TipRow, TooltipHost } from "tooltip.slint";
 
 export struct PluginCommandView {
     plugin: string,
@@ -19,47 +21,191 @@ export struct PluginCommandView {
     icon: IconId,
     // It discards the editor's unsaved sections (it opens another video).
     discards: bool,
+    // A right click opens the folder view's neighbor list (the button belongs to the view's plugin).
+    neighbors: bool,
+}
+
+// Where the open video stands in its folder (API 1.4). The bar never changes its size: its number is the first of
+// `texts` that fits, else none.
+export struct PluginProgressView {
+    shown: bool,
+    fraction: float,
+    texts: [string],
+    title: string,
+    rows: [TipRow],
+    // The video does not count in its folder (or none is open, or the folder cannot be read): dimmed.
+    dim: bool,
+    // The order is names A to Z instead of Dolphin's: the fill is muted.
+    muted: bool,
+    // The position is being read (shown 0.3 s after it began): the bar pulses.
+    loading: bool,
 }
 
 export global PluginCommands {
     // The commands with a File menu entry, in the plugins' order.
     in property <[PluginCommandView]> menu;
-    // The commands with a menu bar button.
-    in property <[PluginCommandView]> buttons;
+    // The commands with a menu bar button, before and after the folder view's bar.
+    in property <[PluginCommandView]> buttons-before;
+    in property <[PluginCommandView]> buttons-after;
+    in property <PluginProgressView> progress;
+    // The neighbor list has a button of its own (its plugin shows neither buttons nor the bar).
+    in property <bool> list-button;
     // The editor has sections that are not saved as a job.
     in property <bool> unsaved;
     callback run(/* plugin */ string, /* command */ string, /* from its button */ bool);
+    // Opens the neighbor list under the element at this window rectangle.
+    callback open-neighbors(/* x */ length, /* y */ length, /* width */ length, /* height */ length);
 }
 
-// The menu bar's plugin buttons, then a separator line (the bell's side). Its width is 0 without buttons.
+component PluginButton inherits Rectangle {
+    in property <PluginCommandView> item;
+
+    width: 28px;
+    height: 24px;
+
+    button := IconButton {
+        width: 28px;
+        height: 24px;
+        icon: root.item.icon;
+        tooltip: root.item.tooltip;
+        shortcut: root.item.shortcut;
+        hold: root.item.discards && PluginCommands.unsaved;
+        clicked => { PluginCommands.run(root.item.plugin, root.item.id, true); }
+        secondary-clicked => {
+            if root.item.neighbors {
+                PluginCommands.open-neighbors(root.absolute-position.x, root.absolute-position.y, root.width, root.height);
+            }
+        }
+    }
+
+    BubbleAnchor {
+        key: "plugin-button:" + root.item.plugin + ":" + root.item.id;
+        width: parent.width;
+        height: parent.height;
+    }
+}
+
+// The bar: the buttons' border and height, two buttons wide, the fill up to every edge (Q-NF2).
+export component PluginProgressBar inherits Rectangle {
+    in property <PluginProgressView> view;
+
+    property <length> inner: root.width - 8px;
+    // The first number that fits the bar without eliding.
+    property <int> pick: m0.preferred-width <= root.inner && root.view.texts.length > 0 ? 0
+        : m1.preferred-width <= root.inner && root.view.texts.length > 1 ? 1
+        : m2.preferred-width <= root.inner && root.view.texts.length > 2 ? 2
+        : m3.preferred-width <= root.inner && root.view.texts.length > 3 ? 3 : -1;
+    property <float> pulse: root.view.loading ? 0.55 + 0.45 * Math.cos(animation-tick() / 1100ms * 360deg) : 1;
+
+    width: 56px;
+    height: 24px;
+    border-radius: 4px;
+    clip: true;
+    background: Theme.surface;
+    opacity: root.view.dim ? 0.45 : 1;
+
+    // The fill reaches the left, top and bottom edges; the border is drawn over it.
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width * Math.clamp(root.view.fraction, 0, 1);
+        height: root.height;
+        background: (root.view.muted ? Theme.text-muted : Theme.primary).with-alpha(Theme.dark ? 0.34 : 0.26);
+        opacity: root.pulse;
+    }
+
+    // Measures, never shown.
+    m0 := Text { visible: false; text: root.view.texts.length > 0 ? root.view.texts[0] : ""; font-size: 10px; font-weight: 600; }
+    m1 := Text { visible: false; text: root.view.texts.length > 1 ? root.view.texts[1] : ""; font-size: 10px; font-weight: 600; }
+    m2 := Text { visible: false; text: root.view.texts.length > 2 ? root.view.texts[2] : ""; font-size: 10px; font-weight: 600; }
+    m3 := Text { visible: false; text: root.view.texts.length > 3 ? root.view.texts[3] : ""; font-size: 10px; font-weight: 600; }
+
+    Text {
+        width: root.width;
+        height: root.height;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        text: root.pick >= 0 ? root.view.texts[root.pick] : "";
+        color: Theme.text;
+        font-size: 10px;
+        font-weight: 600;
+    }
+
+    Rectangle {
+        border-radius: root.border-radius;
+        border-width: 1px;
+        border-color: touch.has-hover ? Theme.border-strong : Theme.border;
+    }
+
+    host := TooltipHost {
+        title: root.view.title;
+        rows: root.view.rows;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        changed has-hover => {
+            if self.has-hover {
+                host.enter();
+            } else {
+                host.leave();
+            }
+        }
+        // Left and right click open the neighbor list (when the view has one; otherwise nothing happens).
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                host.press();
+                if event.button == PointerEventButton.right {
+                    PluginCommands.open-neighbors(root.absolute-position.x, root.absolute-position.y, root.width, root.height);
+                }
+            }
+        }
+        clicked => {
+            PluginCommands.open-neighbors(root.absolute-position.x, root.absolute-position.y, root.width, root.height);
+        }
+    }
+}
+
+// The menu bar's plugin buttons with the folder view's bar between, then a separator line (the bell's side). With
+// too little `room` the bar goes first, then the buttons. Its width is 0 when nothing shows.
 export component PluginCommandBar inherits HorizontalLayout {
     in property <bool> separator: true;
+    in property <length> room: 10000px;
+
+    property <length> buttons-width: (PluginCommands.buttons-before.length + PluginCommands.buttons-after.length) * 30px;
+    property <length> bar-width: PluginCommands.progress.shown ? 58px : 0px;
+    property <length> list-width: PluginCommands.list-button ? 30px : 0px;
+    property <bool> show-bar: PluginCommands.progress.shown && root.room >= root.buttons-width + root.bar-width + root.list-width + 9px;
+    property <bool> show-buttons: root.room >= root.buttons-width + root.list-width + 9px;
+    property <bool> any: (root.show-buttons && (root.buttons-width > 0px || root.list-width > 0px)) || root.show-bar;
 
     spacing: 2px;
     alignment: end;
 
-    for item in PluginCommands.buttons: Rectangle {
+    if root.show-buttons: HorizontalLayout {
+        spacing: 2px;
+        for item in PluginCommands.buttons-before: PluginButton { item: item; }
+    }
+
+    if root.show-bar: PluginProgressBar { view: PluginCommands.progress; }
+
+    if root.show-buttons: HorizontalLayout {
+        spacing: 2px;
+        for item in PluginCommands.buttons-after: PluginButton { item: item; }
+    }
+
+    if root.show-buttons && PluginCommands.list-button: list := IconButton {
         width: 28px;
         height: 24px;
-
-        button := IconButton {
-            width: 28px;
-            height: 24px;
-            icon: item.icon;
-            tooltip: item.tooltip;
-            shortcut: item.shortcut;
-            hold: item.discards && PluginCommands.unsaved;
-            clicked => { PluginCommands.run(item.plugin, item.id, true); }
-        }
-
-        BubbleAnchor {
-            key: "plugin-button:" + item.plugin + ":" + item.id;
-            width: parent.width;
-            height: parent.height;
+        icon: IconId.folder-neighbors;
+        tooltip: "The files around the open video";
+        clicked => { PluginCommands.open-neighbors(self.absolute-position.x, self.absolute-position.y, self.width, self.height); }
+        secondary-clicked => {
+            PluginCommands.open-neighbors(self.absolute-position.x, self.absolute-position.y, self.width, self.height);
         }
     }
 
-    if root.separator && PluginCommands.buttons.length > 0: Rectangle {
+    if root.separator && root.any: Rectangle {
         width: 9px;
 
         Rectangle {
