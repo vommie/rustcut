@@ -21,6 +21,31 @@ pub fn of(path: &Path) -> String {
     comment(mime.essence_str(), &languages()).unwrap_or_default()
 }
 
+/// Sets every entry's type description, looked up once per extension (the MIME database's globs are extensions for
+/// every video type; a folder of 100 000 files has a handful).
+pub fn fill(entries: &mut [super::order::Entry], names: &super::natural::NameOrder) {
+    let languages = languages();
+    let mut known: std::collections::HashMap<String, super::natural::NameKey> = std::collections::HashMap::new();
+    for entry in entries {
+        let ext = entry
+            .path
+            .extension()
+            .map(|e| e.to_string_lossy().to_lowercase())
+            .unwrap_or_default();
+        let key = known.entry(ext).or_insert_with(|| {
+            let name = entry.path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+            let comment = database()
+                .get_mime_types_from_file_name(name)
+                .into_iter()
+                .next()
+                .and_then(|mime| comment(mime.essence_str(), &languages))
+                .unwrap_or_default();
+            names.key(&comment)
+        });
+        entry.type_name = key.clone();
+    }
+}
+
 /// The user's languages, most wanted first (`de_DE`, `de`).
 fn languages() -> Vec<String> {
     let mut out = Vec::new();

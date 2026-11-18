@@ -52,6 +52,8 @@ pub(super) struct Actor {
     jobs: Option<mpsc::UnboundedSender<dispatch::Job>>,
     watch: Option<DevWatch>,
     touched: HashMap<String, u64>,
+    /// "Next in Folder"'s one cached folder listing (plugin API 1.2 `list-folder`).
+    folder_cache: Arc<crate::folder_walk::FolderCache>,
 }
 
 impl Actor {
@@ -76,6 +78,7 @@ impl Actor {
             jobs: None,
             watch: None,
             touched: HashMap::new(),
+            folder_cache: Arc::default(),
         }
     }
 
@@ -458,6 +461,7 @@ impl Actor {
             runtime: tokio::runtime::Handle::current(),
             job_sources,
             dolphin: crate::folder_walk::dolphin::props::DolphinPaths::of_user(),
+            cache: Arc::clone(&self.folder_cache),
         };
         let call = rustcut_plugin_host::commands::CommandCall {
             command,

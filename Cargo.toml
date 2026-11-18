@@ -26,7 +26,7 @@ exclude = ["crates/rustcut-plugin-host/test-plugin"]
 [workspace.package]
 # Single source of truth for the app version: the About page, the package script and the PKGBUILD read it from here.
 # Claude bumps the patch number whenever a state is testable; major and minor belong to the user.
-version = "0.0.114"
+version = "0.0.115"
 edition = "2024"
 # The lowest toolchain known to work (wasmtime 50 needs 1.97). rust-toolchain.toml pins `stable`.
 rust-version = "1.97"
@@ -129,7 +129,10 @@ xattr = "1.7"
 sha1 = "0.11"
 # ... base64 with "/" turned into "-", of the folder's file URL.
 base64 = "0.23"
-url = "2.5"
+# "Next in Folder" stats and sorts folders of hundreds of thousands of files on every core.
+rayon = "1"
+# Folder URLs encoded the way Dolphin (QUrl) writes them.
+percent-encoding = "2.3"
 # The type descriptions Dolphin sorts by "Type" come from the shared MIME database (globs, then the type's XML).
 xdg-mime = "0.4"
 roxmltree = "0.21"

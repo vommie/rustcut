@@ -2,7 +2,7 @@
 
 use super::bindings::with_commands::rustcut::plugin::command_host as wit;
 use crate::commands::{
-    FileManagerMode, FolderFile, FolderListing, FolderOrder, FolderRequest, HiddenFiles, OrderSource,
+    FileManagerMode, FolderFile, FolderListing, FolderOrder, FolderRequest, FolderStep, HiddenFiles, OrderSource,
 };
 
 pub(super) fn request_from_wit(request: wit::FolderRequest) -> FolderRequest {
@@ -43,6 +43,17 @@ fn order_to_wit(order: FolderOrder) -> wit::FolderOrder {
         role: order.role,
         descending: order.descending,
         detail: order.detail,
+    }
+}
+
+pub(super) fn step_to_wit(step: FolderStep) -> wit::FolderStep {
+    wit::FolderStep {
+        file: step.file.map(file_to_wit),
+        position: step.position,
+        total: step.total,
+        skipped: step.skipped,
+        wrapped: step.wrapped,
+        order: order_to_wit(step.order),
     }
 }
 

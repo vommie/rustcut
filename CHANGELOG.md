@@ -7,6 +7,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Next in Folder (plugin commands) failed with "command next-file failed" and paused after three tries in some
+  folders: RustCut's own work for a command (reading the folder, asking Dolphin) counted against the plugin's time
+  limit of one second, which a large folder or a slow mount exceeds. It no longer counts.
+- A folder with square brackets in its path (`/media/[test]/clips`) looked closed to Dolphin, so its files went by
+  name instead of Dolphin's order. Folder addresses are now written the way Dolphin writes them.
+
+### Changed
+
+- Reading a folder for Next in Folder is much faster, also for hundreds of thousands of files: a name order reads only
+  the folder, without asking every file for its size and dates; sizes and dates are read on every core at once (a
+  network mount answers many at a time); the order is computed on every core. Measured on this machine: 100 000 files
+  by name 586 ms before, about 100 ms now; by date 188 ms before, about 85 ms now.
+- The same folder is not read again while nothing changed in it: on a local drive a watcher (inotify) and the folder's
+  own change time tell every new, removed, renamed or changed file at once, so the next step in a folder of 100 000
+  files takes about 3 ms. Only the folder of the last step is kept and watched; another folder drops both. Network and
+  FUSE mounts (NFS, SMB, sshfs) are read every time, since changes made elsewhere reach no watcher there.
+
+### Added
+
+- Plugin API 1.3 (`plugin-api-v1.3.0`): `step-folder`, one step through the open video's folder in the asked order;
+  only the file it lands on reaches the plugin, so a folder's size no longer matters for a plugin's memory and time.
+
 ## [0.0.114] - 2026-11-17
 
 ### Security

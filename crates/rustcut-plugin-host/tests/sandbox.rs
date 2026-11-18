@@ -379,3 +379,110 @@ fn a_worker_runs_commands() {
     let outcome = rx.recv_timeout(Duration::from_secs(10)).unwrap().unwrap();
     assert_eq!(outcome.open.as_deref(), Some(Path::new("/videos/c.mp4")));
 }
+
+/// A folder on a slow mount: the listing takes longer than the plugin's whole time limit.
+struct SlowFolder;
+
+impl Navigator for SlowFolder {
+    fn list_folder(&self, video: &Path, request: FolderRequest) -> Result<FolderListing, String> {
+        std::thread::sleep(Duration::from_millis(300));
+        FixedFolder.list_folder(video, request)
+    }
+}
+
+#[test]
+fn time_in_the_hosts_listing_does_not_count_against_the_plugin() {
+    let limits = Limits {
+        time: Duration::from_millis(100),
+        ..Limits::default()
+    };
+    let mut plugin = instance("ok", limits);
+    let context = Context {
+        video: Some("/videos/b.mp4".into()),
+        ..Context::default()
+    };
+    let call = CommandCall {
+        command: "next".into(),
+        context,
+        navigator: Some(Arc::new(SlowFolder)),
+    };
+    let outcome = plugin.run_command(&call).unwrap();
+    assert_eq!(outcome.open.as_deref(), Some(Path::new("/videos/c.mp4")));
+    // The plugin's own endless loop is still stopped at its limit.
+    let slow = CommandCall {
+        command: "slow".into(),
+        context: Context::default(),
+        navigator: None,
+    };
+    let started = Instant::now();
+    assert!(matches!(plugin.run_command(&slow), Err(CallError::Timeout(_))));
+    assert!(started.elapsed() < Duration::from_secs(2));
+}
+
+#[test]
+fn a_plugin_built_against_api_1_2_still_runs_its_command() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/api-1.2.0");
+    let manifest = Manifest::read(&dir).unwrap();
+    assert_eq!(manifest.api, "1.2");
+    let loaded = runtime().load(&dir, manifest).unwrap();
+    assert!(loaded.has_commands());
+    let mut plugin = Instance::new(&loaded, Limits::default()).unwrap();
+    plugin.configure(&json!({ "mode": "ok" })).unwrap();
+    let context = Context {
+        video: Some("/videos/b.mp4".into()),
+        ..Context::default()
+    };
+    let call = CommandCall {
+        command: "next".into(),
+        context,
+        navigator: Some(Arc::new(FixedFolder)),
+    };
+    assert_eq!(
+        plugin.run_command(&call).unwrap().open.as_deref(),
+        Some(Path::new("/videos/c.mp4"))
+    );
+}
+
+/// `/videos/a.mp4` .. `/videos/<n>.mp4`, the open one first, every file but the last with a job.
+struct Huge(usize);
+
+impl Navigator for Huge {
+    fn list_folder(&self, video: &Path, _request: FolderRequest) -> Result<FolderListing, String> {
+        let dir = video.parent().ok_or("no folder")?;
+        let files = (0..self.0)
+            .map(|i| FolderFile {
+                path: dir.join(format!("{i}.mp4")),
+                name: format!("{i}.mp4"),
+                has_job: i + 1 < self.0,
+            })
+            .collect();
+        let order = FolderOrder {
+            source: OrderSource::NamesOff,
+            role: "text".into(),
+            descending: false,
+            detail: String::new(),
+        };
+        Ok(FolderListing {
+            files,
+            current: Some(0),
+            order,
+        })
+    }
+}
+
+#[test]
+fn api_1_3_steps_hand_over_one_file_however_large_the_folder() {
+    let mut plugin = instance("ok", Limits::default());
+    let context = Context {
+        video: Some("/videos/0.mp4".into()),
+        ..Context::default()
+    };
+    let call = CommandCall {
+        command: "step".into(),
+        context,
+        navigator: Some(Arc::new(Huge(300_000))),
+    };
+    let outcome = plugin.run_command(&call).unwrap();
+    assert_eq!(outcome.open.as_deref(), Some(Path::new("/videos/299999.mp4")));
+    assert_eq!(outcome.bubbles, ["300000 of 300000 (299998 skipped)"]);
+}

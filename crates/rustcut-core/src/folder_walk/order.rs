@@ -4,10 +4,12 @@
 use std::cmp::Ordering;
 use std::path::PathBuf;
 
-use super::natural::NameOrder;
+use rayon::slice::ParallelSliceMut as _;
+
+use super::natural::{NameKey, NameOrder};
 
 /// What a folder is sorted by.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SortRole {
     /// The file name (Dolphin's `text`).
     Name,
@@ -56,7 +58,7 @@ impl SortRole {
 }
 
 /// How a folder's files are ordered.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SortSpec {
     /// The role.
     pub role: SortRole,
@@ -81,8 +83,8 @@ impl Default for SortSpec {
 pub struct Entry {
     /// The full path.
     pub path: PathBuf,
-    /// The file name as shown.
-    pub name: String,
+    /// The file name as shown, split for the name order.
+    pub key: NameKey,
     /// The name starts with a dot.
     pub hidden: bool,
     /// Bytes.
@@ -93,13 +95,20 @@ pub struct Entry {
     pub created: i64,
     /// Seconds since the epoch; -1 when unknown.
     pub accessed: i64,
-    /// The type's description; empty when unknown (sorts last ascending).
-    pub type_name: String,
+    /// The type's description, split for the name order; empty when unknown (sorts last ascending).
+    pub type_name: NameKey,
 }
 
-/// Sorts `entries` in Dolphin's order.
+/// Below this many files one thread sorts (the threads' start costs more than they save).
+const PARALLEL_FROM: usize = 4_096;
+
+/// Sorts `entries` in Dolphin's order (a total order: the path decides last, so an unstable sort is exact).
 pub fn sort(entries: &mut [Entry], spec: &SortSpec, names: &NameOrder) {
-    entries.sort_by(|a, b| compare(a, b, spec, names));
+    if entries.len() >= PARALLEL_FROM {
+        entries.par_sort_unstable_by(|a, b| compare(a, b, spec, names));
+    } else {
+        entries.sort_unstable_by(|a, b| compare(a, b, spec, names));
+    }
 }
 
 /// Dolphin's `lessThan` as an ordering.
@@ -109,7 +118,7 @@ pub fn compare(a: &Entry, b: &Entry, spec: &SortSpec, names: &NameOrder) -> Orde
         return a.hidden.cmp(&b.hidden);
     }
     let result = role_compare(a, b, &spec.role, names)
-        .then_with(|| names.compare(&a.name, &b.name))
+        .then_with(|| names.compare_keys(&a.key, &b.key))
         .then_with(|| a.path.cmp(&b.path));
     if spec.descending { result.reverse() } else { result }
 }
@@ -121,10 +130,10 @@ fn role_compare(a: &Entry, b: &Entry, role: &SortRole, names: &NameOrder) -> Ord
         SortRole::Modified => a.modified.cmp(&b.modified),
         SortRole::Created => a.created.cmp(&b.created),
         SortRole::Accessed => a.accessed.cmp(&b.accessed),
-        SortRole::Type => match (a.type_name.is_empty(), b.type_name.is_empty()) {
+        SortRole::Type => match (a.type_name.name().is_empty(), b.type_name.name().is_empty()) {
             (false, true) => Ordering::Less,
             (true, false) => Ordering::Greater,
-            _ => names.compare(&a.type_name, &b.type_name),
+            _ => names.compare_keys(&a.type_name, &b.type_name),
         },
     }
 }
@@ -137,18 +146,18 @@ mod tests {
     fn entry(name: &str, size: u64, modified: i64, hidden: bool) -> Entry {
         Entry {
             path: PathBuf::from("/v").join(name),
-            name: name.to_owned(),
+            key: NameKey::new(name),
             hidden,
             size,
             modified,
             created: -1,
             accessed: -1,
-            type_name: String::new(),
+            type_name: NameKey::default(),
         }
     }
 
     fn names(entries: &[Entry]) -> Vec<&str> {
-        entries.iter().map(|e| e.name.as_str()).collect()
+        entries.iter().map(|e| e.key.name()).collect()
     }
 
     #[test]
@@ -190,8 +199,8 @@ mod tests {
         let order = NameOrder::new(SortingChoice::Natural, "C");
         let mut a = entry("a", 0, 0, false);
         let mut b = entry("b", 0, 0, false);
-        b.type_name = "MPEG-4 video".into();
-        a.type_name = String::new();
+        b.type_name = NameKey::new("MPEG-4 video");
+        a.type_name = NameKey::default();
         let mut list = vec![a, b];
         sort(
             &mut list,

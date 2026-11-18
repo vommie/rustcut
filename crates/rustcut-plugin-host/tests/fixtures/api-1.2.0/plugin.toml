@@ -1,0 +1,57 @@
+# test-plugin/ as of the tag plugin-api-v1.2.0, built for wasm32-wasip2 (release) and kept as it is: a plugin built
+# against API 1.2 (with a command) must keep loading and answering on every 1.x host (tests/sandbox.rs).
+id = "test-plugin"
+name = "Test Plugin"
+version = "0.1.0"
+api = "1.2"
+description = "The test plugin as built against plugin API 1.2.0 (RustCut's tests: older plugins keep working)."
+authors = ["vommie"]
+license = "MIT"
+icon = "flask"
+wasm = "plugin.wasm"
+
+[[cards]]
+title = "Behavior"
+description = "The test plugin as built against plugin API 1.2.0 (RustCut's tests: older plugins keep working)."
+
+[[cards.fields]]
+key = "mode"
+label = "Mode"
+help = "ok: a toast and the video's folder as the target. fail: an error. panic: a crash. slow: an endless loop (stopped at the time limit). memory: allocates until the memory limit stops it. refuse: refuses its settings. quiet: hides its marks, sets 3 stars and names the target folder id."
+kind = "choice"
+default = "ok"
+options = [
+    { value = "ok", label = "OK" },
+    { value = "fail", label = "Fail" },
+    { value = "panic", label = "Panic" },
+    { value = "slow", label = "Slow" },
+    { value = "memory", label = "Memory" },
+    { value = "refuse", label = "Refuse" },
+    { value = "quiet", label = "Quiet" },
+]
+
+[[cards]]
+title = "Keys"
+description = "The test plugin as built against plugin API 1.2.0 (RustCut's tests: older plugins keep working)."
+
+[[cards.fields]]
+key = "next_key"
+label = "Next video"
+kind = "key"
+default = "Control+Alt+F12"
+
+[[cards.fields]]
+key = "next_button"
+label = "Button in the menu bar"
+kind = "switch"
+default = true
+
+[[commands]]
+id = "next"
+title = "Test: Next Video"
+description = "The test plugin as built against plugin API 1.2.0 (RustCut's tests: older plugins keep working)."
+icon = "flask"
+key = "next_key"
+menu = true
+button = "next_button"
+discards_sections = true

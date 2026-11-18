@@ -43,9 +43,8 @@ pub async fn ask(folder: &Path, want_sort: bool) -> Result<BusView, String> {
 }
 
 async fn ask_inner(folder: &Path, want_sort: bool) -> zbus::Result<BusView> {
-    let url = url::Url::from_file_path(folder)
-        .map_err(|()| zbus::Error::Failure(format!("not an absolute path: {}", folder.display())))?
-        .to_string();
+    let url = super::file_url::file_url(folder)
+        .ok_or_else(|| zbus::Error::Failure(format!("not an absolute path: {}", folder.display())))?;
     let connection = Connection::session().await?;
     let bus = DBusProxy::new(&connection).await?;
     let mut view = BusView::default();

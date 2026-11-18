@@ -208,11 +208,13 @@ impl Commands for NextInFolder {
 export_plugin_with_commands!(NextInFolder);
 ```
 
-While `run` runs, three host functions work:
+While `run` runs, these host functions work (RustCut's own time in them, such as reading a folder on a slow mount
+or asking Dolphin, does not count against the plugin's time limit):
 
 | Function | What it does |
 |---|---|
 | `list-folder(request)` | The files of the open video's folder in the asked order: `file-manager` (`off`, `open-tab`: only while a Dolphin tab shows the folder, `running`: while any Dolphin window exists, `always`: Dolphin's stored order, Dolphin is never started), `hidden` (`skip`, `show`, `like-file-manager`), `videos-only`. Each file says whether a queued job has it as its source; `order` says where the order came from (`file-manager`, or one of the `names-*` reasons for names A to Z, `names-unsupported` with Dolphin's `role` RustCut cannot rebuild). RustCut rebuilds Dolphin's order itself: its natural name order (numbers by value, the locale's letters, case as a tie-break), size, the three dates, type, hidden files last. |
+| `step-folder(request, forward, skip-with-job, wrap)` (since 1.3) | One step from the open video in the same order: the file it lands on (or none at the end), its position, the folder's count, how many files with a job were passed over, whether it started over. Only the result crosses into the plugin, so it costs the same for 100 files and for 500 000; prefer it to `list-folder` for "next" and "previous". |
 | `open-video(path)` | Opens the file after `run` returned, like a dropped file (the last call wins). |
 | `bubble(text)` | A short note at the command's menu bar button (a toast when it has none), with the plugin's name in front. |
 
@@ -250,7 +252,7 @@ A plugin file (`<id>-<version>.rcplugin`) is a tar archive compressed with zstd,
 
 ## Versions
 
-The plugin API follows semantic versioning (the WIT package `rustcut:plugin@1.2.0`, the crate `rustcut-plugin-api`,
+The plugin API follows semantic versioning (the WIT package `rustcut:plugin@1.3.0`, the crate `rustcut-plugin-api`,
 tags `plugin-api-vX.Y.Z` in RustCut's repository). A minor version only adds host functions, imported interfaces or
 types that no export uses; RustCut runs every plugin of its major version whose `api` is not newer than its own. New
 events, actions, record fields, enum cases or exports change the types of `configure`, `handle` and `check`, which
@@ -263,6 +265,7 @@ next major version. An optional exported interface is the one exception (since 1
 |---|---|
 | 1.0 | The events `video-opened`, `tag-assigned`, `tag-removed`; the actions `set-target`, `set-rating`, `notify`; the host's `log`. |
 | 1.1 | The host's `target-folder` and `hide-marks` (new functions only, so a plugin built against 1.0 links unchanged; RustCut's host tests load a 1.0 build). |
+| 1.3 | The host's `step-folder` (a new function and record only). |
 | 1.2 | Commands: the world `plugin-with-commands` (the export `commands.run`, the imports `list-folder`, `open-video`, `bubble`), `[[commands]]` and the field kind `key` in `plugin.toml`. Plugins of 1.0 and 1.1 load unchanged (host tests load both builds). |
 
 ## Testing

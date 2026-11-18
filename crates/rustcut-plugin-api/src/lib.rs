@@ -71,9 +71,10 @@ pub mod commands_bindings {
         pub_export_macro: true,
         export_macro_name: "__export_plugin_with_commands",
         default_bindings_module: "rustcut_plugin_api::__commands_bindings",
+        // wit-bindgen matches these with the package version: change them with every API version.
         with: {
-            "rustcut:plugin/host@1.2.0": crate::bindings::rustcut::plugin::host,
-            "rustcut:plugin/types@1.2.0": crate::bindings::rustcut::plugin::types,
+            "rustcut:plugin/host@1.3.0": crate::bindings::rustcut::plugin::host,
+            "rustcut:plugin/types@1.3.0": crate::bindings::rustcut::plugin::types,
         },
         generate_all,
     });
@@ -122,11 +123,11 @@ macro_rules! export_plugin_with_commands {
 }
 pub use commands_bindings::exports::rustcut::plugin::commands::Guest as Commands;
 pub use commands_bindings::rustcut::plugin::command_host::{
-    FileManagerMode, FolderFile, FolderListing, FolderOrder, FolderRequest, HiddenFiles, OrderSource,
+    FileManagerMode, FolderFile, FolderListing, FolderOrder, FolderRequest, FolderStep, HiddenFiles, OrderSource,
 };
 
 /// The plugin API version this kit implements.
-pub const API_VERSION: &str = "1.2.0";
+pub const API_VERSION: &str = "1.3.0";
 
 /// Writes a line into the plugin log. Outside RustCut (native unit tests) it goes to stderr.
 pub fn log(level: Level, message: &str) {
@@ -167,6 +168,28 @@ pub fn list_folder(request: FolderRequest) -> Result<FolderListing, String> {
     {
         let _ = request;
         Err("list-folder works only inside RustCut".to_owned())
+    }
+}
+
+/// Since API 1.3: one step from the open video through its folder (`forward` = the next file), passing over files with
+/// a job when `skip_with_job`, starting over at the other end when `wrap`. Only the result crosses into the plugin, so
+/// it costs the same for 100 files and for 500 000. Call it inside `Commands::run`; outside RustCut it is an error. A
+/// plugin that calls it needs `api = "1.3"`.
+///
+/// # Errors
+/// As [`list_folder`].
+pub fn step_folder(
+    request: FolderRequest,
+    forward: bool,
+    skip_with_job: bool,
+    wrap: bool,
+) -> Result<FolderStep, String> {
+    #[cfg(target_arch = "wasm32")]
+    return commands_bindings::rustcut::plugin::command_host::step_folder(request, forward, skip_with_job, wrap);
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = (request, forward, skip_with_job, wrap);
+        Err("step-folder works only inside RustCut".to_owned())
     }
 }
 

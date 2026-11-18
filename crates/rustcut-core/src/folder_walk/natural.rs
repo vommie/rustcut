@@ -14,7 +14,7 @@ use icu_collator::{Collator, CollatorBorrowed};
 use icu_locale_core::Locale;
 
 /// Dolphin's `[General] SortingChoice` in `dolphinrc`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum SortingChoice {
     /// Numbers by value, case insensitive, locale-aware (Dolphin's default).
     #[default]
@@ -78,70 +78,168 @@ impl NameOrder {
     /// Dolphin's `stringCompare`.
     #[must_use]
     pub fn compare(&self, a: &str, b: &str) -> Ordering {
+        self.compare_keys(&NameKey::new(a), &NameKey::new(b))
+    }
+
+    /// A name split once for [`NameOrder::compare_keys`]. (ICU sort keys of every run and rest were measured on
+    /// 100 000 names: building them took longer than the comparisons they saved, 2026-11-18.)
+    #[must_use]
+    pub fn key(&self, name: &str) -> NameKey {
+        NameKey::new(name)
+    }
+
+    /// Compares names split once with [`NameKey::new`] (sorting a large folder splits every name once, not per
+    /// comparison).
+    #[must_use]
+    pub fn compare_keys(&self, a: &NameKey, b: &NameKey) -> Ordering {
         match self.choice {
             SortingChoice::Natural => {
-                let a: Vec<char> = a.chars().collect();
-                let b: Vec<char> = b.chars().collect();
-                let (base_a, ext_a) = split_extension(&a);
-                let (base_b, ext_b) = split_extension(&b);
-                let result = self.decimal_aware(base_a, base_b);
-                if result != Ordering::Equal || (ext_a.is_empty() && ext_b.is_empty()) {
+                let result = self.decimal_aware(a.base(), &a.base_tokens, b.base(), &b.base_tokens);
+                if result != Ordering::Equal || (a.ext().is_empty() && b.ext().is_empty()) {
                     return result;
                 }
-                self.decimal_aware(ext_a, ext_b)
+                self.decimal_aware(a.ext(), &a.ext_tokens, b.ext(), &b.ext_tokens)
             }
-            SortingChoice::CaseInsensitive => compare_folded(a, b).then_with(|| a.cmp(b)),
-            SortingChoice::CaseSensitive => a.cmp(b),
+            SortingChoice::CaseInsensitive => compare_folded(&a.text, &b.text).then_with(|| a.text.cmp(&b.text)),
+            SortingChoice::CaseSensitive => a.text.cmp(&b.text),
         }
     }
 
-    fn collate(&self, a: &[char], b: &[char]) -> Ordering {
-        let a: String = a.iter().collect();
-        let b: String = b.iter().collect();
+    fn collate(&self, a: &str, b: &str) -> Ordering {
+        // Equal bytes collate equal: most runs of a folder's names are the same words ("Clip ", " [take ").
+        if a == b {
+            return Ordering::Equal;
+        }
         match &self.collator {
-            Some(collator) => collator.compare(&a, &b),
-            None => compare_folded(&a, &b),
+            Some(collator) => collator.compare(a, b),
+            None => compare_folded(a, b),
         }
     }
 
-    /// Dolphin's `decimalAwareNaturalCompare`.
-    fn decimal_aware(&self, a: &[char], b: &[char]) -> Ordering {
-        let (mut ia, mut ib) = (0, 0);
+    /// Dolphin's `decimalAwareNaturalCompare`, token by token: a text run on one side and a number on the other
+    /// compare the run with nothing; differing runs decide by the whole rest; equal numbers go on.
+    fn decimal_aware(&self, a: &str, ta: &[Token], b: &str, tb: &[Token]) -> Ordering {
+        let (mut i, mut j) = (0, 0);
         let mut numbers = false;
-        while ia < a.len() && ib < b.len() {
-            let digits = is_digit(a.get(ia)) && is_digit(b.get(ib));
-            if digits {
+        while let (Some(x), Some(y)) = (ta.get(i), tb.get(j)) {
+            if x.number && y.number {
                 numbers = true;
-                let chain_a = numeric_chain(a, ia);
-                let chain_b = numeric_chain(b, ib);
-                let result = compare_chains(&chain_a, &chain_b);
-                ia = chain_a.end;
-                ib = chain_b.end;
+                let result = compare_chains(x.text(a), y.text(b));
                 if result != Ordering::Equal {
                     return result;
                 }
+                i += 1;
+                j += 1;
             } else {
-                let end_a = text_run_end(a, ia);
-                let end_b = text_run_end(b, ib);
-                let run = self.collate(
-                    a.get(ia..end_a).unwrap_or_default(),
-                    b.get(ib..end_b).unwrap_or_default(),
-                );
-                if run != Ordering::Equal {
-                    return self.collate(a.get(ia..).unwrap_or_default(), b.get(ib..).unwrap_or_default());
+                let run_a = if x.number { "" } else { x.text(a) };
+                let run_b = if y.number { "" } else { y.text(b) };
+                if self.collate(run_a, run_b) != Ordering::Equal {
+                    return self.collate(x.rest(a), y.rest(b));
                 }
-                ia = end_a;
-                ib = end_b;
+                i += usize::from(!x.number);
+                j += usize::from(!y.number);
             }
         }
-        let rest = self.collate(a.get(ia..).unwrap_or_default(), b.get(ib..).unwrap_or_default());
+        let rest_a = ta.get(i).map_or("", |t| t.rest(a));
+        let rest_b = tb.get(j).map_or("", |t| t.rest(b));
+        let rest = self.collate(rest_a, rest_b);
         if rest != Ordering::Equal || !numbers {
             return rest;
         }
-        let a: String = a.iter().collect();
-        let b: String = b.iter().collect();
-        compare_folded(&a, &b).then_with(|| a.cmp(&b))
+        compare_folded(a, b).then_with(|| a.cmp(b))
     }
+}
+
+/// A file name split once for [`NameOrder::compare_keys`]: the base name and the extension, each as runs of text and
+/// numbers (byte ranges into the name).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NameKey {
+    text: Box<str>,
+    /// Where the extension (with its dot) starts; the name's length without one.
+    split: usize,
+    base_tokens: Vec<Token>,
+    ext_tokens: Vec<Token>,
+}
+
+impl NameKey {
+    #[must_use]
+    pub fn new(name: &str) -> Self {
+        let split = extension_start(name).unwrap_or(name.len());
+        let base = name.get(..split).unwrap_or_default();
+        let ext = name.get(split..).unwrap_or_default();
+        Self {
+            base_tokens: tokens(base),
+            ext_tokens: tokens(ext),
+            split,
+            text: name.into(),
+        }
+    }
+
+    /// The whole name.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.text
+    }
+
+    fn base(&self) -> &str {
+        self.text.get(..self.split).unwrap_or_default()
+    }
+
+    fn ext(&self) -> &str {
+        self.text.get(self.split..).unwrap_or_default()
+    }
+}
+
+/// A run of a name part: text up to the next digit, or a number chain (`12`, `1.5`, `1.2.3`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Token {
+    start: u32,
+    end: u32,
+    number: bool,
+}
+
+impl Token {
+    fn text(self, part: &str) -> &str {
+        part.get(self.start as usize..self.end as usize).unwrap_or_default()
+    }
+
+    /// The part from this token to its end.
+    fn rest(self, part: &str) -> &str {
+        part.get(self.start as usize..).unwrap_or_default()
+    }
+}
+
+/// The runs of a part. Digits and dots are ASCII, so every boundary is a character boundary.
+fn tokens(part: &str) -> Vec<Token> {
+    let bytes = part.as_bytes();
+    let digit = |i: usize| bytes.get(i).is_some_and(u8::is_ascii_digit);
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        let start = i;
+        let number = digit(i);
+        if number {
+            loop {
+                while digit(i) {
+                    i += 1;
+                }
+                if bytes.get(i) == Some(&b'.') && digit(i + 1) {
+                    i += 1;
+                } else {
+                    break;
+                }
+            }
+        } else {
+            while i < bytes.len() && !digit(i) {
+                i += 1;
+            }
+        }
+        let (Ok(start), Ok(end)) = (u32::try_from(start), u32::try_from(i)) else {
+            break;
+        };
+        out.push(Token { start, end, number });
+    }
+    out
 }
 
 /// `de_DE.UTF-8@euro` -> `de-DE`; `C`/`POSIX` and garbage -> unknown (root order).
@@ -160,72 +258,35 @@ fn compare_folded(a: &str, b: &str) -> Ordering {
         .cmp(b.chars().flat_map(char::to_lowercase))
 }
 
-fn is_digit(c: Option<&char>) -> bool {
-    c.is_some_and(char::is_ascii_digit)
-}
-
-/// Dolphin's `findExtensionSeparator`: the base name and the extension (with its dot).
-fn split_extension(name: &[char]) -> (&[char], &[char]) {
-    for index in (1..name.len()).rev() {
-        let Some(&c) = name.get(index) else { continue };
+/// Dolphin's `findExtensionSeparator`: the byte index of the extension's dot (the last `.` that is not between two
+/// digits, from the second character on); `None` when there is none or the suffix holds whitespace.
+fn extension_start(name: &str) -> Option<usize> {
+    let bytes = name.as_bytes();
+    let digit = |i: usize| bytes.get(i).is_some_and(u8::is_ascii_digit);
+    for (index, c) in name.char_indices().rev() {
+        if index == 0 {
+            return None;
+        }
         if c.is_whitespace() {
-            break;
+            return None;
         }
-        if c != '.' {
-            continue;
-        }
-        let between_digits = index
-            .checked_sub(1)
-            .is_some_and(|before| is_digit(name.get(before)) && is_digit(name.get(index + 1)));
-        if between_digits {
-            continue;
-        }
-        return (
-            name.get(..index).unwrap_or_default(),
-            name.get(index..).unwrap_or_default(),
-        );
-    }
-    (name, &[])
-}
-
-fn text_run_end(text: &[char], start: usize) -> usize {
-    (start..text.len())
-        .find(|&i| is_digit(text.get(i)))
-        .unwrap_or(text.len())
-}
-
-/// A chain of digit runs joined by single dots (`12`, `1.5`, `1.2.3`), as digit strings.
-#[derive(Debug)]
-struct Chain {
-    segments: Vec<String>,
-    end: usize,
-}
-
-fn numeric_chain(text: &[char], start: usize) -> Chain {
-    let mut segments = Vec::new();
-    let mut index = start;
-    loop {
-        let run_start = index;
-        while is_digit(text.get(index)) {
-            index += 1;
-        }
-        segments.push(text.get(run_start..index).unwrap_or_default().iter().collect());
-        if text.get(index) == Some(&'.') && is_digit(text.get(index + 1)) {
-            index += 1;
-        } else {
-            break;
+        if c == '.' && !(digit(index - 1) && digit(index + 1)) {
+            return Some(index);
         }
     }
-    Chain { segments, end: index }
+    None
 }
 
-/// Dolphin's `compareNumericChains`.
-fn compare_chains(a: &Chain, b: &Chain) -> Ordering {
-    if let ([int_a, frac_a], [int_b, frac_b]) = (a.segments.as_slice(), b.segments.as_slice()) {
+/// Dolphin's `compareNumericChains`: `N.M` against `N.M` as decimal fractions, other chains segment by segment.
+fn compare_chains(a: &str, b: &str) -> Ordering {
+    let (count_a, count_b) = (a.split('.').count(), b.split('.').count());
+    if count_a == 2 && count_b == 2 {
+        let (int_a, frac_a) = a.split_once('.').unwrap_or((a, ""));
+        let (int_b, frac_b) = b.split_once('.').unwrap_or((b, ""));
         return compare_digits(int_a, int_b).then_with(|| compare_fraction(frac_a, frac_b));
     }
-    let mut left = a.segments.iter();
-    let mut right = b.segments.iter();
+    let mut left = a.split('.');
+    let mut right = b.split('.');
     loop {
         match (left.next(), right.next()) {
             (Some(x), Some(y)) => {
@@ -250,8 +311,16 @@ fn compare_digits(a: &str, b: &str) -> Ordering {
 
 /// Fractions: the shorter is padded with zeros (`.5` == `.50`, `.10` < `.9`).
 fn compare_fraction(a: &str, b: &str) -> Ordering {
-    let width = a.len().max(b.len());
-    format!("{a:0<width$}").cmp(&format!("{b:0<width$}"))
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    (0..a.len().max(b.len()))
+        .map(|i| {
+            a.get(i)
+                .copied()
+                .unwrap_or(b'0')
+                .cmp(&b.get(i).copied().unwrap_or(b'0'))
+        })
+        .find(|o| *o != Ordering::Equal)
+        .unwrap_or(Ordering::Equal)
 }
 
 #[cfg(test)]
