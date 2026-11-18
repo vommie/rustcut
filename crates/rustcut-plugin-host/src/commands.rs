@@ -75,7 +75,13 @@ pub struct FolderView {
     pub progress: bool,
     /// The list of the neighbors.
     pub neighbors: bool,
+    /// The files on a page of the list (API 1.5, [`NEIGHBOR_ROWS`] until the plugin says otherwise).
+    pub rows: u32,
 }
+
+/// The neighbor list's rows per page until a plugin sets them (API 1.5), and their range.
+pub const NEIGHBOR_ROWS: u32 = 15;
+pub const NEIGHBOR_ROWS_RANGE: std::ops::RangeInclusive<u32> = 5..=50;
 
 /// A call changed the plugin's folder view to this (none = removed).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

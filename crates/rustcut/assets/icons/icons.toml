@@ -317,6 +317,7 @@ plugin_install = { tabler = "package-import", doc = "Install a plugin file" }
 plugin_command_next = { tabler = "player-track-next", doc = "A plugin command that goes to the next item (Next in Folder: the next file)" }
 plugin_command_previous = { tabler = "player-track-prev", doc = "A plugin command that goes to the previous item (Next in Folder: the previous file)" }
 folder_neighbors = { tabler = "list", doc = "The files around the open video in its folder (a plugin's folder view, API 1.4)" }
+navigator_current = { tabler = "current-location", doc = "Back to the open video in the folder navigator (Q-NF3)" }
 plugin_dev = { tabler = "flask", doc = "A development folder of a plugin" }
 plugin_update = { tabler = "circle-arrow-up", doc = "A newer version of a plugin is available" }
 settings_export = { tabler = "file-download", doc = "Save a plugin's settings to a file" }

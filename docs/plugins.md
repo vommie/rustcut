@@ -222,7 +222,8 @@ One more host function of the world `plugin-with-commands` works in every call, 
 
 | Function | What it does |
 |---|---|
-| `set-folder-view(view)` (since 1.4) | Shows where the open video stands in its folder, in the menu bar: `progress` = a bar with the position (`10/100`, shortened when it does not fit; its tooltip has the exact numbers, the percent, the order and the folder) between the plugin's buttons, or alone where they would stand; `neighbors` = a list of the files around the open video (a right click on the plugin's buttons or the bar, a click on the bar, or a button of its own when the plugin shows neither). `request` is the order, as in `list-folder`. RustCut reads the position itself whenever a video opens or the folder changes, so it costs the plugin nothing; `none` takes the view away. The first running plugin with a view shows it. Call it from `configure`, so it follows the plugin's settings. |
+| `set-folder-view(view)` (since 1.4) | Shows where the open video stands in its folder, in the menu bar: `progress` = a bar with the position (`10/100`, shortened when it does not fit; its tooltip has the exact numbers, the percent, the order and the folder) between the plugin's buttons, or alone where they would stand; `neighbors` = the folder navigator, a bubble with the folder's files around the open video, a search (wildcards like Dolphin, or a regular expression) and pages (a right click on the plugin's buttons or the bar, a click on the bar, or a button of its own when the plugin shows neither). `request` is the order, as in `list-folder`. RustCut reads the position itself whenever a video opens or the folder changes, so it costs the plugin nothing; `none` takes the view away. The first running plugin with a view shows it. Call it from `configure`, so it follows the plugin's settings. |
+| `set-neighbor-rows(rows)` (since 1.5) | How many files a page of the navigator shows: 5 to 50 (moved into that range), 15 until the plugin says otherwise. Works in every call, `configure` included. |
 
 ## Limits and failures
 
@@ -258,7 +259,7 @@ A plugin file (`<id>-<version>.rcplugin`) is a tar archive compressed with zstd,
 
 ## Versions
 
-The plugin API follows semantic versioning (the WIT package `rustcut:plugin@1.4.0`, the crate `rustcut-plugin-api`,
+The plugin API follows semantic versioning (the WIT package `rustcut:plugin@1.5.0`, the crate `rustcut-plugin-api`,
 tags `plugin-api-vX.Y.Z` in RustCut's repository). A minor version only adds host functions, imported interfaces or
 types that no export uses; RustCut runs every plugin of its major version whose `api` is not newer than its own. New
 events, actions, record fields, enum cases or exports change the types of `configure`, `handle` and `check`, which
@@ -274,6 +275,7 @@ next major version. An optional exported interface is the one exception (since 1
 | 1.2 | Commands: the world `plugin-with-commands` (the export `commands.run`, the imports `list-folder`, `open-video`, `bubble`), `[[commands]]` and the field kind `key` in `plugin.toml`. Plugins of 1.0 and 1.1 load unchanged (host tests load both builds). |
 | 1.3 | The host's `step-folder` (a new function and record only). |
 | 1.4 | The host's `set-folder-view` (a new function and record only). |
+| 1.5 | The host's `set-neighbor-rows` (a new function only). |
 
 ## Testing
 

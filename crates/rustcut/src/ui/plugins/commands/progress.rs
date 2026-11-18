@@ -18,15 +18,20 @@ use slint::{ComponentHandle as _, ModelRc, VecModel};
 
 use super::progress_text as text;
 use super::{BRIDGE, CommandsBridge};
-use crate::ui::menu::{MenuAction, MenuItem};
 use crate::{PluginCommands, PluginProgressView, TipRow};
 
 /// How long a read may take before the bar pulses.
 const PULSE_AFTER: Duration = Duration::from_millis(300);
 /// Changes of the folder that come together are read once.
 const SETTLE: Duration = Duration::from_millis(250);
-/// The neighbors before and after the open video.
-const AROUND: usize = 5;
+
+/// What the navigator takes from the last listing.
+pub(super) struct Snapshot {
+    pub files: Arc<Vec<PathBuf>>,
+    pub current: Option<usize>,
+    pub folder: PathBuf,
+    pub order: String,
+}
 
 /// Where the open video stands, as last read.
 struct Located {
@@ -59,6 +64,13 @@ impl CommandsBridge {
     /// The folder view of the plugins (the first running plugin with one); a change reads again.
     pub(super) fn set_owner(&self, owner: Option<(String, FolderView)>) {
         let changed = self.progress.state.borrow().owner != owner;
+        if owner.as_ref().is_none_or(|(_, v)| !v.neighbors)
+            && let Some(window) = self.window.upgrade()
+            && window.global::<crate::FolderNavigator<'_>>().get_open()
+        {
+            window.global::<crate::FolderNavigator<'_>>().set_open(false);
+            window.invoke_focus_keys();
+        }
         if changed {
             self.progress.state.borrow_mut().owner = owner;
             self.refresh_progress();
@@ -171,6 +183,25 @@ impl CommandsBridge {
         }
         self.progress.pulse.stop();
         self.publish_progress();
+        if self
+            .window
+            .upgrade()
+            .is_some_and(|w| w.global::<crate::FolderNavigator<'_>>().get_open())
+        {
+            self.navigator_listing();
+        }
+    }
+
+    /// The last listing for the folder navigator (Q-NF3).
+    pub(super) fn located_snapshot(&self) -> Option<Snapshot> {
+        let st = self.progress.state.borrow();
+        let located = st.located.as_ref()?;
+        Some(Snapshot {
+            files: Arc::clone(&located.files),
+            current: located.current,
+            folder: located.folder.clone(),
+            order: text::order_chip(&located.sort, &located.source),
+        })
     }
 
     fn publish_progress(&self) {
@@ -245,56 +276,16 @@ impl CommandsBridge {
         }
     }
 
-    /// The neighbor list under the element at `anchor` (window coordinates).
+    /// The folder navigator under the element at `anchor` (window coordinates; Q-NF3), or closed when it is open.
     pub(super) fn open_neighbors(&self, anchor: [f32; 4]) {
-        let st = self.progress.state.borrow();
-        let wanted = st.owner.as_ref().is_some_and(|(_, v)| v.neighbors);
-        let Some(located) = st.located.as_ref().filter(|_| wanted) else {
-            return;
+        let rows = {
+            let st = self.progress.state.borrow();
+            match st.owner.as_ref() {
+                Some((_, view)) if view.neighbors => view.rows,
+                _ => return,
+            }
         };
-        let Some(current) = located.current else { return };
-        let total = located.files.len();
-        let jobs: std::collections::HashSet<PathBuf> = self
-            .queue
-            .upgrade()
-            .map(|q| q.sources())
-            .unwrap_or_default()
-            .iter()
-            .map(path_clean::clean)
-            .collect();
-        let unsaved = self.editor.upgrade().is_some_and(|e| e.has_unsaved_sections());
-        let range = text::neighbors(current, total, AROUND);
-        let mut items = vec![MenuItem::Heading(format!("{} of {total}", current + 1))];
-        for index in range {
-            let Some(path) = located.files.get(index) else { continue };
-            let name = path
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            let mut action = MenuAction::new(index.to_string(), name, None).checked(index == current);
-            if index == current {
-                action = action.enabled(false);
-            } else if jobs.contains(path) {
-                action = action.shortcut("Job");
-            }
-            if unsaved && index != current {
-                action = action.hold();
-            }
-            items.push(MenuItem::Action(action));
-        }
-        let files = Arc::clone(&located.files);
-        drop(st);
-        let Some(menu) = self.context_menu.upgrade() else {
-            return;
-        };
-        let opener = std::rc::Weak::clone(&self.opener);
-        menu.show_at(&items, anchor, move |id| {
-            let path = id.parse::<usize>().ok().and_then(|i| files.get(i)).cloned();
-            if let (Some(path), Some(opener)) = (path, opener.upgrade()) {
-                tracing::info!("[NextInFolder] Opens the neighbor {}", path.display());
-                opener.open(path);
-            }
-        });
+        self.toggle_navigator(anchor, usize::try_from(rows).unwrap_or(15));
     }
 }
 

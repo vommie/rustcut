@@ -33,7 +33,8 @@ fn api_versions_decide_compatibility() {
     assert!(with("1.2").api_compatible());
     assert!(with("1.3").api_compatible());
     assert!(with("1.4").api_compatible());
-    assert!(!with("1.5").api_compatible());
+    assert!(with("1.5").api_compatible());
+    assert!(!with("1.6").api_compatible());
     assert!(!with("2.0").api_compatible());
     assert!(!with("0.9").api_compatible());
     assert!(Manifest::parse(&MINIMAL.replace("api = \"1.0\"", "api = \"one\"")).is_err());

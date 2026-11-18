@@ -38,6 +38,14 @@ export component SearchField inherits Rectangle {
     in property <color> custom-focus-border: transparent;
     in property <color> custom-text: transparent;
 
+    // A small count inside the field, left of the clear button ("" = none), e.g. the number of matches.
+    in property <string> badge;
+    // The text is refused (a pattern that does not compile): a red border, and while the pointer rests on the field a
+    // tooltip says why (`error`, `error-example`).
+    in property <bool> invalid;
+    in property <string> error;
+    in property <string> error-example;
+
     // Tooltip Descriptions
     in property <string> regex-tooltip: "Toggle Regular Expression filter mode";
     in property <string> clear-tooltip: "Clear search filter (Esc)";
@@ -77,7 +85,7 @@ export component SearchField inherits Rectangle {
         root.custom-bg != transparent ? root.custom-bg : Theme.surface-variant
     );
 
-    border-color: !root.is-enabled ? Theme.border : (
+    border-color: !root.is-enabled ? Theme.border : root.invalid ? Theme.status-corrupt : (
         input.has-focus
             ? (root.custom-focus-border != transparent ? root.custom-focus-border : Theme.primary)
             : (root.custom-border != transparent ? root.custom-border : Theme.border)
@@ -111,6 +119,20 @@ export component SearchField inherits Rectangle {
             height: 100%;
             clip: true;
 
+            error-host := TooltipHost {
+                title: root.error;
+                text: root.error-example;
+            }
+
+            property <bool> error-shown: hover-area.has-hover && root.invalid && root.error != "";
+            changed error-shown => {
+                if self.error-shown {
+                    error-host.on-hover-enter(hover-area.mouse-x, hover-area.mouse-y);
+                } else {
+                    error-host.on-hover-leave();
+                }
+            }
+
             if input.text == "" : Text {
                 x: 0px;
                 y: 0px;
@@ -124,49 +146,59 @@ export component SearchField inherits Rectangle {
                 overflow: elide;
             }
 
-            input := TextLine {
+            // Only tracks the pointer around the field (a parent area keeps its hover over its children; the field
+            // takes every press).
+            hover-area := TouchArea {
                 x: 0px;
                 y: 0px;
                 width: 100%;
                 height: 100%;
-                text <=> root.text;
-                font-size: root.font-size;
-                color: root.is-enabled
-                    ? (root.custom-text != transparent ? root.custom-text : Theme.text)
-                    : Theme.text-muted;
-                selection-background-color: Theme.primary;
-                selection-foreground-color: #000000;
-                horizontal-alignment: left;
-                enabled: root.is-enabled;
+                mouse-cursor: MouseCursor.text;
 
-                edited => {
-                    root.search-changed(self.text);
-                }
+                input := TextLine {
+                    x: 0px;
+                    y: 0px;
+                    width: 100%;
+                    height: 100%;
+                    text <=> root.text;
+                    font-size: root.font-size;
+                    color: root.is-enabled
+                        ? (root.custom-text != transparent ? root.custom-text : Theme.text)
+                        : Theme.text-muted;
+                    selection-background-color: Theme.primary;
+                    selection-foreground-color: #000000;
+                    horizontal-alignment: left;
+                    enabled: root.is-enabled;
 
-                accepted => {
-                    root.accepted(self.text);
-                }
-
-                key-pressed(event) => {
-                    if event.text == Key.Escape && root.enable-escape-clear {
-                        if root.text != "" {
-                            root.text = "";
-                            root.search-changed("");
-                            root.cleared();
-                        }
-                        root.escape-pressed();
-                        return accept;
+                    edited => {
+                        root.search-changed(self.text);
                     }
-                    if event.text == Key.Return {
+
+                    accepted => {
                         root.accepted(self.text);
-                        return accept;
                     }
-                    // A key of the window's keymap that works while typing (a plain printable key never is one).
-                    if TypingKeys.key(event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift,
-                        event.modifiers.meta, event.repeat) {
-                        return accept;
+
+                    key-pressed(event) => {
+                        if event.text == Key.Escape && root.enable-escape-clear {
+                            if root.text != "" {
+                                root.text = "";
+                                root.search-changed("");
+                                root.cleared();
+                            }
+                            root.escape-pressed();
+                            return accept;
+                        }
+                        if event.text == Key.Return {
+                            root.accepted(self.text);
+                            return accept;
+                        }
+                        // A key of the window's keymap that works while typing (a plain printable key never is one).
+                        if TypingKeys.key(event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift,
+                            event.modifiers.meta, event.repeat) {
+                            return accept;
+                        }
+                        return reject;
                     }
-                    return reject;
                 }
             }
         }
@@ -232,7 +264,34 @@ export component SearchField inherits Rectangle {
             }
         }
 
-        // 4. Integrated Clear / Reset Button
+        // 4. The count
+        if root.badge != "" : VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 0;
+
+            Rectangle {
+                height: 16px;
+                border-radius: 8px;
+                background: Theme.surface-selected;
+
+                HorizontalLayout {
+                    padding-left: 5px;
+                    padding-right: 5px;
+
+                    Text {
+                        min-width: 6px;
+                        text: root.badge;
+                        font-size: 10px;
+                        font-weight: 600;
+                        color: Theme.text;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+
+        // 5. Integrated Clear / Reset Button
         if root.enable-clear-button && root.text != "" : VerticalLayout {
             alignment: center;
             horizontal-stretch: 0;

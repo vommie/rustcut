@@ -495,6 +495,10 @@ fn api_1_4_a_plugin_sets_its_folder_view_in_configure() {
     let view = update.0.expect("a view");
     assert!(view.progress && !view.neighbors);
     assert_eq!(view.request.file_manager, FileManagerMode::OpenTab);
+    assert_eq!(
+        view.rows, 50,
+        "API 1.5: the rows asked before the view, moved into 5..=50"
+    );
     assert!(plugin.take_view_change().is_none(), "told once");
     plugin.configure(&json!({ "mode": "view" })).unwrap();
     assert!(plugin.take_view_change().is_none(), "the same view is no change");

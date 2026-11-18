@@ -7,7 +7,7 @@
 // a new major version, and RustCut keeps loading the previous major for a while. An optional exported interface (like
 // `commands` of the world `plugin-with-commands`, since 1.2) is no change to the world `plugin`: RustCut looks for it
 // per plugin, and plugins without it load as before. docs/plugins.md in RustCut's repository explains everything.
-package rustcut:plugin@1.4.0;
+package rustcut:plugin@1.5.0;
 
 /// What RustCut offers a plugin to call.
 interface host {
@@ -241,8 +241,8 @@ interface command-host {
         request: folder-request,
         /// A bar in the menu bar, between the plugin's buttons: where the open video stands ("10 of 100").
         progress: bool,
-        /// A list of the five files before and after the open video, opened by a right click on the plugin's buttons
-        /// or the bar (a button of its own when the plugin shows neither); a click on an entry opens it.
+        /// A list of the folder's files around the open video, with a search and pages, opened by a right click on
+        /// the plugin's buttons or the bar (a button of its own when the plugin shows neither); a click opens a file.
         neighbors: bool,
     }
 
@@ -250,6 +250,10 @@ interface command-host {
     /// `configure` (where a plugin turns its settings into it); RustCut keeps it until the plugin sets another or
     /// stops, and keeps it up to date by itself (a video opens, the folder changes).
     set-folder-view: func(view: option<folder-view>);
+
+    /// Since 1.5. How many files a page of the neighbor list shows: 5 to 50 (a number outside is moved into that
+    /// range), 15 until a plugin says otherwise. Like `set-folder-view` it works in every call, also in `configure`.
+    set-neighbor-rows: func(rows: u32);
 
     /// Opens a video in RustCut after `run` returned (the last call wins). RustCut opens it like a dropped file.
     open-video: func(path: string);

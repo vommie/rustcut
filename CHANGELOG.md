@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The neighbor list of Next in Folder is a navigator of the whole folder now instead of a menu of ten files: a bubble
+  with the folder and its order, a search (text anywhere in the name; `*` and `?` like Dolphin; the `.*` switch makes it
+  a regular expression, which stays on across restarts), the files of one page with their number and size and the found
+  part of the name marked, and page numbers with a way back to the open video. A click opens a file and the bubble stays
+  open; Up/Down, Enter, Page Up/Down, Home/End and typing work in it, Escape clears the search and then closes it. A
+  search that cannot be read marks the field red, the list stays as it was, and the reason shows while the pointer rests
+  on the field. Another file is held, not clicked, while sections are not saved.
+
+### Added
+
+- Plugin API 1.5: the host function `set-neighbor-rows` (Next in Folder 1.3: "Files per page", 15 by default). Plugins of
+  1.0 to 1.4 load unchanged.
+
 ## [0.0.116] - 2026-11-18
 
 ### Added

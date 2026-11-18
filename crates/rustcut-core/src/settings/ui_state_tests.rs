@@ -500,3 +500,24 @@ fn a_file_without_a_crop_history_loads_and_a_stored_one_comes_back_clean() {
     assert!(broken.export.crop_history.is_empty());
     assert!(broken.export.keep_filters);
 }
+
+#[test]
+fn the_navigators_regex_switch_round_trips_and_old_files_load() {
+    // A file of 0.0.116 has no `navigator_regex`: the search starts as wildcards.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("ui-state.toml"),
+        "version = 2\n[window]\nwidth = 1000\n",
+    )
+    .unwrap();
+    let value = load::<UiState>(dir.path(), &dir.path().join("b")).unwrap().into_value();
+    assert!(!value.navigator_regex);
+    let state = UiState {
+        navigator_regex: true,
+        ..UiState::default()
+    };
+    let text = toml::to_string(&state).unwrap();
+    assert!(text.contains("navigator_regex = true"));
+    let back: UiState = toml::from_str(&text).unwrap();
+    assert!(back.navigator_regex);
+}

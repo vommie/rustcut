@@ -46,11 +46,12 @@ fn order_to_wit(order: FolderOrder) -> wit::FolderOrder {
     }
 }
 
-pub(super) fn view_from_wit(view: wit::FolderView) -> crate::commands::FolderView {
+pub(super) fn view_from_wit(view: wit::FolderView, rows: u32) -> crate::commands::FolderView {
     crate::commands::FolderView {
         request: request_from_wit(view.request),
         progress: view.progress,
         neighbors: view.neighbors,
+        rows,
     }
 }
 

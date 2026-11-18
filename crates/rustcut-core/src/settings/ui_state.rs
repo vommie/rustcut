@@ -43,6 +43,8 @@ pub struct UiState {
     /// missing.
     #[serde_as(as = "DefaultOnError")]
     pub dialogs: super::dialog_ui::DialogUiState,
+    /// The folder navigator's search is a regular expression (its `.*` switch, Q-NF3).
+    pub navigator_regex: bool,
 }
 
 /// The Settings window (M4.2): its size and place, the page it showed last and what each page had selected.

@@ -80,6 +80,8 @@ pub(super) struct State {
     /// The plugin's folder view (API 1.4) and whether a call changed it since it was last taken.
     view: Option<crate::commands::FolderView>,
     view_changed: bool,
+    /// The neighbor list's rows per page (API 1.5), kept apart from the view so that either call may come first.
+    rows: u32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -186,9 +188,18 @@ impl command_host::Host for State {
     }
 
     fn set_folder_view(&mut self, view: Option<command_host::FolderView>) {
-        let view = view.map(convert_commands::view_from_wit);
+        let view = view.map(|view| convert_commands::view_from_wit(view, self.rows));
         if view != self.view {
             self.view = view;
+            self.view_changed = true;
+        }
+    }
+
+    fn set_neighbor_rows(&mut self, rows: u32) {
+        let range = crate::commands::NEIGHBOR_ROWS_RANGE;
+        self.rows = rows.clamp(*range.start(), *range.end());
+        if let Some(view) = self.view.as_mut().filter(|view| view.rows != self.rows) {
+            view.rows = self.rows;
             self.view_changed = true;
         }
     }
@@ -274,6 +285,7 @@ impl Instance {
             clock: Clock::new(limits.time),
             view: None,
             view_changed: false,
+            rows: crate::commands::NEIGHBOR_ROWS,
         };
         let mut store = Store::new(&loaded.inner.engine, state);
         store.limiter(|state| &mut state.limiter);
