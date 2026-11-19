@@ -497,6 +497,32 @@ impl TagsBridge {
         self.publish();
     }
 
+    /// F12 (`tags`) / F11: applies the last tags or rating to the video (or the edited jobs) while RustView is
+    /// connected; otherwise a short hint says why nothing changed.
+    fn apply_last_key(&self, tags: bool) {
+        let Some(window) = self.window.upgrade() else { return };
+        let playback = window.global::<crate::Playback<'_>>();
+        let connected = matches!(*self.connection.borrow(), ConnectionState::Connected);
+        let mut result = Ok(());
+        self.change(|s| result = s.apply_last_key(tags, playback.get_has_video(), connected));
+        let what = if tags { "tags" } else { "rating" };
+        match result {
+            Ok(()) => {
+                tracing::info!("[Tags] Last {what} applied by key");
+                if !tags {
+                    self.user_rated();
+                    if let Some(rating) = self.state.borrow().last_rating {
+                        crate::ui::player::flash(&playback, crate::ui::player::FlashKind::Rating(rating));
+                    }
+                }
+            }
+            Err(refusal) => {
+                let (title, detail) = view::last_refusal(refusal, tags);
+                Self::tell(Notice::new(Kind::LastRefused, title).detail(detail));
+            }
+        }
+    }
+
     fn tell(notice: Notice) {
         tracing::info!("[Tags] {}", notice.text());
         notices::post(notice);

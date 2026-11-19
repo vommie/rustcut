@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.119] - 2026-11-19
+
+### Added
+
+- Two hotkeys apply the last saved job's tags (F12) and rating (F11) to the open video, or to the queued jobs being
+  edited, like the two buttons under the tag history. The tags are added to the ones already chosen; pressing a key
+  again changes nothing. They act only while RustView is connected; otherwise, and when there are no last tags or no
+  last rating yet, no video is open or tagging is off, a short message says why nothing changed. Both keys are listed
+  and can be changed under Settings > Hotkeys (Tag & Rate), and the buttons' tooltips show them.
+
 ## [0.0.118] - 2026-11-19
 
 ### Security

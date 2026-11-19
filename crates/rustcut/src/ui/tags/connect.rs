@@ -50,6 +50,8 @@ pub(super) fn connect(bridge: &Rc<TagsBridge>, window: &MainWindow) {
             crate::ui::player::flash(&playback, crate::ui::player::FlashKind::Rating(rating));
         }
     });
+    // F12 / F11: the last tags or the last rating, else a short hint why not.
+    on!(on_apply_last_key, |b, tags| b.apply_last_key(tags));
     on!(on_tag_clicked, |b, id| if let Some(id) = tag_id(id) {
         b.change(|s| s.click_tag(id));
         b.user_clicked_tag(id);

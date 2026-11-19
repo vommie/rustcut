@@ -468,6 +468,9 @@ impl Editor {
         sections.set_key_set_end(label(Action::SetEnd).into());
         sections.set_key_add(label(Action::AddSection).into());
         sections.set_key_delete(label(Action::DeleteSection).into());
+        let tags = window.global::<crate::TagRate<'_>>();
+        tags.set_key_apply_last_tags(label(Action::ApplyLastTags).into());
+        tags.set_key_apply_last_rating(label(Action::ApplyLastRating).into());
         if let Some(filters) = self.filters.upgrade() {
             filters.show_keys(&FilterKeys {
                 preview: label(Action::ToggleFilterPreview),

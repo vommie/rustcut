@@ -290,3 +290,50 @@ fn several_edited_jobs_show_partial_tags_and_mixed_ratings() {
     let history = p.history_items();
     assert!(history.iter().all(|i| !i.is_partial));
 }
+
+#[test]
+fn the_last_keys_apply_only_what_exists_while_rustview_is_connected() {
+    let mut p = panel();
+    p.active = true;
+    assert_eq!(p.apply_last_key(true, true, true), Err(LastRefusal::NoLastTags));
+    assert_eq!(p.apply_last_key(false, true, true), Err(LastRefusal::NoLastRating));
+    p.saved(&[2, 4], Some(3));
+    p.click_tag(3);
+    assert_eq!(p.apply_last_key(true, true, false), Err(LastRefusal::NotConnected));
+    assert_eq!(p.apply_last_key(false, false, true), Err(LastRefusal::NoVideo));
+    p.active = false;
+    assert_eq!(p.apply_last_key(false, true, true), Err(LastRefusal::Inactive));
+    assert_eq!(p.draft.tags, [3], "a refused key changes nothing");
+    assert_eq!(p.draft.rating, None);
+    p.active = true;
+    assert_eq!(p.apply_last_key(true, true, true), Ok(()));
+    assert_eq!(p.draft.tags, [3, 2, 4], "the last tags are added to the chosen ones");
+    assert_eq!(p.apply_last_key(true, true, true), Ok(()));
+    assert_eq!(p.draft.tags, [3, 2, 4], "again: nothing changes");
+    assert_eq!(p.apply_last_key(false, true, true), Ok(()));
+    assert_eq!(p.draft.rating, Some(3));
+    assert_eq!(p.apply_last_key(false, true, true), Ok(()));
+    assert_eq!(
+        p.draft.rating,
+        Some(3),
+        "again: the rating stays (a key never clears it)"
+    );
+}
+
+#[test]
+fn the_last_keys_reach_edited_jobs_without_a_video() {
+    let mut p = panel();
+    p.saved(&[2], Some(5));
+    p.active = false;
+    let original = JobMetadata {
+        tags: vec![4],
+        rating: Some(1),
+        source_hash: None,
+        without_rustview: false,
+    };
+    p.begin_edit(vec![EditedJob::new(JobId(3), "Clip - 01".into(), original)]);
+    assert_eq!(p.apply_last_key(true, false, true), Ok(()));
+    assert_eq!(p.apply_last_key(false, false, true), Ok(()));
+    let (_, metadata) = p.edited().pop().unwrap();
+    assert_eq!((metadata.tags, metadata.rating), (vec![2, 4], Some(5)));
+}

@@ -143,6 +143,8 @@ component LastRatingButton inherits Rectangle {
     in property <int> rating;
     /// The current job has this rating.
     in property <bool> applied;
+    /// Its keys for the tooltip (F11 by default).
+    in property <string> shortcut;
     callback clicked();
 
     width: 24px;
@@ -174,6 +176,7 @@ component LastRatingButton inherits Rectangle {
 
     host := TooltipHost {
         text: root.available ? "Apply the last saved job's rating" : "No job was saved with a rating yet";
+        shortcut: root.shortcut;
     }
 
     // On top of the button: hover for the tooltip, click for the action.
@@ -221,6 +224,7 @@ component TagToolbar inherits HorizontalLayout {
         enabled: root.can-tag;
         rating: Math.max(0, TagRate.last-rating);
         applied: TagRate.last-rating >= 0 && TagRate.rating == TagRate.last-rating;
+        shortcut: TagRate.key-apply-last-rating;
         clicked => { TagRate.apply-last-rating(); }
     }
 
@@ -229,6 +233,7 @@ component TagToolbar inherits HorizontalLayout {
         enabled: TagRate.has-last-tags && root.can-tag;
         tooltip: TagRate.has-last-tags ? "Apply the last saved job's tags: " + TagRate.last-tags-tooltip
             : "No job was saved with tags yet";
+        shortcut: TagRate.key-apply-last-tags;
         clicked => { TagRate.apply-last-tags(); }
     }
 
