@@ -9,6 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [0.0.118] - 2026-11-19
 
+### Security
+
+- The plugin sandbox (wasmtime) is updated to 50.0.2, which fixes three advisories: a plugin could make RustCut's
+  memory grow without bound through empty writes (RUSTSEC-2026-0566) or abort RustCut (RUSTSEC-2026-0567,
+  RUSTSEC-2026-0568).
+
 ### Changed
 
 - The folder navigator's list is only as high as the folder needs when it opens (a folder of four videos gets four
