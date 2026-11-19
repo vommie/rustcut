@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The folder navigator's list is only as high as the folder needs when it opens (a folder of four videos gets four
+  rows instead of an empty full page); paging and searching keep that height, so nothing below moves.
+- The folder navigator's path reads in one piece ("…/videos/holiday"), the open video's folder bold.
+
+### Removed
+
+- The folder navigator's "Back to the open video" button.
+
 ## [0.0.117] - 2026-11-19
 
 ### Changed
