@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.118] - 2026-11-19
+
 ### Changed
 
 - The folder navigator's list is only as high as the folder needs when it opens (a folder of four videos gets four
@@ -1630,7 +1632,8 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.117...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.118...HEAD
+[0.0.118]: https://github.com/vommie/rustcut/compare/v0.0.117...v0.0.118
 [0.0.117]: https://github.com/vommie/rustcut/compare/v0.0.116...v0.0.117
 [0.0.116]: https://github.com/vommie/rustcut/compare/v0.0.115...v0.0.116
 [0.0.115]: https://github.com/vommie/rustcut/compare/v0.0.114...v0.0.115
