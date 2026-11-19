@@ -1648,7 +1648,8 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.118...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.119...HEAD
+[0.0.119]: https://github.com/vommie/rustcut/compare/v0.0.118...v0.0.119
 [0.0.118]: https://github.com/vommie/rustcut/compare/v0.0.117...v0.0.118
 [0.0.117]: https://github.com/vommie/rustcut/compare/v0.0.116...v0.0.117
 [0.0.116]: https://github.com/vommie/rustcut/compare/v0.0.115...v0.0.116
