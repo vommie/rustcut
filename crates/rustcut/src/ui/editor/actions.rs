@@ -184,6 +184,8 @@ impl Editor {
                 };
                 window.global::<TagRate<'_>>().invoke_rate_key(rating);
             }
+            Action::ApplyLastTags => window.global::<TagRate<'_>>().invoke_apply_last_key(true),
+            Action::ApplyLastRating => window.global::<TagRate<'_>>().invoke_apply_last_key(false),
             Action::SetStart => self.set_mark_here(Bound::Start),
             Action::SetEnd => self.set_mark_here(Bound::End),
             Action::GoToStart => self.go_to_mark(Bound::Start),

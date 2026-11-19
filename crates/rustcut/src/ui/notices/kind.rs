@@ -279,6 +279,10 @@ kinds! {
         critical false, ("Tags and rating of \"Clip\" updated", "");
     TagsFailed = "tags_failed", "Tags not changed", Tags, Error, Toast, EVENT, desktop true, critical false,
         ("The job's tags were not changed", "RustView unavailable: not installed");
+    /// F12 / F11 found nothing to apply or cannot apply it now (user request 2026-11-19): no last tags or rating, RustView
+    /// not connected, no video, "Active" off.
+    LastRefused = "apply_last_refused", "Last tags or rating not applied", Tags, Info, Toast, EVENT, desktop false,
+        critical false, ("No last tags yet", "Save a job with tags first.");
     /// RustView refused a job's tags and rating (0.0.67; unreachable calls are retried and say so in the Tag & Rate
     /// panel instead).
     SyncFailed = "sync_failed", "Job's tags not written to RustView", Tags, Error, Toast, EVENT, desktop true,

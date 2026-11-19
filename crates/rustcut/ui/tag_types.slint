@@ -69,6 +69,9 @@ export global TagRate {
     // The plugin mark at the rating: the plugin's Settings page.
     callback rating-plugin-clicked();
     in property <bool> has-last-tags;
+    // The keys of the keymap's "Apply the last tags" / "Apply the last rating" for the buttons' tooltips.
+    in property <string> key-apply-last-tags;
+    in property <string> key-apply-last-rating;
     in property <string> last-tags-tooltip;
     /// -1 = no job was saved with a rating yet.
     in property <int> last-rating: -1;
@@ -114,6 +117,8 @@ export global TagRate {
     callback rating-clicked(int);
     // Ctrl+0..5 (the keymap's "Rate 0".."Rate 5").
     callback rate-key(int);
+    // F12 / F11 (the keymap's "Apply the last tags" / "Apply the last rating"): true = the tags, false = the rating.
+    callback apply-last-key(/* tags */ bool);
     callback tag-clicked(int);
     callback tag-right-clicked(int);
     callback tag-toggle-expand(int);

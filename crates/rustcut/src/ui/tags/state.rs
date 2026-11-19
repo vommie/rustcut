@@ -49,6 +49,17 @@ impl Choice {
     }
 }
 
+/// Why F12 / F11 left the video as it was (`TagPanel::apply_last_key`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LastRefusal {
+    NoLastTags,
+    NoLastRating,
+    NotConnected,
+    NoVideo,
+    /// "Active" is off: the next job is saved without RustView.
+    Inactive,
+}
+
 #[derive(Debug, Default)]
 pub struct TagPanel {
     tree: Option<Arc<TagTree>>,
@@ -362,6 +373,35 @@ impl TagPanel {
         if let Some(rating) = self.last_rating {
             self.put_rating(Some(rating));
         }
+    }
+
+    /// F12 / F11 (user request 2026-11-19): adds the last tags or sets the last rating like the buttons under the
+    /// history, but only when there are some, RustView is `connected` and something can be tagged now (a video is open
+    /// with "Active" on, or queued jobs are edited). Applying them again changes nothing.
+    pub fn apply_last_key(&mut self, tags: bool, has_video: bool, connected: bool) -> Result<(), LastRefusal> {
+        if tags && self.last_tags.is_empty() {
+            return Err(LastRefusal::NoLastTags);
+        }
+        if !tags && self.last_rating.is_none() {
+            return Err(LastRefusal::NoLastRating);
+        }
+        if !connected {
+            return Err(LastRefusal::NotConnected);
+        }
+        if self.editing.is_none() {
+            if !has_video {
+                return Err(LastRefusal::NoVideo);
+            }
+            if !self.active {
+                return Err(LastRefusal::Inactive);
+            }
+        }
+        if tags {
+            self.apply_last_tags();
+        } else {
+            self.apply_last_rating();
+        }
+        Ok(())
     }
 
     pub fn toggle_expanded(&mut self, id: u32) {

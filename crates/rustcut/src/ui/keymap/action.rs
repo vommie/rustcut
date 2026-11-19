@@ -56,6 +56,10 @@ pub enum Action {
     Rate3,
     Rate4,
     Rate5,
+    /// Adds the last saved job's tags (user request 2026-11-19, F12).
+    ApplyLastTags,
+    /// Sets the last saved job's rating (user request 2026-11-19, F11).
+    ApplyLastRating,
     QueueMoveUp,
     QueueMoveDown,
     QueueMoveTop,
@@ -64,7 +68,7 @@ pub enum Action {
 }
 
 impl Action {
-    pub const ALL: [Self; 54] = [
+    pub const ALL: [Self; 56] = [
         Self::Open,
         Self::Save,
         Self::Quit,
@@ -114,6 +118,8 @@ impl Action {
         Self::Rate3,
         Self::Rate4,
         Self::Rate5,
+        Self::ApplyLastTags,
+        Self::ApplyLastRating,
         Self::QueueMoveUp,
         Self::QueueMoveDown,
         Self::QueueMoveTop,
@@ -173,6 +179,8 @@ impl Action {
             Self::Rate3 => "rate_3",
             Self::Rate4 => "rate_4",
             Self::Rate5 => "rate_5",
+            Self::ApplyLastTags => "apply_last_tags",
+            Self::ApplyLastRating => "apply_last_rating",
             Self::QueueMoveUp => "queue_move_up",
             Self::QueueMoveDown => "queue_move_down",
             Self::QueueMoveTop => "queue_move_top",
@@ -237,6 +245,8 @@ impl Action {
             Self::Rate3 => "Rate 3",
             Self::Rate4 => "Rate 4",
             Self::Rate5 => "Rate 5",
+            Self::ApplyLastTags => "Apply the last tags",
+            Self::ApplyLastRating => "Apply the last rating",
             Self::QueueMoveUp => "Move the selected jobs up",
             Self::QueueMoveDown => "Move the selected jobs down",
             Self::QueueMoveTop => "Move the selected jobs to the top",
@@ -295,6 +305,9 @@ impl Action {
             Self::Rate3 => &["Control+Digit3"],
             Self::Rate4 => &["Control+Digit4"],
             Self::Rate5 => &["Control+Digit5"],
+            // The last saved job's tags and rating (user request 2026-11-19); no other default uses F11 or F12.
+            Self::ApplyLastTags => &["F12"],
+            Self::ApplyLastRating => &["F11"],
             // The queue (M4.1): Ctrl with the keys that move elsewhere.
             Self::QueueMoveUp => &["Control+UpArrow"],
             Self::QueueMoveDown => &["Control+DownArrow"],

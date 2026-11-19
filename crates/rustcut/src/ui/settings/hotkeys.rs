@@ -82,7 +82,14 @@ pub const fn group(action: Action) -> &'static str {
         | Action::MirrorVertical
         | Action::ResetFilters
         | Action::ProbeRender => "Filters",
-        Action::Rate0 | Action::Rate1 | Action::Rate2 | Action::Rate3 | Action::Rate4 | Action::Rate5 => "Tag & Rate",
+        Action::Rate0
+        | Action::Rate1
+        | Action::Rate2
+        | Action::Rate3
+        | Action::Rate4
+        | Action::Rate5
+        | Action::ApplyLastTags
+        | Action::ApplyLastRating => "Tag & Rate",
         Action::QueueMoveUp
         | Action::QueueMoveDown
         | Action::QueueMoveTop

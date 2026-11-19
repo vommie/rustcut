@@ -3,7 +3,7 @@
 
 use rustcut_core::rustview::ConnectionState;
 
-use super::state::TagPanel;
+use super::state::{LastRefusal, TagPanel};
 use crate::ui::jump::JumpTarget;
 use crate::ui::settings::page::Page;
 
@@ -110,6 +110,25 @@ pub fn tag_names(panel: &TagPanel, ids: &[u32]) -> String {
         .join(", ")
 }
 
+/// The hint after F12 (`tags`) / F11 changed nothing: a title and what to do.
+pub fn last_refusal(refusal: LastRefusal, tags: bool) -> (&'static str, &'static str) {
+    match refusal {
+        LastRefusal::NoLastTags => ("No last tags yet", "Save a job with tags first."),
+        LastRefusal::NoLastRating => ("No last rating yet", "Save a job with a rating first."),
+        LastRefusal::NotConnected => (
+            "RustView is not connected",
+            if tags {
+                "The last tags were not applied."
+            } else {
+                "The last rating was not applied."
+            },
+        ),
+        LastRefusal::NoVideo => ("No video open", "Open a video first."),
+        // The toast is narrow: the switch's tooltip explains "Active".
+        LastRefusal::Inactive => ("Tagging is off", "Switch it on in Tag & Rate."),
+    }
+}
+
 /// What the tree area says while it shows no rows.
 pub fn empty_text(panel: &TagPanel, state: &ConnectionState) -> String {
     if !panel.has_tree() {
@@ -160,6 +179,27 @@ mod tests {
                 .map(JumpTarget::element_key)
                 .as_deref(),
             Some("settings:rustview.enabled")
+        );
+    }
+
+    #[test]
+    fn last_key_hints_fit_the_toast() {
+        let all = [
+            LastRefusal::NoLastTags,
+            LastRefusal::NoLastRating,
+            LastRefusal::NotConnected,
+            LastRefusal::NoVideo,
+            LastRefusal::Inactive,
+        ];
+        for refusal in all {
+            for tags in [true, false] {
+                let (title, detail) = last_refusal(refusal, tags);
+                assert!(title.len() <= 28 && detail.len() <= 33, "{title}: {detail}");
+            }
+        }
+        assert_eq!(
+            last_refusal(LastRefusal::NotConnected, false).1,
+            "The last rating was not applied."
         );
     }
 
