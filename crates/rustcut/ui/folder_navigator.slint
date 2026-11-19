@@ -52,6 +52,9 @@ export global FolderNavigator {
     in property <bool> names-order;
     in property <[NavRow]> rows;
     in property <int> rows-per-page: 15;
+    // How many rows the list is high: set when the bubble opens (a short folder gets a short list), kept while paging
+    // and searching so nothing below moves.
+    in property <int> list-rows: 15;
     // The widest number of the folder ("120"), so the column never changes its width.
     in property <string> widest-number: "000";
     in property <[NavSlot]> slots;
@@ -59,7 +62,6 @@ export global FolderNavigator {
     in property <string> range;
     in property <bool> has-prev;
     in property <bool> has-next;
-    in property <bool> can-current;
     in property <string> empty-text;
     in-out property <string> query;
     in-out property <bool> regex;
@@ -75,7 +77,6 @@ export global FolderNavigator {
     callback activate(/* row on the page */ int);
     callback page(int);
     callback page-step(int);
-    callback to-current();
     callback closed();
 }
 
@@ -247,7 +248,7 @@ export component FolderNavigatorFlyout inherits Rectangle {
     in property <length> anchor-height;
 
     property <length> panel-width: 400px;
-    property <length> list-height: FolderNavigator.rows-per-page * 25px + 3px;
+    property <length> list-height: Math.max(1, FolderNavigator.list-rows) * 25px + 3px;
     property <length> number-width: number-measure.preferred-width + 2px;
     property <length> slot-width: Math.max(24px, page-measure.preferred-width + 12px);
 
@@ -350,25 +351,31 @@ export component FolderNavigatorFlyout inherits Rectangle {
                         }
                     }
 
-                    Text {
-                        horizontal-stretch: 0;
-                        max-width: 120px;
-                        text: FolderNavigator.parent-folder;
-                        color: Theme.text-muted;
-                        font-size: 12px;
-                        vertical-alignment: center;
-                        overflow: elide;
-                    }
-
-                    Text {
+                    // The path in one piece ("…/videos/holiday"), the open video's folder bold.
+                    HorizontalLayout {
                         horizontal-stretch: 1;
-                        min-width: 40px;
-                        text: FolderNavigator.folder;
-                        color: Theme.text;
-                        font-size: 12px;
-                        font-weight: 600;
-                        vertical-alignment: center;
-                        overflow: elide;
+                        spacing: 0px;
+
+                        Text {
+                            horizontal-stretch: 0;
+                            max-width: 120px;
+                            text: FolderNavigator.parent-folder;
+                            color: Theme.text-muted;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+
+                        Text {
+                            horizontal-stretch: 1;
+                            min-width: 40px;
+                            text: FolderNavigator.folder;
+                            color: Theme.text;
+                            font-size: 12px;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
                     }
 
                     VerticalLayout {
@@ -412,7 +419,7 @@ export component FolderNavigatorFlyout inherits Rectangle {
                     regex-toggled(on) => { FolderNavigator.regex-toggled(on); }
                 }
 
-                // The page: always as high as a full page, so nothing below moves.
+                // The page: as high as the rows it had when the bubble opened, so nothing below moves.
                 Rectangle {
                     height: root.list-height;
                     border-radius: 4px;
@@ -441,7 +448,7 @@ export component FolderNavigatorFlyout inherits Rectangle {
                     }
                 }
 
-                // The pager, the range and the way back to the open video.
+                // The pager and the range.
                 HorizontalLayout {
                     height: 24px;
                     spacing: 2px;
@@ -479,17 +486,6 @@ export component FolderNavigatorFlyout inherits Rectangle {
                         horizontal-alignment: right;
                         vertical-alignment: center;
                         overflow: elide;
-                    }
-
-                    Rectangle { width: 4px; }
-
-                    IconButton {
-                        width: 24px;
-                        height: 24px;
-                        icon: IconId.navigator-current;
-                        tooltip: "Back to the open video";
-                        enabled: FolderNavigator.can-current;
-                        clicked => { FolderNavigator.to-current(); }
                     }
                 }
             }

@@ -110,7 +110,6 @@ impl CommandsBridge {
                 b.publish_navigator();
             });
         });
-        global.on_to_current(|| with(CommandsBridge::navigator_to_current));
         global.on_closed(|| {
             with(|b| {
                 b.navigator.shared.borrow_mut().open = false;
@@ -132,18 +131,20 @@ impl CommandsBridge {
         if !self.navigator_listing() {
             return;
         }
-        {
+        let list_rows = {
             let mut shared = self.navigator.shared.borrow_mut();
             shared.open = true;
             shared.nav.set_rows(rows);
             shared.nav.show_current();
-        }
+            shared.nav.list_rows()
+        };
         let [x, y, width, height] = anchor;
         global.set_anchor_x(x);
         global.set_anchor_y(y);
         global.set_anchor_width(width);
         global.set_anchor_height(height);
         global.set_rows_per_page(i32::try_from(rows).unwrap_or(15));
+        global.set_list_rows(i32::try_from(list_rows).unwrap_or(15));
         self.publish_navigator();
         global.set_open(true);
         tracing::info!("[NextInFolder] The folder navigator opened");
@@ -284,18 +285,6 @@ impl CommandsBridge {
         opener.open(path);
     }
 
-    fn navigator_to_current(&self) {
-        let clear = !self.navigator.shared.borrow().nav.current_is_hit();
-        if clear {
-            if let Some(window) = self.window.upgrade() {
-                window.global::<FolderNavigator<'_>>().set_query("".into());
-            }
-            self.search("");
-        }
-        self.navigator.shared.borrow_mut().nav.show_current();
-        self.publish_navigator();
-    }
-
     /// The page into the global (only what changed is replaced) and the missing sizes asked for.
     pub(in crate::ui::plugins::commands) fn publish_navigator(&self) {
         let Some(window) = self.window.upgrade() else { return };
@@ -352,7 +341,6 @@ impl CommandsBridge {
         global.set_range(view.range.as_str().into());
         global.set_has_prev(view.page > 0);
         global.set_has_next(view.page + 1 < pages);
-        global.set_can_current(shared.nav.has_current());
         global.set_widest_number(files.len().max(1).to_string().into());
         global.set_widest_page(pages.to_string().into());
         global.set_order(shared.order.as_str().into());

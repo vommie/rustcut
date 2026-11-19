@@ -62,7 +62,6 @@ fn a_search_pages_its_hits_and_keeps_the_real_numbers() {
     let view = nav.view(Some(&pattern));
     assert_eq!(view.range, "1–9 of 9 found");
     assert_eq!(view.current_page, None, "the open video is no hit");
-    assert!(!nav.current_is_hit());
     assert_eq!(view.rows.first().map(|r| r.index), Some(0));
     assert!(view.rows.iter().all(|r| !r.current));
     let nothing = Pattern::parse("xyz", false).unwrap().unwrap();
@@ -141,4 +140,20 @@ fn fewer_rows_and_a_new_listing_keep_the_place() {
     let view = nav.view(None);
     assert_eq!(view.page, 0, "clamped to the only page");
     assert_eq!(view.range, "1–10 of 10");
+}
+
+#[test]
+fn the_list_is_as_high_as_the_folder_needs_when_it_opens() {
+    assert_eq!(nav(120, 46).list_rows(), 15, "a full page");
+    let mut short = nav(4, 2);
+    assert_eq!(short.list_rows(), 4, "a short folder, a short list");
+    let pattern = Pattern::parse("clip 001", false).unwrap().unwrap();
+    short.set_hits(Some(filter(short.names(), &pattern)));
+    assert_eq!(short.list_rows(), 4, "a search keeps the height");
+    let mut empty = Navigator::new(15);
+    empty.set_files(Arc::new(Vec::new()), None);
+    assert_eq!(empty.list_rows(), 1, "room for \"No files\"");
+    let mut few = Navigator::new(5);
+    few.set_files(nav(30, 0).files().clone(), Some(0));
+    assert_eq!(few.list_rows(), 5, "never more than a page");
 }

@@ -105,19 +105,15 @@ impl Navigator {
         self.page = self.highlight / self.rows;
     }
 
-    /// The open video is in the listing.
-    pub fn has_current(&self) -> bool {
-        self.current.is_some()
-    }
-
     /// How many files the search kept (all without one).
     pub fn found(&self) -> usize {
         self.hits.len()
     }
 
-    /// Whether the open video is among the hits.
-    pub fn current_is_hit(&self) -> bool {
-        self.current.is_some_and(|c| self.hits.contains(&c))
+    /// How many rows the list is high when the bubble opens: a page, or fewer when the folder has fewer files (at
+    /// least one, for "No files"). Paging and searching keep it.
+    pub fn list_rows(&self) -> usize {
+        self.files.len().clamp(1, self.rows)
     }
 
     pub fn pages(&self) -> usize {
