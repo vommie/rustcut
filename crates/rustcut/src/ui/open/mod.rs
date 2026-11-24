@@ -3,6 +3,7 @@
 //! the path is checked on the runtime (never a file system call on the UI thread), then the player loads it, the Media
 //! Info panel probes it, and the window title and the dialog's start folder follow.
 
+pub mod app_request;
 mod drop;
 
 use std::cell::RefCell;

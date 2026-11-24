@@ -4,11 +4,24 @@
 use serde::{Deserialize, Serialize};
 use serde_with::{DefaultOnError, serde_as};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DialogSettings {
     /// "The file exists" / "Queued jobs write the same file" when a job is saved.
     pub conflict: ConflictDialogSettings,
+    /// When RustSearch sends a file while the open video has unsaved sections, RustCut asks first (keep, discard, save).
+    /// Off: the file opens at once, as with File > Open. Only RustSearch's requests ask; File > Open, drops and a second
+    /// start always open at once. Added in 0.0.120 (on in files without it).
+    pub ask_before_rustsearch_replaces: bool,
+}
+
+impl Default for DialogSettings {
+    fn default() -> Self {
+        Self {
+            conflict: ConflictDialogSettings::default(),
+            ask_before_rustsearch_replaces: true,
+        }
+    }
 }
 
 /// The conflict dialog of saving a job.

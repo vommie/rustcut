@@ -69,15 +69,19 @@ pub(super) fn listen(
 ) -> Option<instance::Server> {
     let ui = ui.clone();
     let main = main.clone();
-    let served = instance::serve(socket, runtime, move |request| {
-        if let Request::Open { files } = request {
+    let served = instance::serve(socket, runtime, move |request, answer| match request {
+        Request::Open { files } => {
             let main = main.clone();
             ui.post(move || {
                 if let Some(main) = main.upgrade() {
                     open::open_forwarded(&main, &files);
                 }
             });
+            answer.reply(instance::Reply::ok("forwarded"));
         }
+        // RustSearch's requests (protocol 2) are answered on the UI thread, which knows the editor's state.
+        Request::Status | Request::AppOpen { .. } => ui.post(move || open::app_request::handle(request, answer)),
+        Request::Ping => answer.reply(instance::Reply::ok("pong")),
     });
     match served {
         Ok(server) => Some(server),
