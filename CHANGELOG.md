@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.120] - 2026-11-24
+
+### Added
+
+- RustSearch, a file search that stays open next to RustCut, can open its videos here with a click. It asks RustCut
+  through the single-instance socket what is open (the video, whether its sections are saved, whether a dialog is open)
+  and sends the video it wants opened. The video opens at once, as with File > Open, and RustCut stays behind
+  RustSearch. When the open video has sections that are not saved as a job yet, RustCut first asks and comes to the
+  front: keep the current video, discard its sections and open the new one, or save the sections as a job and then open
+  the new one. While a dialog of RustCut's own is open or a job is being saved, RustSearch's request is refused and
+  nothing changes.
+- Settings > Dialogs > RustSearch: "Ask before RustSearch replaces unsaved sections" (on by default; files of earlier
+  versions get it on). Off, RustSearch's videos open at once like File > Open. Opening a file yourself (File > Open, a
+  drop, a second start) never asks; that stays as it was.
+
 ## [0.0.119] - 2026-11-19
 
 ### Added
@@ -1648,7 +1663,8 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.119...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.120...HEAD
+[0.0.120]: https://github.com/vommie/rustcut/compare/v0.0.119...v0.0.120
 [0.0.119]: https://github.com/vommie/rustcut/compare/v0.0.118...v0.0.119
 [0.0.118]: https://github.com/vommie/rustcut/compare/v0.0.117...v0.0.118
 [0.0.117]: https://github.com/vommie/rustcut/compare/v0.0.116...v0.0.117

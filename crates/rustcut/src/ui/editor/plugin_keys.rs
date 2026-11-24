@@ -65,6 +65,11 @@ impl Editor {
         self.tell_unsaved_with(&st);
     }
 
+    /// A modal dialog of the main window is open (`modal-open` in `main.slint`; also RustSearch's `status`).
+    pub fn modal_open(&self) -> bool {
+        self.menu_modal.get()
+    }
+
     /// A key the keymap does not know (not behind a modal dialog).
     pub(super) fn plugin_key(&self, press: &KeyPress<'_>) -> bool {
         !self.menu_modal.get() && self.extras.keys.borrow().as_ref().is_some_and(|hook| hook(press))

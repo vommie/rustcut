@@ -258,6 +258,7 @@ fn dialog_settings_have_defaults_bad_values_read_as_defaults_and_ranges_are_kept
     assert!(clean_v1(&outcome), "{outcome:?}");
     let value = outcome.into_value();
     assert_eq!(value.dialogs, DialogSettings::default());
+    assert!(value.dialogs.ask_before_rustsearch_replaces);
     assert_eq!(value.queue.workers, 2);
     let c = &value.dialogs.conflict;
     assert_eq!(
@@ -706,4 +707,18 @@ fn plugin_limits_and_ids_are_sanitized() {
     assert_eq!(s.plugins.entries.len(), 1);
     assert_eq!(s.plugins.order, vec!["ok-id".to_owned()]);
     assert!(!s.plugins.sanitize());
+}
+
+#[test]
+fn the_rustsearch_question_is_on_by_default_and_old_files_load() {
+    // A file of 0.0.119 has `[dialogs.conflict]` but not the switch of 0.0.120: it is on, the rest is kept.
+    let text = "version = 10\n[dialogs.conflict]\nshow_series = false\n";
+    let s: Settings = toml::from_str(text).unwrap();
+    assert!(s.dialogs.ask_before_rustsearch_replaces);
+    assert!(!s.dialogs.conflict.show_series);
+    // Off survives a round trip.
+    let mut off = Settings::default();
+    off.dialogs.ask_before_rustsearch_replaces = false;
+    let back: Settings = toml::from_str(&toml::to_string(&off).unwrap()).unwrap();
+    assert!(!back.dialogs.ask_before_rustsearch_replaces);
 }

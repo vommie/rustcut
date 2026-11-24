@@ -42,6 +42,7 @@ import { ContextMenu, ContextMenuLayer, MenuItemView, MenuLevelView } from "cont
 import { AppMenu, AppMenuBar, MenuBarLayer, MenuBarMenu } from "menu_bar.slint";
 import { HoldConfirm } from "hold.slint";
 import { JobLoadDialog } from "job_load_dialog.slint";
+import { AppOpen, AppOpenDialog } from "open_app_dialog.slint";
 import { ConflictDialog } from "export_dialog.slint";
 import { MetadataDialog } from "export_metadata_dialog.slint";
 import { TagColumnView, TagHistoryItemModel, TagHistoryRowModel, TagNodeView, TagRate } from "tag_types.slint";
@@ -79,7 +80,7 @@ export {
     SectionRowView, Filters, FilterRowView, FilterTips, CropOverlay, RenderSettings, OptionRowView, RenderIssueView, Probe, Export,
     ConflictJobView, ConflictOptionView, PreviewView, TipRow, Tip, TipKey, TipKeys, TipPlacement, TipRect, TipSide,
     GlobalTooltip, TooltipLogic, DialogState, Queue, QueueRowView, QueueColumnView, MultiChoiceItem, TagRate, TagNodeView,
-    TagColumnView, TagHistoryItemModel, TagHistoryRowModel, Job, JobRowView, JobSectionView, Logs, LogLineView, JobLoad,
+    TagColumnView, TagHistoryItemModel, TagHistoryRowModel, Job, JobRowView, JobSectionView, Logs, LogLineView, JobLoad, AppOpen,
     ContextMenu, MenuItemView, MenuLevelView, HoldConfirm, SettingsUi, SettingCardView, SettingRowView, SettingsPageItem, PluginsUi, PluginItemView, PluginDetailView, PluginAvailableView, PluginCardView, PluginBlockView, PluginCellView, PluginColumnView, PluginTableRowView, FolderTreeUi, FolderTreeRowView, FolderList, FolderListRowView, FolderFieldView, Relocate, RelocateChipView, RelocateConflictView, RelocateRecordView, FolderWheel, WheelSlotView, WheelLookView, WheelMiddleView, FolderDetailsView, FolderIconView, FolderIconRowView, FolderPictureView, RatioChipView, DiagCheckView, DiagGroupView,
     ProfileItemView, HotkeyRowView, HotkeyChipView, SettingsWindow, TooltipSettings, Power, AppTray, Jump, Notices,
     ToastView, ToastTagView, BannerView, HistoryView, MessageKindView, Bubbles, BubbleView, BubbleButtonView, Problems, ColorCodec, ColorPickerWindow, TagFilterWindow, TagFilterRowView,
@@ -138,7 +139,7 @@ export component MainWindow inherits Window {
     // A modal dialog covers the window: the menu bar's keys (which Slint gives the menu before any focused element) must
     // not act on the editor behind it (found by the P8 audit: I, O and Shift+I moved the marks under the save question).
     property <bool> modal-open: FolderList.open || Relocate.open || Relocate.records-open || CropHistoryUi.open || Export.dialog-open || Export.meta-open || Power.asking || Problems.newer-open
-        || Problems.db-open || JobLoad.open || PlayerPopup.time-open || FolderNavigator.open;
+        || Problems.db-open || JobLoad.open || AppOpen.open || PlayerPopup.time-open || FolderNavigator.open;
     changed modal-open => {
         Shortcuts.modal-changed(root.modal-open);
     }
@@ -588,6 +589,13 @@ export component MainWindow inherits Window {
     }
 
     if JobLoad.open: JobLoadDialog {
+        x: 0;
+        y: root.bar-height;
+        width: parent.width;
+        height: parent.height - root.bar-height;
+    }
+
+    if AppOpen.open: AppOpenDialog {
         x: 0;
         y: root.bar-height;
         width: parent.width;

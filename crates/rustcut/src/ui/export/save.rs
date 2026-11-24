@@ -38,10 +38,15 @@ pub(super) struct Pending {
 }
 
 impl ExportBridge {
+    /// A save runs: the target is read, or its metadata or conflict question is open.
+    pub fn is_saving(&self) -> bool {
+        self.saving.get() || self.pending.borrow().is_some() || self.meta.borrow().is_some()
+    }
+
     /// Builds the job and checks its target; see the module documentation. A job loaded into the editor is a copy:
     /// saving always makes a new job (user decision Q-P8b).
     pub fn save(self: &Rc<Self>) {
-        if self.saving.get() || self.pending.borrow().is_some() || self.meta.borrow().is_some() {
+        if self.is_saving() {
             return;
         }
         let draft = match self.draft() {

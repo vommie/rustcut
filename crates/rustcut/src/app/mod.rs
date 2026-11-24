@@ -595,6 +595,15 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             }
         }));
     }
+    // RustSearch's requests over the socket (protocol 2, 0.0.120): its state and its videos, which may ask first.
+    let _app_requests = crate::ui::open::app_request::AppRequests::install(&crate::ui::open::app_request::Parts {
+        window: &main,
+        opener: &opener,
+        editor: &editor,
+        export: &export,
+        player: &player,
+        writer: &writer,
+    });
     // The single-instance socket: listening while `general.single_instance` is on (also switched while running).
     let server = Rc::new(std::cell::RefCell::new(
         single_instance
