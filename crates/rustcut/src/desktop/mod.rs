@@ -8,3 +8,4 @@ pub mod notify;
 pub mod service;
 pub mod taskbar;
 pub mod x11_dialog;
+pub mod x11_front;

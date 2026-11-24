@@ -220,9 +220,12 @@ impl AppRequests {
         *self.asking.borrow_mut() = Some(file);
         g.set_open(true);
         window.window().set_minimized(false);
-        window
-            .window()
-            .with_winit_window(slint::winit_030::winit::window::Window::focus_window);
+        // RustCut comes to the front only to ask; KWin refuses winit's request while RustSearch has the focus.
+        if !crate::desktop::x11_front::to_front(window.window()) {
+            window
+                .window()
+                .with_winit_window(slint::winit_030::winit::window::Window::focus_window);
+        }
     }
 
     fn answered(self: &Rc<Self>, answer: Answer) {
