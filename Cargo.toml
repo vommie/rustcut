@@ -181,8 +181,8 @@ resvg = { version = "0.49", default-features = false }
 blake3 = "1"
 # Plugins (P12 block 8, Q-P12g): WebAssembly components in a sandbox with time and memory limits; `cache` keeps the
 # compiled code on disk so a plugin starts in half a millisecond after its first start.
-wasmtime = { version = "50.0.2", default-features = false, features = ["component-model", "cranelift", "cache", "parallel-compilation", "std", "runtime", "pooling-allocator", "addr2line", "demangle"] }
-wasmtime-wasi = { version = "50.0.2", default-features = false, features = ["p2"] }
+wasmtime = { version = "50.0.3", default-features = false, features = ["component-model", "cranelift", "cache", "parallel-compilation", "std", "runtime", "pooling-allocator", "addr2line", "demangle"] }
+wasmtime-wasi = { version = "50.0.3", default-features = false, features = ["p2"] }
 # The guest side of the plugin API (crates/rustcut-plugin-api, compiled into every plugin).
 wit-bindgen = "0.63"
 # Plugin files (.rcplugin) are tar archives compressed with zstd.

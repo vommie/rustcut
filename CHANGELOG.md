@@ -7,13 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Changed
-
-- RustSearch's question about the unsaved sections of the open video now has "Keep current" as its default button:
-  it is the highlighted one and Enter picks it, so a quick Enter never replaces the sections. Escape and × keep the
-  current video as before; "Save and open" and "Discard and open" are clicked on purpose.
-
-## [0.0.120] - 2026-11-24
+## [0.0.120] - 2026-11-25
 
 ### Added
 
@@ -27,6 +21,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Settings > Dialogs > RustSearch: "Ask before RustSearch replaces unsaved sections" (on by default; files of earlier
   versions get it on). Off, RustSearch's videos open at once like File > Open. Opening a file yourself (File > Open, a
   drop, a second start) never asks; that stays as it was.
+
+### Changed
+
+- RustSearch's question about the unsaved sections of the open video now has "Keep current" as its default button:
+  it is the highlighted one and Enter picks it, so a quick Enter never replaces the sections. Escape and × keep the
+  current video as before; "Save and open" and "Discard and open" are clicked on purpose.
+
+### Security
+
+- Plugins run on wasmtime 50.0.3 (RUSTSEC-2026-0587, a WASI file system sandbox escape that affects Windows only) and
+  links are handled with url 2.5.9 (RUSTSEC-2026-0592, a stack overflow on nested `blob:` URLs).
 
 ## [0.0.119] - 2026-11-19
 
