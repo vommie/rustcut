@@ -30,8 +30,9 @@ export component AppOpenDialog inherits Rectangle {
                 AppOpen.keep();
                 return accept;
             }
+            // Enter keeps the current video too: "Keep current" is the default button (the safe answer).
             if event.text == Key.Return {
-                AppOpen.save();
+                AppOpen.keep();
                 return accept;
             }
             accept
@@ -76,6 +77,7 @@ export component AppOpenDialog inherits Rectangle {
 
                     DialogButton {
                         text: "Keep current";
+                        primary: true;
                         clicked => { AppOpen.keep(); }
                     }
 
@@ -86,7 +88,6 @@ export component AppOpenDialog inherits Rectangle {
 
                     DialogButton {
                         text: "Save and open";
-                        primary: true;
                         clicked => { AppOpen.save(); }
                     }
                 }
