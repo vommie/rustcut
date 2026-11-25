@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- RustSearch's question about the unsaved sections of the open video now has "Keep current" as its default button:
+  it is the highlighted one and Enter picks it, so a quick Enter never replaces the sections. Escape and × keep the
+  current video as before; "Save and open" and "Discard and open" are clicked on purpose.
+
 ## [0.0.120] - 2026-11-24
 
 ### Added
