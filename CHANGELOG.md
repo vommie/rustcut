@@ -28,6 +28,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   it is the highlighted one and Enter picks it, so a quick Enter never replaces the sections. Escape and × keep the
   current video as before; "Save and open" and "Discard and open" are clicked on purpose.
 
+### Security
+
+- Plugins run on wasmtime 50.0.3 (RUSTSEC-2026-0587, a WASI file system sandbox escape that affects Windows only) and
+  links are handled with url 2.5.9 (RUSTSEC-2026-0592, a stack overflow on nested `blob:` URLs).
+
 ## [0.0.119] - 2026-11-19
 
 ### Added
