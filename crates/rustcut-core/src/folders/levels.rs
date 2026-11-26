@@ -104,7 +104,13 @@ pub fn level(tree: &FolderTree, key: &LevelKey, layout: Layout) -> Option<Level>
         LevelKey::Start => start(tree, layout),
         LevelKey::Group(id) => {
             let group = tree.find(*id).filter(|n| n.is_group())?;
-            let ids: Vec<FolderId> = group.children.iter().map(|n| n.id).collect();
+            // A folder marked "hide in groups" keeps out of the group's level (its own star still shows it).
+            let ids: Vec<FolderId> = group
+                .children
+                .iter()
+                .filter(|n| !n.hide_in_groups)
+                .map(|n| n.id)
+                .collect();
             layout.sequence(&ids)
         }
         LevelKey::More(ids) => {

@@ -668,6 +668,13 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
     );
     // The plugins' pages (P12 block 8): the list, the marks' and messages' way to a plugin, RustView's tags.
     settings_window.attach_plugins(&plugins);
+    // The Target Folders page's folded groups are saved at once, so an end without a clean quit keeps them.
+    {
+        let writer = Rc::clone(&ui_writer);
+        settings_window.hooks().folded_groups = Some(Box::new(move |ids| {
+            writer.update(|s| s.settings.folder_collapsed = ids);
+        }));
+    }
     {
         let tags = Rc::downgrade(&tags);
         settings_window.hooks().tag_paths = Some(Box::new(move || tags.upgrade().and_then(|t| t.tag_paths())));

@@ -220,6 +220,16 @@ impl FolderTree {
         Ok(true)
     }
 
+    /// Whether a folder keeps out of the wheel's group levels; a group or the source cannot (refused as unknown).
+    pub fn set_hide_in_groups(&mut self, id: FolderId, hide: bool) -> Result<bool, EditError> {
+        let node = self.find_mut(id).filter(|n| !n.is_group()).ok_or(EditError::Unknown)?;
+        if node.hide_in_groups == hide {
+            return Ok(false);
+        }
+        node.hide_in_groups = hide;
+        Ok(true)
+    }
+
     /// `#RRGGBB` or none; another text is refused as unknown.
     pub fn set_color(&mut self, id: FolderId, color: Option<&str>) -> Result<bool, EditError> {
         let color = color.filter(|c| is_color(c)).map(str::to_ascii_lowercase);

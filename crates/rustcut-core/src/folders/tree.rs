@@ -102,6 +102,10 @@ pub struct FolderNode {
     /// The name the wheel shows instead of `name` (0.0.84, the user's answer; none = the name).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub short_name: Option<String>,
+    /// A folder in a group that the wheel shows keeps out of that group's level (0.0.121, the user's wish): it stays
+    /// in the group for the pickers, and a star still puts it on the wheel's first level.
+    #[serde(skip_serializing_if = "is_false")]
+    pub hide_in_groups: bool,
     /// A group's entries (a folder has none). An entry that cannot be read is skipped, so one typo never loses the
     /// others.
     #[serde_as(as = "DefaultOnError<VecSkipError<_>>")]
@@ -179,6 +183,14 @@ pub struct FolderTree {
 )]
 const fn is_zero(n: &u32) -> bool {
     *n == 0
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if passes a reference"
+)]
+const fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 /// An entry as the pickers show it: the source or a node.

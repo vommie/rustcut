@@ -34,6 +34,7 @@ export component SettingsCard inherits Rectangle {
             padding-right: 8px;
 
             Text {
+                height: measure.preferred-height;
                 text: root.description;
                 font-size: 11px;
                 color: Theme.text-muted;
@@ -42,5 +43,17 @@ export component SettingsCard inherits Rectangle {
         }
 
         @children
+    }
+
+    // The description's height at the card's width: a wrapped text's preferred height inside a layout can follow an
+    // older width, and the Target Folders card came out a line too short (its rows hung out at the bottom).
+    measure := Text {
+        visible: false;
+        x: 0;
+        y: 0;
+        width: root.width - 2 * 12px - 2 * 8px;
+        text: root.description;
+        font-size: 11px;
+        wrap: word-wrap;
     }
 }

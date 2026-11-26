@@ -11,7 +11,7 @@ import { IconButton, MiddleText, NumberField } from "controls.slint";
 import { SettingsCard } from "settings_card.slint";
 import { DragArea, DragState } from "drag.slint";
 import { JumpFlash } from "jump.slint";
-import { TooltipArea } from "tooltip.slint";
+import { TooltipArea, TooltipHost } from "tooltip.slint";
 import { FolderPicture } from "folder_picture.slint";
 import { FolderTreeRowView, FolderTreeUi } from "settings_folder_types.slint";
 import { FolderDetails } from "settings_folder_details.slint";
@@ -32,9 +32,25 @@ component FolderTreeRow inherits Rectangle {
     border-width: root.drop-target ? 1px : 0px;
     border-color: Theme.primary;
 
+    // The pointer rests on the grip: its tooltip shows. The grip has no touch area of its own, so a press on it reaches
+    // the row's `DragArea` and drags the entry (a `TooltipArea` there took the press and nothing moved).
+    property <bool> on-grip: area.has-hover && area.mouse-x < grip.x + grip.width + 3px;
+
+    changed on-grip => {
+        if root.on-grip {
+            grip-tip.enter();
+        } else {
+            grip-tip.leave();
+        }
+    }
+
     area := DragArea {
         draggable: !root.entry.source && FolderTreeUi.renaming != root.entry.id;
-        pressed-down => { root.pressed(); }
+        mouse-cursor: root.on-grip && self.draggable ? MouseCursor.grab : MouseCursor.default;
+        pressed-down => {
+            grip-tip.press();
+            root.pressed();
+        }
         tapped => { FolderTreeUi.select(root.entry.id); }
         double-tapped => {
             if root.entry.source {
@@ -54,10 +70,13 @@ component FolderTreeRow inherits Rectangle {
 
         // The handle: drag the entry to another place in the tree or onto a place of the small wheel (the whole row
         // drags too).
-        TooltipArea {
+        grip := Rectangle {
             width: 14px;
-            text: root.entry.source ? "\"Next to the source\" stays first; click a place of the small wheel to put it there"
-                : "Drag to move it in the tree, or onto a place of the wheel beside";
+
+            grip-tip := TooltipHost {
+                text: root.entry.source ? "\"Next to the source\" stays first; click a place of the small wheel to put it there"
+                    : "Drag to move it in the tree, or onto a place of the wheel beside";
+            }
 
             if !root.entry.source: AppIcon {
                 y: (parent.height - self.height) / 2;
@@ -146,12 +165,17 @@ component FolderTreeRow inherits Rectangle {
             }
         }
 
-        IconButton {
-            icon: root.entry.place >= 0 ? IconId.folder-favorite-set : IconId.folder-favorite;
-            checked: root.entry.place >= 0;
-            tooltip: root.entry.place >= 0 ? "A favorite: place " + (root.entry.place + 1) + " on the folder wheel (click: no favorite)"
-                : "Make it a favorite: a place of its own on the folder wheel's first level";
-            clicked => { FolderTreeUi.star(root.entry.id); }
+        // Centered in the row like the picture (a layout puts a button lower than its height at the top).
+        VerticalLayout {
+            alignment: center;
+
+            IconButton {
+                icon: root.entry.place >= 0 ? IconId.folder-favorite-set : IconId.folder-favorite;
+                checked: root.entry.place >= 0;
+                tooltip: root.entry.place >= 0 ? "A favorite: place " + (root.entry.place + 1) + " on the folder wheel (click: no favorite)"
+                    : "Make it a favorite: a place of its own on the folder wheel's first level";
+                clicked => { FolderTreeUi.star(root.entry.id); }
+            }
         }
     }
 }
@@ -161,6 +185,8 @@ component FolderTreeList inherits VerticalLayout {
     property <length> pointer-y: FolderTreeUi.pointer-y;
     // The Settings page scrolled under the dragged entry (`DragState.area` "settings"): measured again.
     property <int> scrolls: DragState.scrolls;
+    // Where the keys' focus scope stands in the list (the pressed row).
+    property <length> focus-y;
 
     // Tells Rust where the pointer is over the list (outside it: on the details, the wheel's places).
     function measure() {
@@ -182,12 +208,16 @@ component FolderTreeList inherits VerticalLayout {
 
         IconButton {
             icon: IconId.folder-add;
+            text: "Add folder";
+            with-text: true;
             tooltip: "Add a folder (the folder dialog; folders can also be dropped here from the file manager)";
             clicked => { FolderTreeUi.add-folder(); }
         }
 
         IconButton {
             icon: IconId.folder-group-add;
+            text: "Add group";
+            with-text: true;
             tooltip: "Add a group (a menu entry without a path that holds folders and groups)";
             clicked => { FolderTreeUi.add-group(); }
         }
@@ -205,92 +235,103 @@ component FolderTreeList inherits VerticalLayout {
         }
     }
 
-    keys := FocusScope {
+    frame := Rectangle {
         height: Math.max(6 * FolderTreeUi.row-height, Math.min(FolderTreeUi.rows.length * FolderTreeUi.row-height + 8px, 420px));
-        key-pressed(event) => {
-            if FolderTreeUi.renaming >= 0 {
-                return reject;
+        border-radius: 4px;
+        border-width: 1px;
+        border-color: keys.has-focus ? Theme.primary.with-alpha(0.6) : Theme.border;
+        clip: true;
+
+        // The list's keys. Slint scrolls an element that takes the focus into view, so the scope covers only the
+        // pressed row: a press after an edit elsewhere on the page selects that row and the page never jumps (a
+        // scope over the whole list scrolled the page and the release missed the row).
+        keys := FocusScope {
+            x: 0;
+            y: Math.max(0px, Math.min(parent.height - self.height, root.focus-y));
+            width: parent.width;
+            height: FolderTreeUi.row-height;
+            focus-on-click: false;
+            key-pressed(event) => {
+                if FolderTreeUi.renaming >= 0 {
+                    return reject;
+                }
+                return FolderTreeUi.key(event.text) ? accept : reject;
             }
-            return FolderTreeUi.key(event.text) ? accept : reject;
         }
 
-        frame := Rectangle {
-            border-radius: 4px;
-            border-width: 1px;
-            border-color: keys.has-focus ? Theme.primary.with-alpha(0.6) : Theme.border;
-            clip: true;
+        list := ListView {
+            x: 1px;
+            y: 1px;
+            width: parent.width - 2px;
+            height: parent.height - 2px;
 
-            list := ListView {
-                x: 1px;
-                y: 1px;
-                width: parent.width - 2px;
-                height: parent.height - 2px;
-
-                for item[index] in FolderTreeUi.rows: FolderTreeRow {
-                    entry: item;
-                    drop-target: FolderTreeUi.dragging && FolderTreeUi.drop-into == index;
-                    pressed => { keys.focus(); }
-                    drag-started(y) => {
-                        FolderTreeUi.pointer-y = y;
-                        DragState.pointer-y = y;
-                        FolderTreeUi.drag-start(item.id);
-                        root.measure();
-                    }
-                    drag-moved(x, y) => {
-                        FolderTreeUi.pointer-x = x;
-                        FolderTreeUi.pointer-y = y;
-                        DragState.pointer-y = y;
-                        root.measure();
-                    }
-                    drag-ended => { FolderTreeUi.drag-end(true); }
+            for item[index] in FolderTreeUi.rows: FolderTreeRow {
+                entry: item;
+                drop-target: FolderTreeUi.dragging && FolderTreeUi.drop-into == index;
+                pressed => {
+                    root.focus-y = 1px + index * FolderTreeUi.row-height + list.content-y;
+                    keys.focus();
                 }
-            }
-
-            // Where the dragged entry would land.
-            if FolderTreeUi.dragging && FolderTreeUi.drop-shown && FolderTreeUi.drop-place < 0: Rectangle {
-                x: 28px + FolderTreeUi.drop-depth * FolderTreeUi.indent;
-                y: 1px + FolderTreeUi.drop-y + list.content-y - 1px;
-                width: parent.width - self.x - 8px;
-                height: 2px;
-                background: Theme.primary;
-            }
-
-            if FolderTreeUi.dragging: Rectangle {
-                x: 24px;
-                y: Math.max(0px, Math.min(parent.height - self.height, root.pointer-y - list.absolute-position.y + 8px));
-                width: ghost.preferred-width + 12px;
-                height: 20px;
-                border-radius: 4px;
-                background: Theme.surface-selected.with-alpha(0.85);
-                border-width: 1px;
-                border-color: Theme.primary.with-alpha(0.6);
-
-                ghost := Text {
-                    text: FolderTreeUi.drag-name;
-                    color: Theme.text;
-                    font-size: 11px;
-                }
-            }
-
-            // Near an edge the list scrolls while an entry is dragged.
-            Timer {
-                interval: 30ms;
-                running: FolderTreeUi.dragging;
-                triggered => {
-                    // Only while the pointer is over the list (on the details the page scrolls instead).
-                    if FolderTreeUi.pointer-x < frame.absolute-position.x || FolderTreeUi.pointer-x > frame.absolute-position.x + frame.width
-                        || root.pointer-y < frame.absolute-position.y || root.pointer-y > frame.absolute-position.y + frame.height {
-                        return;
-                    }
-                    if root.pointer-y < list.absolute-position.y + 24px {
-                        list.content-y = Math.min(0px, list.content-y + 8px);
-                    } else if root.pointer-y > list.absolute-position.y + list.height - 24px {
-                        list.content-y = Math.max(list.visible-height - list.content-height, list.content-y - 8px);
-                    } else {
-                        return;
-                    }
+                drag-started(y) => {
+                    FolderTreeUi.pointer-y = y;
+                    DragState.pointer-y = y;
+                    FolderTreeUi.drag-start(item.id);
                     root.measure();
                 }
+                drag-moved(x, y) => {
+                    FolderTreeUi.pointer-x = x;
+                    FolderTreeUi.pointer-y = y;
+                    DragState.pointer-y = y;
+                    root.measure();
+                }
+                drag-ended => { FolderTreeUi.drag-end(true); }
+            }
+        }
+
+        // Where the dragged entry would land.
+        if FolderTreeUi.dragging && FolderTreeUi.drop-shown && FolderTreeUi.drop-place < 0: Rectangle {
+            x: 28px + FolderTreeUi.drop-depth * FolderTreeUi.indent;
+            y: 1px + FolderTreeUi.drop-y + list.content-y - 1px;
+            width: parent.width - self.x - 8px;
+            height: 2px;
+            background: Theme.primary;
+        }
+
+        if FolderTreeUi.dragging: Rectangle {
+            x: 24px;
+            y: Math.max(0px, Math.min(parent.height - self.height, root.pointer-y - list.absolute-position.y + 8px));
+            width: ghost.preferred-width + 12px;
+            height: 20px;
+            border-radius: 4px;
+            background: Theme.surface-selected.with-alpha(0.85);
+            border-width: 1px;
+            border-color: Theme.primary.with-alpha(0.6);
+
+            ghost := Text {
+                text: FolderTreeUi.drag-name;
+                color: Theme.text;
+                font-size: 11px;
+            }
+        }
+
+        // Near an edge the list scrolls while an entry is dragged.
+        Timer {
+            interval: 30ms;
+            running: FolderTreeUi.dragging;
+            triggered => {
+                // Only while the pointer is over the list (on the details the page scrolls instead).
+                if FolderTreeUi.pointer-x < frame.absolute-position.x || FolderTreeUi.pointer-x > frame.absolute-position.x + frame.width
+                    || root.pointer-y < frame.absolute-position.y || root.pointer-y > frame.absolute-position.y + frame.height {
+                    return;
+                }
+                if root.pointer-y < list.absolute-position.y + 24px {
+                    list.content-y = Math.min(0px, list.content-y + 8px);
+                } else if root.pointer-y > list.absolute-position.y + list.height - 24px {
+                    list.content-y = Math.max(list.visible-height - list.content-height, list.content-y - 8px);
+                } else {
+                    return;
+                }
+                root.measure();
             }
         }
     }

@@ -5,7 +5,7 @@
 import { ListView } from "std-widgets.slint";
 import { Theme } from "styles.slint";
 import { AppIcon, IconId, IconSize } from "icons.slint";
-import { IconButton, NumberField, SegmentedChoice } from "controls.slint";
+import { IconButton, NumberField, SegmentedChoice, Switch } from "controls.slint";
 import { ColorSwatchButton } from "color_picker_window.slint";
 import { SettingsSearch } from "settings_search.slint";
 import { TooltipArea } from "tooltip.slint";
@@ -312,6 +312,39 @@ export component FolderDetails inherits VerticalLayout {
         }
 
         Rectangle {
+            horizontal-stretch: 1;
+        }
+    }
+
+    // A folder in a group can keep out of the wheel's group levels (the user's wish 2026-11-26); its own star still
+    // puts it on the first level.
+    if root.shown && !FolderTreeUi.details.source && !FolderTreeUi.details.group: HorizontalLayout {
+        // The other rows' height (their fields and buttons are 24px).
+        height: 24px;
+        spacing: 6px;
+
+        Label {
+            text: "Groups";
+        }
+
+        VerticalLayout {
+            alignment: center;
+
+            Switch {
+                checked: FolderTreeUi.details.hide-in-groups;
+                tooltip: FolderTreeUi.details.hide-in-groups ? "Hidden in its groups on the wheel (click: shown again)"
+                    : "Hide it in its groups on the wheel: the group's place leaves it out, the pickers keep it";
+                toggled => { FolderTreeUi.set-hide-in-groups(!FolderTreeUi.details.hide-in-groups); }
+            }
+        }
+
+        Text {
+            text: FolderTreeUi.details.hide-in-groups ? "Hidden on the wheel inside its groups (a star still places it)"
+                : "Shown on the wheel inside its groups";
+            color: Theme.text-muted;
+            font-size: 11px;
+            vertical-alignment: center;
+            overflow: elide;
             horizontal-stretch: 1;
         }
     }

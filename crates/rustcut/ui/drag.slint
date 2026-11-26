@@ -159,6 +159,8 @@ export component DragArea inherits Rectangle {
     in property <MouseCursor> mouse-cursor: MouseCursor.default;
     out property <bool> has-hover: touch.has-hover;
     out property <bool> pressed: touch.pressed;
+    // The pointer's x inside the area (a row's grip shows its tooltip by it, without a touch area of its own).
+    out property <length> mouse-x: touch.mouse-x;
     // The pointer's window x during a drag (a drop target beside the list, the folder wheel's places, P11.3).
     out property <length> pointer-x;
     callback tapped(/* control */ bool, /* shift */ bool);

@@ -43,6 +43,8 @@ struct Drag {
 pub(super) struct FolderPage {
     selected: Cell<Option<FolderId>>,
     collapsed: RefCell<BTreeSet<FolderId>>,
+    /// The folded groups as last handed to `Hooks::folded_groups` (written at once, so a crash keeps them).
+    collapsed_saved: RefCell<Vec<FolderId>>,
     renaming: Cell<Option<FolderId>>,
     drag: RefCell<Option<Drag>>,
     /// The rows as last shown (keys and drags work on them).
@@ -61,6 +63,7 @@ impl FolderPage {
         Self {
             selected: Cell::new(state.folder_selected),
             collapsed: RefCell::new(state.folder_collapsed.iter().copied().collect()),
+            collapsed_saved: RefCell::new(state.folder_collapsed.clone()),
             renaming: Cell::new(None),
             drag: RefCell::new(None),
             shown: RefCell::default(),
@@ -116,6 +119,7 @@ impl SettingsBridge {
         let ui = window.global::<FolderTreeUi<'_>>();
         let page = &self.folder_page;
         let tree = &settings.export.folders;
+        self.save_folded_groups();
         if page.selected.get().is_some_and(|id| tree.entry(id).is_none()) {
             page.selected.set(None);
         }
@@ -195,6 +199,7 @@ impl SettingsBridge {
             has_color: tint.is_some(),
             color: tint.unwrap_or_default(),
             place: entry.place().map_or(-1, i32::from),
+            hide_in_groups: tree.find(id).is_some_and(|n| n.hide_in_groups),
             contents: i32::try_from(details::contents(tree, id)).unwrap_or(i32::MAX),
         }
     }
@@ -239,6 +244,38 @@ impl SettingsBridge {
             })
             .collect::<Vec<_>>();
         page.icon_rows.set_vec(rows);
+    }
+}
+
+impl SettingsBridge {
+    /// The folded groups changed (a click, a key, an entry added or dropped into a group): saved at once, not only at
+    /// quit, so they survive an end without a clean quit.
+    fn save_folded_groups(&self) {
+        let now: Vec<FolderId> = self.folder_page.collapsed.borrow().iter().copied().collect();
+        if *self.folder_page.collapsed_saved.borrow() == now {
+            return;
+        }
+        if let Some(hook) = self.hooks.borrow().folded_groups.as_ref() {
+            hook(now.clone());
+        }
+        *self.folder_page.collapsed_saved.borrow_mut() = now;
+    }
+
+    /// Whether the selected folder keeps out of the wheel's group levels.
+    fn folder_set_hide_in_groups(&self, hide: bool) {
+        let Some(id) = self.folder_page.selected.get() else {
+            return;
+        };
+        let mut result = Ok(false);
+        self.update(|s| result = s.export.folders.set_hide_in_groups(id, hide));
+        if result == Ok(true) {
+            tracing::info!(
+                id = id.0,
+                hide,
+                "[Settings] Target folder kept out of the wheel's groups or shown again"
+            );
+        }
+        self.folders_changed();
     }
 }
 
