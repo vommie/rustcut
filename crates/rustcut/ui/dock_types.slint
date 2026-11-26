@@ -123,6 +123,9 @@ export global Dock {
     in property <bool> right-shown: true;
     in property <bool> left-collapsed;
     in property <bool> right-collapsed;
+    // The Tag & Rate panel shows in a sidebar (its tab active, the group open, the sidebar shown and not collapsed): the
+    // save bubble of an edit stands beside it only then.
+    in property <bool> tag-rate-shown;
     in property <[DockCardView]> export-cards;
     in property <[DockCardView]> render-cards;
 

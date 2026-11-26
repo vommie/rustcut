@@ -1,6 +1,6 @@
 // The Tag & Rate panel (M3.2, P8b, P9.8): RustCut's wrapper around RustView's copied components (ADR-10). RustView's
 // `TagPanel` holds a mode toolbar for its library; RustCut's panel is always in assign mode for one job (the next one,
-// or a queued job while it is edited, user decision Q-G3) and holds RustCut's own parts: the editing banner, RustView's
+// or a queued job while it is edited, user decision Q-G3) and holds RustCut's own parts: the anchor of the save bubble (`tag_edit_bubble.slint`), RustView's
 // state in the tree's place while it is unavailable or off (the one place it is shown, ADR-6), and PyCutRv's row under
 // the history (user decision Q-P8b: last rating, last tags, clear, the "Active" and "Warn" switches, the eye that shows
 // the hidden tags, the tag filter; no text between them, P9.8). Without a video and without a queued job being edited
@@ -68,68 +68,6 @@ component ConnectionCard inherits ListWell {
                 tooltip: "Try to reach RustView now (RustCut also tries again by itself)";
                 clicked => { TagRate.retry(); }
             }
-        }
-    }
-}
-
-/// "Editing: <job>" with Apply and Cancel while a queued job's tags are edited.
-component EditingBanner inherits Rectangle {
-    height: 28px;
-    border-radius: 4px;
-    border-width: 1px;
-    border-color: Theme.primary;
-    background: Theme.primary.with-alpha(0.12);
-
-    host := TooltipHost {
-        text: TagRate.editing-tooltip;
-    }
-
-    touch := TouchArea {
-        changed has-hover => {
-            if self.has-hover {
-                host.enter();
-            } else {
-                host.leave();
-            }
-        }
-    }
-
-    HorizontalLayout {
-        padding-left: 6px;
-        padding-right: 2px;
-        spacing: 4px;
-
-        AppIcon {
-            y: (parent.height - self.height) / 2;
-            icon: IconId.job-tags;
-            size: IconSize.sm;
-            color: Theme.primary;
-        }
-
-        Text {
-            text: TagRate.editing-title;
-            font-size: 11px;
-            font-weight: 600;
-            color: Theme.text;
-            vertical-alignment: center;
-            horizontal-stretch: 1;
-            overflow: elide;
-        }
-
-        IconButton {
-            y: (parent.height - self.height) / 2;
-            icon: IconId.confirm;
-            enabled: TagRate.can-apply;
-            tooltip: "Apply the tags and the rating to the job";
-            clicked => { TagRate.apply-edit(); }
-        }
-
-        IconButton {
-            y: (parent.height - self.height) / 2;
-            icon: IconId.close;
-            tooltip: "Cancel: back to the next job's tags";
-            shortcut: "Esc";
-            clicked => { TagRate.cancel-edit(); }
         }
     }
 }
@@ -339,11 +277,27 @@ export component TagRatePanel inherits Rectangle {
     // the history, clearing, the switches, the eye and the tag filter stay usable.
     property <bool> has-job: Playback.has-video || TagRate.editing-job;
 
+    // Where the save bubble of an edit points (main.slint draws it beside the panel): the gap under the rating row,
+    // over the panel's whole width, in window coordinates.
+    property <length> anchor-x: root.absolute-position.x;
+    property <length> anchor-y: rating-row.absolute-position.y + rating-row.height;
+    property <length> anchor-width: root.width;
+    property <length> anchor-height: layout.spacing;
+
+    init => {
+        TagRate.edit-anchor-x = root.anchor-x;
+        TagRate.edit-anchor-y = root.anchor-y;
+        TagRate.edit-anchor-width = root.anchor-width;
+        TagRate.edit-anchor-height = root.anchor-height;
+    }
+    changed anchor-x => { TagRate.edit-anchor-x = root.anchor-x; }
+    changed anchor-y => { TagRate.edit-anchor-y = root.anchor-y; }
+    changed anchor-width => { TagRate.edit-anchor-width = root.anchor-width; }
+    changed anchor-height => { TagRate.edit-anchor-height = root.anchor-height; }
+
     layout := VerticalLayout {
         padding: 6px;
         spacing: 6px;
-
-        if TagRate.editing-job: EditingBanner { }
 
         // Always in assign mode for one job (RustView's file selection is RustCut's job).
         rating-row := HorizontalLayout {

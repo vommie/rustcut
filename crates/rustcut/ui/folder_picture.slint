@@ -24,10 +24,14 @@ export component FolderPicture inherits Rectangle {
     in property <bool> tint: true;
     // The background behind a one-color picture (the list's rows have none).
     in property <bool> plate: false;
+    // It stands on a selected row, whose background is the plain plate's color: the plate takes another one, so the
+    // picture keeps its shape.
+    in property <bool> on-selected: false;
 
     border-radius: root.shape == 0 ? root.width / 2 : root.shape == 1 ? root.width * 0.22 : 0px;
     clip: true;
-    background: !root.picture.has-image ? (root.picture.has-color ? root.picture.color : Theme.surface-selected)
+    background: !root.picture.has-image ? (root.picture.has-color ? root.picture.color
+        : root.on-selected ? Theme.surface-variant : Theme.surface-selected)
         : root.picture.mono && root.plate && root.picture.has-color ? root.picture.color.with-alpha(0.22) : transparent;
 
     if root.picture.has-image && !root.picture.mono: Image {

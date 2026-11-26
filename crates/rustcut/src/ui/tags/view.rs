@@ -67,18 +67,18 @@ pub fn connection(state: &ConnectionState) -> ConnectionView {
     }
 }
 
-/// The editing banner's tooltip: which jobs, and that Apply writes them.
+/// The save bubble's tooltip on the name: which jobs, and that Save writes them.
 pub fn editing_tooltip(editing: &super::state::Editing) -> String {
     match editing.jobs.as_slice() {
         [one] => format!(
-            "The tags and the rating of job {} ({}); Apply writes them.",
+            "The tags and the rating of job {} ({}); Save writes them.",
             one.id, one.name
         ),
         jobs => {
             let names: Vec<String> = jobs.iter().map(|j| format!("{} ({})", j.id, j.name)).collect();
             format!(
                 "The tags and the ratings of {} jobs: {}. A tag only some of them have is shown half; a click gives it \
-                 to all, a click on a tag all have removes it from all. Apply writes them.",
+                 to all, a click on a tag all have removes it from all. Save writes them.",
                 jobs.len(),
                 names.join(", ")
             )

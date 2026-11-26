@@ -352,6 +352,20 @@ fn run(cli: &Cli, log: &logging::LogControl) -> Result<Outcome, AppError> {
             }
         }));
     }
+    // The Tag & Rate panel's edit follows the queue: jobs that left it leave the edit (before the thumbnails' hook).
+    {
+        let previous = queue.hooks().jobs.take();
+        let weak = Rc::downgrade(&tags);
+        queue.hooks().jobs = Some(Box::new(move |jobs| {
+            if let Some(tags) = weak.upgrade() {
+                let ids: Vec<i64> = jobs.iter().map(|(id, _)| *id).collect();
+                tags.queue_jobs(&ids);
+            }
+            if let Some(previous) = previous.as_ref() {
+                previous(jobs);
+            }
+        }));
+    }
     {
         let (inspector, logs) = (Rc::downgrade(&inspector), Rc::downgrade(&logs));
         queue.hooks().refreshed = Some(Box::new(move || {

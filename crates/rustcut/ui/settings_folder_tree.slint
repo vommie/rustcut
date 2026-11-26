@@ -112,6 +112,7 @@ component FolderTreeRow inherits Rectangle {
                 width: 20px;
                 height: 20px;
                 picture: root.entry.picture;
+                on-selected: root.entry.selected;
                 shape: FolderTreeUi.shape;
                 tint: FolderTreeUi.tint;
             }
