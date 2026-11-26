@@ -41,6 +41,8 @@ export struct FolderDetailsView {
     has-color: bool,
     color: color,
     place: int,
+    // A folder that keeps out of the wheel's group levels.
+    hide-in-groups: bool,
     // A group: how many entries it holds (all levels).
     contents: int,
 }
@@ -113,6 +115,7 @@ export global FolderTreeUi {
     callback rename(/* id */ int, string) -> bool;
     callback rename-end();
     callback set-short-name(string) -> bool;
+    callback set-hide-in-groups(bool);
     callback star(/* id */ int);
     callback add-folder();
     callback add-group();

@@ -76,6 +76,8 @@ pub struct Hooks {
     pub plugins: Option<Rc<crate::ui::plugins::PluginsBridge>>,
     /// Every tag with its path, `None` while no tag tree arrived (the plugin pages' tag lists and checks).
     pub tag_paths: Option<TagPaths>,
+    /// The Target Folders page's folded groups changed: `ui-state.toml` keeps them at once (0.0.121).
+    pub folded_groups: Option<Box<dyn Fn(Vec<rustcut_core::folders::FolderId>)>>,
 }
 
 /// Every tag with its path (the plugin pages' tag lists).

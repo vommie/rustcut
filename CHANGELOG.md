@@ -7,6 +7,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Settings > Target Folders: a folder in a group has a new "Groups" switch under Color. Switched on, the folder wheel
+  leaves the folder out when it opens one of its groups; the folder stays in the group for the other pickers, and a
+  star still puts it on the wheel's first level. Settings written before read as off.
+
+### Changed
+
+- Settings > Target Folders: "Add folder" and "Add group" show their text beside the icon.
+
+### Fixed
+
+- Settings > Target Folders: dragging an entry by its grip moves it again (before, only the rest of the row dragged
+  and a drag on the grip scrolled the page).
+- Settings > Target Folders: after editing an entry, one click on another entry selects it; the page no longer jumps
+  and swallows that click.
+- Settings > Target Folders: the card around the tree and the details is tall enough again; the last row (Picture, the
+  drop area for an own picture) no longer hangs out at its bottom edge.
+- Settings > Target Folders: folded groups are saved the moment they change, so they come back even when RustCut did
+  not quit cleanly.
+- Settings > Target Folders: the star of an entry sits in the middle of its row.
+
 ## [0.0.120] - 2026-11-25
 
 ### Added

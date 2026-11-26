@@ -512,6 +512,8 @@ pub(super) fn connect(this: &Weak<SettingsBridge>, window: &SettingsWindow) {
     let t = this.clone();
     ui.on_set_short_name(move |text| with(&t, |b| b.folder_set_short_name(&text)));
     let t = this.clone();
+    ui.on_set_hide_in_groups(move |hide| with(&t, |b| b.folder_set_hide_in_groups(hide)));
+    let t = this.clone();
     ui.on_star(move |id| with(&t, |b| id_of(id).map(|id| b.folder_star(id)).unwrap_or_default()));
     let t = this.clone();
     ui.on_add_folder(move || with(&t, SettingsBridge::folder_add));

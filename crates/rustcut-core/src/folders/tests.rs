@@ -399,3 +399,46 @@ fn a_file_without_the_counter_starts_above_its_ids() {
     assert_eq!(t.last_id, 7);
     assert_eq!(t.add_folder(Path::new("/c"), Spot::End).unwrap(), id(8));
 }
+
+#[test]
+fn a_folder_hidden_in_groups_keeps_out_of_their_wheel_levels() {
+    let mut t = sample();
+    let fixed = Layout {
+        places: 4,
+        divided: false,
+    };
+    assert_eq!(t.set_hide_in_groups(id(3), true), Ok(true));
+    assert_eq!(t.set_hide_in_groups(id(3), true), Ok(false), "unchanged");
+    assert_eq!(t.set_hide_in_groups(id(1), true), Err(EditError::Unknown), "a group");
+    assert_eq!(
+        t.set_hide_in_groups(FolderId::SOURCE, true),
+        Err(EditError::Unknown),
+        "the source"
+    );
+    let clients = level(&t, &LevelKey::Group(id(1)), fixed).unwrap();
+    assert_eq!(shown(&clients), ["2", "4", "-", "-"], "South keeps out of Clients");
+    // Its own star still puts it on the first level; the pickers' tree keeps it.
+    t.put_on_place(id(3), 0).unwrap();
+    assert_eq!(
+        shown(&level(&t, &LevelKey::Start, fixed).unwrap()),
+        ["3", "-", "-", "-"]
+    );
+    assert_eq!(
+        shown(&level(&t, &LevelKey::Group(id(1)), fixed).unwrap()),
+        ["2", "4", "-", "-"]
+    );
+    assert!(names(&t).contains(&"-south".to_owned()));
+    // Stored only when on; a file without it reads as off.
+    let text = toml::to_string(&t).unwrap();
+    assert_eq!(text.matches("hide_in_groups = true").count(), 1);
+    assert!(!text.contains("hide_in_groups = false"));
+    let back: FolderTree = toml::from_str(&text).unwrap();
+    assert_eq!(back, t);
+    let old: FolderTree = toml::from_str("[[entries]]\nid = 1\nname = \"x\"\npath = \"/x\"\n").unwrap();
+    assert!(!old.entries.first().unwrap().hide_in_groups);
+    assert_eq!(t.set_hide_in_groups(id(3), false), Ok(true));
+    assert_eq!(
+        shown(&level(&t, &LevelKey::Group(id(1)), fixed).unwrap()),
+        ["2", "3", "4", "-"]
+    );
+}

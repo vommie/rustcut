@@ -30,6 +30,8 @@ export component IconButton inherits Rectangle {
     // Q-P8): red until it is switched on again.
     in property <bool> alert;
     in property <length> icon-size: IconSize.md;
+    // The icon and the text side by side (the icon left of the text), not the text instead of the icon.
+    in property <bool> with-text;
     // The symbol pulses: something runs behind the button (P12 4.1), also while it is disabled.
     in property <bool> pulse;
     // A short glow in `flash-color`: true shows it, false fades it out (a result, P12 4.1).
@@ -48,7 +50,11 @@ export component IconButton inherits Rectangle {
         : root.checked ? Theme.primary : Theme.text;
 
     height: 24px;
-    width: root.text == "" ? 26px : Math.max(26px, label.preferred-width + 12px);
+    property <bool> both: root.with-text && root.icon != IconId.none && root.text != "";
+
+    width: root.text == "" ? 26px
+        : root.both ? 6px + root.icon-size + 5px + label.preferred-width + 8px
+        : Math.max(26px, label.preferred-width + 12px);
     horizontal-stretch: 0;
     vertical-stretch: 0;
     border-radius: 4px;
@@ -119,8 +125,8 @@ export component IconButton inherits Rectangle {
         }
     }
 
-    if root.icon != IconId.none && root.text == "": AppIcon {
-        x: (parent.width - self.width) / 2 + logic.nudge;
+    if root.icon != IconId.none && (root.text == "" || root.both): AppIcon {
+        x: (root.both ? 6px : (parent.width - self.width) / 2) + logic.nudge;
         y: (parent.height - self.height) / 2;
         icon: root.icon;
         size: root.icon-size;
@@ -130,7 +136,7 @@ export component IconButton inherits Rectangle {
 
     label := Text {
         visible: root.text != "";
-        x: (parent.width - self.width) / 2 + logic.nudge;
+        x: (root.both ? 6px + root.icon-size + 5px : (parent.width - self.width) / 2) + logic.nudge;
         text: root.text;
         color: root.content-color;
         font-size: 11px;
