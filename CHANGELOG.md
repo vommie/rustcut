@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.122] - 2026-11-26
+
 ### Changed
 
 - Tag & Rate: while the tags and rating of queued jobs are edited, a bubble beside the panel asks "Save?" with Cancel
@@ -1712,7 +1714,8 @@ The first release of RustCut.
   end of playback, not a failure; a real failure of the video output still shows the error over the video.
 - FLAC audio honors the channel count and the sample rate of a profile (both were ignored).
 
-[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.121...HEAD
+[Unreleased]: https://github.com/vommie/rustcut/compare/v0.0.122...HEAD
+[0.0.122]: https://github.com/vommie/rustcut/compare/v0.0.121...v0.0.122
 [0.0.121]: https://github.com/vommie/rustcut/compare/v0.0.120...v0.0.121
 [0.0.120]: https://github.com/vommie/rustcut/compare/v0.0.119...v0.0.120
 [0.0.119]: https://github.com/vommie/rustcut/compare/v0.0.118...v0.0.119
