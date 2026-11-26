@@ -9,6 +9,7 @@
 //! message says so once. Nothing here waits on the UI thread.
 
 mod connect;
+mod edit_ends;
 mod filter_window;
 mod hidden;
 mod history;
@@ -543,12 +544,7 @@ impl TagsBridge {
 
         let editing = state.editing.as_ref();
         t.set_editing_job(editing.is_some());
-        t.set_editing_title(
-            editing
-                .map(|e| format!("Editing: {}", e.title()))
-                .unwrap_or_default()
-                .into(),
-        );
+        t.set_editing_title(editing.map(Editing::title).unwrap_or_default().into());
         t.set_editing_tooltip(editing.map(view::editing_tooltip).unwrap_or_default().into());
         t.set_can_apply(!self.applying.get() && !state.edited().is_empty());
 

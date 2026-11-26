@@ -24,6 +24,7 @@ import { ThumbPopup, ThumbStrip, Thumbs } from "thumb_popup.slint";
 import { SectionRowView, Sections } from "sections_card.slint";
 import { FilterRowView, FilterTips, Filters } from "filters_types.slint";
 import { FilterMenuFlyout } from "filters_menu.slint";
+import { TagEditBubble } from "tag_edit_bubble.slint";
 import { TabView } from "tabs.slint";
 import { CropOverlay } from "crop_overlay.slint";
 import { GlobalTooltip, Tip, TipKey, TipKeys, TipPlacement, TipRect, TipRow, TipSide, TooltipLogic } from "tooltip.slint";
@@ -702,6 +703,23 @@ export component MainWindow inherits Window {
         anchor-y: CropHistoryUi.anchor-y - root.content-y;
         anchor-width: CropHistoryUi.anchor-width;
         anchor-height: CropHistoryUi.anchor-height;
+    }
+
+    // While queued jobs' tags and rating are edited: the save bubble beside the Tag & Rate panel, only while the panel
+    // shows (in its sidebar or held over the video from a collapsed sidebar's rail).
+    property <bool> tag-rate-peeked: (Dock.left-collapsed && (RailPeek.side == 0 || RailPeek.pin-left >= 0)
+        && Dock.left-groups[RailPeek.side == 0 ? RailPeek.group : RailPeek.pin-left].active_key == "tag-rate")
+        || (Dock.right-collapsed && (RailPeek.side == 1 || RailPeek.pin-right >= 0)
+        && Dock.right-groups[RailPeek.side == 1 ? RailPeek.group : RailPeek.pin-right].active_key == "tag-rate");
+    if TagRate.editing-job && (Dock.tag-rate-shown || root.tag-rate-peeked): TagEditBubble {
+        x: 0;
+        y: root.bar-height;
+        width: parent.width;
+        height: parent.height - root.bar-height;
+        anchor-x: TagRate.edit-anchor-x - root.content-x;
+        anchor-y: TagRate.edit-anchor-y - root.content-y;
+        anchor-width: TagRate.edit-anchor-width;
+        anchor-height: TagRate.edit-anchor-height;
     }
 
     // A filter's options menu hangs beside its adjustments button (P9.13).

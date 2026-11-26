@@ -126,8 +126,16 @@ impl DockBridge {
             width: d.width,
             target: d.hit.map(|h| h.target),
         });
+        let mut tag_rate_shown = false;
         for (side, models) in [(Side::Left, &self.left), (Side::Right, &self.right)] {
-            publish_groups(models, view::group_rows(layout, side, dragged.as_ref()));
+            let rows = view::group_rows(layout, side, dragged.as_ref());
+            let sidebar = layout.sidebar(side);
+            tag_rate_shown |= sidebar.is_shown()
+                && !sidebar.collapsed
+                && rows
+                    .iter()
+                    .any(|r| r.group.shows_body && r.group.active_key == PanelId::TagRate.key());
+            publish_groups(models, rows);
             sync(&models.rail, view::rail_rows(layout, side));
         }
         sync(&self.export_cards, view::export_cards(layout));
@@ -144,6 +152,7 @@ impl DockBridge {
         dock.set_right_shown(layout.right.is_shown());
         dock.set_left_collapsed(layout.left.collapsed);
         dock.set_right_collapsed(layout.right.collapsed);
+        dock.set_tag_rate_shown(tag_rate_shown);
         let pin = |s: &super::model::Sidebar| s.pinned_group().and_then(|g| i32::try_from(g).ok()).unwrap_or(-1);
         let peek = window.global::<RailPeek<'_>>();
         peek.set_pin_left(pin(&layout.left));

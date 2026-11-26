@@ -7,6 +7,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Tag & Rate: while the tags and rating of queued jobs are edited, a bubble beside the panel asks "Save?" with Cancel
+  (Esc) and Save, under the job's name (cut in the middle when it is long; "2 jobs" for several, the tooltip lists
+  them). It replaces the bar above the rating, so the tag tree no longer moves when an edit starts. The bubble shows
+  while the panel does (also held over the video from a collapsed sidebar) and closes with the edit.
+
+### Fixed
+
+- Tag & Rate: an edit of queued jobs ends when another file is opened (as Cancel does), and when the edited jobs leave
+  the queue; before, it went on and its Save could no longer apply.
+- Target folders: on a selected row of the Settings tree and of the folder list, an entry's letter keeps its plate (it
+  had the row's color and looked bare).
+
 ## [0.0.121] - 2026-11-26
 
 ### Added

@@ -200,6 +200,7 @@ component ListRow inherits Rectangle {
                     width: 18px;
                     height: 18px;
                     picture: root.entry.picture;
+                    on-selected: root.highlighted;
                     shape: FolderList.shape;
                     tint: FolderList.tint;
                 }

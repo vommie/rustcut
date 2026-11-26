@@ -59,6 +59,11 @@ export global TagRate {
     in property <string> editing-title;
     in property <string> editing-tooltip;
     in property <bool> can-apply;
+    // The save bubble's anchor in window coordinates (the panel reports it: the gap under its rating row).
+    in-out property <length> edit-anchor-x;
+    in-out property <length> edit-anchor-y;
+    in-out property <length> edit-anchor-width;
+    in-out property <length> edit-anchor-height;
 
     // The rating bar: -1 = no rating chosen (the bar sets it on a click; Rust sets what the job holds right after).
     in-out property <int> rating: -1;

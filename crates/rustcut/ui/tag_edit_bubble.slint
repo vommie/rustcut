@@ -1,0 +1,95 @@
+// The save bubble of an edit of queued jobs' tags and rating (user request 2026-11-26): it replaced the banner over the
+// rating bar, so the tag tree no longer moves when an edit starts. It hangs beside the Tag & Rate panel with its arrow at
+// the gap between the rating bar and the tree (`TagRate.edit-anchor-*`, reported by the panel): the job's name (cut in
+// the middle like the queue's names; its tooltip lists the jobs), "Save?", Cancel (Esc) and Save. It is not modal: the
+// tree and the rating stay usable while it shows. main.slint shows it only while an edit runs and the panel is shown.
+
+import { Theme } from "styles.slint";
+import { IconId } from "icons.slint";
+import { IconButton, MiddleText } from "controls.slint";
+import { TooltipArea } from "tooltip.slint";
+import { Flyout } from "flyout.slint";
+import { TagRate } from "tag_types.slint";
+
+export component TagEditBubble inherits Rectangle {
+    // The panel's gap between the rating bar and the tree in layer coordinates.
+    in property <length> anchor-x;
+    in property <length> anchor-y;
+    in property <length> anchor-width;
+    in property <length> anchor-height;
+
+    // The name's width decides the bubble's, within bounds (a long name is cut in the middle).
+    measure := Text {
+        visible: false;
+        text: TagRate.editing-title;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    Flyout {
+        width: parent.width;
+        height: parent.height;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        anchor-width: root.anchor-width;
+        anchor-height: root.anchor-height;
+        panel-width: content.width;
+        panel-height: content.height;
+        beside: true;
+        modal: false;
+
+        content := Rectangle {
+            x: 0;
+            y: 0;
+            width: Math.round(Math.max(150px, Math.min(280px, measure.preferred-width + 20px)) / 1px) * 1px;
+            height: body.preferred-height;
+
+            body := VerticalLayout {
+                padding: 8px;
+                padding-top: 6px;
+                spacing: 4px;
+
+                TooltipArea {
+                    height: 20px;
+                    text: TagRate.editing-tooltip;
+
+                    MiddleText {
+                        width: parent.width;
+                        height: parent.height;
+                        text: TagRate.editing-title;
+                        color: Theme.text;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
+                }
+
+                HorizontalLayout {
+                    height: 24px;
+                    spacing: 4px;
+
+                    Text {
+                        text: "Save?";
+                        color: Theme.text-muted;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+
+                    IconButton {
+                        icon: IconId.close;
+                        tooltip: "Cancel: back to the next job's tags";
+                        shortcut: "Esc";
+                        clicked => { TagRate.cancel-edit(); }
+                    }
+
+                    IconButton {
+                        icon: IconId.confirm;
+                        enabled: TagRate.can-apply;
+                        tooltip: "Save the tags and the rating to the job";
+                        clicked => { TagRate.apply-edit(); }
+                    }
+                }
+            }
+        }
+    }
+}

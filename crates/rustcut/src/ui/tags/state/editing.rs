@@ -198,6 +198,13 @@ impl Editing {
         self.jobs.iter().filter_map(|j| Some((j.id, j.edited()?))).collect()
     }
 
+    /// Keeps the jobs that are still queued; the ids of those that left come back (oldest first).
+    pub fn keep_queued(&mut self, queued: impl Fn(JobId) -> bool) -> Vec<JobId> {
+        let left: Vec<JobId> = self.jobs.iter().map(|j| j.id).filter(|id| !queued(*id)).collect();
+        self.jobs.retain(|j| queued(j.id));
+        left
+    }
+
     /// Apply wrote job `id`: what it holds now is its choice.
     pub fn written(&mut self, id: JobId) {
         if let Some(job) = self.jobs.iter_mut().find(|j| j.id == id)
@@ -308,5 +315,17 @@ mod tests {
         };
         same.jobs[0].choice.tags = vec![1, 2];
         assert!(same.edited().is_empty());
+    }
+
+    #[test]
+    fn jobs_that_left_the_queue_leave_the_edit() {
+        let mut editing = Editing {
+            jobs: vec![job(1, &[3], Some(2)), job(2, &[], None), job(3, &[4], None)],
+        };
+        assert_eq!(editing.keep_queued(|id| id.0 != 2), vec![JobId(2)]);
+        assert_eq!(editing.jobs.iter().map(|j| j.id.0).collect::<Vec<_>>(), [1, 3]);
+        assert!(editing.keep_queued(|_| true).is_empty());
+        assert_eq!(editing.keep_queued(|_| false), vec![JobId(1), JobId(3)]);
+        assert!(editing.jobs.is_empty());
     }
 }

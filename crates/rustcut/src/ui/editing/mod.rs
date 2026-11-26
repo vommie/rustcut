@@ -293,6 +293,10 @@ impl JobEditor {
 
     /// The user opened another file: the link ends there.
     pub fn user_opened(&self, path: &Path) {
+        // An edit of queued jobs' tags and rating ends too (the panel shows the new file's choice).
+        if let Some(tags) = self.tags.upgrade() {
+            tags.file_opened();
+        }
         let Some(edit) = self.session.borrow_mut().take() else {
             return;
         };
